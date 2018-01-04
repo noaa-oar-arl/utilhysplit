@@ -313,7 +313,7 @@ class Species():
         returnval +=  "%0.2f"%self.duration + note + '\n' 
         if annotate:
            note=spc + '#Start date of emission'
-        returnval +=  self.date.strip() + note  +'\n'
+        returnval +=  self.date.strftime("%y %m %d %H") + note  +'\n'
         return returnval
 
     def strdep(self, annotate=True):
