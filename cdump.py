@@ -185,7 +185,6 @@ class ModelBin(object):
                  deposition = np.zeros_like(lat2d)
                  indx = list(concframe['indx'])
                  jndx = list(concframe['jndx'])
-                 ml = list(concframe['mass_loading'])
                  k = 0
                  for i in indx:
                      j =jndx[k]
