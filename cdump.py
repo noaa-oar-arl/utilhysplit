@@ -179,7 +179,7 @@ class ModelBin(object):
              concframe[cname] = concframe[cname] * multx 
              ml = list(concframe[cname])
              if grid==0:
-                 return ml
+                 return ml #returns 1d array of deposition.
              elif grid==1:
                  lat2d, lon2d = self.get_latlon(grid=1)
                  deposition = np.zeros_like(lat2d)
@@ -189,9 +189,9 @@ class ModelBin(object):
                  k = 0
                  for i in indx:
                      j =jndx[k]
-                     deposition[j-1][i-1]  = ml[k]   #need to subtract one because fortran arrays start at index 1 while python arrays start at index 0.
+                     deposition[j-1][i-1]  = ml[k]  
                      k+=1
-                 return  deposition                 #returns 2d array of mass loading or concentration.
+                 return  deposition                 #returns 2d array of deposition
 
       ##Add concentration * depth loop
       ##This loop adds concentration * depth for each level      
