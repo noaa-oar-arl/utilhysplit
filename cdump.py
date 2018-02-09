@@ -15,8 +15,8 @@ ABSTRACT: classes and functions for creating HYSPLIT control and setup files.
 
 
    CHANGES for PYTHON 3
-     For python 3 the numpy char4 are read in as a numpy.bytes_ class and need to be converted to a python
-     string by using decode('UTF-8').
+   For python 3 the numpy char4 are read in as a numpy.bytes_ class and need to be converted to a python
+   string by using decode('UTF-8').
 
 
 """
@@ -29,8 +29,8 @@ class ModelBin(object):
      get_latlon - returns latitude longitude positions as either list or array
      define_struct - static method storing structure of cdump binary file in numpy dtypes.
      __init__
-     _col_name - creates concentration column name describing pollutant and level
-     _mcol_name- creates mass loading column name describing pollutant and level
+     _col_name - creates concentration column name describing pollutant and level for pandas dataframe
+     _mcol_name- creates mass loading column name describing pollutant and level  for pandas dataframe
      thicknesses - calculates self.depth - list of thicknesses corresponding to each top height in self.level
      _readfile - opens and reads contents of cdump file into pandas dataframe
 
@@ -44,7 +44,7 @@ class ModelBin(object):
      ##TO DO - write add_conc method to add concentration grids together.
   """
 
-  def __init__(self, filename, dir='', drange=[], missing=(), century=0, verbose=False, readwrite='r'):
+  def __init__(self, filename, cdir='./', drange=[], missing=(), century=0, verbose=False, readwrite='r'):
      """
        drange should be a list of two datetime objects. 
         The read method will store data from the cdump file for which the sample start is greater thand drange[0] and less than drange[1] 
@@ -53,7 +53,7 @@ class ModelBin(object):
      """
      ##It isn't clear if we want to keep the restriction that the sample stop must be less than drange[1]. 
      self.drange = drange
-     self.filename = dir + filename
+     self.filename = cdir + filename
      self.missing = missing
      self.century = century
      self.verbose = verbose
@@ -68,7 +68,7 @@ class ModelBin(object):
      #self.edate       #last sampling time end dates
      #self.levels      #list of levels  (top height of level as stored in cdump file)
      if readwrite == 'r': 
-         self.dataflag = self._readfile(dir+filename, drange, verbose, century)
+         self.dataflag = self._readfile(cdir+filename, drange, verbose, century)
          if self.dataflag:
              self.thicknesses() 
              #self.get_concentration()
@@ -104,9 +104,6 @@ class ModelBin(object):
       for lev in self.levels:
           self.depth[str(lev)] = (lev - levp)
           levp = lev
- 
-
- 
 
   def get_concentration(self,pdate=None, species=None, levels=None, mass_loading =1, units='', cthresh=0, grid=0, multx=1, verbose=False):
       """Returns concentration  for  pollutants specified in list of species and levels specified in list of levels 
@@ -126,6 +123,8 @@ class ModelBin(object):
          if mass_loading = 1 returns column mass loading else returns concentration.
          if grid==0 then returns list of points at which mass loading  or concentration is non-zero. 
          if grid==1 then returns 2d array of mass loading or concentration over the entire grid.
+ 
+         if only the deposition level is requested then will return deposition level. Otherwise, will ignore deposition level.
 
 
          TO DO - Do we want to be able to return concentrations for multiple time periods or simply call this function multiple times?
@@ -168,7 +167,32 @@ class ModelBin(object):
           if verbose: print('conc all for each species' , cnames2)
       ##END Add species loop
 
-      
+      ###Block if only deposition level is requested then it is returned here.
+      deponly = False
+      for lev in levels:  
+          if lev == 0:
+             deponly = True
+          else:
+             deponly = False 
+      if deponly:
+             cname = self._col_name('', lev)
+             concframe[cname] = concframe[cname] * multx 
+             ml = list(concframe[cname])
+             if grid==0:
+                 return ml
+             elif grid==1:
+                 lat2d, lon2d = self.get_latlon(grid=1)
+                 deposition = np.zeros_like(lat2d)
+                 indx = list(concframe['indx'])
+                 jndx = list(concframe['jndx'])
+                 ml = list(concframe['mass_loading'])
+                 k = 0
+                 for i in indx:
+                     j =jndx[k]
+                     deposition[j-1][i-1]  = ml[k]   #need to subtract one because fortran arrays start at index 1 while python arrays start at index 0.
+                     k+=1
+                 return  deposition                 #returns 2d array of mass loading or concentration.
+
       ##Add concentration * depth loop
       ##This loop adds concentration * depth for each level      
       m_cols=[]
@@ -202,19 +226,18 @@ class ModelBin(object):
          indx = list(concframe['indx'])
          jndx = list(concframe['jndx'])
          ml = list(concframe['mass_loading'])
-         k = 0
-         for i in indx:
-             j =jndx[k]
+         k = int(0)
+         for ii in indx:
+             j =int(jndx[k])
+             i = int(ii)
              conc2d[j-1][i-1]  = ml[k]   #need to subtract one because fortran arrays start at index 1 while python arrays start at index 0.
              k+=1
          if mass_loading != 1:
             conc2d = conc2d / thickness
          return  conc2d                  #returns 2d array of mass loading or concentration.
 
-
-
   def xtract_point(self, latpt, lonpt, drange=[]):
-      #look at latlon grid. Find concentration at only a location
+      #TO DO look at latlon grid. Find concentration at only a location
       # Find i,j, indx corresponding to latlon location
       ##not functional yet.
       lat, lon = get_latlon(grid=0)
