@@ -22,7 +22,6 @@ ABSTRACT: classes and functions for creating HYSPLIT control and setup files.
    writelanduse - writes ASCDATA.CFG file.
 """
 
-
 def writelanduse(landusedir, outdir='./'):
     """writes an ASCDATA.CFG file in the outdir. The landusedir must
        be the name of the directory where the landuse files are located.
@@ -38,6 +37,8 @@ def writelanduse(landusedir, outdir='./'):
 
 class ConcGrid():
     """concentration grid as defined by 10 lines in the HYSPLIT concentration CONTROL file.
+       interval is
+       sample type (0 is average) 
        """
     def __init__(self, name, levels=None, centerlat = 0, centerlon= 0, latdiff=-1, londiff=-1, 
                  latspan=90, lonspan=360, outdir='./', outfile='cdump', nlev=-1, 
@@ -57,8 +58,8 @@ class ConcGrid():
        self.outdir = outdir
        self.outfile = outfile
        self.nlev = nlev
-       self.sample_start = sample_start
-       self.sample_stop = sample_stop
+       self.sample_start = sample_start  #string (could be changed to datetime)
+       self.sample_stop = sample_stop    #string (could be changed to datetime)
        self.sampletype = sampletype
        self.interval = interval
        self.get_nlev()
@@ -251,6 +252,7 @@ class Species():
         self.decay = decay
         self.resuspension = resuspension
         Species.total += 1
+        self.datestr = "00 00 00 00 00"
 
     def definition(self, lines):
         """input 3 lines from HYSPLIT CONTROL file which define a pollutant/species"""
@@ -266,12 +268,15 @@ class Species():
            return  False
         if lines[2].strip()[0:2] == "00":
               self.date = lines[2].strip()
+              self.datestr = self.date
         else:
             try:
                self.date = datetime.datetime.strptime(lines[2].strip(), "%y %m %d %H %M")
+               self.datestr = self.date.strptime("%y %M %D %H")
             except:
                print("warning: date not valid" , lines[2])
                self.date = lines[2].strip()
+               self.datestr = lines[2].strip()
            
         return True
 
@@ -313,7 +318,7 @@ class Species():
         returnval +=  "%0.2f"%self.duration + note + '\n' 
         if annotate:
            note=spc + '#Start date of emission'
-        returnval +=  self.date.strftime("%y %m %d %H") + note  +'\n'
+           returnval +=  self.datestr  + note  +'\n'
         return returnval
 
     def strdep(self, annotate=True):
@@ -501,8 +506,8 @@ class HycsControl():
         if working_directory[-1] != '/':
            working_directory += '/'
         self.wdir = working_directory
-        self.species = []
-        self.concgrids=[]
+        self.species = []   #list of objects in Species class
+        self.concgrids=[]   #list of object in ConcGrid class
         self.locs=[]
         self.metfiles=[]
         self.metdirs=[]
@@ -520,6 +525,9 @@ class HycsControl():
  
     def add_sdate(self, sdate):
         self.date = sdate
+    
+    def remove_species(self):
+        self.species = []
  
     def add_species(self, species):
         self.num_sp +=1
@@ -557,11 +565,9 @@ class HycsControl():
            self.metdirs.pop(num) 
            self.num_met += -1
 
-
-
     def add_duration(self, duration):
+        """will replace the duration if already exists"""
         self.run_duration= duration
-
 
     def write(self, verbose=True, annotate=False):
         note = ''
@@ -685,7 +691,8 @@ class HycsControl():
                 if sptemp.definition(lines):
                    self.species.append(sptemp)
             zz += 4*self.num_sp
-            self.num_grids = int(content[zz])
+            print( content[zz])
+            self.num_grids = int(content[zz].strip())
             self.concgrids=[]
             for ii in range(zz, zz+10*self.num_grids, 10):
                 lines = []
@@ -697,7 +704,7 @@ class HycsControl():
                    self.concgrids.append(sptemp)
             zz += 10*self.num_grids 
             zz += 1
-            temp = int(content[zz])
+            temp = int(content[zz].strip())
             if temp != self.num_sp:
                print('warning: number of species for deposition not equal to number of species')
             nn=0
