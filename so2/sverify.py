@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import pandas as pd
 import numpy as np
+from optparse import OptionParser
 import datetime
 from monet.obs import cems
 import sys
@@ -56,39 +57,90 @@ class SO2Verify(object):
         self.metdir = '/pub/archives/wrf27km/'
         self.hdir = '/n-home/alicec/hysplit/trunk/exec/'
         self.tdir = '/pub/Scratch/alicec/SO2/'
+        self.tmap = None
+        self.fignum = 1
 
     def find_emissions(self):
         mmm = monet.MONET()
         self.cems= mmm.add_obs(obs='cems')
+        area = self.area
         efile = 'emission_02-28-2018_103721604.csv'
         self.cems.load(efile, verbose=True)
+        self.cems.latlonfilter((area[2], area[0]), (area[3], area[2]))
         self.ehash = self.cems.create_location_dictionary()
 
+   
+    def sources(self):
+        sources = self.cems.get_var(('so2','lbs'), loc=None, daterange=[self.d1, self.d2])
+         
+
+    def plot_emissions(self):
+        for loc in self.ehash:
+            data = self.cems.get_var(('so2','lbs'), loc=loc, daterange=[self.d1, self.d2])
+            data = data * 0.453592
+            data = data.rename("so2_kg")
+            plt.plot(data, '--b.')   
+
+
+    def map_emissions(self):
+        if not self.tmap: self.create_map()
+        fig = plt.figure(self.fignum)
+        for loc in self.ehash:
+            latlon = self.cems.get_location(loc)
+            x, y = self.tmap(latlon[1], latlon[0])
+            self.tmap.plot(x,y,'bo') 
+
     def create_map(self):
-        self.tmap = Basemap(llcrnrlon=area[0], llcrnrlat=area[1], urcrnrlon=area[2], urcrnrlat=area[3], projection='cyl', resolution='h')
+        from mpl_toolkits.basemap import Basemap 
+        self.tmap = Basemap(llcrnrlon=area[0], llcrnrlat=area[2], urcrnrlon=area[1], urcrnrlat=area[3], projection='cyl', resolution='h')
         self.tmap.drawcoastlines()
         self.tmap.drawmapboundary()
         self.tmap.drawstates()
 
     def runHYSPLIT(self):
         sources = self.cems.get_var(('so2','lbs'), loc=None, daterange=[self.d1, self.d2])
+        sources = sources * 0.453592  #convert from lbs to kg.
         runh.mult_run(1, self.d1, self.d2, sources, hysplitdir=self.hdir, topdirpath=self.tdir, metdirpath=self.metdir)
 
 
-    def find_meas(self):
+    def find_obs(self, verbose=False):
         aq = aqs.AQS()
+        area = self.area
         aq.add_data([self.d1, self.d2], param=['SO2'], download=True)
-        aaa = StationData(df=aq.df)
-        
+        self.aaa = StationData(df=aq.df)
+        self.aaa.latlonfilter((area[2], area[0]), (area[3], area[2]))
+        if verbose: self.aaa.summarize()   
+        self.ohash = self.aaa.get_lhash('siteid')
+ 
+    def map_obs(self):
+        if not self.tmap: self.create_map()
+        for key in self.ohash:
+            latlon = self.ohash[key]
+            x, y = self.tmap(latlon[1], latlon[0])
+            plt.text(x, y, str(key), fontsize=7, color='red')
+        return 1
 
+
+parser = OptionParser()
+
+parser.add_option('--run', action="store_true", dest="runh", default=False)
+parser.add_option('--map', action="store_true", dest="emap", default=False)
+
+(options, args) = parser.parse_args()
 
 d1 = datetime.datetime(2016,1,1,0)
 d2 = datetime.datetime(2016,1,7,0)
 
 #lon lon lat lat
-area = [-110, -100, 32, 50]
-
+area = [-110, -100, 40, 50]
 sv = SO2Verify([d1,d2], area)
+if options.runh:
+    sv.find_emissions()
+    sv.runHYSPLIT()
 
-sv.find_emissions()
-sv.runHYSPLIT()
+if options.emap:
+    #sv.find_emissions()
+    #sv.map_emissions()
+    sv.find_obs()
+    sv.map_obs()
+    plt.show()
