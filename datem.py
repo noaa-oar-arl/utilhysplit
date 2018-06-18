@@ -78,7 +78,7 @@ def writedatem_sh(cfile_list, mult='1e20', mdl='./',  ofile_list=None,
                         outfile_list.append(outfile)
                     ##Following block writes line in shell script to run c2datem
                     ##the -h0 specifies to not write header lines.
-                    print('WRITING', cfile)
+                    #print('WRITING', cfile)
                     fid.write('$MDL/c2datem -n -h0 -i'+cfile.strip() + ' -mdatemfile.txt -o' + outfile + '  -c$mult -z$zl')
                     fid.write(' -p' + str(int(psz)))                                   #pollutant index select for multiple species
                     fid.write('\n')
@@ -95,7 +95,37 @@ def writedatem_sh(cfile_list, mult='1e20', mdl='./',  ofile_list=None,
     
     return outfile_list 
 
-def writedatem(dfile, stationlocs, sample_start, sample_end, stime, height=' 10') :
+def frame2datem(dfile, df,  header_str='Header', writeover=True,\
+                 cnames = ['date', 'duration', 'lat', 'lon', 'obs', 'vals', 'sid', 'altitude']):
+    """converts a pandas dataframe with columns names by cnames (date, duration, lat, lon, obs, vals, sid, altitude)
+       to a text file in datem format.
+       date should be a datetime object.
+       duration should be a string format HHMM (TODO- make this more flexible?)
+       lat - latitude, float
+       lon - longitude, float
+       obs - value of observation, float
+       vals - modeled value, float
+       sid  - station id, int or string
+       altitude - float """
+    iii=0
+    if writeover:
+        with open(dfile, "w") as fid:
+            fid.write(header_str + ' (obs then model) ' + '\n')
+            fid.write('year mn dy shr dur(hhmm) LAT LON  ug/m2 ug/m2 site_id  height \n' )
+    with open(dfile, "a") as fid:
+          for index, row in df.iterrows():
+              fid.write(row[cnames[0]].strftime('%Y %m %d %H%M') + ' ')
+              fid.write(row[cnames[1]] + ' ' )
+              fid.write("%8.3f  %8.3f" % (row[cnames[2]], row[cnames[3]]))
+              fid.write("%8.4f  %8.4f " % (row[cnames[4]], row[cnames[5]] ))
+              if isinstance(row[cnames[6]], int):
+                 fid.write("%12i" % (row[cnames[6]]))
+              elif isinstance(row[cnames[6]], str):
+                 fid.write("%12s  " % (row[cnames[6]]))
+              fid.write("%7.2f \n" % (row[cnames[7]]))
+              #fid.write(str(row[cnames[7]]) + '\n')           
+
+def writedatem(dfile, stationlocs, sample_start, sample_end, stime, height=' 10'):
     """writes a station datem file which has times for each station location.
        This file is used by c2datem to determine what concentration values to pull from the cdump files.
        stationlocs is a list of (lat,lon) tuples. 
@@ -192,6 +222,9 @@ def panda_daily(sdate, run_num=2, verbose=1, topdirpath='./', pkl_name='conc_dai
     verbose=False
     dt = datetime.timedelta(hours=24)
     dftot = panda_conc(sdate, sdate + dt, run_num=run_num, verbose=verbose, topdirpath=topdirpath, logfile=logfile)
+    #vpi = np.where(dftot>0)
+    #print('VPI')
+    #print(vpi)
     outdir = date2dir(topdirpath,  sdate, dhour=24)  
     pickle.dump(dftot, open(outdir + 'conc_daily.pkl', "wb"))
     if verbose:
@@ -199,11 +232,11 @@ def panda_daily(sdate, run_num=2, verbose=1, topdirpath='./', pkl_name='conc_dai
        print dftot
     print 'panda pkl done ' , sdate, outdir
 
-def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False):
+def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
+    colra=['date','meas_lat', 'meas_lon', 'vals','sourceid','stationid', 'level','thickness','psize','sourcedate',  \
+           ]):
     """ Reads a datem file and returns a dataframe with colums described by colra
-        colra=['date','vals','ustar','sourceid','level','thickness','psize','sourcedate', 'u10m', 'v10m', \
-           'uwnd1','vwnd1','uwnd2','vwnd2','pres','prss1','prss2', 'meas_lat', 'meas_lon']
-       
+       colra : 1st must be date, second must be lat, third must be longitude 
        fname : base name of datem file to read and get information from
        zlevs : 
        pdict :
@@ -211,49 +244,57 @@ def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False):
        dummy : if dummy= True creates and returns a dataframe with correct columns with 0's. 
     """
     tdate = []
-    mvals = []
-    levra = []
-    thickra = []
-    psize = []
-    sdatera = []
+    #mvals = []
+    #levra = []
+    #thickra = []
+    #psize = []
+    #sdatera = []
     mlat = []
     mlon = []
-    sourceid=[]
-    colra=['date','vals','sourceid','level','thickness','psize','sourcedate',  \
-           'meas_lat', 'meas_lon']
+    #sourceid=[]
+    #stationid=[]
+    #colra=['date','vals','sourceid','stationid', 'level','thickness','psize','sourcedate',  \
+    #       'meas_lat', 'meas_lon']
+    vhash = {}
+    nhash = {}
+    qhash = {}
+    iii=7
+    jjj=0
+    for val in colra:
+        vhash[val].append([])
+        nhash[val] = iii
+        qhash[iii] = val
+        iii += 1
+        jjj += 1
+    ##the date takes up  0,1,2,3
+    ##lat is 5th
+    ##lon is 6th
     if not dummy:
         with open(fname, 'r') as fid:
              for line in fid:
                  temp = line.split() 
-                 mlat.append(float(temp[5]))  #lat of measurement
-                 mlon.append(float(temp[6]))  #lon of measurement
+                 vhash[colra[1]].append(float(temp[5]))  #lat of measurement
+                 vhash[colra[2]].append(float(temp[6]))  #lon of measurement
                  hh = int(temp[3][0:2])
                  try:
-                    mm = int(temp[3][2:4])
+                     mm = int(temp[3][2:4])
                  except:
-                    print 'ERR in read', temp[3] 
-                    sys.exit()
-                 tdate.append(datetime.datetime(int(temp[0]), int(temp[1]), int(temp[2]), hh, mm))
-                 mvals.append(float(temp[7]))
-                 #ustar.append(float(temp[9])/100.0)
-                 sourceid.append(temp[9])
-                 levindex = int(temp[10]) 
-                 if levindex != 0:
-                    thickness = zlevs[levindex] - zlevs[levindex-1]
-                 else:
-                    thickness = zlevs[levindex]
-                 levra.append(zlevs[levindex])
-                 thickra.append(thickness)
-                 psize.append(pdict[temp[11]]) 
-                 sdatera.append(sdate)
+                     print 'ERR in read', temp[3] 
+                     sys.exit()
+                 ##if value is -1 that means no valid info on the cdump grid. Meas point may be off grid.
+                 #if float(temp[7]) != -1:
+                 vhash[colra[0]].append(datetime.datetime(int(temp[0]), int(temp[1]), int(temp[2]), hh, mm))
+                 for val in vra:
+                     iii = nhash[val]
+                     vhash[val].append(float(temp[iii]))                     
 
-
-        if tdate != []:
-            tempzip = zip(tdate, mvals, sourceid, levra, thickra, psize, sdatera, \
-                                 mlat, mlon)
+        if vhash[colra[0]] != []:
+            vra = []
+            for col in colra:
+                vra.append(vhash[col])
+            tempzip = zip(*vra) 
             if not tempzip:
                print 'Did not read ', fname, ' file correctly. read_datem_file function exiting'
-              
                sys.exit() 
             df = pd.DataFrame(tempzip, columns=colra)
             if verbose: print 'read_datem_file returning df', df
@@ -332,7 +373,7 @@ def panda_conc(sdate, edate,  run_num=2, verbose=0,
         os.chdir(newdir)
         if os.path.isfile('model.txt'):
             if verbose>=1: print 'model.txt exists in' , newdir
-            print 'model.txt exists in' , newdir
+            #print 'model.txt exists in' , newdir
             df = read_datem_file('model.txt', zlevs, pdict,sdate)
             if verbose>=1: print df
             df = df[df.vals != 0]                     #remove zero values

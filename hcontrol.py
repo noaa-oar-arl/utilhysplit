@@ -33,6 +33,8 @@ def writelanduse(landusedir, outdir='./'):
           fid.write("2 \n")
           fid.write("0.2 \n")
           fid.write(landusedir + "/bdyfiles/ \n")
+
+
         
 
 class ConcGrid():
@@ -318,7 +320,7 @@ class Species():
         returnval +=  "%0.2f"%self.duration + note + '\n' 
         if annotate:
            note=spc + '#Start date of emission'
-           returnval +=  self.datestr  + note  +'\n'
+        returnval +=  self.datestr  + note  +'\n'
         return returnval
 
     def strdep(self, annotate=True):
@@ -371,6 +373,9 @@ class NameList():
 
     def add_n(self, nlist):
         self.nlist = nlist
+
+    def rename(self, name):
+        self.fname = name
 
     def _load_descrip(self):
         self.descrip['ichem'] = 'Chemistry conversion modules. 0:none, 1:matrix , 2:convert, 3:dust' 
@@ -540,6 +545,14 @@ class HycsControl():
     def add_location(self, line=False, latlon = (0,0), alt= 10.0 , rate=False, area=False):
         self.nlocs +=1
         self.locs.append(ControlLoc(line=line, latlon=latlon, alt=alt, rate=rate, area=area))
+ 
+    def remove_locations(self, num=-99 ):
+        if num == -99:
+            self.nlocs =0
+            self.locs = []
+        else:
+            self.nlocs -= 1
+            self.locs.pop(num)
          
     def add_ztop(self, ztop):
         self.ztop=ztop
@@ -663,12 +676,17 @@ class HycsControl():
         with  open(self.wdir + self.fname, "r") as fid:
         #fid = open(self.fname, "r")
             content = fid.readlines()
-            self.date = datetime.datetime.strptime(content[0].strip(), "%y %m %d %H")
+            try:
+                self.date = datetime.datetime.strptime(content[0].strip(), "%y %m %d %H")
+            except:
+                self.date = datetime.datetime.strptime(content[0].strip(), "%y %m %d %H %M")
             self.nlocs = int(content[1].strip())
             #self.locs = []
             zz=2
             for ii in range(zz, zz+self.nlocs):
-                self.locs.append(content[ii].strip()) 
+                temploc = content[ii].strip()
+                #self.locs.append(content[ii].strip()) 
+                self.locs.append(ControlLoc(line=temploc) )
             zz+=self.nlocs
             self.run_duration = content[zz].strip()
             self.vertical_motion = content[zz+1].strip()

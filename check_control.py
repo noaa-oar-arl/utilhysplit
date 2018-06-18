@@ -9,7 +9,7 @@ from hcontrol import HycsControl
 parser = OptionParser()
 
 parser.add_option("-i", type="string", dest="fname", default='CONTROL',
-                  help="Path and name of input cdump binary file")
+                  help="Path and name of input CONTROL file")
 
 (options, args) = parser.parse_args()
 
