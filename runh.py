@@ -60,7 +60,7 @@ function mult_run - main function for making multiple HYSPLIT runs.
 
 """
 def source_generator(df, area=1, altitude=10):
-    """tseries is a pandas dataframe with index being release date and column headers showing
+    """df is a pandas dataframe with index being release date and column headers showing
        location of release and values are emission rates"""
     locs = df.columns.values
     for index, row in df.iterrows(): 
@@ -495,6 +495,47 @@ class MultRun(object):
         print(filera)   
         self.model.open_files(filera) 
 
+
+def concmerge(hdir, files2merge):
+    """
+    hdir: string
+    files2merge: list of strings
+    """
+    mfile = 'mfiles.txt'
+    ofile = 'merged.bin'
+    with open(mfile, 'w') as fid:
+         for fl in files2merge:
+             fid.write(fl + '\n')
+    callstr =  hdir + '/conmerge -i' + mfile + ' -o' + ofile 
+    #subprocess.call(callstr, shell=True)
+    return ofile
+
+
+def create_plume(run_num, start_date, end_date,  dframe, 
+             verbose=True, topdirpath = './',  
+             hysplitdir = './'):
+
+    rhash = RunParams(run_num, met_type = met_type, topdirpath=topdirpath)
+    verbose=True 
+    tdirpath = rhash.topdirpath
+    zzz = 0 
+    sgenerator = source_generator(dframe, altitude=rhash.altitude)
+    pdir = None
+    cnames = []
+    for source in sgenerator:
+        if verbose: print(source)
+    #for newdir in dirtree(rhash.topdirpath,  start_date, end_date, dhour=dhour):  
+        sdate = source.sdate  #get the date from the source
+        newdir = date2dir(tdirpath, sdate, chkdir=False) #now create the directory from the date.
+        if newdir != pdir: zzz=0
+        #sdate = datetime.datetime.strptime(newdir, dfmt)       #get the date from the directory tree.
+        iii = source.nid
+        cnames.append('cdump.' +   iii)
+        zzz+=1
+        pdir = newdir
+        if verbose: print(newdir, iii)
+    ofile = concmerge(newdir, cnames) 
+    return ofile 
  
 def mult_run(run_num, start_date, end_date,  dframe, runh=0, process_max = 24, met_type='wrf27', logname='junklog',
              verbose=True, topdirpath = './', metdirpath='./', 
@@ -502,17 +543,20 @@ def mult_run(run_num, start_date, end_date,  dframe, runh=0, process_max = 24, m
     """ Starts and keeps track of multiple HYSPLIT runs. 
         The first HYSPLIT run will be started at start_date. CONTROL, SETUP and output files from the run 
         are placed in a directory tree Yyear/month/day/hour/.
-       The sources are determined by the source_generator function.
+        The sources are determined by the source_generator function.
     
 
-        run_num    : is an integer which is passed to RunParams to determine input values into HYSPLIT.
+        run_num    : integer 
+                     passed to RunParams to determine input values into HYSPLIT.
                      the runs created are also placed under the directory run(run_num).
-        start_date : First date to start a HYSPLIT for. 
-        end_date   : Last date to create a HYSPLIT run for.
-        dframe     : dataframe to use as input into the source_generator.
-
-
-        runh       : 1 run check_ustar only to create USTAR directory tree with data from xtrct_stn.
+        start_date : datetime.
+                     First date to start a HYSPLIT for. 
+        end_date   : datetime 
+                     Last date to create a HYSPLIT run for.
+        dframe     : dataframe 
+                     to use as input into the source_generator.
+        runh       : integer 
+                     1 run check_ustar only to create USTAR directory tree with data from xtrct_stn.
                      2 do a dry run and create directory tree and CONTROL and SETUP files but do not run HYSPLIT.
                      0 is the default and will run check_ustar as well as HYSPLIT.
         process_max : number of hysc_std processes to keep running at the same time.

@@ -13,7 +13,7 @@ from os import path
 #from ashfall_base_iceland import make_sourceid  
 import sys
 import os
-import cPickle as pickle
+import pickle as pickle
 import pandas as pd
 #from ashfall_base_iceland import RunParams
 from arlhysplit.runh import date2dir
@@ -228,9 +228,9 @@ def panda_daily(sdate, run_num=2, verbose=1, topdirpath='./', pkl_name='conc_dai
     outdir = date2dir(topdirpath,  sdate, dhour=24)  
     pickle.dump(dftot, open(outdir + 'conc_daily.pkl', "wb"))
     if verbose:
-       print outdir
-       print dftot
-    print 'panda pkl done ' , sdate, outdir
+       print(outdir)
+       print(dftot)
+    print('panda pkl done ' , sdate, outdir)
 
 def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
     colra=['date','meas_lat', 'meas_lon', 'vals','sourceid','stationid', 'level','thickness','psize','sourcedate',  \
@@ -279,7 +279,7 @@ def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
                  try:
                      mm = int(temp[3][2:4])
                  except:
-                     print 'ERR in read', temp[3] 
+                     print('ERR in read', temp[3]) 
                      sys.exit()
                  ##if value is -1 that means no valid info on the cdump grid. Meas point may be off grid.
                  #if float(temp[7]) != -1:
@@ -292,12 +292,12 @@ def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
             vra = []
             for col in colra:
                 vra.append(vhash[col])
-            tempzip = zip(*vra) 
+            tempzip = list(zip(*vra)) 
             if not tempzip:
-               print 'Did not read ', fname, ' file correctly. read_datem_file function exiting'
+               print('Did not read ', fname, ' file correctly. read_datem_file function exiting')
                sys.exit() 
             df = pd.DataFrame(tempzip, columns=colra)
-            if verbose: print 'read_datem_file returning df', df
+            if verbose: print('read_datem_file returning df', df)
             return df
         else: dummy = True
     elif dummy:
@@ -321,10 +321,10 @@ def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
         relh  =[0]
         mlat = [0]
         mlon = [0]
-        df = pd.DataFrame(zip(tdate, mvals, ustar, sourceid, levra, thickra, psize, sdatera, u10m, v10m, uwnd1, vwnd1, \
-                              uwnd2, vwnd2, pres, prss1, prss2, relh, mlat, mlon),  \
+        df = pd.DataFrame(list(zip(tdate, mvals, ustar, sourceid, levra, thickra, psize, sdatera, u10m, v10m, uwnd1, vwnd1, \
+                              uwnd2, vwnd2, pres, prss1, prss2, relh, mlat, mlon)),  \
                               columns=colra)
-        print 'USTAR ZZZZZZZZZ' , df.ustar.unique()
+        print('USTAR ZZZZZZZZZ' , df.ustar.unique())
         return df
 
 
@@ -366,16 +366,16 @@ def panda_conc(sdate, edate,  run_num=2, verbose=0,
     odate = sdate
     while not done:
         if sdate.hour ==0 and verbose>=1:
-           print 'working on' , sdate
+           print('working on' , sdate)
         newdir = date2dir(topdirpath,  sdate, dhour=1) 
         
         outdir = date2dir(topdirpath,  sdate, dhour=24)  #directory where panda concentration pkl file will be written.
         os.chdir(newdir)
         if os.path.isfile('model.txt'):
-            if verbose>=1: print 'model.txt exists in' , newdir
+            if verbose>=1: print('model.txt exists in' , newdir)
             #print 'model.txt exists in' , newdir
             df = read_datem_file('model.txt', zlevs, pdict,sdate)
-            if verbose>=1: print df
+            if verbose>=1: print(df)
             df = df[df.vals != 0]                     #remove zero values
             if nnn==0:
                dftot = df.copy()
@@ -395,6 +395,6 @@ def panda_conc(sdate, edate,  run_num=2, verbose=0,
     else:
         with open(topdirpath + logfile, 'a') as fid:
             fid.write('MESSAGE: no emissions for ' +  odate.strftime('%Y %m %d %H ') + '\n')
-        print 'MESSAGE: no emissions for ' ,  odate.strftime('%Y %m %d %H ') , '\n'
+        print('MESSAGE: no emissions for ' ,  odate.strftime('%Y %m %d %H ') , '\n')
         return read_datem_file('model.txt', zlevs, pdict,sdate, dummy=True)
 

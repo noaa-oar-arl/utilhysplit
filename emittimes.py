@@ -14,7 +14,7 @@ import numpy.ma as ma
 #from mpl_toolkits.basemap import Basemap
 #from hysplit import *
 import datetime
-from mpl_toolkits.basemap import Basemap
+#from mpl_toolkits.basemap import Basemap
 
 ##Note. the place holder lat lon values in the CONTROL file must be within the meteorological grid-space.
 ##otherwise HYSPLIT will throw up an error and stop.
@@ -91,7 +91,6 @@ class EmitTimes(object):
             for record in self.recordra:
                 fid.write(str(record)) 
 
-
    def parse_record(self, record):
        temp = record.split()
        year = int(temp[0])
@@ -134,17 +133,17 @@ class EmitTimes(object):
        iii=0
        rrr=[]
        for record in self.recordra:
-           print 'lat', record.lat, llcrnr[1], urcrnr[1]
-           print 'lon', record.lon, llcrnr[0], urcrnr[0]
+           print('lat', record.lat, llcrnr[1], urcrnr[1])
+           print('lon', record.lon, llcrnr[0], urcrnr[0])
 
            if record.lat < llcrnr[1] or record.lat > urcrnr[1]:
               rrr.append(iii)
-              print 'lat out'
+              print('lat out')
            elif record.lon< llcrnr[0] or record.lon > urcrnr[0]:
               rrr.append(iii)
-              print 'lon out'
+              print('lon out')
            iii+=1
-       print rrr
+       print(rrr)
        for iii in sorted(rrr, reverse=True):
            self.recordra.pop(iii)
            self.nrecs -= 1
@@ -178,23 +177,23 @@ class EmitTimes(object):
  
        numcircs = int(radius / dr)
        if radius%dr != 0:
-          print('Warning. Radius not evenly divisible by dr. Radius to ' , numcircs*dr)
+          print(('Warning. Radius not evenly divisible by dr. Radius to ' , numcircs*dr))
        if numcircs == 0:
           print('Warning. dr larger than radius') 
           numcircs = 1
           dr = radius
-       map = Basemap(projection="sinu", lon_0=lon, resolution="c")
-       x0,y0 = list(map(lon,lat))
-       x1,y1 = list(map(lon+1,lat+1))
+       #map = Basemap(projection="sinu", lon_0=lon, resolution="c")
+       #x0,y0 = list(map(lon,lat))
+       #x1,y1 = list(map(lon+1,lat+1))
        dt = 1000
-       t0,t1 = list(map(x0+dt, y0+dt, inverse=True))
+       #t0,t1 = list(map(x0+dt, y0+dt, inverse=True))
        dtheta = 40
        for n in range(1,numcircs+1):
            dth = dtheta / n   #keep arc length between points the same.
            if dth <=5:
               dth = 5
            xp, yp = circpts(x0,y0, dr*n, dtheta = dth)
-           lonp , latp = list(map(xp, yp, inverse=True))
+           #lonp , latp = list(map(xp, yp, inverse=True))
            latlist= np.concatenate((latlist, latp))
            lonlist = np.concatenate((lonlist, lonp))
            #print 'CONCAT' , latlist
@@ -223,14 +222,14 @@ class EmitTimes(object):
                    emitfile.write(self.datestr +  ' '  + duration + '  ' + latstr + ' ' + 
                           lonstr + ' ' + htstr + ' ' + rate_str + ' ' + 
                           '0   ' +  heat + '\n')
-       map2 = Basemap(projection="tmerc", lon_0=lonlist[0], lat_0= latlist[0], llcrnrlat=np.min(latlist)-1, urcrnrlat=np.max(latlist)+1,
-                                       llcrnrlon=np.min(lonlist)-1, urcrnrlon=np.max(lonlist)+1)
-       xp, yp = map2(lonlist, latlist)
-       map2.drawmeridians(np.arange(0,360,1), labels=[0,0,0,1])
-       map2.drawparallels(np.arange(0,360,1), labels=[1,0,0,0])
-       map2.drawcoastlines()
-       map2.plot(xp,yp, '-bo')
-       plt.show()
+       #map2 = Basemap(projection="tmerc", lon_0=lonlist[0], lat_0= latlist[0], llcrnrlat=np.min(latlist)-1, urcrnrlat=np.max(latlist)+1,
+       #                                llcrnrlon=np.min(lonlist)-1, urcrnrlon=np.max(lonlist)+1)
+       #xp, yp = map2(lonlist, latlist)
+       #map2.drawmeridians(np.arange(0,360,1), labels=[0,0,0,1])
+       #map2.drawparallels(np.arange(0,360,1), labels=[1,0,0,0])
+       #map2.drawcoastlines()
+       #map2.plot(xp,yp, '-bo')
+       #plt.show()
        emitfile.close()
        return nnnrecords
 
