@@ -233,7 +233,27 @@ def panda_daily(sdate, run_num=2, verbose=1, topdirpath='./', pkl_name='conc_dai
     print('panda pkl done ' , sdate, outdir)
 
 def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
-    colra=['date','meas_lat', 'meas_lon', 'vals','sourceid','stationid', 'level','thickness','psize','sourcedate',  \
+    """ Reads a datem file and returns a dataframe with colums described by colra
+       colra : 1st must be date, second must be lat, third must be longitude 
+       fname : base name of datem file to read and get information from
+       zlevs : 
+       sdate :
+    """
+    colra=['year','month','day','hour','duration','meas_lat', 'meas_lon', 'vals','sourceid','stationid', 'level','thickness']): 
+
+    dtp = {'year':int, 'month':int, 'day':int, 'hour':int}
+    datem = pd.read_csv(fname, names=colra, header=None, delimiter=r"\s+", dtype=dtp)
+    datem.columns = colra
+    datem['minute'] = datem['hour'] %100
+    datem['hour'] = datem['hour'] / 100
+    datem['hour'] = datem['hour'].astype(int)
+    def getdate(x): return datetime.datetime(x['year'], x['month'], x['day'], x['hour'], x['minute'])
+    datem['time'] = datem.apply(getdate, axis=1)
+    datem.drop(['year','month','day','hour','minute'], axis=1, inplace=True)
+    return datem
+
+def read_datem_file_old(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
+    colra=['year','month','day','hour','duration','meas_lat', 'meas_lon', 'vals','sourceid','stationid', 'level','thickness','psize','sourcedate',  \
            ]):
     """ Reads a datem file and returns a dataframe with colums described by colra
        colra : 1st must be date, second must be lat, third must be longitude 
@@ -251,22 +271,20 @@ def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
     #sdatera = []
     mlat = []
     mlon = []
-    #sourceid=[]
-    #stationid=[]
-    #colra=['date','vals','sourceid','stationid', 'level','thickness','psize','sourcedate',  \
-    #       'meas_lat', 'meas_lon']
     vhash = {}
     nhash = {}
     qhash = {}
     iii=7
     jjj=0
     for val in colra:
-        vhash[val].append([])
+        #vhash[val].append([])
+        vhash[val] = []
         nhash[val] = iii
         qhash[iii] = val
         iii += 1
         jjj += 1
     ##the date takes up  0,1,2,3
+    ##duration is 4th
     ##lat is 5th
     ##lon is 6th
     if not dummy:
@@ -284,9 +302,9 @@ def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
                  ##if value is -1 that means no valid info on the cdump grid. Meas point may be off grid.
                  #if float(temp[7]) != -1:
                  vhash[colra[0]].append(datetime.datetime(int(temp[0]), int(temp[1]), int(temp[2]), hh, mm))
-                 for val in vra:
-                     iii = nhash[val]
-                     vhash[val].append(float(temp[iii]))                     
+                 #for val in vra:
+                 #    iii = nhash[val]
+                 #    vhash[val].append(float(temp[iii]))                     
 
         if vhash[colra[0]] != []:
             vra = []
@@ -335,7 +353,7 @@ def panda_conc(sdate, edate,  run_num=2, verbose=0,
       date (dates in datem output file)
       vals (concentration from datem output file)
       sourceid (ascii latitude_longitude of release location)
-      ustar (friction velocity at release location and time)
+      #ustar (friction velocity at release location and time)
       sourcedate (date of release) 
       psize (particle size in microns)
       level (top height of leve in meters)
@@ -381,7 +399,7 @@ def panda_conc(sdate, edate,  run_num=2, verbose=0,
                dftot = df.copy()
             else:
                dftot = pd.merge(dftot, df, how='outer') 
-            nnn+=1
+            nnn+=e
         else:
             with open(topdirpath + logfile, 'a') as fid:
                 fid.write('no model.txt file in ' +  newdir + '\n')
