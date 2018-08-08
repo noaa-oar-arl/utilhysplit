@@ -25,18 +25,24 @@ def find_range(ds):
     dt = datetime.timedelta(hours=24)
     done=False
     rlist = []
+    alist = []
+    daylist = []
     jjj=0
     while not done:
        ix = (ds.index > d1) & (ds.index < d1+dt) 
        dsub = ds[ix]
        rrr = dsub.max() - dsub.min()
+       #print(dsub)
+       #print(dsub.mean())
+       alist.append(dsub.mean())
+       daylist.append(datetime.datetime(d1.year, d1.month, d1.day, 0))
        rlist.append(rrr)
        d1 = d1 + dt
        if d1 > de: done=True       
        jjj+=1
        if jjj> 400: done=True
-    print(dsub)
-    return rlist
+    pa = pd.Series(alist, index=daylist)
+    return rlist, pa
 
 def relh(x):
     #temp should be in Celsius
@@ -83,25 +89,50 @@ class Mverify(object):
 
     def find_obs(self, isd=True):
         mdata = ish_mod.ISH()
-        self.obs = mdata.add_data(self.dates, country=None, box=self.area, resample=False)
-        self.obs['relh'] = self.obs.apply(relh, axis=1) 
-        self.obs['latlon'] = str(self.obs['latitude']) + ' ' + str(self.obs['longitude'])
+        obs = mdata.add_data(self.dates, country=None, box=self.area, resample=False)
+        print(obs[0:10])
+        print(obs.columns.values)
+        obs['relh'] = obs.apply(relh, axis=1) 
+        obs['latlon'] = str(obs['latitude']) + ' ' + str(obs['longitude'])
         #print(self.obs['latitude'].unique())
         #print(self.obs['longitude'].unique())
         #print(self.obs.columns.values)
         #rplot(self.obs)
-        return self.obs
+        return obs.copy()
+
 
 area = [46.3,-120,46.9, -119]
-d1 = datetime.datetime(2012,1,1,0)
-d2 = datetime.datetime(2012,12,1,0)
-sv = Mverify([d1,d2], area)
-obs = sv.find_obs()
-obs.set_index('time', inplace=True)
-relh = obs['relh']
-rlist = find_range(relh)
-plt.plot(rlist)
+year= 1982
+endyear = 1983
+done = False
+iii=0
+while not done:
+    area = [46.3,-120,46.9, -119]
+    d1 = datetime.datetime(year,1,1,0)
+    d2 = datetime.datetime(year,12,31,23)
+    sv = Mverify([d1,d2], area)
+    obsb = sv.find_obs()
+    obsb.set_index('time', inplace=True)
+    relh = obsb['relh']
+    rlist, pa = find_range(relh)
+    print(pa[0:10])
+    pw = pa.resample('W').mean()
+    pm = pa.resample('M').mean()
+    if iii==0:
+        relhmonth = pm
+        relhweek = pw
+    else:
+        relhmonth = pd.concat([pmseries,pm], axis=1)
+        relhweek = pd.concat([pwseries,pw], axis=1)
+    year = year + 1
+    iii += 1
+    if year > endyear: done=True
+print('HERE')
+print(relhmonth)
+plt.plot(relhmonth)
 plt.show()
+
+
 
 
 
