@@ -1,4 +1,3 @@
-#!/opt/Tools/anaconda3/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 from math import *
 import sys 
@@ -46,7 +45,7 @@ class EmitLine(object):
        self.duration = duration
        self.lat = lat
        self.lon = lon
-       self.heigt=height
+       self.height=height
        self.rate = rate
        self.area = area
        self.heat = heat
@@ -56,10 +55,13 @@ class EmitLine(object):
        returnstr += self.duration + ' '
        returnstr += str(self.lat) + ' '
        returnstr += str(self.lon) + ' '
-       reuturnstr += str(self.height) + ' '
-       reuturnstr += str(self.rate) + ' '
-       reuturnstr += str(self.area) + ' '
-       reuturnstr += str(self.heat) + ' \n'
+       returnstr += str(self.height) + ' '
+       #returnstr += str(self.rate) + ' '
+       returnstr += '{:1.2e}'.format(self.rate) + ' '
+       returnstr += '{:1.2e}'.format(self.area) + ' '
+       returnstr += '{:1.2e}'.format(self.heat) + ' \n'
+       #returnstr += str(self.area) + ' '
+       #returnstr += str(self.heat) + ' \n'
        return returnstr
 
 class EmitTimes(object):
@@ -84,6 +86,7 @@ class EmitTimes(object):
 
    def write_new(self, filename, duration='0024'):
        datestr = self.sdate.strftime('%Y %m %d %H ')
+       #print('FILENAME EMIT', filename)
        with open(filename, 'w') as fid:
             fid.write(self.header_str())
             fid.write(datestr + ' ' + duration + ' ' + str(self.nrecs) + '\n')
@@ -133,17 +136,17 @@ class EmitTimes(object):
        iii=0
        rrr=[]
        for record in self.recordra:
-           print('lat', record.lat, llcrnr[1], urcrnr[1])
-           print('lon', record.lon, llcrnr[0], urcrnr[0])
+           #print('lat', record.lat, llcrnr[1], urcrnr[1])
+           #print('lon', record.lon, llcrnr[0], urcrnr[0])
 
            if record.lat < llcrnr[1] or record.lat > urcrnr[1]:
               rrr.append(iii)
-              print('lat out')
+              #print('lat out')
            elif record.lon< llcrnr[0] or record.lon > urcrnr[0]:
               rrr.append(iii)
-              print('lon out')
+              #print('lon out')
            iii+=1
-       print(rrr)
+       #print(rrr)
        for iii in sorted(rrr, reverse=True):
            self.recordra.pop(iii)
            self.nrecs -= 1

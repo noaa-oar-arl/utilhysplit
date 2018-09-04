@@ -364,7 +364,7 @@ class NameList():
  
     def __init__(self, fname='SETUP.CFG', working_directory='./'):
         self.fname = fname 
-        self.nlist = {}
+        self.nlist = {}  #dictionary
         self.descrip = {}
         self._load_descrip()
         if working_directory[-1] != '/':
@@ -373,6 +373,9 @@ class NameList():
 
     def add_n(self, nlist):
         self.nlist = nlist
+ 
+    def add(self, name, value):
+        self.nlist[name] = value
 
     def rename(self, name):
         self.fname = name
@@ -464,7 +467,7 @@ class ControlLoc():
         
  
     def definition(self, line):
-        temp = line.split(' ')
+        temp = line.split()
         try:
             self.lat = float(temp[0])
         except:
