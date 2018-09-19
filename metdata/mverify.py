@@ -6,9 +6,12 @@ import pickle as pickle
 from optparse import OptionParser
 import datetime
 import sys
+import monet
+#from  monet.obs import *
 from monet.obs import ish_mod
-import monet.obs.obs_util as obs_util
+#import monet.obs.obs_util as obs_util
 import matplotlib.pyplot as plt
+import seaborn as sns
 #from monet import MONET
 
 """
@@ -42,6 +45,21 @@ def rplot(df):
     ax3.plot(df['time'], df['t'], '-b.')
     plt.show()
 
+def r2plot(df):
+    sns.set()
+    fig = plt.figure(1)
+    ax2 = fig.add_subplot(2,1,1)
+    ax2.plot(df['time'], df['dpt'], '-b.')
+    ax2.set_xlabel('Time')
+    ax2.set_ylabel('Dew Point')
+    ax3 = fig.add_subplot(2,1,2)
+    ax3.plot(df['time'], df['t'], '-b.')
+    ax3.set_xlabel('Time')
+    ax3.set_ylabel('Temperature')
+    ax3 = fig.add_subplot(2,1,2)
+    plt.show()
+
+
 class Mverify(object):
 
     def __init__(self, dates, area):
@@ -64,13 +82,14 @@ class Mverify(object):
 
     def find_obs(self, isd=True):
         mdata = ish_mod.ISH()
+        #self.obs = monet.obs.aqs.add_data(self.dates)
         self.obs = mdata.add_data(self.dates, country=None, box=self.area, resample=False)
         self.obs['relh'] = self.obs.apply(relh, axis=1) 
         self.obs['latlon'] = str(self.obs['latitude']) + ' ' + str(self.obs['longitude'])
         print(self.obs['latitude'].unique())
         print(self.obs['longitude'].unique())
         print(self.obs.columns.values)
-        rplot(self.obs)
+        r2plot(self.obs)
 
 parser = OptionParser()
 

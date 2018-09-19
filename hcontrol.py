@@ -35,8 +35,6 @@ def writelanduse(landusedir, outdir='./'):
           fid.write(landusedir + "/bdyfiles/ \n")
 
 
-        
-
 class ConcGrid():
     """concentration grid as defined by 10 lines in the HYSPLIT concentration CONTROL file.
        interval is
@@ -509,7 +507,8 @@ class ControlLoc():
 class HycsControl():
     """class which represents the HYSPLIT control file and all the information in it"""
 
-    def __init__(self, fname='CONTROL', working_directory='./'):
+    def __init__(self, fname='CONTROL', working_directory='./',\
+                 rtype='dispersion'):
         self.fname = fname        
         if working_directory[-1] != '/':
            working_directory += '/'
@@ -523,7 +522,8 @@ class HycsControl():
         self.num_grids = 0  #number of concentration grids.
         self.num_sp = 0     #number of pollutants / species
         self.num_met = 0    #number of met files
-    
+        self.rtype = rtype  #dispersion or trajectory run.   
+ 
     def rename(self,name, working_directory='./'):
         self.fname=name
         if working_directory[-1] != '/':
@@ -629,6 +629,11 @@ class HycsControl():
                 fid.write(note + "\n")
                 iii+=1
 
+            if self.rtype=='trajectory':
+                fid.write(self.outdir + "\n")               
+                fid.write(self.outfile)               
+                return False
+
             if annotate: note = sp28 + '#Number of Pollutant Species'
             fid.write(str(self.num_sp) + note + "\n")
             iii=0
@@ -700,6 +705,14 @@ class HycsControl():
                 self.metdirs.append(content[ii].strip()) 
                 self.metfiles.append(content[ii+1].strip()) 
             zz = zz + 2*self.num_met
+            ##if it is a trajectory control file then just
+            ##two more lines
+            if self.rtype == 'trajectory':  
+               self.outdir = content[zz]
+               self.outfile = content[zz+1]
+               return 'Traj'
+            ##this is end of trajectory file 
+
             self.num_sp = int(content[zz])
             zz+=1
             for ii in range(zz, zz+4*self.num_sp, 4):

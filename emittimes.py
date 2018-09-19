@@ -56,12 +56,9 @@ class EmitLine(object):
        returnstr += str(self.lat) + ' '
        returnstr += str(self.lon) + ' '
        returnstr += str(self.height) + ' '
-       #returnstr += str(self.rate) + ' '
        returnstr += '{:1.2e}'.format(self.rate) + ' '
        returnstr += '{:1.2e}'.format(self.area) + ' '
        returnstr += '{:1.2e}'.format(self.heat) + ' \n'
-       #returnstr += str(self.area) + ' '
-       #returnstr += str(self.heat) + ' \n'
        return returnstr
 
 class EmitTimes(object):

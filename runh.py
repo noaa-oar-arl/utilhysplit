@@ -73,7 +73,6 @@ def source_generator(df, area=1, altitude=10):
 
 class Station(object):  
     """Helper class to store information about a measurement station or location where we want to model concentrations"""
-
     def __init__(self, name='name', sample_start="00 00 00 00", stime=1, location=(0,0), cname='9999',
                  cspan=[10,10], cdiff=[0.1,0.1]):
         """name - name of measurement location or station
@@ -154,7 +153,7 @@ class RunParams(object):
 
        ##Change values depending on run number input. So each run number is
        ##associated with these inputs.
-       if num == 1:
+       if num == 1 or num==2:
            self.clevels = [20,50,100,200,250]   #use 4 vertical level.
            self.nbptyp  =  '1'              #use 1 bin for particle sizes.       
            self.numpar = '10000'            #use 100,000 particles
@@ -514,7 +513,6 @@ def concmerge(hdir, files2merge):
 def create_plume(run_num, start_date, end_date,  dframe, 
              verbose=True, topdirpath = './',  
              hysplitdir = './'):
-
     rhash = RunParams(run_num, met_type = met_type, topdirpath=topdirpath)
     verbose=True 
     tdirpath = rhash.topdirpath
@@ -650,6 +648,7 @@ def mult_run(run_num, start_date, end_date,  dframe, runh=0, process_max = 24, m
             control.add_vmotion(0)
             for mfile in metfiles:
                 control.add_metfile(mfile[0], mfile[1])
+            ##NOTE that the rate in the particle section is set to 1 because the rate is set when the location is specified.
             add_psizes(control, rhash.emission_hrs, rhash.psizelist, verbose=False)
 
             cfile_list = []
@@ -668,6 +667,7 @@ def mult_run(run_num, start_date, end_date,  dframe, runh=0, process_max = 24, m
                 cfile_list.append(cname2)
             ##add source lines to the control file object. 
             sloc = source.center
+            ##The hourly release rate is set here, on the lines for location.
             if rhash.vert:  #if want to make a line source from ground to top altitude add a source at 0 elevation.
                control.add_location(latlon = (sloc[0], sloc[1]), alt= source.altitude[0], rate = source.rate, area = source.area)
                control.add_location(latlon = (sloc[0], sloc[1]), alt= source.altitude[1], rate = source.rate, area = source.area)

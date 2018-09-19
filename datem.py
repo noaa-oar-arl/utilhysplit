@@ -232,27 +232,29 @@ def panda_daily(sdate, run_num=2, verbose=1, topdirpath='./', pkl_name='conc_dai
        print(dftot)
     print('panda pkl done ' , sdate, outdir)
 
-def read_datem_file(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
+def read_datem_file(fname, dummy=False, verbose=False, \
+    colra=['year','month','day','hour','duration','meas_lat', 'meas_lon', 'vals','stationid','sourceid', 'level','thickness']): 
     """ Reads a datem file and returns a dataframe with colums described by colra
-       colra : 1st must be date, second must be lat, third must be longitude 
-       fname : base name of datem file to read and get information from
+       colra : should have columns for 'year' 'month' 'day' 'hour'. 'hour' column should be in hhmm format. 
+       fname : 
        zlevs : 
        sdate :
-    """
-    colra=['year','month','day','hour','duration','meas_lat', 'meas_lon', 'vals','sourceid','stationid', 'level','thickness']): 
 
+       returns pandas dataframe.
+    """
     dtp = {'year':int, 'month':int, 'day':int, 'hour':int}
     datem = pd.read_csv(fname, names=colra, header=None, delimiter=r"\s+", dtype=dtp)
     datem.columns = colra
     datem['minute'] = datem['hour'] %100
     datem['hour'] = datem['hour'] / 100
     datem['hour'] = datem['hour'].astype(int)
-    def getdate(x): return datetime.datetime(x['year'], x['month'], x['day'], x['hour'], x['minute'])
-    datem['time'] = datem.apply(getdate, axis=1)
+    def getdate(x): return datetime.datetime(int(x['year']), int(x['month']),
+                           int(x['day']), int(x['hour']), int(x['minute']))
+    datem['date'] = datem.apply(getdate, axis=1)
     datem.drop(['year','month','day','hour','minute'], axis=1, inplace=True)
     return datem
 
-def read_datem_file_old(fname, zlevs, pdict,sdate, dummy=False, verbose=False, \
+def read_datem_file_old(fname, sdate, dummy=False, verbose=False, \
     colra=['year','month','day','hour','duration','meas_lat', 'meas_lon', 'vals','sourceid','stationid', 'level','thickness','psize','sourcedate',  \
            ]):
     """ Reads a datem file and returns a dataframe with colums described by colra
@@ -358,8 +360,8 @@ def panda_conc(sdate, edate,  run_num=2, verbose=0,
       psize (particle size in microns)
       level (top height of leve in meters)
       thickness (thickness of level in meters) 
-      topdirpath is directory where the USTAR directory and the run(number) directory are found.
 
+      topdirpath is directory where the USTAR directory and the run(number) directory are found.
       sdate   : first day to return data for
       edate   : last day to return data for
       run_num    : the run number to create the pickle file for.
@@ -399,7 +401,7 @@ def panda_conc(sdate, edate,  run_num=2, verbose=0,
                dftot = df.copy()
             else:
                dftot = pd.merge(dftot, df, how='outer') 
-            nnn+=e
+            nnn+=1
         else:
             with open(topdirpath + logfile, 'a') as fid:
                 fid.write('no model.txt file in ' +  newdir + '\n')
