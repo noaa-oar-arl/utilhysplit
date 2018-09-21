@@ -62,6 +62,7 @@ class EmitTimes(object):
        self.cycle_list = []  #list of EmitCycle objects.
        self.ncycles = 0
        self.chash = {}
+       self.sdatelist =[] 
 
    def header_str(self):
       returnval =  'YYYY MM DD HH    DURATION(hhhh) #RECORDS \n'
@@ -98,6 +99,7 @@ class EmitTimes(object):
         dt = datetime.timedelta(hours=int(duration))        
         d2 = sdate + dt
         self.chash[self.ncycles-1] = (d1, d2)
+        self.sdatelist.append(sdate)
  
    def filter_records(self,llcrnr, urcrnr):
        for ec in self.cycle_list:

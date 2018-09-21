@@ -120,30 +120,6 @@ def nickmapping(sid):
         nickname = ''
     return nickname
 
-def get_stack_heights(sid):
-     """sid can either be the orispl code (integer)
-     or the station name.
-     """
-     ##coal creek: two units, same height
-     ##chimney height 650 feet = 198 m
-     ##https://swce.coop/wp-content/uploads/2016/07/Coal-Creek-Information.pdf
-     hdict[6030] = 198
-     ndict['coal creek'] = 6030
-
-
-     rt = True
-     try: 
-         ht == hdict[sid]
-     except:
-         rt = False
-     if rt: 
-         return ht
-     else: 
-         try:
-            orispl = ndict[sid.lower().strip()]
-         except:
-             return -999
-         return hdict[orispl]           
 
 def concmerge_old(hdir, files2merge):
     """
@@ -213,76 +189,144 @@ class SO2Verify(object):
     #def add_siteidlist(self, slist):
     #    self.siteidlist.extend(slist)
 
-    def find_emissions(self, testcase=False):
+    def find_emissions(self, testcase=False, byunit=False, verbose=False):
         """find emissions using the CEMSEmissions class
         """
         print("FIND EMISSIONS")
         area = self.area
         if testcase:
             efile = 'emission_02-28-2018_103721604.csv'
-            self.cems.load(efile, verbose=True)
+            self.cems.load(efile, verbose=verbose)
         else:
-            self.cems.add_data([self.d1, self.d2], states=self.states, download=True, verbose=True)
+            self.cems.add_data([self.d1, self.d2], states=self.states,
+                                download=True, verbose=True)
         if area:
             self.cems.df = obs_util.latlonfilter(self.cems.df, (area[2], area[0]), (area[3], area[1]))
         self.ehash = self.cems.create_location_dictionary()
+        
+        self.stackhash = cems_mod.get_stack_dict(cems_mod.read_stack_height(), orispl=self.ehash.keys())
+
+        #key is the orispl_code and value is (latitude, longitude)
         print('List of emissions sources found\n', self.ehash)
         print('----------------')
         namehash = self.cems.create_name_dictionary()
         self.meanhash={}    
         ##This gets a pivot table with rows time.
         ##columns are (orisp, unit_id) or just (orisp)
-        data1 = self.cems.cemspivot(('so2_lbs'), daterange=[self.d1, self.d2], verbose=True, unitid=False)
-        for loc in self.ehash:
+        data1 = self.cems.cemspivot(('so2_lbs'), daterange=[self.d1, self.d2],
+                verbose=True, unitid=byunit)
+        print('done with pivot----------------')
+        print(self.ehash)
+        
+        for oris in self.ehash.keys():
             print('----------------')
             try:
                 #data = data1[loc].sum(axis=1)
-                data = data1[loc]
+                data = data1[oris]
             except: 
                 data = pd.Series()
             ##print statements show info about emissions point.
-            print(str(loc))
-            print(namehash[loc])
-            print(self.ehash[loc])
-            if not np.isnan(data.mean(axis=0)):
-                self.meanhash[loc] = data.mean(axis=0) * 0.453592
+            #print(data[0:10])
+            qmean = data.mean(axis=0)
+            #qmean = qmean[0]
+            qmax = data.max(axis=0)
+            #qmax = qmax[0]
+            print(namehash[oris])
+            print('ORISPL ' + str(oris))
+            print(self.ehash[oris])
+            if not np.isnan(qmean):
+                self.meanhash[oris] = qmean * 0.453592
             else: 
-                self.meanhash[loc] = 0
-            print('Mean emission (lbs)', data.mean(axis=0))
-            print('Maximum emission (lbs)', data.max(axis=0))
-   
-    def get_sources(self):
+                self.meanhash[oris] = 0
+            print('Mean emission (lbs)', qmean)
+            print('Maximum emission (lbs)', qmax)
+            print('Stack id, Stack height (meters)')
+            for val in self.stackhash[oris]:
+                print(str(val[0]) + ',    ' + str(val[1]*0.3048))
+
+
+    def get_so2(self):
+        sources = self.get_sources(stype='so2_lbs') 
+        sources = sources * 0.453592  #convert from lbs to kg.
+        return sources
+
+    def get_heat(self):
+        sources = self.get_sources(stype='heat_input (mmbtu)') 
+        mult = 1.055e9 / 3600.0  
+        sources = sources * mult  #convert from mmbtu to watts
+        return sources
+ 
+    def get_sources(self, stype='so2_lbs'):
         """ 
-        load self.sources attribute from the cems class dataframe so2 column.
+        
         """
         print("GET SOURCES")
         if self.cems.df.empty: self.find_emissions()
-        sources = self.cems.cemspivot(('so2_lbs'), daterange=[self.d1, self.d2], verbose=True, unitid=False)
+        sources = self.cems.cemspivot((stype), daterange=[self.d1, self.d2],
+                  verbose=False, unitid=False)
         ehash = self.cems.create_location_dictionary()
+        stackhash = cems_mod.get_stack_dict(cems_mod.read_stack_height(), orispl=self.ehash.keys())
         ##This block replaces ORISP code with (lat, lon) tuple as headers
-        ##TO DO, add stack height and heat realease to tuple. 
         cnew = []
         columns=list(sources.columns.values)
-        for ccc in columns:
-            cnew.append(ehash[ccc])
+        for oris in columns:
+            sid, ht = zip(*stackhash[oris])
+            ##puts the maximum stack height associated with that orispl code.
+            newcolumn = (ehash[oris][0], ehash[oris][1], np.max(ht), oris)
+            cnew.append(newcolumn)
         sources.columns=cnew
         #print(sources[0:20])
-        self.sources = sources * 0.453592  #convert from lbs to kg.
+        return sources
 
+
+    def emittimes(self, edate):
+        from emittimes import EmitTimes
+        efile = EmitTimes()
+        df = self.get_so2()
+        dfheat = self.get_heat()
+        locs=df.columns.values
+        d1 = edate  #date to start emittimes file.
+        for hdr in locs:
+            print('HEADER', hdr)
+            dftemp = df[hdr]
+            dfh = dfheat[hdr]
+            
+            oris = hdr[3]
+            height = hdr[2]
+            lat = hdr[0]
+            lon = hdr[1]
+            record_duration='0100'
+            area=1
+            ename = 'EMIT' + str(oris) + '.txt'
+            efile = EmitTimes(filename=ename)
+            dt = datetime.timedelta(hours=24)
+            efile.add_cycle(d1, "0024")
+            for date, rate in dftemp.iteritems():
+                if date >= edate:
+                    heat=dfh[date]
+                    check= efile.add_record(date, record_duration, lat, lon, height,
+                                     rate, area, heat)
+                    if not check: 
+                       d1 = d1 + dt
+                       efile.add_cycle(d1, "0024")
+                       check2= efile.add_record(date, record_duration, lat, lon, height,
+                                     rate, area, heat)
+                       if not check2: 
+                           print('sverify WARNING: record not added to EmitTimes')
+                           print(date.strftime("%Y %m %d %H:%M"))
+
+            efile.write_new(ename)
+  
     def plot_emissions(self):
         """plot time series of emissions"""
         sns.set()
         namehash = self.cems.create_name_dictionary()
-        data1 = self.cems.cemspivot(('so2_lbs'), daterange=[self.d1, self.d2], verbose=True, unitid=False)
+        data1 = self.cems.cemspivot(('so2_lbs'), daterange=[self.d1, self.d2],
+                verbose=False, unitid=False)
         for loc in self.ehash:
             fig = plt.figure(self.fignum)
             ax = fig.add_subplot(1,1,1)
-            #data = self.cems.get_var(('so2_lbs'), loc=[loc], daterange=[self.d1, self.d2],  verbose=False)
-            #data = self.cems.get_var(('so2','lbs'), loc=[loc])
             data = data1[loc] * 0.453592
-            #data = data.rename("so2_kg")
-            #print(type(data)) #ERASE
-            #print(data)       #ERASE
             ax.plot(data, '--b.')   
             plt.ylabel('SO2 mass kg')
             plt.title(str(loc) + ' ' + namehash[loc])
@@ -380,16 +424,10 @@ class SO2Verify(object):
             ##TO DO - something happens when converting units of mdl column.
             #self.obs = epa_util.convert_epa_unit(self.obs, obscolumn='mdl', unit='UG/M3')
         area = self.area
-        #print('column values of observation' , self.obs.columns.values)
         if area: self.obs = obs_util.latlonfilter(self.obs, (area[2], area[0]), (area[3], area[1]))
         rt = datetime.timedelta(hours=72)
         self.obs = obs_util.timefilter(self.obs, [self.d1, self.d2+rt])
-        #print('Site ids in obs dataset', self.obs['siteid'].unique()) 
         siteidlist= np.array(self.siteidlist)
-        #siteidlist = [380570124, 380570123, 380570118, 380570102, 380570004, 380650002]
-        #siteidlist = [381050103, 381050105, 380930101]
-        #siteidlist = [381050103, 381050105] 
-        #siteidlist = [380930101]
         if siteidlist.size: 
             print('HERE -------------------')
             self.obs = self.obs[self.obs['siteid'].isin(siteidlist)]
@@ -681,6 +719,7 @@ if options.eplot:
     fig = plt.figure(fignum)
     ax = create_map(fignum)
     sv.map_emissions(ax)
+    sv.emittimes(sv.d1)
     plt.show()
 
 if options.oplot:
