@@ -5,15 +5,7 @@ from scipy.io import netcdf
 from pylab import *
 import numpy as np
 import numpy.ma as ma
-#import matplotlib.pyplot as plt
-#import string
-#import datetime
-#from matplotlib.path import Path
-#import shapely.geometry as sgeo
-#from mpl_toolkits.basemap import Basemap
-#from hysplit import *
 import datetime
-#from mpl_toolkits.basemap import Basemap
 
 ##Note. the place holder lat lon values in the CONTROL file must be within the meteorological grid-space.
 ##otherwise HYSPLIT will throw up an error and stop.
@@ -21,9 +13,12 @@ import datetime
 ##For a line source, in the second line the emissions must be zero. Emission for the source defined in first line only:
 
 """class EmitTimes 
-   function circpts
-   function sat2emit"""
+   class EmitLine
+   class EmitCycle
 
+   function circpts
+   function sat2emit
+"""
 
 
 def circpts(x0, y0, r, dtheta=10):
@@ -35,8 +30,6 @@ def circpts(x0, y0, r, dtheta=10):
     #print 'ptx' , x0 , xp
     #print 'pty' , y0 , str(yp) 
     return np.array(xp), np.array(yp) 
-
-
 
 class EmitLine(object):
 
@@ -61,14 +54,92 @@ class EmitLine(object):
        returnstr += '{:1.2e}'.format(self.heat) + ' \n'
        return returnstr
 
+
 class EmitTimes(object):
 
    def __init__(self, filename='EMITIMES.txt'):
        self.filename=filename
+       self.cycle_list = []  #list of EmitCycle objects.
+       self.ncycles = 0
+       self.chash = {}
+
+   def header_str(self):
+      returnval =  'YYYY MM DD HH    DURATION(hhhh) #RECORDS \n'
+      returnval += 'YYYY MM DD HH MM DURATION(hhmm) LAT LON HGT(m) RATE(/h) AREA(m2) HEAT(w)  \n'
+      return returnval 
+
+   def write_new(self, filename):
+       with open(filename, 'a') as fid:
+           fid.write(self.header_str())
+       for ecycle in self.cycle_list:
+           ecycle.write_new(filename)
+
+   def read_file(self):
+       with open(self.filename, 'r') as fid:
+            fid.readline()
+            fid.readline()
+            done=False
+            while not done:
+               ec = EmitCycle()
+               check = ec.read_cycle(fid)
+               if not check: 
+                  done=True
+               else:
+                  self.cycle_list.append(ec)
+                  self.ncycles += 1
+
+   def add_cycle(self, sdate, duration):
+        self.ncycles +=1 
+        ec = EmitCycle()
+        ec.add_start_date(sdate)
+        ec.add_duration(duration)
+        self.cycle_list.append(ec)
+        d1 = sdate
+        dt = datetime.timedelta(hours=int(duration))        
+        d2 = sdate + dt
+        self.chash[self.ncycles-1] = (d1, d2)
+ 
+   def filter_records(self,llcrnr, urcrnr):
+       for ec in self.cycle_list:
+           ec.filter_records(llcrnr, urcrnr)
+
+ 
+   def add_record(self, date, duration, lat, lon,
+                   height, rate, area, heat):
+        """
+        adds a record to a cycle based on the date of the record.
+        """
+        ###This block determines which cycle the record goes into
+        ###based on the date.
+        cycle_number = -1
+        for ccc in self.chash.keys():
+            if date >= self.chash[ccc][0] and date < self.chash[ccc][1]:
+               cycle_number = ccc
+        if cycle_number == -1:
+            rvalue = False
+        else:
+            self.cycle_list[cycle_number].add_record(date, duration, lat, lon,
+                                                 height, rate, area, heat)
+            rvalue = True 
+        return rvalue 
+
+class EmitCycle(object):
+   """Helper class for EmitTimes
+   This represents a cycle in an EmitTimes file.
+   Each cycle begins with a line which has the start date, duration
+   and number of records. Then the records follow.
+   """
+   #def __init__(self, filename='EMITIMES.txt'):
+   def __init__(self):
+       #self.filename=filename
        self.recordra=[]
        self.nrecs = 0
+       self.duration = ''
 
    def parse_header(self, header):
+       """
+       read header in the file.
+       """
        temp = header.split()
        year = int(temp[0])
        month = int(temp[1])
@@ -81,12 +152,21 @@ class EmitTimes(object):
        self.dt = datetime.timedelta(hours=dhour) 
        return nrecs
 
-   def write_new(self, filename, duration='0024'):
+   def add_start_date(self, sdate):
+       self.sdate = sdate
+ 
+   def add_duration(self, duration):
+       self.duration = duration
+
+   def write_new(self, filename):
+       """
+       write new emittimes file.
+       """
        datestr = self.sdate.strftime('%Y %m %d %H ')
        #print('FILENAME EMIT', filename)
-       with open(filename, 'w') as fid:
-            fid.write(self.header_str())
-            fid.write(datestr + ' ' + duration + ' ' + str(self.nrecs) + '\n')
+       with open(filename, 'a') as fid:
+            #fid.write(self.header_str())
+            fid.write(datestr + ' ' + self.duration + ' ' + str(self.nrecs) + '\n')
              
             for record in self.recordra:
                 fid.write(str(record)) 
@@ -115,6 +195,35 @@ class EmitTimes(object):
           heat=0
        return EmitLine(sdate, duration, lat, lon, ht, rate, area, heat) 
 
+   def add_record(self, sdate, duration, lat, lon, ht, rate, area, heat):
+       """Inputs
+       sdate
+       duration
+       lat
+       lon
+       height
+       rate
+       area
+       heat
+       """
+       eline = EmitLine(sdate, duration, lat, lon, ht, rate, area, heat)
+       self.recordra.append(eline)
+       self.nrecs +=1
+
+   def read_cycle(self, fid):
+       check=True
+       recordra=[]
+       header = fid.readline()
+       if not header: 
+         check=False
+       else:
+           nrecs =  self.parse_header(header)
+           for line in range(0,nrecs):
+               temp = fid.readline()
+               recordra.append(self.parse_record(temp))
+           self.recordra.extend(recordra)
+           self.nrecs = nrecs         
+       return check
 
    def read_file(self):
        recordra=[]
@@ -130,36 +239,28 @@ class EmitTimes(object):
        self.nrecs = nrecs         
 
    def filter_records(self,llcrnr, urcrnr):
+       """Needs to be moved to EmitTimes"""
        iii=0
        rrr=[]
        for record in self.recordra:
-           #print('lat', record.lat, llcrnr[1], urcrnr[1])
-           #print('lon', record.lon, llcrnr[0], urcrnr[0])
-
            if record.lat < llcrnr[1] or record.lat > urcrnr[1]:
               rrr.append(iii)
-              #print('lat out')
            elif record.lon< llcrnr[0] or record.lon > urcrnr[0]:
               rrr.append(iii)
-              #print('lon out')
            iii+=1
-       #print(rrr)
        for iii in sorted(rrr, reverse=True):
            self.recordra.pop(iii)
            self.nrecs -= 1
 
-   def header_str(self):
-      returnval =  'YYYY MM DD HH    DURATION(hhhh) #RECORDS \n'
-      returnval += 'YYYY MM DD HH MM DURATION(hhmm) LAT LON HGT(m) RATE(/h) AREA(m2) HEAT(w)  \n'
-      return returnval 
 
-
-   def write_header(self, sdate, duration='0100'):
+class Cylindrical(object):
+   """9/20/2018 These methods were broken off from the EmitTimes class and
+      may need to be modified to stand alone
+   """
+   def __init__(self, sdate, duration):
+       name = 'cylindrical'
        self.sdate = sdate
-       self.datestr = sdate.strftime('%Y %m %d %H %M')
        self.duration = duration
-       with open(self.filename, 'w') as emitfile:
-            emitfile.writelines(self.header_str())
 
    def ash(self):
        pollnum = 4
