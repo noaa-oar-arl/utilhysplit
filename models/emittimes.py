@@ -69,10 +69,22 @@ class EmitTimes(object):
       returnval += 'YYYY MM DD HH MM DURATION(hhmm) LAT LON HGT(m) RATE(/h) AREA(m2) HEAT(w)  \n'
       return returnval 
 
+
+   def findmaxrec(self):
+       maxrec = 0
+       for ec in self.cycle_list:
+           if ec.nrecs > maxrec:
+              maxrec = ec.nrecs
+       return maxrec
+
+
    def write_new(self, filename):
+       maxrec = self.findmaxrec()
        with open(filename, 'a') as fid:
            fid.write(self.header_str())
        for ecycle in self.cycle_list:
+           for iii in range(0, maxrec - ecycle.nrecs):
+              ecycle.add_dummy_record()
            ecycle.write_new(filename)
 
    def read_file(self):
@@ -91,9 +103,7 @@ class EmitTimes(object):
 
    def add_cycle(self, sdate, duration):
         self.ncycles +=1 
-        ec = EmitCycle()
-        ec.add_start_date(sdate)
-        ec.add_duration(duration)
+        ec = EmitCycle(sdate, duration)
         self.cycle_list.append(ec)
         d1 = sdate
         dt = datetime.timedelta(hours=int(duration))        
@@ -132,11 +142,17 @@ class EmitCycle(object):
    and number of records. Then the records follow.
    """
    #def __init__(self, filename='EMITIMES.txt'):
-   def __init__(self):
-       #self.filename=filename
+   def __init__(self, sdate, duration):
+       self.sdate = sdate
+       self.duration = duration  #duration of the cycle.
        self.recordra=[]
        self.nrecs = 0
-       self.duration = ''
+       ##all cycles in a file must have same number of records.
+       ##so some cycles may need to have dummy records
+       ##with zero emissions.
+       self.dummy_recordra = []
+       self.drecs = 0
+       
 
    def parse_header(self, header):
        """
@@ -154,23 +170,19 @@ class EmitCycle(object):
        self.dt = datetime.timedelta(hours=dhour) 
        return nrecs
 
-   def add_start_date(self, sdate):
-       self.sdate = sdate
- 
-   def add_duration(self, duration):
-       self.duration = duration
-
    def write_new(self, filename):
        """
        write new emittimes file.
        """
+       maxrec = self.nrecs + self.drecs 
        datestr = self.sdate.strftime('%Y %m %d %H ')
        #print('FILENAME EMIT', filename)
        with open(filename, 'a') as fid:
             #fid.write(self.header_str())
-            fid.write(datestr + ' ' + self.duration + ' ' + str(self.nrecs) + '\n')
-             
+            fid.write(datestr + ' ' + self.duration + ' ' + str(maxrec) + '\n')
             for record in self.recordra:
+                fid.write(str(record)) 
+            for record in self.dummy_recordra:
                 fid.write(str(record)) 
 
    def parse_record(self, record):
@@ -196,6 +208,13 @@ class EmitCycle(object):
        except:
           heat=0
        return EmitLine(sdate, duration, lat, lon, ht, rate, area, heat) 
+
+   def add_dummy_record(self):
+       """uses last record in the recordra to get date and position"""
+       rc = self.recordra[-1]
+       eline = EmitLine(rc.date, "0100", rc.lat, rc.lon, 0, 0, 0, 0)
+       self.dummy_recordra.append(eline)
+       self.drecs +=1
 
    def add_record(self, sdate, duration, lat, lon, ht, rate, area, heat):
        """Inputs
