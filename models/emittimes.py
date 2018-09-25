@@ -142,7 +142,7 @@ class EmitCycle(object):
    and number of records. Then the records follow.
    """
    #def __init__(self, filename='EMITIMES.txt'):
-   def __init__(self, sdate, duration):
+   def __init__(self, sdate=None, duration=None):
        self.sdate = sdate
        self.duration = duration  #duration of the cycle.
        self.recordra=[]
@@ -152,7 +152,6 @@ class EmitCycle(object):
        ##with zero emissions.
        self.dummy_recordra = []
        self.drecs = 0
-       
 
    def parse_header(self, header):
        """
@@ -167,7 +166,8 @@ class EmitCycle(object):
        dhour = int(temp[4])
        nrecs = int(temp[5])
        self.sdate = datetime.datetime(year, month, day, hour)
-       self.dt = datetime.timedelta(hours=dhour) 
+       self.duration = datetime.timedelta(hours=dhour) 
+       self.nrecs = nrecs
        return nrecs
 
    def write_new(self, filename):
@@ -243,24 +243,15 @@ class EmitCycle(object):
                temp = fid.readline()
                recordra.append(self.parse_record(temp))
            self.recordra.extend(recordra)
-           self.nrecs = nrecs         
+           self.nrecs += nrecs         
        return check
 
-   def read_file(self):
-       recordra=[]
-       with open(self.filename, 'r') as fid:
-            fid.readline()
-            fid.readline()
-            header = fid.readline()
-            nrecs =  self.parse_header(header)
-            for line in range(0,nrecs):
-                temp = fid.readline()
-                recordra.append(self.parse_record(temp))
-       self.recordra.extend(recordra)
-       self.nrecs = nrecs         
 
    def filter_records(self,llcrnr, urcrnr):
-       """Needs to be moved to EmitTimes"""
+       """ removes records which are outside the box
+           described by llcrnr = (lat, lon) lower left corner
+                        urcrnr = (lat, lon) upper right corner
+       """
        iii=0
        rrr=[]
        for record in self.recordra:
