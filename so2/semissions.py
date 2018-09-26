@@ -163,12 +163,12 @@ class SEmissions(object):
         dfheat = self.get_heat()
         locs=df.columns.values
         done = False
-        while not done
+        while not done:
             d1 = edate
             d2 = edate + datetime.timedelta(hours=schunks)
             dftemp = df.loc[d1:d2]
             hdf = dfheat[d1:d2]
-            if dftemp.empty(): 
+            if dftemp.empty: 
                break
             self.emit_subroutine(dftemp, hdf, tdir)       
             d1 = d2
