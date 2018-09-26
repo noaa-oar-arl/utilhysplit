@@ -152,7 +152,7 @@ class SObs(object):
             #    plt.show()
         if verbose: obs_util.summarize(self.obs)   
         self.ohash = obs_util.get_lhash(self.obs, 'siteid')
-        if not pload: self.save_obs()          
+        if not pload: self.save()          
         #self.obs.writecsv()
 
     def mkpkl(self):

@@ -153,8 +153,31 @@ class SEmissions(object):
         #print(sources[0:20])
         return sources
 
+    def new_create_emittimes(self, edate, schunks=-99, tdir='./'):
+        """
+        create emittimes file for CEMS emissions.
+        edate is the date to start the file on.
+        Currently, 24 hour cycles are hard-wired.
+        """
+        df = self.get_so2()
+        dfheat = self.get_heat()
+        locs=df.columns.values
+        done = False
+        while not done
+            d1 = edate
+            d2 = edate + datetime.timedelta(hours=schunks)
+            dftemp = df.loc[d1:d2]
+            hdf = dfheat[d1:d2]
+            if dftemp.empty(): 
+               break
+            self.emit_subroutine(dftemp, hdf, tdir)       
+            d1 = d2
 
-    def create_emittimes(self, edate):
+
+    #def emit_subroutine(self, df, dfheat):
+
+
+    def create_emittimes(self, edate, schunks=-99, tdir='./'):
         """
         create emittimes file for CEMS emissions.
         edate is the date to start the file on.
@@ -176,7 +199,8 @@ class SEmissions(object):
             ##hardwire 1 hr duraton of emissions.
             record_duration='0100'
             area=1
-            ename = 'EMIT' + str(oris) + '.txt'
+            odir =  date2dir(tdir, edate, dhour=schunks, chkdir=True)
+            ename = odir + 'EMIT' + str(oris) + '.txt'
             efile = emittimes.EmitTimes(filename=ename)
             ##hardwire 24 hour cycle length
             dt = datetime.timedelta(hours=24)

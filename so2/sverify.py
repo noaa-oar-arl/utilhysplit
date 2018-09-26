@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 #from monet.obs import ish_mod
 #import monet.obs.obs_util as obs_util
 #from arlhysplit import runh
-#from arlhysplit.runh import date2dir
+from arlhysplit.runh import date2dir
+from arlhysplit.runh import dirtree
 #from arlhysplit.runh import source_generator
 #from arlhysplit.runh import create_plume
 #from arlhysplit.tcm import TCM
@@ -100,6 +101,8 @@ parser.add_option('-d', type="string", dest="drange", \
                   help='daterange YYYY:M:D:YYYY:M:D')
 parser.add_option('--cems', action="store_true", dest="cems", default=False)
 parser.add_option('--obs', action="store_true", dest="obs", default=False)
+parser.add_option('-o', type="string", dest="tdir", default="./", \
+                  help='directory path')
 ##-----##
 parser.add_option('--run', action="store_true", dest="runh", default=False)
 parser.add_option('--map', action="store_true", dest="emap", default=False)
@@ -143,13 +146,32 @@ else:
 ##Need a 100 particles to get to 6.7 ug/m3.
 ##This seems reasonable.
 
+days=5
+##source_chunks specify how many source times go into 
+##an emittimes file. They will also determine the directory
+##tree structure. Since directories will be according to run start times.
+source_chunks = 24*days
+
+##run_duration specifies how long each run lasts.
+##the last emissions will occur after the time specified in
+##source_chunks, however, the run will need to extend beyond this time.
+##the amount of observation data in the datem file should match the run time.
+run_duration = 24*(days+2)
+datemchunks = run_duration
+
+##mkdir is a generator
+mkdir = dirtree(options.tdir, d1, d2,  dhour = 24*days)
+for sdir in mkdir:
+    print(sdir)
+
+
 rfignum=1
 if options.cems:
     from semissions import SEmissions
     ef = SEmissions([d1,d2], area, state)
     ef.find()
     ef.plot()
-    ef.create_emittimes(ef.d1)
+    ef.create_emittimes(ef.d1, schunks=source_chunks, tdir=options.tdir)
     rfignum = ef.fignum 
     if not options.obs:
         mapfig = plt.figure(fignum)
