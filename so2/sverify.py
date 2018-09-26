@@ -7,23 +7,22 @@ from optparse import OptionParser
 import datetime
 import sys
 import seaborn as sns
-from monet.obs import cems_mod
-from monet.obs import aqs_mod
-from monet.obs import airnow
-from monet.obs import ish_mod
-import monet.obs.obs_util as obs_util
 import matplotlib.pyplot as plt
-#from monet import MONET
-from arlhysplit import emittimes
-from arlhysplit import runh
-from arlhysplit.datem import writedatem_sh
-from arlhysplit.datem import frame2datem
-from arlhysplit.runh import source_generator
-from arlhysplit.runh import date2dir
-from arlhysplit.runh import create_plume
-from arlhysplit.datem import mk_datem_pkl
-from arlhysplit.tcm import TCM
-from monet.obs.epa_util import convert_epa_unit
+#from monet.obs import cems_mod
+#from monet.obs import aqs_mod
+#from monet.obs import airnow
+#from monet.obs import ish_mod
+#import monet.obs.obs_util as obs_util
+#from arlhysplit import runh
+#from arlhysplit.runh import date2dir
+#from arlhysplit.runh import source_generator
+#from arlhysplit.runh import create_plume
+#from arlhysplit.tcm import TCM
+#from arlhysplit.models import emittimes
+#from arlhysplit.models.datem import writedatem_sh
+#from arlhysplit.models.datem import frame2datem
+#from arlhysplit.models.datem import mk_datem_pkl
+#from monet.obs.epa_util import convert_epa_unit
 
 """
 INPUTS: Dates to run
@@ -71,7 +70,6 @@ EPA method code 60  = EQSA-0486-060
 """
 
 
-
 def create_map(fignum):
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -91,561 +89,20 @@ def create_map(fignum):
     ax.add_feature(cfeature.COASTLINE)
     return(ax)
 
-def nickmapping(sid):
-    """returns the number or letter
-     Nick is using to identify the stations"""
-    nhash = {}
-    sid = int(sid)
-    nhash[381050105] = 1
-    nhash[381050103] = 2
-    nhash[380070002] = 3
-    nhash[380530111] = 4
-    nhash[380650002] = 5
-    nhash[380570004] = 6
-    nhash[300530001] = 7
-    nhash[380530104] = 8
-    nhash[380150003] = 9
-    nhash[380570124] = 'A'
-    nhash[380570118] = 'B'
-    nhash[380250003] = 'C'
-    nhash[380130004] = 'D'
-    nhash[380930101] = 'E'
-    nhash[380570102] = 'F'
-    nhash[380530002] = 'G'
-    nhash[300830001] = 'H'
-    nhash[380570123] = 'J'
-    try:
-        nickname = nhash[sid]
-    except:
-        nickname = ''
-    return nickname
-
-
-def concmerge_old(hdir, files2merge):
-    """
-    hdir: string
-    files2merge: list of strings
-    """
-    mfile = 'mfiles.txt'
-    ofile = 'merged.bin'
-    with open(mfile, 'w') as fid:
-         for fl in files2merge:
-             fid.write(fl + '\n')
-    callstr =  hdir + '/conmerge -i' + mfile + ' -o' + ofile 
-    subprocess.call(callstr, shell=True)
-    return ofile
-
-def get_tseries(df, siteid, var='obs', svar='siteid', convert=False):
-    qqq = df['siteid'].unique()
-    df = df[df[svar] == siteid]
-    df.set_index('time', inplace=True)
-    mult=1
-    if convert: mult=1/2.6178
-    series = df[var] * mult
-    return series
-
-
-
-class SO2Verify(object):
-    """This class for running the SO2 HYSPLIT verification.
-       self.cems is a CEMS object
-
-       methods
-       find_emissions
-
-    """
-    def __init__(self, dates, area, states=['nd']):
-        """
-        self.sources: pandas dataframe
-            sources are created from a CEMSEmissions class object in the get_sources method.
-        """
-        ##dates to consider.
-        self.d1 = dates[0]
-        self.d2 = dates[1]
-
-        self.states=states
-
-        #area to consider
-        self.area = area
-        self.pfile = './' + 'obs' + self.d1.strftime("%Y%m%d.") + self.d2.strftime("%Y%m%d.") + 'pkl'
-
-        self.metdir = '/pub/archives/wrf27km/'
-        self.hdir = '/n-home/alicec/Ahysplit/trunk/exec/'
-        self.tdir = '/pub/Scratch/alicec/SO2/'
-
-        self.tmap = None
-        self.fignum = 1
-        self.rnum = 1  #run number for HYSPLIT runs.
-
-        ##self.sources is a DataFrame returned by the CEMS class.
-        self.cems= cems_mod.CEMS()
-        self.sources = pd.DataFrame()
-
-        ##self obs is a Dataframe returned by either the aqs or airnow MONET class.
-        self.obs = pd.DataFrame()
-        ##siteidlist is list of siteid's of measurement stations that we want to look at.
-        self.siteidlist = []
-
-    #def add_siteidlist(self, slist):
-    #    self.siteidlist.extend(slist)
-
-    def find_emissions(self, testcase=False, byunit=False, verbose=False):
-        """find emissions using the CEMSEmissions class
-        """
-        print("FIND EMISSIONS")
-        area = self.area
-        if testcase:
-            efile = 'emission_02-28-2018_103721604.csv'
-            self.cems.load(efile, verbose=verbose)
-        else:
-            self.cems.add_data([self.d1, self.d2], states=self.states,
-                                download=True, verbose=True)
-        if area:
-            self.cems.df = obs_util.latlonfilter(self.cems.df, (area[2], area[0]), (area[3], area[1]))
-        self.ehash = self.cems.create_location_dictionary()
-        
-        self.stackhash = cems_mod.get_stack_dict(cems_mod.read_stack_height(), orispl=self.ehash.keys())
-
-        #key is the orispl_code and value is (latitude, longitude)
-        print('List of emissions sources found\n', self.ehash)
-        print('----------------')
-        namehash = self.cems.create_name_dictionary()
-        self.meanhash={}    
-        ##This gets a pivot table with rows time.
-        ##columns are (orisp, unit_id) or just (orisp)
-        data1 = self.cems.cemspivot(('so2_lbs'), daterange=[self.d1, self.d2],
-                verbose=True, unitid=byunit)
-        print('done with pivot----------------')
-        print(self.ehash)
-        
-        for oris in self.ehash.keys():
-            print('----------------')
-            try:
-                #data = data1[loc].sum(axis=1)
-                data = data1[oris]
-            except: 
-                data = pd.Series()
-            ##print statements show info about emissions point.
-            #print(data[0:10])
-            qmean = data.mean(axis=0)
-            #qmean = qmean[0]
-            qmax = data.max(axis=0)
-            #qmax = qmax[0]
-            print(namehash[oris])
-            print('ORISPL ' + str(oris))
-            print(self.ehash[oris])
-            if not np.isnan(qmean):
-                self.meanhash[oris] = qmean * 0.453592
-            else: 
-                self.meanhash[oris] = 0
-            print('Mean emission (lbs)', qmean)
-            print('Maximum emission (lbs)', qmax)
-            print('Stack id, Stack height (meters)')
-            for val in self.stackhash[oris]:
-                print(str(val[0]) + ',    ' + str(val[1]*0.3048))
-
-
-    def get_so2(self):
-        sources = self.get_sources(stype='so2_lbs') 
-        sources = sources * 0.453592  #convert from lbs to kg.
-        return sources
-
-    def get_heat(self):
-        sources = self.get_sources(stype='heat_input (mmbtu)') 
-        mult = 1.055e9 / 3600.0  
-        sources = sources * mult  #convert from mmbtu to watts
-        return sources
- 
-    def get_sources(self, stype='so2_lbs'):
-        """ 
-        
-        """
-        print("GET SOURCES")
-        if self.cems.df.empty: self.find_emissions()
-        sources = self.cems.cemspivot((stype), daterange=[self.d1, self.d2],
-                  verbose=False, unitid=False)
-        ehash = self.cems.create_location_dictionary()
-        stackhash = cems_mod.get_stack_dict(cems_mod.read_stack_height(), orispl=self.ehash.keys())
-        ##This block replaces ORISP code with (lat, lon) tuple as headers
-        cnew = []
-        columns=list(sources.columns.values)
-        for oris in columns:
-            sid, ht = zip(*stackhash[oris])
-            ##puts the maximum stack height associated with that orispl code.
-            newcolumn = (ehash[oris][0], ehash[oris][1], np.max(ht), oris)
-            cnew.append(newcolumn)
-        sources.columns=cnew
-        #print(sources[0:20])
-        return sources
-
-
-    def emittimes(self, edate):
-        from emittimes import EmitTimes
-        efile = EmitTimes()
-        df = self.get_so2()
-        dfheat = self.get_heat()
-        locs=df.columns.values
-        d1 = edate  #date to start emittimes file.
-        for hdr in locs:
-            print('HEADER', hdr)
-            dftemp = df[hdr]
-            dfh = dfheat[hdr]
-            
-            oris = hdr[3]
-            height = hdr[2]
-            lat = hdr[0]
-            lon = hdr[1]
-            record_duration='0100'
-            area=1
-            ename = 'EMIT' + str(oris) + '.txt'
-            efile = EmitTimes(filename=ename)
-            dt = datetime.timedelta(hours=24)
-            efile.add_cycle(d1, "0024")
-            for date, rate in dftemp.iteritems():
-                if date >= edate:
-                    heat=dfh[date]
-                    check= efile.add_record(date, record_duration, lat, lon, height,
-                                     rate, area, heat)
-                    if not check: 
-                       d1 = d1 + dt
-                       efile.add_cycle(d1, "0024")
-                       check2= efile.add_record(date, record_duration, lat, lon, height,
-                                     rate, area, heat)
-                       if not check2: 
-                           print('sverify WARNING: record not added to EmitTimes')
-                           print(date.strftime("%Y %m %d %H:%M"))
-
-            efile.write_new(ename)
-  
-    def plot_emissions(self):
-        """plot time series of emissions"""
-        sns.set()
-        namehash = self.cems.create_name_dictionary()
-        data1 = self.cems.cemspivot(('so2_lbs'), daterange=[self.d1, self.d2],
-                verbose=False, unitid=False)
-        for loc in self.ehash:
-            fig = plt.figure(self.fignum)
-            ax = fig.add_subplot(1,1,1)
-            data = data1[loc] * 0.453592
-            ax.plot(data, '--b.')   
-            plt.ylabel('SO2 mass kg')
-            plt.title(str(loc) + ' ' + namehash[loc])
-            self.fignum+=1
-       
-    def plot_obs(self):
-        """plot time series of observations"""
-        sra = self.obs['siteid'].unique()
-        print('PLOT OBS')
-        print(sra)
-        sns.set()
-        fignum=1
-        dist = []
-        ptrue=True
-        for sid in sra:
-            ts = get_tseries(self.obs, sid, var='obs', svar='siteid', convert=True)
-            ms = get_tseries(self.obs, sid, var='mdl', svar='siteid')
-            dist.extend(ts.tolist())
-            if ptrue:
-                fig = plt.figure(fignum)
-                nickname = nickmapping(sid)
-                ax = fig.add_subplot(1,1,1)
-                plt.title(str(sid) + '  (' + str(nickname) + ')' )
-                ax.set_xlim(self.d1, self.d2)
-                ts.plot()
-                ms.plot()
-                fignum +=1
-        #sns.distplot(dist, kde=False)
-        plt.show()           
-        sns.distplot(np.array(dist)/2.6178, kde=False, hist_kws={'log':True})
-        plt.show()
-        sns.distplot(np.array(dist)/2.6178, kde=False, norm_hist=True, hist_kws={'log':False, 'cumulative':True})
-        plt.show()
-
-    def map_emissions(self, ax):
-        """plot location of emission sources"""
-        plt.sca(ax)
-        
-        fig = plt.figure(self.fignum)
-        for loc in self.ehash:
-            lat = self.ehash[loc][0]
-            lon = self.ehash[loc][1]
-            #print('PLOT', str(lat), str(lon))
-            #plt.text(lon, lat, (str(loc) + ' ' + str(self.meanhash[loc])), fontsize=12, color='red')
-            pstr = str(loc) + ' \n' + str(int(self.meanhash[loc])) + 'kg'
-            if self.meanhash[loc] > 1:
-                ax.text(lon, lat, pstr, fontsize=12, color='red')
-                ax.plot(lon, lat,  'ko')
-            #latlon = self.cems.get_location(loc)
-            #x, y = self.tmap(latlon[1], latlon[0])
-            #self.tmap.plot(x,y,'bo') 
-
-
-    def runHYSPLIT(self):
-        """create a HYSPLIT run for each source in self.sources
-           self.sources is a pandas dataframe with index being release data and columns headers showing location of releases.
-           values are emission rates.
-        """
-        if self.sources.empty:
-           self.get_sources() 
-        #selfsources = self.cems.get_var(('so2','lbs'), loc=None, daterange=[self.d1, self.d2])
-        #sources = sources * 0.453592  #convert from lbs to kg.
-        runh.mult_run(self.rnum, self.d1, self.d2, self.sources, hysplitdir=self.hdir, topdirpath=self.tdir, metdirpath=self.metdir)
-
-    def plotplume(self):
-        runh.create_plume(self.rnum, self.d1, self.d2, self.sources, hysplitdir=self.hdir, topdirpath=self.tdir, verbose=True)
- 
-    def save_obs(self):
-        pickle.dump(self.obs, open(self.pfile, "wb"))
-
-    def find_obs(self, verbose=False, pload=True, getairnow=False):
-        """
-
-        """
-        if pload:
-           try:
-            print('trying to load file')
-            print(self.pfile)
-            self.obs = pickle.load(open(self.pfile,"rb"))
-           except:
-            pload=False
-            print('Failed to load')
-           if pload: print('loaded file')
-           if not pload: print('Not loading pkl file' + self.pfile + "\n")
-        if not pload:
-            if getairnow: 
-               aq = airnow.AirNow()
-               aq.add_data([self.d1, self.d2], download=True)
-            else:
-               aq = aqs_mod.AQS()
-               aq.add_data([self.d1, self.d2], param=['SO2'], download=True)
-            self.obs = aq.df.copy()
-            #print(aq.df['qualifier'].unique())
-            self.obs = convert_epa_unit(self.obs, obscolumn='obs', unit='UG/M3')
-            ##TO DO - something happens when converting units of mdl column.
-            #self.obs = epa_util.convert_epa_unit(self.obs, obscolumn='mdl', unit='UG/M3')
-        area = self.area
-        if area: self.obs = obs_util.latlonfilter(self.obs, (area[2], area[0]), (area[3], area[1]))
-        rt = datetime.timedelta(hours=72)
-        self.obs = obs_util.timefilter(self.obs, [self.d1, self.d2+rt])
-        siteidlist= np.array(self.siteidlist)
-        if siteidlist.size: 
-            print('HERE -------------------')
-            self.obs = self.obs[self.obs['siteid'].isin(siteidlist)]
-            iii = 0
-            sym =[['r.','bd'],['r.','c.']]
-            #for sid in siteidlist:
-            #    print('HERE -------------------' + str(sid))
-            #    #self.obs.check_mdl(sid, sym=sym[iii])
-            #    iii+=1
-            #    plt.show()
-        if verbose: obs_util.summarize(self.obs)   
-        self.ohash = obs_util.get_lhash(self.obs, 'siteid')
-        if not pload: self.save_obs()          
-        #self.obs.writecsv()
-
-    def mkpkl(self):
-        tdir = self.tdir + 'run' + str(self.rnum) + '/'
-        mk_datem_pkl(self.rnum, self.d1, self.d2, tdir)
-
-    def mktcm(self):
-        fig = plt.figure(self.fignum)
-        ax = fig.add_subplot(1,1,1)
-        tdir = self.tdir + 'run' + str(self.rnum) + '/'
-        tcm = TCM(self.d1, self.d2, snum=1, edir=self.hdir, pid=1)
-        tcm.make_tcm(topdirpath=tdir)
-        #tcm.print_rows()
-        #tcm.image_tcm()
-        #plt.show()
-        tcm.get_conc(emissions=1)
-        self.tcm = tcm
-
-    def plot_tcm(self):
-        clrs = ['--r*', '--b*', '--g.', '--k.', '--c.']
-        iii=0
-        for stn, time, conc in self.tcm.yield_conc():
-            plt.plot(time, conc, clrs[iii], label=str(stn))
-            handles, labels = ax.get_legend_handles_labels()
-            ax.legend(handles, labels)
-            #dstr = time[0].strftime("%Y%m%d") + '-' + time[-1].strftime("%Y%m%d")
-            iii+=1
-            dstr = 't1'
-        print('SAVING FIGURE')
-        plt.savefig('tcm' + str(stn) + '-' + dstr + '.jpg')
-        plt.show()
-
-    def plot_both(self): 
-        sns.set()
-        clrs = ['--r*', '--b*', '--g.', '--b.', '--c.']
-        clrs[0] = sns.xkcd_rgb["sky blue"] #model data with zeros filled in.
-        clrs[1] = sns.xkcd_rgb["blue"]  #model data
-        clrs[2] = sns.xkcd_rgb["bright green"]  #observation series
-        clrs[3] = sns.xkcd_rgb["forest green"]  #obs series again
-        iii=0
-        print( self.obs.columns.values)
-        sra = self.obs['siteid'].unique()
-        for stn, time, conc in self.tcm.yield_conc():
-            print('HERE', stn, type(time), type(conc))
-            fig = plt.figure(self.fignum)
-            ax = fig.add_subplot(1,1,1)
-
-            #------------------------------------------------------------
-            ##PLOTTING Model data
-            plt.plot(time, conc, clrs[1], label=str(stn))
-            handles, labels = ax.get_legend_handles_labels()
-            #plt.plot(obs)
-          
-            #------------------------------------------------------------
-            ##PLOTTING OBSERVATIONS 
-            sid = str(stn)
-            nickname = nickmapping(stn)
-            plt.title(sid + ' (' + str(nickname) + ')') 
-            if stn in sra:
-               print('FOUND')
-            else:
-               print('NOT FOUND', type(sid), type(stn), stn, sra)
-            ts = get_tseries(self.obs, sid, var='obs', svar='siteid')
-            #obs = self.obs.plotloc(sid, svar='siteid', get=True)    
-            #obs = obs_util.plotloc(self.obs, sid, svar='siteid', get=True)    
-            ts.plot(color=clrs[2])
-            #------------------------------------------------------------
-
-            #plt.plot(ts, '--k', label='observations')
-            ax.set_xlim(self.d1, self.d2)
-            #ax.legend(handles, labels)
-            #iii+=1
-            dstr='t1'
-            #dstr = time[0].strftime("%Y%m%d") + '-' + time[-1].strftime("%Y%m%d")
-            #print('SAVING FIGURE')
-            #plt.savefig(str(stn) + '-' + dstr + '.jpg')
-            #plt.show()
-
-            ##Done plotting-----------------------------------------------
-
-            #df1 = pd.DataFrame(zip(time, conc), columns=['date','vals']) 
-            tdict = {'date': time, 'vals' : conc}
-            df1 = pd.DataFrame(tdict)
-            df1.set_index('date') 
-            #print('obs', ts[0:10])
-            df1.set_index('date', inplace=True)
-            #print('DF1', df1[0:10])
-
-            ##TODO How is this join being done?
-            ##is this only keeping point where there are both measurements and model data?
-            #df3 = pd.concat([df1, ts], axis=1, join='inner')
-            df3 = pd.concat([df1, ts], axis=1)
-            df3.fillna(0, inplace=True)
-
-            loc = self.tcm.locations[self.tcm.locations['stationid'] == stn]
-            #df4 = df3.set_index('date')
-            plt.plot(df3['obs'], clrs[3])
-            plt.plot(df3['vals'], clrs[0])
-            #print(loc['meas_lat'])
-            #print(loc['meas_lon'])
-            df3['lat'] = loc['meas_lat'].tolist()[0]
-            df3['lon'] = loc['meas_lon'].tolist()[0]
-            df3['sid'] = sid
-            df3['duration'] = '0100'
-            df3['altitude'] = 20
-            df3.reset_index(inplace=True)
-            df3.rename(index=str, columns={'index':'date'}, inplace=True)
-            #print('DF3', df3[0:10])
-            writeover=False
-            if iii==0: writeover=True
-            frame2datem('outfile.txt', df3, header_str='SO2', writeover=writeover)
-            plt.show()
-            iii+=1 
-
-        #plt.show()
-        #sra = self.obs.df['siteid'].unique()
-        #print(sra)
-        #for sid in sra:
-        #    self.obs.plotloc(sid, svar='siteid')    
-
-
-    def testsources(self):
-        if self.sources.empty: self.get_sources()
-        sgenerator = source_generator(self.sources)
-        for src in sgenerator:
-            print(src)
-
-    def rundatem(self):
-        """
-        datemfile.txt which contains observations in datem format should already be written.
-        Runs c2datem in each directory.  creates datem.sh which will run c2datem and append
-        results in one file.
-        """
-        if self.sources.empty: self.get_sources()
-        sgenerator = source_generator(self.sources)
-        pdir = 'none'
-        cfilera = []
-        nidra = []
-        iii=0
-        for src in sgenerator:
-            sdate = src.sdate
-            newdir = date2dir(self.tdir + 'run'+str(self.rnum) + '/', sdate, chkdir=False) 
-            if iii==0: 
-               pdir = newdir
-               os.chdir(newdir)
-            #print('directory ' + str(iii) + ' ' + pdir + ' ' + src.nid)
-            if newdir != pdir:  
-               #self.obs.write_datem(sitename='siteid')
-               print('running c2datem ' + newdir, cfilera, self.hdir)
-               ##emissions are in kg (1e3 grams). so mult by 1e9 will put them in ug (1e-6 grams).
-               writedatem_sh(cfilera, mult='1e9', mdl=self.hdir, add2ra=nidra)
-               callstr = 'chmod u+x datem.sh'
-               subprocess.call(callstr, shell=True)
-               callstr = './datem.sh'
-               subprocess.call(callstr, shell=True)
-               nidra=[]
-               cfilera=[]
-            cfilera.append('cdump.' + src.nid)
-            nidra.append(src.nid)
-            os.chdir(newdir)
-            pdir  = newdir
-            iii+=1
-
-    def obs2datem(self):
-        """
-        write datemfile.txt. observations in datem format
-        """
-        #if self.obs.empty: self.find_obs()
-        obs_util.write_datem(self.obs)
-        if self.sources.empty: self.get_sources()
-        sgenerator = source_generator(self.sources)
-        pdir = 'none'
-        cfilera = []
-        nidra = []
-        rt = datetime.timedelta(hours=100)
-        for src in sgenerator:
-            sdate = src.sdate
-            newdir = date2dir(self.tdir + 'run'+str(self.rnum) + '/', sdate, chkdir=False) 
-            os.chdir(newdir)
-            cfilera.append('cdump.' + src.nid)
-            nidra.append(src.nid)
-            if newdir != pdir and pdir != 'none':  
-               obs_util.write_datem(self.obs, sitename='siteid', drange=[sdate, sdate + rt])
-               #self.obs.write_datem(sitename='siteid')
-            pdir  = newdir
- 
-    def map_obs(self, ax):
-        plt.sca(ax) 
-        clr=sns.xkcd_rgb["cerulean"]
-        #sns.set()
-        #if not self.tmap: self.create_map()
-        for key in self.ohash:
-            latlon = self.ohash[key]
-            #x, y = self.tmap(latlon[1], latlon[0])
-            plt.text(latlon[1], latlon[0], str(key), fontsize=7, color='red')
-            plt.plot(latlon[1], latlon[0],  color=clr, marker='*')
-        return 1
 
 
 parser = OptionParser()
 
+parser.add_option('-a', type="string", dest="area", default="ND",\
+                  help='two letter state code (ND)')
+parser.add_option('-d', type="string", dest="drange", \
+                  default="2106:1:1:2016:2:1", \
+                  help='daterange YYYY:M:D:YYYY:M:D')
+parser.add_option('--cems', action="store_true", dest="cems", default=False)
+parser.add_option('--obs', action="store_true", dest="obs", default=False)
+##-----##
 parser.add_option('--run', action="store_true", dest="runh", default=False)
 parser.add_option('--map', action="store_true", dest="emap", default=False)
-parser.add_option('--ploto', action="store_true", dest="oplot", default=False)
-parser.add_option('--plume', action="store_true", dest="plume", default=False)
 parser.add_option('--plote', action="store_true", dest="eplot", default=False, \
                   help='plot emissions')
 parser.add_option('--datem', action="store_true", dest="datem", default=False)
@@ -653,10 +110,8 @@ parser.add_option('--rundatem', action="store_true", dest="rundatem", default=Fa
 parser.add_option('--pickle', action="store_true", dest="pickle", default=False)
 parser.add_option('--tcm', action="store_true", dest="tcm", default=False)
 parser.add_option('--test', action="store_true", dest="runtest", default=False)
-parser.add_option('--obs', action="store_true", dest="findobs", default=False)
+#parser.add_option('--obs', action="store_true", dest="findobs", default=False)
 parser.add_option('-x', action="store_false", dest="opkl", default=True)
-parser.add_option('-d', type="string", dest="drange", default="2106:1:1:2016:2:1")
-parser.add_option('-a', type="string", dest="area", default="ND")
 (options, args) = parser.parse_args()
 
 opkl = options.opkl
@@ -678,8 +133,7 @@ else:
     area = None
     state=[options.area.strip()]
 
-sv = SO2Verify([d1,d2], area, state)
-
+#sv = SO2Verify([d1,d2], area, state)
 
 ##emissions are on order of 1,000-2,000 lbs (about 1,000 kg)
 ##10,000 particles - each particle would be 0.1 kg or 100g.
@@ -689,14 +143,44 @@ sv = SO2Verify([d1,d2], area, state)
 ##Need a 100 particles to get to 6.7 ug/m3.
 ##This seems reasonable.
 
+rfignum=1
+if options.cems:
+    from semissions import SEmissions
+    ef = SEmissions([d1,d2], area, state)
+    ef.find()
+    ef.plot()
+    ef.create_emittimes(ef.d1)
+    rfignum = ef.fignum 
+    if not options.obs:
+        mapfig = plt.figure(fignum)
+        axmap = create_map(rfignum)
+        ef.map(axmap)
+        plt.show()
+
+if options.obs:
+    from sobs import SObs
+    obs = SObs([d1,d2], area, state)
+    obs.fignum=rfignum
+    obs.find(pload=opkl)
+    obs.obs2datem() 
+    obs.plot()
+    fignum = obs.fignum 
+    axmap = create_map(fignum)
+    obs.map(axmap)
+    if options.cems:
+       ef.map(axmap)
+    plt.show()
+
+
+##------------------------------------------------------##
 if options.runtest:
    sv.testsources()
 
-if options.plume:
-   sv.plotplume()
+#if options.plume:
+#   sv.plotplume()
 
-if options.findobs:
-    sv.find_obs(pload=opkl)
+#if options.findobs:
+#    sv.find_obs(pload=opkl)
 
 if options.runh:
     sv.find_emissions()
@@ -712,19 +196,11 @@ if options.emap:
     sv.obs2datem() 
     plt.show()
 
-if options.eplot:
-    sv.find_emissions()
-    sv.plot_emissions()
-    fignum = sv.fignum + 1
-    fig = plt.figure(fignum)
-    ax = create_map(fignum)
-    sv.map_emissions(ax)
-    sv.emittimes(sv.d1)
-    plt.show()
-
-if options.oplot:
-   sv.find_obs(pload=opkl)
-   sv.plot_obs()
+#if options.oplot:
+#    from sobs import SObs
+#    obs = SObs([d1,d2], area, state)
+#    obs.find(pload=opkl)
+#    obs.plot()
 
 if options.datem:
     sv.find_obs(pload=opkl)

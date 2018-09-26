@@ -8,11 +8,11 @@ import pickle as pickle
 import sys
 from .process import is_process_running
 from .process import ProcessList
-from .hcontrol import HycsControl
-from .hcontrol import Species
-from .hcontrol import ConcGrid
-from .hcontrol import NameList
-from .hcontrol import writelanduse
+from .models.hcontrol import HycsControl
+from .models.hcontrol import Species
+from .models.hcontrol import ConcGrid
+from .models.hcontrol import NameList
+from .models.hcontrol import writelanduse
 
 """
 NAME: ashfall_base.py
@@ -178,13 +178,17 @@ class RunParams(object):
 def get_vlist(sdate, dhour):
        """This function is called by the dirtree generator to help generate a directory
        tree based on date.
-       Input is sdate (datetime object) and dhour (integer specifying how many directories per hour in the tree).
+       Input 
+          sdate: datetime object 
+          dhour: integer specifying how many directories per hour in the tree).
        If dhour = -1 then directory tree only goes down to month.
+       output
+          
        """
        if dhour < 24:
             list1 = [sdate.year, sdate.month, sdate.day, sdate.hour]
             list2 = ['y', 'm', 'd', 'h']
-            list3 = [4,2,2,2]
+            list3 = [4,2,2,2] #this tells how many spaces to take up.
             vlist = list(zip(list1, list2, list3))
        elif dhour >= 24:
             list1 = [sdate.year, sdate.month, sdate.day]
