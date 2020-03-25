@@ -18,6 +18,8 @@ ABSTRACT: classes and functions for creating HYSPLIT control and setup files.
    For python 3 the numpy char4 are read in as a numpy.bytes_ class and need to be converted to a python
    string by using decode('UTF-8').
 
+This file has been replaced by either the cdump reader in MONET or the cdump
+reader in hysplitdata repositories
 
 """
 
