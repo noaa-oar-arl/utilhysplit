@@ -235,7 +235,7 @@ class ConcGrid:
             note = "  #Directory to write concentration output file"
         returnstr += self.outdir + note + "\n"
         if pnotes:
-            note = "  #Filename for concentration output file"
+            note = "  #Filename for trajectory output"
         returnstr += self.outfile + note + "\n"
         if pnotes:
             note = "  #Number of vertical levels for concentration grid"
@@ -853,6 +853,13 @@ class HycsControl(object):
             fname="CONTROL",
             working_directory="./",
             rtype="dispersion"):
+        """
+        INPUTS
+        fname : str : name of control file
+        working_directory : str : directory where CONTROL file is
+        rtype : string : dispersion, trajectory, vmixing
+        """
+         
         self.fname = fname
         if working_directory[-1] != "/":
             working_directory += "/"
@@ -868,7 +875,7 @@ class HycsControl(object):
         self.num_met = 0  # number of met files
         self.rtype = rtype  # dispersion or trajectory run or vmixing.
 
-        self.outfile = "cdump"
+        self.outfile = "tdump"  #output file name for trajectory 
         self.outdir = "./"
         self.run_duration = 1
         self.vertical_motion = 1
@@ -1056,6 +1063,7 @@ class HycsControl(object):
             if self.rtype == 'vmixing':
                 return False
 
+            # done writing if using for trajectory.
             if self.rtype == "trajectory":
                 fid.write(self.outdir + "\n")
                 fid.write(self.outfile)
@@ -1113,7 +1121,12 @@ class HycsControl(object):
     #            self.nlocs += 1
 
     def parse_num_met(self, line):
-        # sometimes this line can have two numbers on it.
+        """
+        line : str 
+              line from control file which specifies
+              number of met files. Can sometimes have
+              two numbers in it.
+        """
         temp = line.split()
         num1 = int(temp[0])
         try:
@@ -1238,47 +1251,3 @@ def roundtime(dto):
     """rounds input datetime to day at 00 H"""
     return datetime.datetime(dto.year, dto.month, dto.day, 0, 0)
 
-
-def getmetfiles(
-        sdate,
-        runtime,
-        mfmt,
-        warn_file="MetFileWarning.txt",
-        mdir="./",
-):
-    """
-       INPUTS:
-       sdate : start date (datetime object)
-       runtime : int (hours)
-       mdir : str directory where files are to be found
-       mft  : str filename format such as
-
-       OUTPUT:
-       mfiles : list strings
-       names of files that cover the time from sdate to sdate + runtime.
-    """
-    dt = datetime.timedelta(
-        days=1)  # step throgh file names one day at a time.
-    mfiles = []
-    edate = sdate
-    end_date = sdate + datetime.timedelta(hours=runtime)
-    notdone = True
-    if mdir[-1] != "/":
-        mdir += "/"
-    while notdone:
-        temp = edate.strftime(mfmt)
-        if not path.isfile(mdir + temp):
-            with open(warn_file, "a") as fid:
-                fid.write(
-                    "WARNING " +
-                    mdir +
-                    temp +
-                    " meteorological file does not exist\n")
-        else:
-            mfiles.append(temp)
-        edate = edate + dt
-        if roundtime(edate) > roundtime(end_date):
-            notdone = False
-    # return mdir, mfiles
-    mfiles = list(set(mfiles))
-    return mfiles
