@@ -14,16 +14,21 @@ from Tools import volcMER
 import utilhysplit.pardump as pardump
 import matplotlib.pyplot as plt
 #import reventador as reventador
+import monet
 
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture as GMM
 from sklearn.mixture import BayesianGaussianMixture as BGM
 
-def generate_rev_times(stop):
-    start_time = datetime.datetime(2019,2,25,17)
-    dt = datetime.timedelta(hours=0.25)
-    for iii in range(0, stop):
-        yield start_time + iii*dt
+"""
+
+classes
+
+
+functions
+
+"""
+
 
 def compare_pdump(pdumpdf, time, fig=None, plot=False):
     """
@@ -63,23 +68,6 @@ def get_thickness(df, t1, t2):
     df2 = df2[df2['ht']<=t2]
     return df2
 
-def parmulti(pdumpdf):
-    # creates a multi-point object.
-    #mpts = make_multi(lat, lon)
-    #center = mpts.centroid
-    #rectangle = mpts.minimum_rotated_rectangle
-    #bnds = rectangle.bounds
-    #plt.plot(bnds[1],bnds[0], 'y*')
-    #plt.plot(bnds[3], bnds[2],'y*')
-    #len1 = (bnds[2]-bnds[0]) / nnn
-    #len2 = (bnds[3]-bnds[1]) / nnn
-    #for iii in np.arange(0,nnn):
-    #    for jjj in np.arange(0,nnn):
-    #        llcrn = bnds[0] + iii*0            
-
-    #cb = plt.scatter(lon, lat, c=ht)
-    #plt.plot(center.y, center.x, 'r*')
-    return -1
 
 class ParConc:
 
@@ -300,8 +288,9 @@ class ParConc:
             plt.colorbar(cb)
             iii+= 1
 
-def threshold(cra, tval=3, tp='log'):
+def threshold(cra, tval=3, tp='log',fillna=True):
     """
+    Apply a threshold to a DataArray
     if tp=='log' then tval indicates how many orders of magnitude
     shoudl be retained.
     """
@@ -313,7 +302,7 @@ def threshold(cra, tval=3, tp='log'):
     else:
        thresh = tval
     cra = cra.where(cra>=thresh)
-    cra = cra.fillna(0)
+    if fillna: cra = cra.fillna(0)
     return cra
 
 def merge_pdat(pardf, datdf):
@@ -347,7 +336,6 @@ def merge_pdat(pardf, datdf):
     print('dfnew length', len(dfnew))
     return dfnew
                    
-
 def par2fit(pdumpdf,  
          #time=None,
          #sp=1, 
@@ -356,9 +344,35 @@ def par2fit(pdumpdf,
          dd=0.01,
          dh=0.1,
          nnn=None,
-         bnds=None,
-         thk=None,
-         msl=True):
+         msl=True,
+         wcp=1e3):  #used for Bayesian Gaussian Mixture
+
+    """
+    INPUT
+    pdumpdf : pandas DataFrame
+              pandas DataFrame which has particle locations and mass.
+              locations are indicated by 'lon', 'lat', 'ht' columns.
+              mass is indicated by 'pmass' column.
+              'ht' should be in meters and is converted to km for fitting.
+              'lon', 'lat' are in degrees.
+        
+    method : string
+             options are 'gmm', 'bgm', 'kde'
+    
+    mult : float
+           MassFit object has a mass attribute which is computed here by
+           summing over the mass on all the particles and multiplying by this
+           number.
+
+    nnn  : if method 'gmm'  or 'gbm' number of clusters to use.
+           if None will try to figure out for gmm.
+           if method 'kde' it is the bandwidth
+    dd   : horizontal resolution of output in degrees.
+    dh   : vertical resolution of output in km.
+
+    returns an instance of the MassFit class.
+    """
+
     htmult = 1/1000.0 #convert height to km
     bic=True 
     mfithash = {}
@@ -390,6 +404,8 @@ def par2fit(pdumpdf,
         if nnn>=len(xra): nnn= np.floor(len(xra)/2.0)
         if nnn==0: nnn=1
         gmm = get_gmm(n_clusters=nnn)
+    elif method=='bgm':
+        gmm = get_bgm(n_clusters=nnn, wcp=wcp)
     elif method=='kde':
         if not nnn:
            nnn = dd
@@ -397,10 +413,9 @@ def par2fit(pdumpdf,
     else:
         print('Not valid method ', method)
         sys.exit()
-    print('MassFit', len(xra))
+    print('par2fit: MassFit', len(xra))
     mfit = MassFit(gmm, xra, mass)
     return mfit
-
 
 
 
@@ -414,7 +429,8 @@ def par2conc(pdumpdf,
          nnn=None,
          bnds=None,
          thk=None,
-         msl=True):
+         msl=True,
+         wcp=1e3):
     """
     Three dimensional. Can use multiple species.
     pdumpdf : pandas dataframe representing pardump file.
@@ -450,41 +466,7 @@ def par2conc(pdumpdf,
         bnds['htmax'] = np.max(dfa['ht'].values*htmult)
     for species in sp:
         df2 = dfa[dfa['poll']==species]
-        mass = df2['pmass'].sum() * mult
-        lon = df2['lon'].values
-        lat = df2['lat'].values
-        # change heights to kilometers.
-        # use agl from the dat file 
-        hval = 'ht'
-        if 'agl' in df2.columns.values:
-            if msl:
-                df2['msl'] = df2.apply(lambda row:
-                             row['agl'] + row['grdht'], axis=1)
-                hval = 'msl'
-            else: 
-                hval = 'agl'
-        ht = df2[hval].values * htmult
-
-        print('HT', ht, len(ht))
-        print('Mass', mass)
-        xra = get_xra(lon,lat,ht)
-        print(len(xra), len(df2), len(pdumpdf))
-        if method=='gmm':
-            if not nnn:
-                nnn1,nnn2 = find_n(xra, plot=True)
-                print('bic: ', nnn1,' aic: ',nnn2)
-                if bic: nnn=nnn1
-                else: nnn=nnn2
-            gmm = get_gmm(n_clusters=nnn)
-        elif method=='kde':
-            if not nnn:
-               nnn = dd
-            gmm = get_kde(bandwidth=nnn) 
-        else:
-            print('Not valid method ', method)
-            sys.exit()
-        #print('MassFit', species, len(xra))
-        mfit = MassFit(gmm, xra, mass)
+        mfit = par2fit(df2,method,dd,dh,nnn,msl,wcp)
         dra = mfit.get_conc(dd, dh, buf, time=time, bnds=bnds, mass=mass)
         #conc = massload / float(thickness)
         if iii==0:
@@ -550,7 +532,8 @@ class MassFit():
     def __init__(self,gmm, xra, mass=1, thickness=None):
         """
         gmm : GuassianModelMixture object 
-              OR 
+              OR KED or BGM 
+             
         xra : list of (longitude, latitude) points
         mass: float : mass represented by latitude longitude points
         thickness : float : thickness of layer (in m) that particles reside in.
@@ -559,13 +542,13 @@ class MassFit():
         self.gmm = gmm
         self.xra = xra
         self.fit=True
-        print('fitting')
+        print('MassFit: fitting')
         try:
             self.gfit = gmm.fit(xra)
         except:
-            print('fitting failed')
+            print('MassFit: fitting failed')
             self.fit=False
-        print('done fitting')
+        print('MassFit: done fitting')
         self.mass = mass 
         self.thickness = thickness
         self.htunits = self.get_ht_units()
@@ -644,8 +627,12 @@ class MassFit():
            dh = dh / 1000.0
         #htmin = np.floor(htmin)
         #htmax = np.ceil(htmax)
+        if htmin <= 0.01:
+           htmin = -0.02
         htra = np.arange(htmin, htmax, dh)
         # then convert back to m.
+         
+
         if self.htunits == 'm': htra = htra * 1000.0
         return htra
 
@@ -673,22 +660,26 @@ class MassFit():
         latmax = np.max(lat)+buf
         lonmin = np.min(lon)-buf
         lonmax = np.max(lon)+buf
-        htmin = np.min(ht)
-        htmax = np.max(ht)
+        htmin = np.min(ht)-buf
+        htmax = np.max(ht)+buf
         latra = self.get_lra(latmin, latmax, dd)
         lonra = self.get_lra(lonmin, lonmax, dd)
         htra =  self.get_ht_ra(htmin, htmax, dh)
         return latra, lonra, htra
 
     def partialgrid(self,lat,lon,ht,dd,dh,buf):
+        print('partial grid bf', buf, 'dh ', dh)
         bufx = buf[0]
+        if bufx < dd: bufx = dd
         bufh = buf[1]
-        latmin = lat-dd-bufx
-        latmax = lat+2*dd+bufx
-        lonmin = lon-dd-bufx
-        lonmax = lon+2*dd+bufx
-        htmin = ht - dh -bufh
-        if htmin < 0 : htmin=0
+        if bufh < dd: bufh = dh
+        latmin = lat-bufx
+        latmax = lat+dd+bufx
+        lonmin = lon-bufx
+        lonmax = lon+dd+bufx
+        htmin = ht - bufh
+        #if htmin < 0 : htmin=0
+        print('ht', ht, 'dh', dh, 'bufh', bufh)
         htmax = ht + dh + bufh
         latra = self.get_lra(latmin, latmax, dd)
         lonra = self.get_lra(lonmin, lonmax, dd)
@@ -704,11 +695,14 @@ class MassFit():
                  buf=0.2, 
                  bnds=None, 
                  time=None, 
-                 mass=1,
+                 mass=None,
                  lat=None,
                  lon=None,
                  ht=None,
                  verbose=False):
+        print('get conc ', buf, 'dh ', dh)
+        if not mass: 
+           mass = self.mass
         if not lat:
            latra, lonra, htra = self.totalgrid(dd,dh,buf) 
         else:
@@ -732,12 +726,13 @@ class MassFit():
             coords.append(ccc)
             dims.append(dim)
         conc2 = self.conc.reshape(rshape)
-        self.dra = xr.DataArray(conc2,
+        dra = xr.DataArray(conc2,
                            coords=coords,
                            dims=dims)
         if time: 
-           self.dra['time'] = time
-           self.dra = self.dra.expand_dims(dim='time') 
+           dra['time'] = time
+           dra = self.dra.expand_dims(dim='time') 
+        self.dra = monet.monet_accessor._dataset_to_monet(dra,lat_name='y',lon_name='x')
         return self.dra         
 
     def plotconc(self,dra):
@@ -830,6 +825,8 @@ def use_gmm(gmm, xra, mass=1, label=True, ax=None):
      plt.colorbar(cb)
      return massload, score, gfit
 
+
+
 def plot_gmm(lonra, latra, massload):
      clevs = [0.1,1,5,10,20,50]
      if clevs:
@@ -869,6 +866,35 @@ def get_xra(lon,lat, ht=None):
         xra = np.array(list(zip(lon,lat)))
 
     return xra
+
+
+def get_bgm(n_clusters=10, wcp=1.0e3, tol=None):
+    """
+    # wcp: higher number puts more mass in the center and will lead to more
+    # more components being active
+    """
+    covartype = 'full'
+    #init_params = 'random' #alternative is kmeans
+    init_params = 'kmeans' #alternative is kmeans
+    #wcpt = 'dirichlet_process'       #wcp shouldbe (float, float)
+    wcpt = 'dirichlet_distribution' #wcp should be float 
+    warm_start = False
+    verbose = False
+    n_init = 1
+    max_iter=500
+    reg_covar = 1e-5  #default is 1e-6
+    if not tol: tol=1e-3
+    gmm = BGM(n_components=n_clusters, 
+              covariance_type=covartype,
+              n_init = n_init,
+              weight_concentration_prior_type = wcpt,
+              init_params = init_params,
+              max_iter=max_iter,
+              verbose=verbose,
+              reg_covar = reg_covar,
+              tol=tol)
+    return gmm
+
 
 def get_gmm(n_clusters=0):
     # possibilities
@@ -951,164 +977,7 @@ class VolcPar:
         self.delta = datetime.timedelta(hours=1)
         self.delt=5
         self.ymax=9
-        self.time_generator = generate_rev_times
         self.pdict = {}
-
-
-    def write_dataA(self, dfin, c_col='mean', name='dataA.txt',thresh=1):
-        model=True
-        dataA=False
-        data=False
-        if dataA:
-            reorder = ['Num','Site','Lat','Lon','Yr','Mo','Da','Hr','Meas','Calc']
-            rename = ['Num', 'date','Lat','Lon','Site','Meas','mean','max','min','dur']
-            droplist = ['date','dur','mean','max','min']
-        if model or data:
-            reorder = ['Yr','Mo','Da','Hr','dur','Lat','Lon','Calc','Site']
-            rename = ['Num', 'date','Lat','Lon','Site','Meas','mean','max','min','dur']
-            droplist = ['date','mean','max','min','Meas']
-        if  data:
-            reorder = ['Yr','Mo','Da','Hr','dur','Lat','Lon','Meas','Site']
-            droplist = ['date','mean','max','min','Calc']
-        df = dfin.copy()
-        df.reset_index(inplace=True)
-        df.columns = rename
-        def apply_thresh(row):
-            mult=1e12
-            val = float(row) * mult
-            if val < thresh: val=0
-            return val
-            
-        mult=1e12
-        df['Yr'] = df.apply(lambda row: row['date'].year, axis=1)
-        df['Mo'] = df.apply(lambda row: row['date'].month, axis=1)
-        df['Da'] = df.apply(lambda row: row['date'].day, axis=1)
-        df['Hr'] = df.apply(lambda row: row['date'].hour*100, axis=1)
-        df['Calc'] = df.apply(lambda row: apply_thresh(row[c_col]),axis=1)
-        print(df.columns.values)
-        df = df.drop(droplist,axis=1)
-        print(df.columns.values)
-        df = df[reorder]
-        print(df.columns.values)
-        df.to_csv(name, index=False, sep=' ') 
-        return df
-
-    def compare_stations2(self, stndf,nnn=None, maxht=300,mlist=None):
-        udates = stndf.date.unique()
-        udur = stndf.dur.unique()
-        outdf = pd.DataFrame()
-        iii=0
-        mfitlist = []
-        for date in udates:
-            sdf2 = stndf[stndf['date']==date]        
-            for dur in udur:
-                sdf = sdf2[sdf2['dur']==dur]        
-                if sdf.empty: 
-                   print('EMPTY', date, dur)
-                   continue
-                print('adding', date, dur)
-                tmave = int(dur)/100 * 60
-                #jjj, dfnew = combine_pdict(self.pdict, pd.to_datetime(date), tmave)
-                pdictnew = subset_pdict(self.pdict, pd.to_datetime(date), tmave)
-                submlist = []
-                jjj=0
-                for pdn in pdictnew: 
-                    if maxht: pdn = pdn[pdn['ht']< maxht]
-                    if not mlist: 
-                       mfit = par2fit(pdn,nnn=nnn)
-                    else: 
-                       mfit = mlist[iii][jjj]
-                    if not mfit.fit: continue
-                    mass = pdn['pmass'].sum() 
-                    submlist.append(mfit)
-                    jjj+=1
-                concdf = self.get_conc(submlist, sdf, mass)
-                if not mlist: mfitlist.append(submlist)
-                if iii==0: outdf = concdf
-                else: outdf = pd.concat([outdf, concdf], axis=0) 
-                iii+=1
-        return mfitlist, outdf             
-
-    def compare_stations(self, stndf,nnn=None,  maxht=300,mlist=None):
-        """
-        stndf : Pandas dataframe. Should have columns
-                date, dur, pmch
-        """
-        #sdf = stndf.sort_values(by=['date','dur'],axis=1)
-        udates = stndf.date.unique()
-        udur = stndf.dur.unique()
-        outdf = pd.DataFrame()
-        iii=0
-        mfitlist = []
-        for date in udates:
-            sdf2 = stndf[stndf['date']==date]        
-            for dur in udur:
-                sdf = sdf2[sdf2['dur']==dur]        
-                if sdf.empty: 
-                   print('EMPTY', date, dur)
-                   continue
-                print('adding', date, dur)
-                tmave = int(dur)/100 * 60
-                jjj, dfnew = combine_pdict(self.pdict, pd.to_datetime(date), tmave)
-                if dfnew.empty: 
-                   print('dfnew empty')
-                   continue
-                if maxht: dfnew = dfnew[dfnew['ht']< maxht]
-                if not mlist:
-                    mfit = par2fit(dfnew,nnn=nnn)
-                    mfitlist.append(mfit)
-                else:
-                    mfit = mlist[iii]
-                mass = dfnew['pmass'].sum() / jjj 
-                #mfitlist.append(mfit)
-                concdf = self.get_conc([mfit], sdf, mass)
-                if iii==0: outdf = concdf
-                else: outdf = pd.concat([outdf, concdf], axis=0) 
-                iii+=1
-        return mfitlist, outdf             
- 
-    def get_conc(self, mfitlist, stndf, mass, rval='DataFrame', ht=0.1):
-        dlist = []
-        dd = 0.01
-        dh = 0.05
-        buf = [0.05,0]
-        measname = 'pmch'
-        for row in stndf.itertuples(index=True, name='Pandas'): 
-            phash={}
-            date = getattr(row,'date')
-            lat = getattr(row,'lat')
-            lon = getattr(row,'lon')
-            stn = getattr(row,'stn')
-            meas = getattr(row,measname)
-            dur = getattr(row,'dur')
-            nnn=0
-            for mfit in mfitlist:
-                conc = mfit.get_conc(dd=dd, 
-                                   dh=dh, 
-                                   buf=buf,
-                                   mass=mass,
-                                   lat=lat,
-                                   lon=lon,
-                                   ht=ht)
-                if nnn==0:
-                   concra = conc
-                else:
-                   concra = xr.concat([concra, conc],dim='time')
-                nnn+=1
-            concra = concra.mean(dim='time')
-            phash['date']=date
-            phash['lat'] = lat                 
-            phash['lon'] = lon                
-            phash['stn'] = stn
-            phash['meas'] = meas
-            phash['mean'] = concra.mean()
-            phash['max'] = concra.max()
-            phash['min'] = concra.min()               
-            phash['dur'] = dur
-            dlist.append(phash)
-        if rval=='DataFrame':
-            return pd.DataFrame(dlist)       
-          
 
     def read_pardump(self, century=2000):
         pd = pardump.Pardump(fname=self.tname) 
@@ -1125,19 +994,6 @@ class VolcPar:
         # returns a dataframe for that time.
         dstr = time.strftime(self.strfmt)
         return self.pdict[dstr]
-
-    def compare_pars(self, plot=False):
-        dfhash = {}
-        fignum=1
-        for time in generate_rev_times(24):
-            if plot: fig = plt.figure(fignum)
-            else: fig=None
-            df = compare_pdump(self.getbytime(time), time, fig, plot=plot)
-            fignum += 1     
-            dfhash[time] = df
-        if plot: plt.figure(fignum)
-        self.plotsource(dfhash)
-        return dfhash
 
     def findsource(self, sorti):
         import pandas as pd
@@ -1192,6 +1048,28 @@ class VolcPar:
             newlist.append(val.seconds)
         return newlist 
 
+
+def average_mfitlist(mfitlist,masslist,dd=None,dh=None,buf=None,lat=None, lon=None, ht=None):
+    iii=0
+    for mfit in mfitlist:
+        conc = mfit.get_conc(dd=dd, 
+                           dh=dh, 
+                           buf=buf,
+                           mass=masslist[iii],
+                           lat=lat,
+                           lon=lon,
+                           ht=ht)
+        if iii==0:
+           concra = conc
+        else:
+           concra = xr.concat([concra, conc],dim='time')
+        iii+=1
+    try:
+        concra = concra.mean(dim='time')
+    except:
+        pass
+    return concra
+
 def key2datetime(time):
     strfmt = "%Y%m%d%H%M"
     return datetime.datetime.strptime(time, strfmt)
@@ -1218,7 +1096,7 @@ def combine_pdict(pdict, stime, tmave=60, makelist=False, verbose=False):
     etime = stime + datetime.timedelta(minutes=tmave)
     skey = datetime2key(stime)
     ekey = datetime2key(etime)
-    print('ENDkey', ekey, stime, etime, tmave)
+    print('combine_pdict ENDkey', ekey, stime, etime, tmave)
     keylist = list(pdict.keys())
     keylist.sort()
     if skey in pdict.keys():
@@ -1283,42 +1161,101 @@ class RevPar(VolcPar):
         self.start = datetime.datetime(2019,2,25,16,30)
         self.delta = datetime.timedelta(seconds=5*60)
         self.delt=5
-        self.time_generator = generate_rev_times
 
     def get_data(self, time):
         lat, lon, dmass, dht = get_rev_data(time)
 
+def process_under(under):
+    lastz = under.z.values[-1]
+    under = under.sum(dim='z')
+    under = under.assign_coords(z=lastz)
+    under = under.expand_dims('z') 
+    return under
 
 
-class ParDat:
+def shift_underground(dra):
     """
-    Read in and process a particle.dat file from STILT options. 
+    Takes all mass that is underground and puts it in the first level.
     """
+    import math
+    iii=0
+    height=1e-12
+    for val in dra.z.values:
+        if height < val: break
+        if math.isclose(height,val): break
+        iii+=1 
+    under = dra.isel(z=np.arange(0,iii+1))
+    under = process_under(under)
+    above = dra.isel(z=np.arange(iii+1,len(dra.z.values),1))
+    new = xr.concat([under,above],dim='z')    
+    return new
 
-    def __init__(self,fname, stime):
-        """
-        fname : str
-        stime : datetime. date of beginning of run.
-        
-        """
-        self.fname = fname
-        self.stime = stime #start time of simulation
-        self.keepvals = ['dtime','index','site','lat','lon','agl','grdht','foot']
-        self.colnames = ['date','sorti','site','lat','lon','agl','grdht','foot']
-        self.df = self.read()
-        self.df = self.process(self.df)
 
-    def read(self):
-        df = pd.read_csv(self.fname, sep='\s+', header=[0])
-        # time is minutes since start of run
-        df['dtime'] = df.apply(lambda row: self.stime +
-                                datetime.timedelta(minutes=row['time']),axis=1) 
-        return df
+def reflect_underground(dra):
+    """
+    reflects mass that is in first 3 levels underground
+    onto first three levels above ground.
+    """
+    import math
+    iii=0
+    height=0
+    for val in dra.z.values:
+        if height < val: break
+        if math.isclose(height,val): break
+        iii+=1 
+    print('INDEX', iii)
+    under1 = dra.isel(z=[iii-1,iii])
+    print('under1', under1)
+    under1 = process_under(under1)
+    under = under1
+    jjj=iii+1
+    if iii-2 > 0:
+       under2 = dra.isel(z=[iii-2,iii+1])
+       print('under2', under2)
+       under2 = process_under(under2)
+       jjj=iii+2
+       under = xr.concat([under,under2],dim='z')
+    if iii-3 > 0:
+       under3 = dra.isel(z=[iii-3,iii+2])
+       print('under3', under3)
+       under3 = process_under(under3)
+       jjj=iii+3
+       under = xr.concat([under,under3],dim='z')
+
+
+    #under = under1
+    print('under', under)
+    above = dra.isel(z=np.arange(jjj,len(dra.z.values),1))
+    print('above',above.z.values)
+
+    #lastz = under.z.values[-1]
+    #under = under.sum(dim='z')
+    
+    #under = under.assign_coords(z=lastz)
+    #under = under.expand_dims('z') 
+    
+    new = xr.concat([under,above],dim='z')    
  
-    def process(self, df):
-        df = df[self.keepvals]
-        df.columns = self.colnames
-        self.df = df
-        return df
+    return new
+    
 
+def xslice(dra, longitude ):
+    latitude = dra.latitude.values[0][0]
+    xi, yi = dra.monet.nearest_ij(lat=latitude, lon=longitude) 
+    return dra.isel(x=xi)
+
+def yslice(dra, latitude ):
+    longitude = dra.longitude.values[0][0]
+    xi, yi = dra.monet.nearest_ij(lat=latitude, lon=longitude) 
+    return dra.isel(y=yi)
+
+def zslice(dra, height ):
+    import math
+    iii=0
+    for val in dra.z.values:
+        if height < val: break
+        if math.isclose(height,val): break
+        iii+=1 
+        print(iii, val, height)
+    return dra.isel(z=iii)
 

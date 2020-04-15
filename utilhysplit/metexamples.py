@@ -1,4 +1,4 @@
-import monet.utilhysplit.metfiles as mf
+import utilhysplit.metfiles as mf
 import datetime
 
 d1 = datetime.datetime(2017, 12, 5, 2)

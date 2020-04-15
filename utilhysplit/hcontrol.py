@@ -41,7 +41,7 @@ def writeover(name, overwrite, query, verbose=False):
     """
     rval = 1
     if path.isfile(name):
-        print('file already exists ' + name)
+        if verbose: print('file already exists ' + name)
         fexists = True
         if query:
             istr = " Press y to overwrite file \n"

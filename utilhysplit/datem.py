@@ -288,7 +288,7 @@ def read_dataA(fname):
         datem = pd.read_csv(
             fname, names=colra, header=None, delimiter=r"\s+", dtype=dtp, skiprows=2
         )
-    except pandas.errors.ParserError:
+    except pd.errors.ParserError:
         datem = pd.DataFrame()
 
     if not datem.empty:

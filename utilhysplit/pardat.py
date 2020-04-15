@@ -1,18 +1,7 @@
-import xarray as xr
 #import matplotlib.pyplot as plt
 #import textwrap
-import cartopy.crs as ccrs
-import cartopy.feature as cfeat
-import numpy as np
-import numpy.ma as ma
 import pandas as pd
 import datetime
-import seaborn as sns
-import os
-import sys
-from Tools import volcMER
-import utilhysplit.pardump as pardump
-import matplotlib.pyplot as plt
 #import reventador as reventador
 
 
@@ -29,8 +18,12 @@ class ParDat:
         """
         self.fname = fname
         self.stime = stime #start time of simulation
-        self.keepvals = ['dtime','index','site','lat','lon','agl','grdht','foot']
-        self.colnames = ['date','sorti','site','lat','lon','agl','grdht','foot']
+        self.keepvals =
+                      ['dtime','index','site','lat','lon',
+                       'agl','grdht','foot','dmass']
+        self.colnames =
+                      ['date','sorti','site','lat','lon',
+                       'agl','grdht','foot','pmass']
         self.df = self.read()
         self.df = self.process(self.df)
 

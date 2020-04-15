@@ -181,7 +181,6 @@ class MetFiles:
         edate = sdate
         if self.verbose:
             print("GETMET", sdate, edate, end_date, runtime, self.mdt)
-        print("GETMET", sdate, edate, end_date, runtime, self.mdt)
         zzz = 0
         while not done:
             if "week" in self.strfmt:

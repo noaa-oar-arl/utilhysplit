@@ -6,7 +6,7 @@ import datetime
 import subprocess
 from os import path
 import pandas as pd
-from monet.utilhysplit.hcontrol import HycsControl
+from utilhysplit.hcontrol import HycsControl
 
 """
 PRGMMR: Alice Crawford  ORG: ARL  
