@@ -69,225 +69,6 @@ def get_thickness(df, t1, t2):
     return df2
 
 
-class ParConc:
-
-    def __init__(self,pdict, sp=[1], mult=1,nnn=None,
-                 dd=0.1, dh=0.1, bnds=None, method='gmm'):
-        self.pdict = pdict
-        self.sp = sp
-        self.mult = mult
-        self.nnn = nnn
-        self.dd = dd
-        self.dh = dh
-        self.bnds = bnds
-        self.method = method
-        self.concra = xr.DataArray(None)   
-        self.mfitlist = []  
-        self.pdat = False
-        self.pdatdf = pd.DataFrame()
-        self.msl = False
-        self.maxnnn= nnn
-        self.time_average = 0
-        self.sourcename = 'unknown'
-
-    def add_source_description(self, sname):
-        self.sourcename = sname
-
-    def save(self, outname):
-        atthash = {}
-        atthash['dd'] = self.dd
-        atthash['dh'] = self.dh
-        atthash['nG'] = self.nG
-        atthash['method'] = self.method
-        atthash['mult'] = self.mult
-        atthash['species'] = str.join(',',map(str,self.sp))
-        atthash['Time_Average (minutes)'] = self.time_average
-        atthash['description'] = self.sourcename
-        self.concra = self.concra.assign_attributes(atthash)
-        self.concra.to_netcdf(outname, format='NETCDF4')
-
-    def load(self, fname):
-        dset = xr.open_dataset(fname)
-        dra = dset.to_array()
-        dra = dra.isel(variable=0)
-        return dra
-
-    def set_nnn(self,nnn):
-        self.nnn = nnn
-        self.maxnnn = nnn 
-
-    def add_pardat_file(self,df):
-        self.pdat= True
-        self.msl = True 
-        self.pdatdf = df
-
-    def set_msl(self):
-        if self.pdat: self.msl=True
-        else: print('WARNING: cannot set msl. no pdat file')
- 
-    def make_bnds(self, dfa):
-         bnds = {}
-         bnds['latmin'] = np.min(dfa['lat'].values)
-         bnds['latmax'] = np.max(dfa['lat'].values)
-         bnds['lonmin'] = np.min(dfa['lon'].values)
-         bnds['lonmax'] = np.max(dfa['lon'].values)
-         return bnds 
-
-    def key2datetime(self,time):
-        strfmt = "%Y%m%d%H%M"
-        return datetime.datetime.strptime(time, strfmt)
-
-    def timeave(self, tmave=60, stime=None, etime=None):
-        # NOT DONE
-        self.time_average=tmave
-        iii=0
-        jjj=0
-        templist=[]
-        atime = stime
-        macc=0 # minutes accumulated.
-        if not etime:
-            tlist = list(self.pdict.keys())
-            etime = self.key2datetime(tlist[-1]) 
-        self.mfitlist=[] 
-        for time in self.pdict.keys():
-            print(stime,etime, self.key2datetime(time))
-            if iii==0 and not stime: 
-               stime = self.key2datetime(time) 
-               macc = 0
-               atime = stime
-            else:
-               ptime = self.key2datetime(time) 
-               # if before start time then go to nex time
-               if ptime < stime: 
-                  print('wait')
-                  continue
-               # if after end time then exit loop
-               if ptime > etime: 
-                  print('stop')
-                  break
-               macc = (ptime-atime).seconds/60.0
-               #if ((ptime-stime).seconds/60) % delta !=0:
-               #   continue               
-               if jjj==0: 
-                  dfnew = self.pdict[time]
-               else:
-                  dfnew = pd.concat([dfnew, self.pdict[time]])
-               if macc < tmave:
-                  print('macc', macc)
-                  jjj += 1
-                  continue
-               else:
-                  print('end macc', macc)
-                  tw = jjj
-                  macc=0
-                  jjj=0
-                  atime = ptime
-            print('Lenght of file', len(dfnew))
-            print('time weighting', tw)
-            nnn = self.checkn(dfnew)
-            mfit, conc = par2conc(dfnew, 
-                     self.key2datetime(time),
-                     self.sp,
-                     self.mult / float(tw),
-                     self.method,
-                     self.dd, 
-                     self.dh, 
-                     nnn,  
-                     self. bnds)
-            if iii==0:
-              print('creating concra')
-              concra = conc
-            else:
-              print('appending concra')
-              concra = xr.concat([concra, conc],dim='time')
-            self.mfitlist.append(mfit)
-            iii+=1
-            if macc > tmave: 
-               print('WARNING: macc too large')
-               break 
-            macc=0
-            jjj=0
-        self.concra = concra     
-        return  concra  
- 
-
-    def checkn(self, df):
-        ncheck = len(df)
-        if ncheck/ self.nnn > 10:
-           rval = self.nnn
-        elif ncheck < 50:
-           rval = 1
-        else:
-           rval = ncheck / 50.0
-        rval = np.min([rval, self.maxnnn])
-        return rval 
-        
-    def timeloop(self, delta=60, stime=None, etime=None):
-        """
-        stime : datetime :  first time to extract
-        delta : int : extract time every delta minutes
-        """
-        iii=0
-        self.mfitlist=[]
-        if not etime:
-            tlist = list(self.pdict.keys())
-            etime = self.key2datetime(tlist[-1]) 
-        for time in self.pdict.keys():
-            if iii==0 and not stime: 
-               stime = self.key2datetime(time) 
-            else:
-               ptime = self.key2datetime(time) 
-               if ptime < stime: continue
-               if ptime > etime: break
-               if ((ptime-stime).seconds/60) % delta !=0:
-                  continue               
-            if self.pdat:
-               print('Merging pdat', time, len(self.pdict[time]))
-               dfnew = merge_pdat(self.pdict[time], self.pdatdf)
-            else:
-               dfnew = self.pdict[time]
-            print('Lenght of file', len(dfnew))
-            nnn = self.checkn(dfnew)
-            mfit, conc = par2conc(dfnew, 
-                     self.key2datetime(time),
-                     self.sp,
-                     self.mult,
-                     self.method,
-                     self.dd, 
-                     self.dh, 
-                     nnn,  
-                     self. bnds)
-            if iii==0:
-              concra = conc
-            else:
-              concra = xr.concat([concra, conc],dim='time')
-            self.mfitlist.append(mfit)
-            iii+=1
-        self.concra = concra     
-        return  concra  
- 
-
-    def check_ones(self):
-        for mfit in self.mfitlist:
-            for key in mfit.keys():
-                print(key, mfit[key].one)        
-                print(key, mfit[key].htunits)
-
-    def mass_loading(self, splist=None, thresh=1e-10):
-        iii=0
-        for time in self.concra.time.values:
-            if iii>0: break
-            tempra = self.concra.sel(time=time)
-            tempra = threshold(tempra)
-            if 'sp' in tempra.coords:
-                tempra = tempra.sum(dim='sp')
-            tempra = tempra.sum(dim='z')
-            tempra = tempra * self.dh* 1000
-            if iii>0: break
-            cb = plt.pcolormesh(tempra.x, tempra.y, tempra)
-            plt.colorbar(cb)
-            iii+= 1
-
 def threshold(cra, tval=3, tp='log',fillna=True):
     """
     Apply a threshold to a DataArray
@@ -337,12 +118,8 @@ def merge_pdat(pardf, datdf):
     return dfnew
                    
 def par2fit(pdumpdf,  
-         #time=None,
-         #sp=1, 
          mult=1,
          method='gmm',
-         dd=0.01,
-         dh=0.1,
          nnn=None,
          msl=True,
          wcp=1e3):  #used for Bayesian Gaussian Mixture
@@ -367,8 +144,8 @@ def par2fit(pdumpdf,
     nnn  : if method 'gmm'  or 'gbm' number of clusters to use.
            if None will try to figure out for gmm.
            if method 'kde' it is the bandwidth
-    dd   : horizontal resolution of output in degrees.
-    dh   : vertical resolution of output in km.
+
+    wcp  : for bgm
 
     returns an instance of the MassFit class.
     """
@@ -391,10 +168,7 @@ def par2fit(pdumpdf,
         else: 
             hval = 'agl'
     ht = df2[hval].values * htmult
-    #print('HT', ht, len(ht))
-    #print('Mass', mass)
     xra = get_xra(lon,lat,ht)
-    #print(len(xra), len(df2), len(pdumpdf))
     if method=='gmm':
         if not nnn:
             nnn1,nnn2 = find_n(xra, plot=True)
@@ -408,7 +182,8 @@ def par2fit(pdumpdf,
         gmm = get_bgm(n_clusters=nnn, wcp=wcp)
     elif method=='kde':
         if not nnn:
-           nnn = dd
+           print('par2fit error: bandwidth, (nnn) must be specified for KDE method')
+           sys.exit() 
         gmm = get_kde(bandwidth=nnn) 
     else:
         print('Not valid method ', method)
@@ -529,18 +304,16 @@ def make_bnds(dfa):
 
 class MassFit():
 
-    def __init__(self,gmm, xra, mass=1, thickness=None):
+    def __init__(self,gmm, xra, mass=1):
         """
         gmm : GuassianModelMixture object 
               OR KED or BGM 
              
-        xra : list of (longitude, latitude) points
+        xra : list of (longitude, latitude, height) points
         mass: float : mass represented by latitude longitude points
-        thickness : float : thickness of layer (in m) that particles reside in.
-        htunits: str : 'm' or 'km'
         """
         self.gmm = gmm
-        self.xra = xra
+        self.xra = xra  
         self.fit=True
         print('MassFit: fitting')
         try:
@@ -550,7 +323,6 @@ class MassFit():
             self.fit=False
         print('MassFit: done fitting')
         self.mass = mass 
-        self.thickness = thickness
         self.htunits = self.get_ht_units()
 
     def get_ht_units(self):
@@ -640,19 +412,26 @@ class MassFit():
         """
         helps make sure that multiple grids can be added
         in the xarray.
+        TO DO : needs to be generalized to all values of dd.
+                dh should be added as well.
         """
         if dd in [0.1,0.05,0.02]:
            qqq=10
-        elif dd in [0.01]:
+        elif dd in [0.01,0.005,0.002]:
            qqq=100
+        else:
+           qqq=1
         lmin = (np.floor(lmin * qqq)) /qqq
         lmax = (np.ceil(lmax * qqq)) /qqq
         lra = np.arange(lmin, lmax, dd)
-        #print(lmin, lmax, lra)
         return lra
 
          
     def totalgrid(self, dd,dh,buf):
+        """
+        returns lat, lon, ht arrays based
+        on data in the xra.
+        """
         lon = self.xra[:,0]
         lat = self.xra[:,1]
         ht = self.xra[:,2]
@@ -668,7 +447,15 @@ class MassFit():
         return latra, lonra, htra
 
     def partialgrid(self,lat,lon,ht,dd,dh,buf):
-        print('partial grid bf', buf, 'dh ', dh)
+        """
+        returns lat, lon, ht arrays.
+        dd is resolution in horizontal directions
+        dh is resolution in vertical direction.
+        buf[0] is 1/2 span in horizontal directions.
+        buf[1] is 1/2 span in vertical directions.
+        Will allow height array to go below 0.
+
+        """
         bufx = buf[0]
         if bufx < dd: bufx = dd
         bufh = buf[1]
@@ -678,8 +465,6 @@ class MassFit():
         lonmin = lon-bufx
         lonmax = lon+dd+bufx
         htmin = ht - bufh
-        #if htmin < 0 : htmin=0
-        print('ht', ht, 'dh', dh, 'bufh', bufh)
         htmax = ht + dh + bufh
         latra = self.get_lra(latmin, latmax, dd)
         lonra = self.get_lra(lonmin, lonmax, dd)
@@ -700,7 +485,6 @@ class MassFit():
                  lon=None,
                  ht=None,
                  verbose=False):
-        print('get conc ', buf, 'dh ', dh)
         if not mass: 
            mass = self.mass
         if not lat:
