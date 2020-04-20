@@ -1,12 +1,11 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import datetime
-
 import numpy as np
 import pandas as pd
 
 
 """
-PGRMMR: Alice Crawford ORG: ARL/CICS
+PGRMMR: Alice Crawford ORG: NOAA/ARL
 PYTHON 3
 ABSTRACT: classes and functions for reading and writing binary HYSPLIT
 PARDUMP file
@@ -15,11 +14,19 @@ CLASSES
     Pardump - contains methods to write or read a binary pardump file
 
 FUNCTIONS
-    none
+    open_dataset()
 
 
 
 """
+
+def open_dataset(fname, drange=None, century=2000, verbose=False):
+    """
+
+    """    
+    pdump = Pardump(fname)
+    df = pdump.read(drange=drange, century=century)
+    return df 
 
 
 class Pardump():
@@ -71,6 +78,10 @@ class Pardump():
                                ('poll', tp2),
                                ('mgrid', tp2),
                                ('sorti', tp2)])
+
+
+    def df2par(self, df):
+        return -1
 
     def write(self, numpar, pmass, lon, lat, ht, pollnum, sdate):
         """
@@ -141,7 +152,7 @@ class Pardump():
         indicating the beginning
         and ending date of the particle positions of interest.
         Returns
-           pframehash :  dictionary.
+           parframe_all : pandas DataFrame
 
         The key is the date of the particle positions in YYMMDDHH.
         The value is a pandas dataframe object with the particle information.
@@ -154,9 +165,10 @@ class Pardump():
 
         imax = 100000
         # returns a dictionary of pandas dataframes. Date valid is the key.
-        pframe_hash = {}
+        # pframe_hash = {}
+        parframe_all = pd.DataFrame()
         with open(self.fname, 'rb') as fp:
-            i = 0
+            iii = 0
             testf = True
             while testf:
                 hdata = np.fromfile(fp, dtype=self.hdr_dt, count=1)
@@ -211,23 +223,30 @@ class Pardump():
                     # released yet
 
                     if sorti:
-                        # returns only particles with
+                        # returns only particles with 
                         par_frame = par_frame.loc[par_frame['sorti'].isin(
                             sorti)]
                         # sort index in list sorti
                     par_frame['date'] = pdate
                     #par_frame.sort('ht', inplace=True)  # sort by height
+                    if iii==0:
+                       parframe_all = par_frame.copy()
+                    else:
+                       parframe_all = pd.concat([parframe_all, par_frame], axis=0)
                     par_frame = pd.concat(
                         [par_frame], keys=[
                             self.fname])  # add a filename key
                     # create dictionary key for output.
                     datekey = pdate.strftime(self.dtfmt)
                     # Add value to dictionary.
-                    pframe_hash[datekey] = par_frame
+                    #pframe_hash[datekey] = par_frame
+
+                iii += 1
+                #parframe_all = pd.concat(
+                #    [parframe_all], keys=[
+                #        self.fname])  # add a filename key
 
                 # Assume data is written sequentially by date.
-                i += 1
-
                 if drange:
                     if pdate > drange[1]:
                         testf = False
@@ -237,7 +256,10 @@ class Pardump():
                     #   testf=False
                     #   if verbose:
                     #      print "Before date. Closing file"
-                if i > imax:
+                if iii > imax:
                     print('Read pardump. Limited to' + str(imax) +'  iterations. Stopping')
                     testf = False
-        return pframe_hash
+        parframe_all = pd.concat(
+            [parframe_all], keys=[
+                self.fname])  # add a filename key
+        return parframe_all
