@@ -1,44 +1,45 @@
-# forecast_data.py
-# Functions designed to find the correct directories and meteorological files for
-# a HYSPLIT run
-# Find met files for HYSPLIT forecast runs
+# metdata.py
+# Functions designed to find the correct directories and
+# meteorological files for a HYSPLIT run
 import os
+from datetime import timedelta as td
 
-# changelog:
-# Mar 24 2020 (amc) made fctdir input into findcycles_forecast
 
-def findcycles_forecast(dstart, metdata, fctdir='/pub/forecast'):
-    """dstart : datetime object. start date
-       metdata : str 
-       GFS, GFS0p5, GFS0p25, NAM 12 km, NAMAK, NAMHI 
+def findcycles_forecast(dstart, metdata):
+    """Finds forecast meteorology data files
+    dstart : datetime object of start date
+    metdata : string (options: GFS, GFS0p5, GFS0p25, NAM12, NAMAK, NAMHI)
     """
+    FCTDIR = '/pub/forecast/'
     cycles = ["t00z", "t06z", "t12z", "t18z"]
     ctimes = [0, 6, 12, 18]
     metdirlist = []
     metfilelist = []
     days = [""]
-    if metdata == "GFS":
+    if(metdata == "GFS"):
         meta = "gfsa"
         met = "gfsf"
-    elif metdata == "GFS0p5":
-        met = "gfs0p5f"
-    elif metdata == "GFS0p25":
+    elif(metdata == "GFS0p25"):
         met = "gfs0p25"
-    elif metdata == "NAM 12 km":
+    elif(metdata == "NAM12"):
         met = "namf"
-    elif metdata == "NAMAK":
+    elif(metdata == "NAMAK"):
         met = "namsf.AK"
         meta = "namsa.AK"
-    elif metdata == "NAMHI":
+    elif(metdata == "NAMHI"):
         met = "namsf.HI"
         meta = "namsa.HI"
-    metdir1 = fctdir + dstart.strftime("%Y%m%d") + '/'
+    metdir1 = FCTDIR + dstart.strftime("%Y%m%d") + '/'
     #print('<br>' + metdir1)
     cyclename = 'None'
     metnamefinal = 'No data found'
     for cyc, tms in zip(cycles, ctimes):
         metfilename = 'hysplit.' + cyc + '.' + met + 'f'
         metname = metdir1 + metfilename
+        if (not os.path.isfile(metname)):
+            dstart = dstart - td(days=1)
+            metdir1 = FCTDIR + dstart.strftime("%Y%m%d") + '/'
+            metname = metdir1 + metfilename
         if os.path.isfile(metname):
             if tms <= dstart.hour:
                 metnamefinal = metfilename
@@ -53,17 +54,17 @@ def findcycles_forecast(dstart, metdata, fctdir='/pub/forecast'):
 
 def findcycles_archive(dstart, dend, metdata, direction):
     """dstart : datetime object start date
-        dend : datetime object end date
-        metdata : string : GDAS0p5, GDAS1
-        direction: string : Forward, Back
-   """
+    dend : datetime object end date
+    metdata : string : GDAS0p5, GDAS1
+    direction: string : Forward, Back"""
     from datetime import timedelta as td
-    #from datetime import date
+    from datetime import date
+
     DIR = '/pub/archives/'
     metdirlist = []
     metfilelist = []
     datelist = []
-    if metdata == "GFS0p25":
+    if (metdata == "GFS0p25"):
         met = "gfs0p25"
         metdir1 = DIR + met + '/'
         if (direction == 'Forward'):
@@ -80,7 +81,8 @@ def findcycles_archive(dstart, dend, metdata, direction):
             metfilelist.append(datelist[y].strftime("%Y%m%d") + '_' + met)
             metdirlist.append(metdir1)
             y += 1
-    elif metdata == "GDAS1":
+
+    elif (metdata == "GDAS1"):
         met = "gdas1"
         metdir1 = DIR + met + '/'
         smonyr = dstart.strftime('%b%y').lower()
@@ -99,10 +101,9 @@ def findcycles_archive(dstart, dend, metdata, direction):
                     y = 0
                     while y < len(nweeks):
                         metdirlist.append(metdir1)
-                        metfilelist.append(
-                            met + '.' + smonyr + '.w' + str(nweeks[y]))
+                        metfilelist.append(met + '.' + smonyr + '.w' + str(nweeks[y]))
                         y += 1
-        if smonyr != emonyr:
+        if (smonyr != emonyr):
             sweek = (dstart.day - 1) // 7 + 1
             eweek = (dend.day - 1) // 7 + 1
             ndays = abs((dend - dstart).days)
@@ -116,18 +117,11 @@ def findcycles_archive(dstart, dend, metdata, direction):
                 tmpdate = dstart
                 for x in range(0, dstep + 1):
                     if (direction == 'Forward'):
-<<<<<<< HEAD
                         tmpdate = tmpdate + td(days=7*x)
                     if (direction == 'Back'):
                         tmpdate = tmpdate - td(days=7*x)
-=======
-                        tmpdate = tmpdate + td(days=7 * x)
-                    if (direction == 'Back'):
-                        tmpdate = tmpdate - td(days=7 * x)
->>>>>>> restructure
                     tmpweek = (tmpdate.day - 1) // 7 + 1
                     tmpmonyr = tmpdate.strftime('%b%y').lower()
                     metdirlist.append(metdir1)
-                    metfilelist.append(
-                        met + '.' + tmpmonyr + '.w' + str(tmpweek))
+                    metfilelist.append(met + '.' + tmpmonyr + '.w' + str(tmpweek))
     return metdirlist, metfilelist
