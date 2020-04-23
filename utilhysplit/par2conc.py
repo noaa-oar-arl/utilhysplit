@@ -21,26 +21,26 @@ from sklearn.mixture import GaussianMixture as GMM
 from sklearn.mixture import BayesianGaussianMixture as BGM
 
 """
+Functions and classes to convert pardump file
+output to concentrations using mixture models or 
+kernel density estimation.
+the KDE functionality is very basic.
+
+
 classes
 -------------
-
 MassFit
 Par2Conc
 
 functions:
 -------------
-
-par2fit
+par2fit : returns a MassFit object.
 draw_ellipse
 get_kde
 get_gmm
 get_bgm
 get_xra
 find_n
-
-
-subset_pdict TODO
-combine_pdict TODO
 
 average_mfitlist
 threshold
@@ -58,12 +58,10 @@ cdump_plot
 """
 
 
-
 def get_thickness(df, t1, t2):
     df2 = df[df['ht']>t1]
     df2 = df2[df2['ht']<=t2]
     return df2
-
 
 def threshold(cra, tval=3, tp='log',fillna=True):
     """
@@ -187,8 +185,11 @@ def par2fit(pdumpdf,
            sys.exit() 
         gmm = get_kde(bandwidth=nnn) 
     elif method=='p_bgm':
-        gmm = copy_bgm(pfit)
-        gmm.warm_start=False
+        gmm = copy_fit(pfit, method='bgm')
+        gmm.warm_start=True
+    elif method=='p_gmm':
+        gmm = copy_fit(pfit, method='gmm')
+        gmm.warm_start=True
     else:
         print('Not valid method ', method)
         sys.exit()
@@ -716,17 +717,20 @@ def get_xra(lon,lat, ht=None):
 
     return xra
 
-def copy_bgm(bgm):
-    covartype = bgm.covariance_type
+    
+def copy_fit(bgm, method='bgm'):
     n_clusters  = bgm.n_components
+    covartype = bgm.covariance_type
     n_init = bgm.n_init
-    wcpt = bgm.weight_concentration_prior_type
     max_iter = bgm.max_iter
-    reg_covar = bgm.reg_covar
-    init_params = bgm.init_params
-    verbose = True
     tol = bgm.tol
-    copy = BGM(n_components=n_clusters, 
+    verbose = True
+    if method=='bgm':
+       wcpt = bgm.weight_concentration_prior_type
+       reg_covar = bgm.reg_covar
+       init_params = bgm.init_params
+       tol = bgm.tol
+       copy = BGM(n_components=n_clusters, 
               covariance_type=covartype,
               n_init = n_init,
               weight_concentration_prior_type = wcpt,
@@ -735,6 +739,22 @@ def copy_bgm(bgm):
               verbose=verbose,
               reg_covar = reg_covar,
               tol=tol)
+       copy.weight_concentration_prior_ = bgm.weight_concentration_prior_
+       copy.weight_concentration_ = bgm.weight_concentration_ 
+       copy.mean_precision_prior = bgm.mean_precision_prior
+       copy.mean_prior_ = bgm.mean_prior_
+       copy.mean_precision_ = bgm.mean_precision_
+       copy.covariance_prior_ = bgm.covariance_prior_
+       copy.degrees_of_freedom_prior_ = bgm.degrees_of_freedom_prior_
+       copy.degrees_of_freedom_ = bgm.degrees_of_freedom_
+    if method=='gmm':
+       copy = GMM(n_components=n_clusters, 
+              random_state=42,
+              covariance_type=covartype,
+              max_iter=max_iter,
+              n_init = n_init,
+              tol = tol,
+              verbose=verbose)
     copy.means_ = bgm.means_ 
     copy.covariances_ = bgm.covariances_ 
     copy.weights_ = bgm.weights_ 
@@ -743,14 +763,6 @@ def copy_bgm(bgm):
     copy.converged_ = bgm.converged_
     copy.n_iter_ = bgm.n_iter_
     copy.lower_bound_ = bgm.lower_bound_
-    copy.weight_concentration_prior_ = bgm.weight_concentration_prior_
-    copy.weight_concentration_ = bgm.weight_concentration_ 
-    copy.mean_precision_prior = bgm.mean_precision_prior
-    copy.mean_precision_ = bgm.mean_precision_
-    copy.mean_prior_ = bgm.mean_prior_
-    copy.degrees_of_freedom_prior_ = bgm.degrees_of_freedom_prior_
-    copy.degrees_of_freedom_ = bgm.degrees_of_freedom_
-    copy.covariance_prior_ = bgm.covariance_prior_
     return copy
 
 def get_bgm(n_clusters=10, wcp=1.0e3, tol=None):
@@ -937,13 +949,12 @@ class VolcPar:
         return newlist 
 
 
-def average_mfitlist(mfitlist,masslist,dd=None,dh=None,buf=None,lat=None, lon=None, ht=None):
+def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,lat=None, lon=None, ht=None):
     iii=0
     for mfit in mfitlist:
         conc = mfit.get_conc(dd=dd, 
                            dh=dh, 
                            buf=buf,
-                           mass=masslist[iii],
                            lat=lat,
                            lon=lon,
                            ht=ht)

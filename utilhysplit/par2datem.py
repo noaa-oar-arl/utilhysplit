@@ -114,6 +114,7 @@ def sub2(pardf,nnn,maxht, mlist=None, method='gmm'):
 def sub(pardf, nnn, maxht, mlist=None,method='gmm'):
     jjj=0
     submlist = []
+    pmethod = 'p_' + method 
     #masslist = []
     #fit each unique date in the period.
     print('in sub')
@@ -126,7 +127,7 @@ def sub(pardf, nnn, maxht, mlist=None,method='gmm'):
                mfit = par2conc.par2fit(pdn,nnn=nnn, method=method)
                print('sub first', mfit)
            else:
-               mfit = par2conc.par2fit(pdn,nnn=nnn, method='p_bgm',pfit=pfit)
+               mfit = par2conc.par2fit(pdn,nnn=nnn, method=pmethod,pfit=pfit)
                print('sub mfit with previous', mfit)
         else: 
            mfit = mlist[jjj]
