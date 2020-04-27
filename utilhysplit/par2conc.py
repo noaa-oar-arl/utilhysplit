@@ -21,53 +21,47 @@ from sklearn.mixture import GaussianMixture as GMM
 from sklearn.mixture import BayesianGaussianMixture as BGM
 
 """
+Functions and classes to convert pardump file
+output to concentrations using mixture models or 
+kernel density estimation.
+the KDE functionality is very basic.
+
 
 classes
+-------------
+MassFit
+Par2Conc
 
+functions:
+-------------
+par2fit : returns a MassFit object.
+draw_ellipse
+get_kde
+get_gmm
+get_bgm
+get_xra
+find_n
 
-functions
+average_mfitlist
+threshold
+make_bnds
+
+use_gmm
+
+plot_gmm
+par2conc
+get_thickness
+merge_pdat
+makeplot
+cdump_plot
 
 """
 
-
-def compare_pdump(pdumpdf, time, fig=None, plot=False):
-    """
-    pdumpdf : pandas dataframe.
-    time : datetime object
-    """
-    import matplotlib.pyplot as plt
-    #lat, lon, vmass, vht = reventador.get_rev_data(time)
-    vpi = np.where(vmass>0)
-    latgood = lat[vpi]
-    longood = lon[vpi]
-    buff = 0.005
-    latmin = np.min(latgood)
-    latmax = np.max(latgood)
-    lonmin = np.min(longood)
-    lonmax = np.max(longood)
-    try:
-        df = pdumpdf[pdumpdf['lat']<=latmax+buff]
-        df = df[df['lat']>=latmin-buff]
-        df = df[df['lon']<=lonmax+buff]
-        df = df[df['lon']>=lonmin-buff]
-    except:
-        df = pdumpdf.copy() 
-    if plot:
-        plt.title(time.strftime("%Y %m %d %H:%Mz"))
-        ax = fig.add_subplot(3,1,1)
-        ax2 = fig.add_subplot(3,1,2)
-        ax3 = fig.add_subplot(3,1,3)
-        ax.pcolormesh(lon, lat, vmass)
-        ax2.plot(df['lon'], df['lat'], 'k.',MarkerSize=1)
-        ax2.contourf(lon, lat, vmass)
-        ax3.plot(df['lon'],df['ht'], 'k.') 
-    return df 
 
 def get_thickness(df, t1, t2):
     df2 = df[df['ht']>t1]
     df2 = df2[df2['ht']<=t2]
     return df2
-
 
 def threshold(cra, tval=3, tp='log',fillna=True):
     """
@@ -120,6 +114,7 @@ def merge_pdat(pardf, datdf):
 def par2fit(pdumpdf,  
          mult=1,
          method='gmm',
+         pfit=None,
          nnn=None,
          msl=True,
          wcp=1e3):  #used for Bayesian Gaussian Mixture
@@ -135,7 +130,11 @@ def par2fit(pdumpdf,
         
     method : string
              options are 'gmm', 'bgm', 'kde'
-    
+             p_bgm use a previous bgm fit (input with pfit).
+             The function will make a copy of the pfit and set
+             warm_start=True.
+
+ 
     mult : float
            MassFit object has a mass attribute which is computed here by
            summing over the mass on all the particles and multiplying by this
@@ -185,6 +184,12 @@ def par2fit(pdumpdf,
            print('par2fit error: bandwidth, (nnn) must be specified for KDE method')
            sys.exit() 
         gmm = get_kde(bandwidth=nnn) 
+    elif method=='p_bgm':
+        gmm = copy_fit(pfit, method='bgm')
+        gmm.warm_start=True
+    elif method=='p_gmm':
+        gmm = copy_fit(pfit, method='gmm')
+        gmm.warm_start=True
     else:
         print('Not valid method ', method)
         sys.exit()
@@ -193,8 +198,88 @@ def par2fit(pdumpdf,
     return mfit
 
 
+class ParArgs:
 
-def par2conc(pdumpdf,  
+    def __init__(self, 
+                 stime, 
+                 tmave, 
+                 splist=None, 
+                 sorti=None, 
+                 htmin=None, 
+                 htmax=None):
+        self.stime = stime
+        self.tmave = tmave
+        self.splist = splist
+        self.sorti = sorti
+        self.htmin = htmin
+        self.htmax = htmax
+
+def fixlondf(df, colname='lon', neg=True):
+    if not neg:
+        df[colname] = df.apply(lambda row: fixlon(row[colname]), axis=1)
+    else:
+        df[colname] = df.apply(lambda row: fixlon(row[colname])-360 , axis=1)
+    return df
+
+def fixlonra(ra):
+    newlon = []
+    for lon in ra:
+        newlon.append(fixlon(lon))
+    return newlon
+
+def fixlon(x):
+    if x < 0:
+       return 360+x
+    else:
+       return x
+
+
+class Par2Conc:
+
+    def __init__(self,df): 
+        self.df = df      # pandas DataFrame
+        self.fitlist = [] # collection of MassFit objects.
+        self.dra = None   # array with concentrations.
+
+    def subsetdf(self, 
+                 stime, 
+                 tmave, 
+                 splist=None, 
+                 sorti=None,
+                 htmin=None, 
+                 htmax=None):
+        #jjj, dfnew = combine_pdict(self.pdict, pd.to_datetime(date), tmave)
+        pardf = self.df.copy()
+        d1 = stime
+        d2 = d1 + datetime.timedelta(minutes=tmave)
+        pdn = pardf[pardf.date < d2]
+        pdn = pdn[pdn.date >= d1]
+        if splist:
+           pdn = pdn[pdn.poll.isin(splist)]
+        if sorti:
+           pdn = pdn[pdn.sorti.isin(sorti)]
+        if htmax:
+           pdn = pdn[pdn.ht<=htmax]
+        if htmin:
+           pdn = pdn[pdn.ht>=htmin]
+        #make sure longitudes aren't split.
+        pdn = fixlondf(pdn)
+        return pdn 
+
+    def timeloop(self, timestep, parargs):
+        iii==0
+        mfitlist = []
+        for time in timelist:
+            df = subsetdf(time, tmave, parargs) 
+            if iii==0:
+                mfit = par2fit(df, method='bgm', nnn=50)
+            else:   
+                mfit = par2fit(df, method='p_bgm', pfit=pfit, nnn=50)
+            pfit = mfit.gfit
+            mfitlist.append(mfit)
+
+
+    def addfit(self,
          time=None,
          sp=[1], 
          mult=1,
@@ -206,51 +291,49 @@ def par2conc(pdumpdf,
          thk=None,
          msl=True,
          wcp=1e3):
+    
+        return -1
+
+def fit_timeloop(pardf, nnn, maxht=None, mlist=None,method='gmm',
+                 warm_start=True,
+                ):
     """
-    Three dimensional. Can use multiple species.
-    pdumpdf : pandas dataframe representing pardump file.
-    mult : multiplicative factor for particle mass.
-    method : kde or gmm (gaussian mixture model)
-    nnn  : if method 'gmm' number of clusters to use.
-           if None will try to figure out.
-           if method 'kde' it is the bandwidth
-    dd   : horizontal resolution of output in degrees.
-    dh   : vertical resolution of output in km.
-    OUTPUT:
-    mfithash : dictionary of MassFit objects.
-    conctotal : xarray DataArray
+    pardf : dataframe with particle positions.
+    Returns:
+    submlist : list of MassFit objects.
+    
+    creates a separate fit for each time period in the pardf file.
+
     """
-    buf=0.2
-    htmult = 1/1000.0 #convert height to km
-    bnds=None
-    bic=True 
-    if thk:
-        dfa = get_thickness(pdumpdf, thk[0], thk[1])
-        thickness = thk[0] - thk[1]
-    else:
-        dfa = pdumpdf.copy()
-    mfithash = {}
-    iii=0
-    if not bnds:
-        bnds = {}
-        bnds['latmin'] = np.min(dfa['lat'].values)
-        bnds['latmax'] = np.max(dfa['lat'].values)
-        bnds['lonmin'] = np.min(dfa['lon'].values)
-        bnds['lonmax'] = np.max(dfa['lon'].values)
-        bnds['htmin'] = np.min(dfa['ht'].values*htmult)
-        bnds['htmax'] = np.max(dfa['ht'].values*htmult)
-    for species in sp:
-        df2 = dfa[dfa['poll']==species]
-        mfit = par2fit(df2,method,dd,dh,nnn,msl,wcp)
-        dra = mfit.get_conc(dd, dh, buf, time=time, bnds=bnds, mass=mass)
-        #conc = massload / float(thickness)
-        if iii==0:
-           conctotal = dra
-        else:
-           conctotal = xr.concat([conctotal,dra],dim='sp')
-        iii+=1
-        mfithash[(time,iii)] = mfit
-    return mfithash, conctotal
+    jjj=0
+    submlist = []
+    pmethod = 'p_' + method 
+    #masslist = []
+    #fit each unique date in the period.
+    print('in sub')
+    dlist = pardf.date.unique()
+    dlist.sort()
+    for ndate in dlist: 
+        pdn = pardf[pardf.date==ndate]
+        print('sub', pdn)
+        if maxht: pdn = pdn[pdn['ht']< maxht]
+        if not mlist:
+           if jjj==0:
+               mfit = par2fit(pdn,nnn=nnn, method=method)
+               print('sub first', mfit)
+           else:
+               mfit = par2fit(pdn,nnn=nnn, method=pmethod,pfit=pfit)
+               print('sub mfit with previous', mfit)
+        else: 
+           mfit = mlist[jjj]
+        if not mfit.fit: continue
+        pfit = mfit.gfit
+        #masslist.append(pdn['pmass'].sum())
+        submlist.append(mfit)
+        if warm_start: jjj+=1
+    return submlist 
+
+
 
 def makeplot(lon, lat, conc, levels=None):
     from matplotlib.colors import BoundaryNorm
@@ -274,7 +357,7 @@ def draw_ellipse(position, covariance, ax=None, **kwargs):
     """Draw an ellipse with a given position and covariance"""
     from matplotlib.patches import Ellipse
     ax = ax or plt.gca()
-    
+    print(position, covariance) 
     # Convert covariance to principal axes
     if covariance.shape == (2, 2):
         U, s, Vt = np.linalg.svd(covariance)
@@ -286,6 +369,7 @@ def draw_ellipse(position, covariance, ax=None, **kwargs):
     
     # Draw the Ellipse
     for nsig in range(1, 4):
+        print('HERE', nsig, width, height, angle)
         ax.add_patch(Ellipse(position, nsig * width, nsig * height,
                              angle, **kwargs))
 
@@ -303,6 +387,11 @@ def make_bnds(dfa):
      return bnds 
 
 class MassFit():
+
+    """
+    For gmm
+    If we can keep giving it different xra values then we can 
+    """
 
     def __init__(self,gmm, xra, mass=1):
         """
@@ -372,20 +461,29 @@ class MassFit():
 
     def plot_gaussians(self, ax=None, dim='ht'):
         """
-        plot gaussians as eillipses.
-        Needs to be modified for 3d.
+        plot gaussians as ellipses.
         """
         ax = ax or plt.gca()
         gfit = self.gfit
         wfactor = 0.5 /self.gfit.weights_.max()
+        if dim =='ht':
+           c1 = 0
+           c2 = 1
+        if dim =='lon':
+           c1 = 1
+           c2 = 2
+        if dim =='lat':
+           c1 = 0
+           c2 = 2
         for pos, covar, www in zip(gfit.means_, gfit.covariances_, gfit.weights_): 
-            draw_ellipse(pos, covar, ax, alpha=www * wfactor) 
+            position = np.array([pos[c1],pos[c2]])
+            one = covar[c1][c1]
+            two = covar[c1][c2]
+            three = covar[c2][c1]
+            four = covar[c2][c2]
+            covariance = np.array([[one,two],[three,four]])
+            draw_ellipse(position, covariance, ax, alpha=www * wfactor) 
 
-    #def get_conc(self, dd, buf=0.2):
-    #    if self.thickness:
-    #       lonra, latra, massload = self.get_massload(dd, buf)
-    #       conc = massload / self.thickness
-    #    return lonra, latra, conc
 
 
     def get_ht_ra(self, htmin, htmax, dh):
@@ -478,29 +576,48 @@ class MassFit():
                  dd,
                  dh, 
                  buf=0.2, 
-                 bnds=None, 
                  time=None, 
                  mass=None,
                  lat=None,
                  lon=None,
                  ht=None,
                  verbose=False):
+
         if not mass: 
            mass = self.mass
+
+        # if lat,lon,ht not specified then find conc over whole area.
         if not lat:
            latra, lonra, htra = self.totalgrid(dd,dh,buf) 
         else:
            latra, lonra, htra = self.partialgrid(lat,lon,ht, dd,dh,buf)
+
+        # create the sampling grid
         x,y,z = np.meshgrid(lonra, latra, htra)
         xra2 = np.array([x.ravel(), y.ravel(),z.ravel()]).T 
+
+        # retrieve values at sampling grid locations.
         score = self.gfit.score_samples(xra2)
-        one = np.exp(score) * dd**2 * dh
-        if verbose: print('ONE is ', one.sum()) 
-        self.one = one.sum()
+
+        # multipy by volume to get probability in that volume.
+        prob = np.exp(score) * dd**2 * dh
+
+        # sum over whole volume should be one
+        self.one = prob.sum()
+        if verbose: print('ONE is ', self.one) 
+       
+        # multiply probability by total mass 
+        # to get the mass in that volume.
+        # Divide by volume (in m^3) to get
+        # concentration.    
         deg2meter = 111e3
         volume = dh * (dd*deg2meter)**2
         if self.htunits == 'km': volume = volume * 1000.0
-        self.conc = np.exp(score)*dd**2 * dh * mass / volume
+
+        #self.conc = np.exp(score)*dd**2 * dh * mass / volume
+        self.conc = prob * mass / volume
+
+        # reshape the array.
         corder = [(latra,'y'), (lonra,'x'), (htra,'z')]
         rshape = []
         coords=[]
@@ -510,13 +627,19 @@ class MassFit():
             coords.append(ccc)
             dims.append(dim)
         conc2 = self.conc.reshape(rshape)
+
+        # create the xarray
         dra = xr.DataArray(conc2,
                            coords=coords,
                            dims=dims)
+        # add time dimensions
         if time: 
            dra['time'] = time
            dra = self.dra.expand_dims(dim='time') 
+
+        # modify xarray.
         self.dra = monet.monet_accessor._dataset_to_monet(dra,lat_name='y',lon_name='x')
+
         return self.dra         
 
     def plotconc(self,dra):
@@ -651,6 +774,56 @@ def get_xra(lon,lat, ht=None):
 
     return xra
 
+def compare_fits(fit1, fit2, method='gmm'):
+    return -1 
+
+    
+def copy_fit(bgm, method='bgm'):
+    n_clusters  = bgm.n_components
+    covartype = bgm.covariance_type
+    n_init = bgm.n_init
+    max_iter = bgm.max_iter
+    tol = bgm.tol
+    verbose = True
+    if method=='bgm':
+       wcpt = bgm.weight_concentration_prior_type
+       reg_covar = bgm.reg_covar
+       init_params = bgm.init_params
+       tol = bgm.tol
+       copy = BGM(n_components=n_clusters, 
+              covariance_type=covartype,
+              n_init = n_init,
+              weight_concentration_prior_type = wcpt,
+              init_params = init_params,
+              max_iter=max_iter,
+              verbose=verbose,
+              reg_covar = reg_covar,
+              tol=tol)
+       copy.weight_concentration_prior_ = bgm.weight_concentration_prior_
+       copy.weight_concentration_ = bgm.weight_concentration_ 
+       copy.mean_precision_prior = bgm.mean_precision_prior
+       copy.mean_prior_ = bgm.mean_prior_
+       copy.mean_precision_ = bgm.mean_precision_
+       copy.covariance_prior_ = bgm.covariance_prior_
+       copy.degrees_of_freedom_prior_ = bgm.degrees_of_freedom_prior_
+       copy.degrees_of_freedom_ = bgm.degrees_of_freedom_
+    if method=='gmm':
+       copy = GMM(n_components=n_clusters, 
+              random_state=42,
+              covariance_type=covartype,
+              max_iter=max_iter,
+              n_init = n_init,
+              tol = tol,
+              verbose=verbose)
+    copy.means_ = bgm.means_ 
+    copy.covariances_ = bgm.covariances_ 
+    copy.weights_ = bgm.weights_ 
+    copy.precisions_ = bgm.precisions_ 
+    copy.precisions_cholesky_ = bgm.precisions_cholesky_
+    copy.converged_ = bgm.converged_
+    copy.n_iter_ = bgm.n_iter_
+    copy.lower_bound_ = bgm.lower_bound_
+    return copy
 
 def get_bgm(n_clusters=10, wcp=1.0e3, tol=None):
     """
@@ -735,14 +908,14 @@ def cluster_pars(xra, n_clusters=0):
         #plt.scatter(ra[:,0], ra[:,1], c=glabels)  
     return gmm 
 
-def subdivide_box(bnds, nnn):
-    jra = np.arange(0,nnn+1)
-    dlen = (bnds[2] - bnds[0]) / float(nnn)
-    latra = bnds[0] + jra * dlen
-
-    jra = np.arange(0,nnn+1)
-    dlen = (bnds[3] - bnds[1]) / float(nnn)
-    lonra = bnds[1] + jra * dlen
+#def subdivide_box(bnds, nnn):
+#    jra = np.arange(0,nnn+1)
+#    dlen = (bnds[2] - bnds[0]) / float(nnn)
+#    latra = bnds[0] + jra * dlen
+#
+#    jra = np.arange(0,nnn+1)
+#    dlen = (bnds[3] - bnds[1]) / float(nnn)
+#    lonra = bnds[1] + jra * dlen
 
 def temp():
     rC = RevPars('PARDUMP.C')    
@@ -751,6 +924,9 @@ def temp():
     key1 = "201902252000"
     dfc = pdict[key1]
     mpts = par2conc(dfc, obs, 1, 9000)
+
+
+
 
 class VolcPar:
     def __init__(self, fdir='./', fname='PARDUMP.A'):
@@ -765,19 +941,19 @@ class VolcPar:
 
     def read_pardump(self, century=2000):
         pd = pardump.Pardump(fname=self.tname) 
-        self.pdict = pd.read(century=century)
+        self.df = pd.read(century=century)
 
-    def key2time(self):
-        datelist=[]
-        for key in self.pdict.keys:
-            datelist.append(datetime.datetime.strptime(key, self.strfmt))
-        #self.datetlist = datelist
-        return datelist
+    #def key2time(self):
+    #    datelist=[]
+    #    for key in self.pdict.keys:
+    #        datelist.append(datetime.datetime.strptime(key, self.strfmt))
+    #    #self.datetlist = datelist
+    #    return datelist
 
-    def getbytime(self,time):
-        # returns a dataframe for that time.
-        dstr = time.strftime(self.strfmt)
-        return self.pdict[dstr]
+    #def getbytime(self,time):
+    #    # returns a dataframe for that time.
+    #    dstr = time.strftime(self.strfmt)
+    #    return self.pdict[dstr]
 
     def findsource(self, sorti):
         import pandas as pd
@@ -833,13 +1009,15 @@ class VolcPar:
         return newlist 
 
 
-def average_mfitlist(mfitlist,masslist,dd=None,dh=None,buf=None,lat=None, lon=None, ht=None):
+def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,lat=None, lon=None,
+                     ht=None,
+                     mean=True):
     iii=0
+    concra = xr.DataArray(None)
     for mfit in mfitlist:
         conc = mfit.get_conc(dd=dd, 
                            dh=dh, 
                            buf=buf,
-                           mass=masslist[iii],
                            lat=lat,
                            lon=lon,
                            ht=ht)
@@ -848,86 +1026,20 @@ def average_mfitlist(mfitlist,masslist,dd=None,dh=None,buf=None,lat=None, lon=No
         else:
            concra = xr.concat([concra, conc],dim='time')
         iii+=1
-    try:
-        concra = concra.mean(dim='time')
-    except:
-        pass
+    if mean:
+        try:
+            concra = concra.mean(dim='time')
+        except:
+            pass
     return concra
 
-def key2datetime(time):
-    strfmt = "%Y%m%d%H%M"
-    return datetime.datetime.strptime(time, strfmt)
+#def key2datetime(time):
+#    strfmt = "%Y%m%d%H%M"
+#    return datetime.datetime.strptime(time, strfmt)
 
-def datetime2key(time):
-    strfmt = "%Y%m%d%H%M"
-    return time.strftime(strfmt)
-
-def subset_pdict(pdict,stime,tmave=60,verbose=False):
-    plist = combine_pdict(pdict,stime,tmave,makelist=True, verbose=verbose)
-    return plist 
-
-def combine_pdict(pdict, stime, tmave=60, makelist=False, verbose=False):
-    """
-    pdict : dictionary of dataframes
-    stime : datetime
-    tmave : integer (minutes)
-    outputs
-
-    """
-    iii=0
-    jjj=0
-    templist=[]
-    etime = stime + datetime.timedelta(minutes=tmave)
-    skey = datetime2key(stime)
-    ekey = datetime2key(etime)
-    print('combine_pdict ENDkey', ekey, stime, etime, tmave)
-    keylist = list(pdict.keys())
-    keylist.sort()
-    if skey in pdict.keys():
-        firsti = keylist.index(skey)
-        dfnew = pdict[keylist[firsti]]
-    else:
-        print('WARNING: key does not exist', skey)
-        print('WARNING: Using ', keylist[0])
-        firsti = 0
-        dfnew = pdict[keylist[firsti]]
-    if ekey in pdict.keys():
-        lasti = keylist.index(ekey)
-    else:
-        print('WARNING: key does not exist', ekey)
-        print('WARNING: Using ', keylist[-1])
-        lasti=len(keylist)
-    #else:
-    #    print('WARNING: key does not exist')
-    #    return 0, pd.DataFrame()
-        #continue   
-    jjj=1
-    for iii in range(firsti+1, lasti):
-        key = keylist[iii]
-        if verbose: print(key)
-        if key in pdict.keys():
-            dfnew = pd.concat([dfnew, pdict[key]])
-        else:
-            print('WARNING: key does not exist')
-        templist.append(pdict[key])
-        jjj+=1
-    if makelist:
-       return templist
-    else:
-       return jjj, dfnew
-
-class KasPar(VolcPar): 
-    def __init__(self, fname='PARDUMP.A', fdir=None):
-        if not fdir:
-            fdir = '/pub/Scratch/alicec/KASATOCHI/2020/cylens/'
-        fname = fname
-        self.tname = os.path.join(fdir, fname)
-        self.strfmt = "%Y%m%d%H%M"
-        self.start = datetime.datetime(2008,8,10,16,00)
-        self.delta = datetime.timedelta(hours=1)
-        self.delt=5
-        self.ymax=9
-        self.pdict = {}
+#def datetime2key(time):
+#    strfmt = "%Y%m%d%H%M"
+#    return time.strftime(strfmt)
 
 def height_correction(zaprime, zter, msl=True):
     zmdl = 25000
@@ -935,19 +1047,6 @@ def height_correction(zaprime, zter, msl=True):
     if msl: za += zter
     return za
 
-class RevPar(VolcPar):
-    def __init__(self, fname='PARDUMP.A', fdir=None):
-        if not fdir:
-            fdir = '/pub/ECMWF/JPSS/reventador/pens/'
-        fname = fname
-        self.tname = os.path.join(fdir, fname)
-        self.strfmt = "%Y%m%d%H%M"
-        self.start = datetime.datetime(2019,2,25,16,30)
-        self.delta = datetime.timedelta(seconds=5*60)
-        self.delt=5
-
-    def get_data(self, time):
-        lat, lon, dmass, dht = get_rev_data(time)
 
 def process_under(under):
     lastz = under.z.values[-1]
@@ -955,7 +1054,6 @@ def process_under(under):
     under = under.assign_coords(z=lastz)
     under = under.expand_dims('z') 
     return under
-
 
 def shift_underground(dra):
     """
@@ -973,7 +1071,6 @@ def shift_underground(dra):
     above = dra.isel(z=np.arange(iii+1,len(dra.z.values),1))
     new = xr.concat([under,above],dim='z')    
     return new
-
 
 def reflect_underground(dra):
     """

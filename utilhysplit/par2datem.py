@@ -5,7 +5,7 @@ import os
 import sys
 import numpy as np
 import pandas as pd
-from utilhysplit import parutils
+from utilhysplit import par2conc
 
 
 
@@ -44,16 +44,21 @@ def write_dataA(dfin, c_col='mean', name='model.txt',thresh=1):
     df.to_csv(name, index=False, sep=' ') 
     return df
 
-def par2stn(stndf,pdict,nnn=None,maxht=300,mlist=None,fit='all'):
+#def par2stn(stndf,pdict,nnn=None,maxht=300,mlist=None,fit='all'):
     #if fit=='all':
 #
 #    else:
 #       mfitlist,outdf = par2stn 
 #       write_dataA(outdf)
-    return -1
+#    return -1
 
-def par2df( stndf,pdict,nnn=None,ht=10, maxht=300,dd=0.01,dh=0.01,
-            buf=[0.05,0.05],mlist=None,method='gmm'):
+def par2df(stndf,pardf,nnn=None,ht=10, maxht=300,dd=0.01,dh=0.01,
+            buf=[0.05,0.05],mlist=None,method='gmm',
+            averaging_method='separate',
+            warm_start = True):
+    """
+
+    """
     udates = stndf.date.unique()
     udur = stndf.dur.unique()
     outdf = pd.DataFrame()
@@ -65,15 +70,26 @@ def par2df( stndf,pdict,nnn=None,ht=10, maxht=300,dd=0.01,dh=0.01,
             sdf = sdf2[sdf2['dur']==dur]        
             if sdf.empty: 
                continue
-            print('par2df: adding :', date, dur)
             tmave = int(dur)/100 * 60
             #jjj, dfnew = combine_pdict(self.pdict, pd.to_datetime(date), tmave)
-            pdictnew = parutils.subset_pdict(pdict, pd.to_datetime(date), tmave)
+            d1 = pd.to_datetime(date)
+            d2 = d1 + datetime.timedelta(minutes=tmave)
+            pardfnew = pardf[pardf.date < d2]
+            pardfnew = pardfnew[pardfnew.date >= d1]
+            print(pardfnew.date.unique())
+            #pdictnew = par2conc.subset_pdict(pdict, pd.to_datetime(date), tmave)
             if mlist: mval = mlist[iii]
             else: mval=None 
-            print('par2df buf', buf, 'dh', dh)
-            masslist, submlist = sub(pdictnew,nnn,maxht,mval,method)
-            concdf = get_concdf(submlist, sdf, masslist, 
+            if averaging_method == 'separate':
+               #fit each time period separately
+               submlist = sub(pardfnew,nnn,maxht,mval,method, warm_start)
+            elif averaging_method == 'together':
+               #fit all particles in averaging time period together.
+               submlist = sub2(pardfnew,nnn,maxht,mval,method, warm_start)
+            else:
+               print('WARNING method not found', averaging_method)
+               submlist = sub2(pardfnew,nnn,maxht,mval,method, warm_start)
+            concdf = get_concdf(submlist, sdf, 
                                ht=ht,dd=dd,dh=dh,buf=buf)
             if not mlist: mfitlist.append(submlist)
             if iii==0: outdf = concdf
@@ -87,62 +103,52 @@ def par2df( stndf,pdict,nnn=None,ht=10, maxht=300,dd=0.01,dh=0.01,
     #outdf can be input into write_dataA
     return mfitlist, outdf             
 
-def sub(pdictnew, nnn, maxht, mlist=None,method='gmm'):
+def sub2(pardf,nnn,maxht, mlist=None, method='gmm', warm_start=False):
+    # fit all particles in averaging time period at once.
+    # mass needs to be divided by averaging time periods.
+    # currently warm_start doesn't do anything.
+    massmult  = 1.0 / float(len(pardf.date.unique()))
+    jjj=0
+    #submlist = []
+    masslist = []
+    pdn = pardf.copy()
+    if maxht: pdn = pdn[pdn['ht']< maxht]
+    mfit = par2conc.par2fit(pdn,mult=massmult,nnn=nnn, method=method)
+    if not mlist: 
+       mfit = par2conc.par2fit(pdn,nnn=nnn, method=method)
+    else: 
+       mfit = mlist[jjj]
+    return [mfit]
+
+def sub(pardf, nnn, maxht, mlist=None,method='gmm', warm_start=True):
     jjj=0
     submlist = []
-    masslist = []
-    for pdn in pdictnew: 
+    pmethod = 'p_' + method 
+    #masslist = []
+    #fit each unique date in the period.
+    print('in sub')
+    for ndate in pardf.date.unique(): 
+        pdn = pardf[pardf.date==ndate]
+        print('sub', pdn)
         if maxht: pdn = pdn[pdn['ht']< maxht]
-        if not mlist: 
-           mfit = parutils.par2fit(pdn,nnn=nnn, method=method)
+        if not mlist:
+           if jjj==0:
+               mfit = par2conc.par2fit(pdn,nnn=nnn, method=method)
+               print('sub first', mfit)
+           else:
+               mfit = par2conc.par2fit(pdn,nnn=nnn, method=pmethod,pfit=pfit)
+               print('sub mfit with previous', mfit)
         else: 
            mfit = mlist[jjj]
         if not mfit.fit: continue
-        masslist.append(pdn['pmass'].sum())
+        pfit = mfit.gfit
+        #masslist.append(pdn['pmass'].sum())
         submlist.append(mfit)
-        jjj+=1
-    return masslist, submlist 
+        if warm_start: jjj+=1
+    return submlist 
 
 
-def par2df_b( stndf,pdict,nnn=None,  maxht=300,mlist=None):
-    """
-    stndf : Pandas dataframe. Should have columns
-            date, dur, pmch
-    """
-    #sdf = stndf.sort_values(by=['date','dur'],axis=1)
-    udates = stndf.date.unique()
-    udur = stndf.dur.unique()
-    outdf = pd.DataFrame()
-    iii=0
-    mfitlist = []
-    for date in udates:
-        sdf2 = stndf[stndf['date']==date]        
-        for dur in udur:
-            sdf = sdf2[sdf2['dur']==dur]        
-            if sdf.empty: 
-                print('EMPTY', date, dur)
-                continue
-            print('adding', date, dur)
-            tmave = int(dur)/100 * 60
-            jjj, dfnew = parutils.combine_pdict(pdict, pd.to_datetime(date), tmave)
-            if dfnew.empty: 
-               print('dfnew empty')
-               continue
-            if maxht: dfnew = dfnew[dfnew['ht']< maxht]
-            if not mlist:
-               mfit = parutils.par2fit(dfnew,nnn=nnn)
-               mfitlist.append(mfit)
-            else:
-               mfit = mlist[iii]
-            mass = dfnew['pmass'].sum() / jjj 
-            #mfitlist.append(mfit)
-            concdf = get_concdf([mfit], sdf, mass,ht,dd,dh,buf)
-            if iii==0: outdf = concdf
-            else: outdf = pd.concat([outdf, concdf], axis=0) 
-            iii+=1
-    return mfitlist, outdf             
-
-def get_concdf( mfitlist, stndf, mass, 
+def get_concdf( mfitlist, stndf,  
                ht=50,
                dd=0.01,
                dh=0.01,
@@ -168,19 +174,24 @@ def get_concdf( mfitlist, stndf, mass,
         stn = getattr(row,'stn')
         meas = getattr(row,measname)
         dur = getattr(row,'dur')
-        print('get_concdf buf', buf, 'dh', dh)
-        concra = parutils.average_mfitlist(mfitlist,mass,
+        concra = par2conc.average_mfitlist(mfitlist,
                           dd=dd,dh=dh,buf=buf,lat=lat,lon=lon,ht=ht)
-        concra = parutils.shift_underground(concra) 
-
         phash['date']=date
         phash['lat'] = lat                 
         phash['lon'] = lon                
         phash['stn'] = stn
         phash['meas'] = meas
-        phash['mean'] = float(concra.mean())
-        phash['max'] = float(concra.max())
-        phash['min'] = float(concra.min())               
+        if concra.isnull().all():
+           print('WARNING: par2datem.get_concdf')
+           print('concra is empty. ', date)
+           phash['mean']=-999
+           phash['max']=-999
+           phash['min']=-999
+        else:
+           concra = par2conc.shift_underground(concra) 
+           phash['mean'] = float(concra.mean())
+           phash['max'] = float(concra.max())
+           phash['min'] = float(concra.min())               
         phash['dur'] = dur
         dlist.append(phash)
     return pd.DataFrame(dlist)       
