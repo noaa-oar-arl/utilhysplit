@@ -4,6 +4,8 @@ import datetime
 import os
 import sys
 import numpy as np
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 from utilhysplit import par2conc
 
@@ -134,10 +136,10 @@ def sub(pardf, nnn, maxht, mlist=None,method='gmm', warm_start=True):
         if not mlist:
            if jjj==0:
                mfit = par2conc.par2fit(pdn,nnn=nnn, method=method)
-               print('sub first', mfit)
+               print('sub first')
            else:
                mfit = par2conc.par2fit(pdn,nnn=nnn, method=pmethod,pfit=pfit)
-               print('sub mfit with previous', mfit)
+               print('sub mfit with previous')
         else: 
            mfit = mlist[jjj]
         if not mfit.fit: continue

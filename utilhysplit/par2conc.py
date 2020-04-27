@@ -5,6 +5,8 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeat
 import numpy as np
 import numpy.ma as ma
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import datetime
 import seaborn as sns
@@ -332,7 +334,6 @@ def fit_timeloop(pardf, nnn, maxht=None, mlist=None,method='gmm',
         submlist.append(mfit)
         if warm_start: jjj+=1
     return submlist 
-
 
 
 def makeplot(lon, lat, conc, levels=None):
@@ -956,7 +957,6 @@ class VolcPar:
     #    return self.pdict[dstr]
 
     def findsource(self, sorti):
-        import pandas as pd
         done=False
         iii=0
         while not done:
@@ -1008,10 +1008,32 @@ class VolcPar:
             newlist.append(val.seconds)
         return newlist 
 
+def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,
+                     lat=None, 
+                     lon=None,
+                     ht=None):
+    """
+    returns xarray DataArray
+    """
+    concra = combine_mfitlist(mfitlist, dd, dh, buf, lat,lon,ht)
+    concra = concra.mean(dim='time')
+    return concra
 
-def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,lat=None, lon=None,
+def combine_mfitlist(mfitlist,dd=None,dh=None,buf=None,
+                     lat=None, 
+                     lon=None,
                      ht=None,
-                     mean=True):
+                     ):
+    """
+    mfitlist : list of MassFit objects.
+
+    finds concentrations from each fit and combines into
+    one xarray along dimension called 'time'. Although in
+    some cases that dimension may represent something other than time.
+    e.g. ensemble member number.
+
+    returns xarray DataArray
+    """
     iii=0
     concra = xr.DataArray(None)
     for mfit in mfitlist:
@@ -1026,11 +1048,8 @@ def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,lat=None, lon=None,
         else:
            concra = xr.concat([concra, conc],dim='time')
         iii+=1
-    if mean:
-        try:
-            concra = concra.mean(dim='time')
-        except:
-            pass
+    if 'time' not in concra.dims:
+        concra = concra.expand_dims('time')    
     return concra
 
 #def key2datetime(time):
