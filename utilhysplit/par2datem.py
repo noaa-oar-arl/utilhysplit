@@ -53,7 +53,12 @@ def write_dataA(dfin, c_col='mean', name='model.txt',thresh=1):
 #    return -1
 
 def par2df(stndf,pardf,nnn=None,ht=10, maxht=300,dd=0.01,dh=0.01,
-            buf=[0.05,0.05],mlist=None,method='gmm',method2='fit1'):
+            buf=[0.05,0.05],mlist=None,method='gmm',
+            averaging_method='separate',
+            warm_start = True):
+    """
+
+    """
     udates = stndf.date.unique()
     udur = stndf.dur.unique()
     outdf = pd.DataFrame()
@@ -75,12 +80,15 @@ def par2df(stndf,pardf,nnn=None,ht=10, maxht=300,dd=0.01,dh=0.01,
             #pdictnew = par2conc.subset_pdict(pdict, pd.to_datetime(date), tmave)
             if mlist: mval = mlist[iii]
             else: mval=None 
-            if method2 == 'fit1':
+            if averaging_method == 'separate':
                #fit each time period separately
-               submlist = sub(pardfnew,nnn,maxht,mval,method)
-            if method2 == 'fit2':
+               submlist = sub(pardfnew,nnn,maxht,mval,method, warm_start)
+            elif averaging_method == 'together':
                #fit all particles in averaging time period together.
-               submlist = sub2(pardfnew,nnn,maxht,mval,method)
+               submlist = sub2(pardfnew,nnn,maxht,mval,method, warm_start)
+            else:
+               print('WARNING method not found', averaging_method)
+               submlist = sub2(pardfnew,nnn,maxht,mval,method, warm_start)
             concdf = get_concdf(submlist, sdf, 
                                ht=ht,dd=dd,dh=dh,buf=buf)
             if not mlist: mfitlist.append(submlist)
@@ -95,23 +103,24 @@ def par2df(stndf,pardf,nnn=None,ht=10, maxht=300,dd=0.01,dh=0.01,
     #outdf can be input into write_dataA
     return mfitlist, outdf             
 
-def sub2(pardf,nnn,maxht, mlist=None, method='gmm'):
+def sub2(pardf,nnn,maxht, mlist=None, method='gmm', warm_start=False):
     # fit all particles in averaging time period at once.
     # mass needs to be divided by averaging time periods.
+    # currently warm_start doesn't do anything.
     massmult  = 1.0 / float(len(pardf.date.unique()))
     jjj=0
-    submlist = []
+    #submlist = []
     masslist = []
-    pdn = pardf.cop()
+    pdn = pardf.copy()
     if maxht: pdn = pdn[pdn['ht']< maxht]
     mfit = par2conc.par2fit(pdn,mult=massmult,nnn=nnn, method=method)
     if not mlist: 
        mfit = par2conc.par2fit(pdn,nnn=nnn, method=method)
     else: 
        mfit = mlist[jjj]
-    return submlist 
+    return [mfit]
 
-def sub(pardf, nnn, maxht, mlist=None,method='gmm'):
+def sub(pardf, nnn, maxht, mlist=None,method='gmm', warm_start=True):
     jjj=0
     submlist = []
     pmethod = 'p_' + method 
@@ -135,7 +144,7 @@ def sub(pardf, nnn, maxht, mlist=None,method='gmm'):
         pfit = mfit.gfit
         #masslist.append(pdn['pmass'].sum())
         submlist.append(mfit)
-        jjj+=1
+        if warm_start: jjj+=1
     return submlist 
 
 
@@ -165,19 +174,24 @@ def get_concdf( mfitlist, stndf,
         stn = getattr(row,'stn')
         meas = getattr(row,measname)
         dur = getattr(row,'dur')
-        print('get_concdf buf', buf, 'dh', dh)
         concra = par2conc.average_mfitlist(mfitlist,
                           dd=dd,dh=dh,buf=buf,lat=lat,lon=lon,ht=ht)
-        concra = par2conc.shift_underground(concra) 
-
         phash['date']=date
         phash['lat'] = lat                 
         phash['lon'] = lon                
         phash['stn'] = stn
         phash['meas'] = meas
-        phash['mean'] = float(concra.mean())
-        phash['max'] = float(concra.max())
-        phash['min'] = float(concra.min())               
+        if concra.isnull().all():
+           print('WARNING: par2datem.get_concdf')
+           print('concra is empty. ', date)
+           phash['mean']=-999
+           phash['max']=-999
+           phash['min']=-999
+        else:
+           concra = par2conc.shift_underground(concra) 
+           phash['mean'] = float(concra.mean())
+           phash['max'] = float(concra.max())
+           phash['min'] = float(concra.min())               
         phash['dur'] = dur
         dlist.append(phash)
     return pd.DataFrame(dlist)       

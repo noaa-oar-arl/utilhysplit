@@ -294,6 +294,47 @@ class Par2Conc:
     
         return -1
 
+def fit_timeloop(pardf, nnn, maxht=None, mlist=None,method='gmm',
+                 warm_start=True,
+                ):
+    """
+    pardf : dataframe with particle positions.
+    Returns:
+    submlist : list of MassFit objects.
+    
+    creates a separate fit for each time period in the pardf file.
+
+    """
+    jjj=0
+    submlist = []
+    pmethod = 'p_' + method 
+    #masslist = []
+    #fit each unique date in the period.
+    print('in sub')
+    dlist = pardf.date.unique()
+    dlist.sort()
+    for ndate in dlist: 
+        pdn = pardf[pardf.date==ndate]
+        print('sub', pdn)
+        if maxht: pdn = pdn[pdn['ht']< maxht]
+        if not mlist:
+           if jjj==0:
+               mfit = par2fit(pdn,nnn=nnn, method=method)
+               print('sub first', mfit)
+           else:
+               mfit = par2fit(pdn,nnn=nnn, method=pmethod,pfit=pfit)
+               print('sub mfit with previous', mfit)
+        else: 
+           mfit = mlist[jjj]
+        if not mfit.fit: continue
+        pfit = mfit.gfit
+        #masslist.append(pdn['pmass'].sum())
+        submlist.append(mfit)
+        if warm_start: jjj+=1
+    return submlist 
+
+
+
 def makeplot(lon, lat, conc, levels=None):
     from matplotlib.colors import BoundaryNorm
     if not levels: levels = np.arange(0,5,0.1)
@@ -420,8 +461,7 @@ class MassFit():
 
     def plot_gaussians(self, ax=None, dim='ht'):
         """
-        plot gaussians as eillipses.
-        Needs to be modified for 3d.
+        plot gaussians as ellipses.
         """
         ax = ax or plt.gca()
         gfit = self.gfit
@@ -444,11 +484,6 @@ class MassFit():
             covariance = np.array([[one,two],[three,four]])
             draw_ellipse(position, covariance, ax, alpha=www * wfactor) 
 
-    #def get_conc(self, dd, buf=0.2):
-    #    if self.thickness:
-    #       lonra, latra, massload = self.get_massload(dd, buf)
-    #       conc = massload / self.thickness
-    #    return lonra, latra, conc
 
 
     def get_ht_ra(self, htmin, htmax, dh):
@@ -541,32 +576,48 @@ class MassFit():
                  dd,
                  dh, 
                  buf=0.2, 
-                 bnds=None, 
                  time=None, 
                  mass=None,
                  lat=None,
                  lon=None,
                  ht=None,
                  verbose=False):
+
         if not mass: 
            mass = self.mass
+
+        # if lat,lon,ht not specified then find conc over whole area.
         if not lat:
            latra, lonra, htra = self.totalgrid(dd,dh,buf) 
         else:
            latra, lonra, htra = self.partialgrid(lat,lon,ht, dd,dh,buf)
+
+        # create the sampling grid
         x,y,z = np.meshgrid(lonra, latra, htra)
-        print('transform')
         xra2 = np.array([x.ravel(), y.ravel(),z.ravel()]).T 
-        print('scoring', xra2.shape)
+
+        # retrieve values at sampling grid locations.
         score = self.gfit.score_samples(xra2)
-        one = np.exp(score) * dd**2 * dh
-        if verbose: print('ONE is ', one.sum()) 
-        print('ONE is ', one.sum()) 
-        self.one = one.sum()
+
+        # multipy by volume to get probability in that volume.
+        prob = np.exp(score) * dd**2 * dh
+
+        # sum over whole volume should be one
+        self.one = prob.sum()
+        if verbose: print('ONE is ', self.one) 
+       
+        # multiply probability by total mass 
+        # to get the mass in that volume.
+        # Divide by volume (in m^3) to get
+        # concentration.    
         deg2meter = 111e3
         volume = dh * (dd*deg2meter)**2
         if self.htunits == 'km': volume = volume * 1000.0
-        self.conc = np.exp(score)*dd**2 * dh * mass / volume
+
+        #self.conc = np.exp(score)*dd**2 * dh * mass / volume
+        self.conc = prob * mass / volume
+
+        # reshape the array.
         corder = [(latra,'y'), (lonra,'x'), (htra,'z')]
         rshape = []
         coords=[]
@@ -576,13 +627,19 @@ class MassFit():
             coords.append(ccc)
             dims.append(dim)
         conc2 = self.conc.reshape(rshape)
+
+        # create the xarray
         dra = xr.DataArray(conc2,
                            coords=coords,
                            dims=dims)
+        # add time dimensions
         if time: 
            dra['time'] = time
            dra = self.dra.expand_dims(dim='time') 
+
+        # modify xarray.
         self.dra = monet.monet_accessor._dataset_to_monet(dra,lat_name='y',lon_name='x')
+
         return self.dra         
 
     def plotconc(self,dra):
@@ -716,6 +773,9 @@ def get_xra(lon,lat, ht=None):
         xra = np.array(list(zip(lon,lat)))
 
     return xra
+
+def compare_fits(fit1, fit2, method='gmm'):
+    return -1 
 
     
 def copy_fit(bgm, method='bgm'):
@@ -949,8 +1009,11 @@ class VolcPar:
         return newlist 
 
 
-def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,lat=None, lon=None, ht=None):
+def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,lat=None, lon=None,
+                     ht=None,
+                     mean=True):
     iii=0
+    concra = xr.DataArray(None)
     for mfit in mfitlist:
         conc = mfit.get_conc(dd=dd, 
                            dh=dh, 
@@ -963,10 +1026,11 @@ def average_mfitlist(mfitlist,dd=None,dh=None,buf=None,lat=None, lon=None, ht=No
         else:
            concra = xr.concat([concra, conc],dim='time')
         iii+=1
-    try:
-        concra = concra.mean(dim='time')
-    except:
-        pass
+    if mean:
+        try:
+            concra = concra.mean(dim='time')
+        except:
+            pass
     return concra
 
 #def key2datetime(time):
