@@ -12,8 +12,9 @@ import matplotlib.pyplot as plt
 
 """
 FUNCTIONS
+The functions in this file are for
+manipulating concentration xarray objects which have dimesions of lat,lon,z,time,ens,source
 
-manipulating xarray which has dimesions of lat,lon,z,time,ens,source
 maxconc   : returns maximum concentration along a dimension(x,y, or z)
 topheight : returns height of level
 ATL       : applied threshold level
@@ -24,7 +25,8 @@ plotmaxconc : creates plot of maximum concentrations along a dimension (x,y,z)
 getclrslevs : 
 plotATL :
 plot_ens_mean :
-ashcmap
+ashcmap :
+draw_map :
 
 For reading writing netcdf file
 makenc :
@@ -52,6 +54,9 @@ def draw_map(fignum, fs=20):
     return ax
 
 def exampleATL(revash):
+    """
+    output of maketestra can be used.
+    """
     #if not revash:
     #    revash = maketestra()
     enslist = revash.ens.values
@@ -202,6 +207,12 @@ def getclrslevs(rtot):
 
 
 def plotmaxconc(revash, time, enslist, level=1,clevs=None, dim='y', tp='contourf'):
+    """
+    time : datetime object
+    enslist : list of ints
+    """
+
+
     rtot = maxconc(revash, time, enslist, level, dim)
     ax = plt.gca()
     clrs, levs = getclrslevs(rtot)
@@ -230,12 +241,12 @@ def plotmaxconc(revash, time, enslist, level=1,clevs=None, dim='y', tp='contourf
                              levels=levs) 
     elif tp == 'pcolormesh':
         cmap = plt.get_cmap('summer')
+        levs = [0.001,0.01,0.1,0.5,1,2.5,5,10]
         norm = BoundaryNorm(levs,ncolors=cmap.N, clip=True)
         cb2 = ax.pcolormesh(xcoord,ycoord, rtot, cmap=cmap,
                              norm=norm) 
     plt.colorbar(cb2)
     return ax, rtot
-
 
 def topheight(revash, time,ens, level,thresh=0.01,tp=0):
      source=0
@@ -262,7 +273,33 @@ def topheight(revash, time,ens, level,thresh=0.01,tp=0):
          rht = rtot.max(dim='z')
      return  rht
 
+def ATLmass(dra, time, enslist=None,thresh=0.1):
+     """
+     convert to mass loading and then calculate
+     applied threshold level.
+     """
+     from monetio.models import hysplit
+     source=0
+     r2 = dra.sel(time=time)
+     r2 = r2.isel(source=source)
+     if enslist:
+        r2 = r2.isel(ens=enslist)
+     r2 = hysplit.hysp_massload(r2)
+     # place zeros where it is below threshold
+     r2 = r2.where(r2>=thresh)
+     r2 = r2.fillna(0)
+     # place onces where it is above threshold
+     r2 = r2.where(r2<thresh)
+     r2 = r2.fillna(1)
+     r2 = r2.sum(dim=['ens'])
+     return r2
+
 def ATL(revash, time, enslist, thresh=0.2, level=1):
+     """
+     Returns array with number of ensemble members above
+     given threshold at each location.
+     """
+
      #import matplotlib.pyplot as plt
      #sns.set_style('whitegrid')
      source=0
@@ -278,7 +315,6 @@ def ATL(revash, time, enslist, thresh=0.2, level=1):
          r2 = r2.where(r2>=thresh)
          r2 = r2.fillna(0)
          # place onces where it is above threshold
-         print(r2)
          r2 = r2.where(r2<thresh)
          r2 = r2.fillna(1)
          # ensemble members were above threshold at each location. 
@@ -294,7 +330,7 @@ def ATL(revash, time, enslist, thresh=0.2, level=1):
      # This gives you maximum value that were above concentration 
      # at each location.
      if iii>1:rtot = rtot.max(dim='z')
-     cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
+     #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
      # sum up all the ones. This tells you how many
      # ensemble members were above threshold at each location. 
      #r2 = r2.sum(dim=['ens'])

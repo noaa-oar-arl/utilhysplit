@@ -27,17 +27,23 @@ FUNCTIONS
 def writeover(name, overwrite, query, verbose=False):
     """
     checks if file already exits.
+    Returns 1 if file should be written.
+    Returns -1 if file should not be written.
+ 
     Inputs
     name : str
            filename
     overwrite: boolean  
-           if True then will overwrite file if it exists.
+           if True then will 1.
     query : boolean
            if True then will ask for user input before overwriting a file
     verbose : boolean  
            if True will write messages
+
     Outputs
     rval : int
+         Value is 1 if file should be written.
+         Value is -1 if file should not be written.
     """
     rval = 1
     if path.isfile(name):
@@ -63,30 +69,36 @@ def writeover(name, overwrite, query, verbose=False):
 
 
 def writelanduse(landusedir, working_directory="./", overwrite=True,
-                 query=False, silent=False):
+                 query=False, verbose=False, silent=True):
     """writes an ASCDATA.CFG file in the outdir. The landusedir must
        be the name of the directory where the landuse files are located.
     Parameters
     ----------
     landusedir : string
     working_directory : string
+    overwrite : boolean
+    query : boolean
+    verbose : boolean
+    silent : boolean - not used.
 
     Returns
     ----------
-    None
+    rval : int
     """
     rval = writeover(working_directory + 'ASCDATA.CFG', overwrite, query,
                      verbose=silent)
-    with open(path.join(working_directory, "ASCDATA.CFG"), "w") as fid:
-        fid.write("-90.0  -180.0 \n")
-        fid.write("1.0    1.0    \n")
-        fid.write("180    360    \n")
-        fid.write("2 \n")
-        fid.write("0.2 \n")
-        fid.write(landusedir + " \n")
-        if not path.isdir(landusedir) and not silent:
-            print('writelanduse function WARNING: landuse directory does not exist', landusedir)
-
+    if rval == 1:
+        with open(path.join(working_directory, "ASCDATA.CFG"), "w") as fid:
+            fid.write("-90.0  -180.0 \n")
+            fid.write("1.0    1.0    \n")
+            fid.write("180    360    \n")
+            fid.write("2 \n")
+            fid.write("0.2 \n")
+            fid.write(landusedir + " \n")
+            if not path.isdir(landusedir) and verbose:
+                print('writelanduse function WARNING:')
+                print('landuse directory does not exist', landusedir)
+    return rval
 
 class ConcGrid:
     """concentration grid as defined by 10 lines in the HYSPLIT concentration
@@ -138,10 +150,6 @@ class ConcGrid:
         interval=(-1, -1),
     ):
 
-        # self.name, self.levels, self.centerlat, self.centerlon,
-        # self.latdiff, self.londiff, self.latspan, self.lonspan,
-        # self.outdir, self.outfile, self.nlev, self.sample_start,
-        # self.sample_stop, self.sampletype, self.interval
         """
         Parameters
         ----------
@@ -413,8 +421,6 @@ class Species:
        definition : input 3 lines from control file for defining a pollutant
        define_dep : input 5 lines from control file for defining deposition
 
-
-
     """
 
     total = 0
@@ -451,8 +457,8 @@ class Species:
         self.vel = vel
         self.decay = decay
         self.resuspension = resuspension
-        Species.total += 1
         self.datestr = "00 00 00 00 00"
+        Species.total += 1
 
     def copy(self):
         return Species(

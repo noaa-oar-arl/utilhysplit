@@ -243,6 +243,13 @@ class Par2Conc:
         self.fitlist = [] # collection of MassFit objects.
         self.dra = None   # array with concentrations.
 
+    def choose_time(self,
+                    time_average=None)
+        """ 
+        time_average minutes
+        """
+        self.tmave = time_average
+
     def subsetdf(self, 
                  stime, 
                  tmave, 
@@ -280,6 +287,8 @@ class Par2Conc:
             pfit = mfit.gfit
             mfitlist.append(mfit)
 
+
+    def concfromlist(self)
 
     def addfit(self,
          time=None,
@@ -1052,14 +1061,6 @@ def combine_mfitlist(mfitlist,dd=None,dh=None,buf=None,
         concra = concra.expand_dims('time')    
     return concra
 
-#def key2datetime(time):
-#    strfmt = "%Y%m%d%H%M"
-#    return datetime.datetime.strptime(time, strfmt)
-
-#def datetime2key(time):
-#    strfmt = "%Y%m%d%H%M"
-#    return time.strftime(strfmt)
-
 def height_correction(zaprime, zter, msl=True):
     zmdl = 25000
     za = zaprime * (zmdl-zter)/float(zmdl)
@@ -1138,24 +1139,4 @@ def reflect_underground(dra):
  
     return new
     
-
-def xslice(dra, longitude ):
-    latitude = dra.latitude.values[0][0]
-    xi, yi = dra.monet.nearest_ij(lat=latitude, lon=longitude) 
-    return dra.isel(x=xi)
-
-def yslice(dra, latitude ):
-    longitude = dra.longitude.values[0][0]
-    xi, yi = dra.monet.nearest_ij(lat=latitude, lon=longitude) 
-    return dra.isel(y=yi)
-
-def zslice(dra, height ):
-    import math
-    iii=0
-    for val in dra.z.values:
-        if height < val: break
-        if math.isclose(height,val): break
-        iii+=1 
-        print(iii, val, height)
-    return dra.isel(z=iii)
 
