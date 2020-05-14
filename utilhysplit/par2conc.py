@@ -13,10 +13,12 @@ import seaborn as sns
 import os
 import sys
 from Tools import volcMER
-import utilhysplit.pardump as pardump
+import monetio.models.pardump as pardump
 import matplotlib.pyplot as plt
 #import reventador as reventador
 import monet
+
+from scipy.stats import multivariate_normal
 
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture as GMM
@@ -244,7 +246,7 @@ class Par2Conc:
         self.dra = None   # array with concentrations.
 
     def choose_time(self,
-                    time_average=None)
+                    time_average=None):
         """ 
         time_average minutes
         """
@@ -288,7 +290,6 @@ class Par2Conc:
             mfitlist.append(mfit)
 
 
-    def concfromlist(self)
 
     def addfit(self,
          time=None,
@@ -468,6 +469,187 @@ class MassFit():
         ax.axis('equal')
         return z
 
+    def plot_means(self,dim='ht'):
+        for pos, covar, www in self.generate_gaussians(dim):
+            plt.scatter(pos[0], pos[1], s=100*www)
+            print(www) 
+
+    def quickconc(self, mult):
+        # Create empty xarray with  latitude - longitude grid
+        df = pd.DataFrame()
+       
+        dlist = []
+        latlist = []
+        lonlist = []
+        zlist = []
+  
+        buflat = 1
+        buflon = 1
+        bufht = 1 
+        ddd = 0.25 / 2.0
+        fdd = ddd * 2.0
+        # get positions of particles.
+        zlist = self.sort_fits()
+        means = list(zip(*zlist))[0]
+        temp = list(zip(*means))
+        lats = temp[1]
+        lons = temp[0]      
+        hts = temp[2]
+        latr = [np.min(lats),np.max(lats)]
+        lonr = [np.min(lons),np.max(lons)]
+        htr = [np.min(hts),np.max(hts)]
+      
+        # find lower left corner.
+        latmin = np.floor(latr[0]) - buflat
+        lonmin = np.floor(lonr[0]) - buflon
+        zmin = np.floor(htr[0]) - bufht 
+
+        latmax = np.ceil(latr[1]) + buflat
+        lonmax = np.ceil(lonr[1]) + buflon
+        zmax = np.ceil(htr[1]) + bufht 
+
+        lat = latmin
+        lon = lonmin
+        ht = zmin
+        
+        done=False
+        iii=0 
+        while not done:
+            if iii % 100 == 0:
+                print(iii, lon,lat,ht)
+            conc = self.calcconc(ddd, ddd,pos=[lon,lat,ht], check=False,
+                                 verbose=False)
+            dlist.append(conc*mult)
+            iii+=1
+            lat +=  ddd * 2
+            if lat > latmax:
+               lat = latmin
+               lon +=  ddd * 2
+               if lon > lonmax:
+                  lon = lonmin
+                  if iii> 5000000: 
+                     done=True
+                     print('stopping', lat,lon,ht)
+                     zmax = ht 
+                  ht +=  ddd * 2
+                  if ht > zmax:
+                     done=True
+        latlist = np.arange(latmin, latmax + fdd,fdd)
+        lonlist = np.arange(lonmin, lonmax + fdd,fdd)
+        zlist = np.arange(zmin, zmax + fdd,fdd)
+
+        dra = np.array(dlist)
+        dra = dra.reshape(len(zlist),len(lonlist),len(latlist))
+        dset = xr.DataArray(dra, coords=[zlist,lonlist,latlist],
+                            dims=['z','longitude','latitude',])
+        
+
+        return dset, dlist, [latmin,latmax], [lonmin,lonmax], [zmin,zmax]
+
+ 
+    def get_sublist(self, pos):
+        zlist = self.sort_fits()
+        cutoff = 1
+        for mean, cov, www in zlist:
+            ddd=0
+            for iii in [0,1,2]:
+                ddd += (mean[iii]-pos[iii])**2 
+                 
+
+
+    def calcconc(self, dd, dh, pos=None, check=True, verbose=True):
+        # DOES NOT WORK YET.
+        # ATTEMPT to calculate probablitilies with CDF's.
+        iii=0
+        totalprob = 0
+        if not pos:
+            zlist = self.sort_fits()
+            mean = zlist[0][0]
+            lat = mean[1] 
+            lon = mean[0]
+            ht = mean[2]  
+        else:
+            lat = pos[1]
+            lon = pos[0]
+            ht = pos[2]
+        if verbose: print('Position', lat,lon,ht)
+        if check:
+            # retrieve values at sampling grid locations.
+            score = self.gfit.score_samples([[lon,lat,ht]])
+            # this should approximate the "area" under the curve.
+            # which for small volumes should be very close
+            # to what you get from using the CDF method.
+            prob = np.exp(score) * (2*dd)**2 * 2*dh
+
+        for mean, cov, www  in self.generate_gaussians(dim=None):
+            # The cdf method computes the cumulative distribution function.
+            # at various points. For a 1d Gaussian - two points
+            # cdf at point 1 gives area under the curve from -infinity to that
+            # point.
+            # cdf at point 2 gives area under curve from -infinity side to that  point.
+
+            # For a 2d Gaussian - need 4 points.
+ 
+            # For 3d Gaussian - need 8 points
+
+            # and finds "area" by subtracting cdf at 
+            volume = getvolume(mean,cov,lon,lat,ht,dd,dh, verbose) 
+            if verbose: print('prob, volume, weight', volume * www, volume, www)
+            if verbose: print('\n--------------')
+            totalprob += volume * www
+            iii+=1
+
+        deg2meter = 111e3
+        vol = 2*dh*1000 * (2*dd*deg2meter)**2
+        conc = totalprob * self.mass / vol
+
+        if check:
+            if dd <= 0.05: vv = 0.005
+            if dd <= 0.1: vv = 0.005
+            elif dd <= 0.5: vv = 0.01
+            elif dd <= 1: vv = 0.01
+            else: vv = 0.01
+            conc2 = self.get_conc(vv, vv,buf=[dd,dh],lat=lat,lon=lon,ht=ht)
+            print('get_conc function', conc2.mean(), self.one)
+            print('conc this function' , conc, totalprob) 
+            print('conc 1 pt estimation ' , prob * self.mass / vol, prob)
+        return conc
+
+    def sort_fits(self):
+        gfit = self.gfit
+        zlist = zip(gfit.means_, gfit.covariances_, gfit.weights_)
+        zzz = list(zlist)
+        # sort according to weight, biggest to smallest.
+        zlist = sorted(zzz, key=lambda x: x[2], reverse=True)
+        return zlist
+
+    def generate_gaussians(self,dim='ht'):
+        """
+        """
+        gfit = self.gfit
+        wfactor = 0.5 /self.gfit.weights_.max()
+        if dim =='ht':
+           c1 = 0
+           c2 = 1
+        if dim =='lon':
+           c1 = 1
+           c2 = 2
+        if dim =='lat':
+           c1 = 0
+           c2 = 2
+        zlist = self.sort_fits()
+        for pos, covar, www in zlist: 
+            if dim:
+                position = np.array([pos[c1],pos[c2]])
+                one = covar[c1][c1]
+                two = covar[c1][c2]
+                three = covar[c2][c1]
+                four = covar[c2][c2]
+                covariance = np.array([[one,two],[three,four]])
+            else:
+                position = pos
+                covariance = covar
+            yield position, covariance, www
 
     def plot_gaussians(self, ax=None, dim='ht'):
         """
@@ -1138,5 +1320,64 @@ def reflect_underground(dra):
     new = xr.concat([under,above],dim='z')    
  
     return new
-    
 
+
+class GridClass:
+
+    def __init__(lat,lon,ht,dlat,dlon,dz,nlat,nlon,nz):
+
+        self.llcrnr_lat = lat
+        self.llcrnr_lon = lon
+        self.llcrnr_ht = ht
+
+        self.dlon = dlon
+        self.dlat = dlat
+        self.dz = dz
+
+        self.nlon = nlon
+        self.nlat = nlat
+        self.nz = nz
+
+    def makegrid(self):
+        """
+        """
+        # checked HYSPLIT code. the grid points
+        # do represent center of the sampling area.
+        slat = self.llcrnr_lat * self.dlat
+        slon = self.llcrnr_lon * self.dlon
+        sht = self.llcrnr_ht * self.dz
+        lat = np.arange(slat, slat + self.nlat * self.dlat, self.dlat)
+        lon = np.arange(slon, slon + self.nlon * self.dlon, self.dlon)
+        ht = np.arange(sht, sht + self.nz * dz, dz)
+        #lonlist = [lon[x - 1] for x in xindx]
+        #latlist = [lat[x - 1] for x in yindx]
+        mgrid = np.meshgrid(lon, lat, ht)
+        return mgrid
+
+def getvolume(mean, cov, x,y,z,dh,dz, verbose=False):
+    """
+    mean and cov of gaussian
+    rv is multivariate_normal object
+    """
+    rv = multivariate_normal(mean,cov)
+
+    a1 = rv.cdf([x+dh,y+dh,z+dz])
+    a5 = rv.cdf([x-dh,y+dh,z-dz])
+    a8 = rv.cdf([x-dh,y+dh,z+dz])
+    a4 = rv.cdf([x+dh,y+dh,z-dz])
+ 
+    a6 = rv.cdf([x+dh,y-dh,z+dz])
+    a2 = rv.cdf([x-dh,y-dh,z-dz])
+    a3 = rv.cdf([x+dh,y-dh,z-dz])
+    a7 = rv.cdf([x-dh,y-dh,z+dz])
+
+    v1 = (a1+a5) - (a8+a4)
+    v2 = (a6+a2) - (a3+a7)
+
+    if verbose: print(a1, a5)
+    if verbose: print(a8, a4)
+    if verbose: print(a6,a2)
+    if verbose: print(a7,a3)
+    volume = v1 - v2
+    if verbose: print('volume, V1, V2', volume, '=', v1, '-',  v2)
+    return volume
