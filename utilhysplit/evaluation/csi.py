@@ -2,12 +2,16 @@
 from math import *
 import sys 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import string
 import datetime
 from itertools import permutations
 import time
-from xarray import DataArray as da
+#from xarray import DataArray as da
+import xarray as xr
+import numpy as np
+from math import pi, cos
 
 """
 routines to help calculates critical success index by a point by point comparison.
@@ -154,17 +158,28 @@ def get_area_domain(dset, directory='./',write=0, radius=6378.137):
        Output is xarray of same size with corresponding area (km2) of each grid cell.
        Converts degrees to meters using a radius of 6378.137 km."""
 
-    d2r =  pi/180.0              #convert degrees to radians
-    d2km = radius * d2r     #convert degree latitude to kilometers.
-    
+    #d2r =  pi/180.0              #convert degrees to radians
+    #d2km = radius * d2r     #convert degree latitude to kilometers.
+     
     ash_mass = dset.ash_mass     #Pulls out ash mass array
     ash_mass = ash_mass[0,:,:]    #Removes time dimension
     lat = ash_mass.latitude
     lon = ash_mass.longitude
+    fname = os.path.join(directory,'area_whole_domain.nc')
+    return compute_area(lat,lon,radius,write,fname)
+
+
+def compute_area(lat, lon, radius=6378.137,write=0,fname=None):
+    # need a faster way to do this.
+    # possibly by shifting the arrays and subtracting? 
+    # it looks like numpy.roll will do this.
+    d2r =  pi/180.0              #convert degrees to radians
+    d2km = radius * d2r     #convert degree latitude to kilometers.
+    
     latrad = lat * d2r     #Creating latitude array in radians
     coslat = np.cos(latrad) * d2km * d2km     #Grouping constant multiplication outside of loop
     #Creates an array copy of ash_mass filled with the fill value
-    area = xr.full_like(ash_mass,ash_mass._FillValue)
+    area = xr.full_like(lat,0)
     shape = np.shape(area)
     #Begins looping through each element of array
     i = 0
@@ -179,7 +194,7 @@ def get_area_domain(dset, directory='./',write=0, radius=6378.137):
         area.name = 'area'
         area.attrs['long_name'] = 'area of each lat/lon grid box'
         area.attrs['units'] = 'km^2'
-        area.to_netcdf(directory+'area_whole_domain.nc')   #Writes area array to netcdf 
+        area.to_netcdf(fname)   #Writes area array to netcdf 
     return area
 
 def get_area(dset, dset2):
@@ -197,69 +212,58 @@ def get_area(dset, dset2):
     area2 = area.where(ash_mass != ash_mass._FillValue, drop = True)
     return area2
 
-def calc_fss(ra1, ra2, plot_fractions = False, threshold=0, sn=[3,10]):
+def calc_fss(ra1, ra2,  
+            threshold1=0, threshold2=0, 
+            szra=[1,3,5,7], 
+            makeplots = False,
+            verbose=0):
     from scipy.signal import convolve2d
     """Calculates the fraction skill score (fss) 
        See Robers and Lean (2008) Monthly Weather Review
        and Schwartz et al (2010) Weather and Forecasting
        for more information.
        
-       ra1 is observations/satellite
-       ra2 is the forecast/model
+       ra1 : observations/satellite
+       ra2 : the forecast/model
+        
        Can plot fractions if desired (double check calculations)
-       threshold = value for data threshold
-       sn is the number of pixels (radius) to use in fractions calculation
+       threshold1 = value for data  threshold
+       threshold2 = value for model threshold
+       szra is  a list of the number of pixels (neightborhood length) to use 
+            in fractions calculation
             default is to use 1, 3, 5, 7 pixels size squares
+
+    Return
+       df : pandas dataframe
     """   
     #Creating FSS dictionary
     fss_dict = {}
     bigN = ra1.size
+
     # create binary fields
-    mask1 = mask_threshold(ra1, threshold = 0.)
-    mask2 = mask_threshold(ra2, threshold = threshold)
+    mask1 = mask_threshold(ra1, threshold = threshold1)
+    mask2 = mask_threshold(ra2, threshold = threshold2)
 
-    #Convolution for "1d" - making 3x3 array with 1. at center
-    filter_array = np.zeros((3,3))
-    filter_array[1,1] = 1.
-    print('Convolution array size: (1, )')
-    print('Convolution array: ', filter_array)
-    start = time.time()
-    frac_arr1 = convolve2d(mask1, filter_array, mode = 'same')
-    frac_arr2 = convolve2d(mask2, filter_array, mode = 'same')
-    end = time.time()
-    print('Calculation time: ', end - start)
-    #Calculate the Fractions Brier Score (FBS)
-    fbs = np.power(frac_arr1 - frac_arr2, 2).sum() / float(bigN)
-    print('FBS ' , fbs)
-    #Calculate the worst possible FBS (assuming no overlap of nonzero fractions)
-    fbs_ref = (np.power(frac_arr1,2).sum() + np.power(frac_arr2,2).sum() ) / float(bigN)
-    print('FBS reference' , fbs_ref)
-    #Calculate the Fractional Skill Score (FSS)
-    fss = 1 - (fbs / fbs_ref)
-    print('FSS ' , fss)
-    fss_tmp = dict({'Conv_array': np.shape(filter_array), 'FBS': fbs, 'FBS_ref': fbs_ref, 'FSS': fss})
-    print(' ')
-    fss_dict[1] = fss_tmp
-    if (plot_fractions == True):
-        fig = plt.figure(1)
-        ax1 = fig.add_subplot(2,1,1) 
-        ax2 = fig.add_subplot(2,1,2) 
-        ax1.imshow(frac_arr1)
-        ax2.imshow(frac_arr2)
-        plt.show()
+    #loop for the convolutions
+    for sz in szra:
 
-    #loop for the rest of the convolutions
-    for sz in range(sn[0], sn[1], 2):
-        filter_array = np.ones((sz, sz))
-        filter_array = filter_array * (1/np.sum(filter_array))
-        print('Convolution array size: ', np.shape(filter_array))
-        print('Convolution array: ', filter_array)
+        if sz == 1:
+            filter_array = np.zeros((3,3))
+            filter_array[1,1] = 1.
+            conv_array = (1,1)
+        else: 
+            filter_array = np.ones((sz, sz))
+            filter_array = filter_array * (1/np.sum(filter_array))
+            conv_array = np.shape(filter_array)
+
+        if verbose: print('Convolution array size: ', np.shape(filter_array))
+        if verbose: print('Convolution array: ', filter_array)
 
         start = time.time()
         frac_arr1 = convolve2d(mask1, filter_array, mode = 'same')
         frac_arr2 = convolve2d(mask2, filter_array, mode = 'same')
         end = time.time()
-        print('Calculation time: ', end - start)
+        if verbose: print('Calculation time: ', end - start)
         
         #Calculate the Fractions Brier Score (FBS)
         fbs = np.power(frac_arr1 - frac_arr2, 2).sum() / float(bigN)
@@ -270,8 +274,8 @@ def calc_fss(ra1, ra2, plot_fractions = False, threshold=0, sn=[3,10]):
         #Calculate the Fractional Skill Score (FSS)
         fss = 1 - (fbs / fbs_ref)
         print('FSS ' , fss)
-        fss_tmp = dict({'Conv_array': np.shape(filter_array), 'FBS': fbs, 'FBS_ref': fbs_ref, 'FSS': fss})
-        if (plot_fractions == True):
+        fss_tmp = dict({'Nlen': conv_array[0], 'FBS': fbs, 'FBS_ref': fbs_ref, 'FSS': fss})
+        if (makeplots == True):
             fig = plt.figure(1)
             ax1 = fig.add_subplot(2,1,1) 
             ax2 = fig.add_subplot(2,1,2) 
@@ -280,10 +284,12 @@ def calc_fss(ra1, ra2, plot_fractions = False, threshold=0, sn=[3,10]):
             plt.show()
         print(' ')
         fss_dict[sz] = fss_tmp
-    return fss_dict
+    df = pd.DataFrame.from_dict(fss_dict, orient='index')
+    return df
 
 def find_threshold(ra1, ra2, nodata_value=None):
     """
+       Implement pixel matching.
        Base threshold on matching number of pixels in observations.
        ra1 is the satellite data.
        ra2 is model data"""
@@ -312,7 +318,8 @@ def find_threshold(ra1, ra2, nodata_value=None):
 def mask_threshold(ra1, threshold = 0.):
     """input array. 
         Returns array with 1's where data above threshold
-        and 0. if below or equal to threshold (nan = 0.)  """
+        and 0. if below or equal to threshold (nan = 0.)  
+    """
     mask = ra1.fillna(0.)
     mask1 = mask.where(mask <= threshold, 1.)
     return mask1
