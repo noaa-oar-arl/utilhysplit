@@ -111,14 +111,14 @@ class HysplitMessageFile(object):
         plt.show()
 
 
-parser = OptionParser()
+#parser = OptionParser()
 
-parser.add_option("-f", type='string', dest='fname', default='MESSAGE',
-                  help="Name of HYSPLIT output MESSAGE file. (MESSAGE)")
+#parser.add_option("-f", type='string', dest='fname', default='MESSAGE',
+#                  help="Name of HYSPLIT output MESSAGE file. (MESSAGE)")
 
-(options, args) = parser.parse_args()
+#(options, args) = parser.parse_args()
 
-mfile = HysplitMessageFile(options.fname)
+#mfile = HysplitMessageFile(options.fname)
 # mfile.print_warnings()
 # mfile.plot_time_step()
-mfile.plot_emrise()
+#mfile.plot_emrise()
