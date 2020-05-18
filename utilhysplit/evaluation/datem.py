@@ -456,7 +456,7 @@ def write_datem(df,
         while not done: 
            t2 +=  dt
            # fill in missing values with 9.
-           print('val4', val[4], ddd)
+          # print('val4', val[4], ddd)
            #print('vlist 4', vlist[ddd+1])
            if fillhours == 0:
               done = True
@@ -475,7 +475,7 @@ def write_datem(df,
               runstring += get_runstring(val2, height, duration)
            #if ddd >= len(vlist)-1:
            #    done=True   
-           print(ddd, iii, len(vlist), val)
+           #print(ddd, iii, len(vlist), val)
            if iii > 1e9:
               break
         iii+=1

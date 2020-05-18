@@ -14,9 +14,9 @@ from matplotlib.path import Path
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 import shapely.geometry as sgeo
-from pyvolcat.modis import ModisNC
-from pyhysplit.hysplit import Pardump
-from mytools import sortxyz
+#from pyvolcat.modis import ModisNC
+#from pyhysplit.hysplit import Pardump
+#from mytools import sortxyz
 import pandas as pd
 
 ##notes - fundamental sampling resolution of caliop lidar is 30 meters vertical and 333 meters horizontal.
@@ -89,7 +89,7 @@ class ParGroup(object):
 
         lidar_group = self.df.groupby(['blidar'], axis=0)                          
         lidar = lidar_group.get_group(True)
-        print 'found lidar group ' , len(lidar['pnt'].tolist())
+        #print 'found lidar group ' , len(lidar['pnt'].tolist())
         lidar['ldist'] = lidar['pnt2'].apply(fdist)                 #distance from the beginning of the line.
         lidar['lpnt']  = lidar['ldist'].apply(fnearpnt)              #closest point on the lidar line.
         lidar['ld']    = lidar['pnt2'].combine(lidar['lpnt'], func=fldist)  #this is the distance from pt and line
@@ -159,7 +159,7 @@ class ParGroup(object):
         self.rlat = [temp1.lat , temp2.lat]
         self.rlon = [temp1.lon , temp2.lon]
         self.rht =  [temp1.ht , temp2.ht]
-        print 'RANGE of ParGroup' , self.rlat , self.rlon
+        #print 'RANGE of ParGroup' , self.rlat , self.rlon
 
 
     def __str__(self):

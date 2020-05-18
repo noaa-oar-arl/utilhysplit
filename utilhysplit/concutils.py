@@ -6,6 +6,34 @@ import numpy as np
 import datetime
 import pandas as pd
 
+
+def coarsen(small, large):
+    """
+    small : xarray
+    large : xarray
+    new : xarray
+    """
+
+    boundary='trim'
+    d1 = np.abs(small.latitude.values[2][0] - small.latitude.values[1][0])   
+    d2 = np.abs(large.latitude.values[2][0] - large.latitude.values[1][0])   
+    num = int(np.round(d2 / d1))
+    print('lat NUM', d2, d1, num)
+    new = small.coarsen(y=num, boundary=boundary).mean()
+
+    d1 = np.abs(small.longitude.values[0][1] - small.longitude.values[0][0])  
+    d2 = np.abs(large.longitude.values[0][1] - large.longitude.values[0][0])
+    num = int(np.round(d2 / d1))
+    print('lon NUM', d2, d1, num)
+    new = new.coarsen(x=num, boundary=boundary).mean()
+
+    #d1 = np.abs(small.z.values[2] - small.z.values[1])
+    #d2 = np.abs(large.z.values[2] - large.z.values[1])
+    #num = int(np.round(d2 / d1))
+    #print('NUMz', d2, d1,num)
+    #new = new.coarsen(z=num, boundary=boundary).mean()
+    return new 
+
 def xslice(dra, longitude ):
     # dra is xrarray 
     latitude = dra.latitude.values[0][0]

@@ -1,5 +1,5 @@
 from optparse import OptionParser
-from models/hcontrol import HycsControl
+from utilhysplit.hcontrol import HycsControl
 
 
 #pylint:  disable=C0103
@@ -8,7 +8,7 @@ parser = OptionParser()
 
 parser.add_option("-i", type="string", dest="fname", default='./CONTROL',
                   help="Path and name of input CONTROL file")
-parser.add_option("-h", action='store_true', dest="help", default=False,
+parser.add_option("-p", action='store_true', dest="help", default=False,
                   help="print out help message")
 
 
