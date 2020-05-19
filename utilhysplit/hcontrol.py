@@ -86,7 +86,7 @@ def writelanduse(landusedir, working_directory="./", overwrite=True,
     rval : int
     """
     rval = writeover(working_directory + 'ASCDATA.CFG', overwrite, query,
-                     verbose=silent)
+                     verbose=verbose)
     if rval == 1:
         with open(path.join(working_directory, "ASCDATA.CFG"), "w") as fid:
             fid.write("-90.0  -180.0 \n")
