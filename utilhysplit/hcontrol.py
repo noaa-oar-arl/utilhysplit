@@ -919,16 +919,25 @@ class HycsControl(object):
         self.locs.append(newloc)
         self.nlocs += 1
 
-    def add_location(self, line=False, latlon=(0, 0), alt=10.0, rate=False, area=False):
+    def add_location(self, latlon=(0, 0), alt=10.0, rate=False, area=False):
         """add new emission location
-           line: boolean
            latlon : tuple of floats
            atl    : float
            rate   :
            area   :
         """
         self.nlocs += 1
-        self.locs.append(ControlLoc(line=line, latlon=latlon, alt=alt, rate=rate, area=area))
+        self.locs.append(ControlLoc(line=False, latlon=latlon, alt=alt, rate=rate, area=area))
+
+
+    def add_location_str(self, locstr):
+        """add new emission location
+        locstr : string
+        string which represents location line.
+        """
+        self.nlocs += 1
+        self.locs.append(ControlLoc(line=locstr))
+
 
     def remove_locations(self, num=-99):
         """
