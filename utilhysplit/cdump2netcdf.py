@@ -4,7 +4,6 @@ import sys
 import xarray as xr
 import numpy as np
 from monetio.models import hysplit
-#import monet.utilhysplit.hysp_func as hf
 from netCDF4 import Dataset
 #import matplotlib.pyplot as plt
 

@@ -475,6 +475,7 @@ class MassFit():
             print(www) 
 
     def quickconc(self, mult):
+        # quick conc is SLOW.
         # Create empty xarray with  latitude - longitude grid
         df = pd.DataFrame()
        
@@ -488,7 +489,10 @@ class MassFit():
         bufht = 1 
         ddd = 0.25 / 2.0
         fdd = ddd * 2.0
-        # get positions of particles.
+
+
+
+        # get positions of centers of Gaussians
         zlist = self.sort_fits()
         means = list(zip(*zlist))[0]
         temp = list(zip(*means))
@@ -542,9 +546,8 @@ class MassFit():
         dra = dra.reshape(len(zlist),len(lonlist),len(latlist))
         dset = xr.DataArray(dra, coords=[zlist,lonlist,latlist],
                             dims=['z','longitude','latitude',])
-        
 
-        return dset, dlist, [latmin,latmax], [lonmin,lonmax], [zmin,zmax]
+        return dset
 
  
     def get_sublist(self, pos):
@@ -555,24 +558,50 @@ class MassFit():
             for iii in [0,1,2]:
                 ddd += (mean[iii]-pos[iii])**2 
                  
+    def getcenter(self):
+        zlist = self.sort_fits()
+        mean = zlist[0][0]
+        lat = mean[1] 
+        lon = mean[0]
+        ht = mean[2]  
+        return (lon,lat,ht)
 
+    def getcenters(self):
+        # get positions of centers of Gaussians
+        zlist = self.sort_fits()
+        means = list(zip(*zlist))[0]
+        temp = list(zip(*means))
+        lats = temp[1]
+        lons = temp[0]      
+        hts = temp[2]
+        latr = [np.min(lats),np.max(lats)]
+        lonr = [np.min(lons),np.max(lons)]
+        htr = [np.min(hts),np.max(hts)]
+      
+    def make_pos_list(self, dd, dh):
+        zlist = self.sort_fits()
+        plist = []
+        means = list(zip(*zlist))[0]
+        dblat = 1
+        dblon = 1
+        dbz = 1               
+        
 
-    def calcconc(self, dd, dh, pos=None, check=True, verbose=True):
-        # DOES NOT WORK YET.
-        # ATTEMPT to calculate probablitilies with CDF's.
+ 
+
+    def calcconc(self, dd, dh, pos, check=True, verbose=True):
+        """
+        calculates concentration in volume centerd on (lon,lat,ht) position
+        width, lenght, height defined by dd and dh.
+        """
+        # calculate probablitilies with CDF's.
         iii=0
         totalprob = 0
-        if not pos:
-            zlist = self.sort_fits()
-            mean = zlist[0][0]
-            lat = mean[1] 
-            lon = mean[0]
-            ht = mean[2]  
-        else:
-            lat = pos[1]
-            lon = pos[0]
-            ht = pos[2]
-        if verbose: print('Position', lat,lon,ht)
+        lat = pos[1]
+        lon = pos[0]
+        ht = pos[2]
+
+        #if verbose: print('Position', lat,lon,ht)
         if check:
             # retrieve values at sampling grid locations.
             score = self.gfit.score_samples([[lon,lat,ht]])
@@ -587,17 +616,14 @@ class MassFit():
             # cdf at point 1 gives area under the curve from -infinity to that
             # point.
             # cdf at point 2 gives area under curve from -infinity side to that  point.
-
             # For a 2d Gaussian - need 4 points.
- 
             # For 3d Gaussian - need 8 points
-
             # and finds "area" by subtracting cdf at 
             volume = getvolume(mean,cov,lon,lat,ht,dd,dh, verbose) 
-            if verbose: print('prob, volume, weight', volume * www, volume, www)
-            if verbose: print('\n--------------')
+            #if verbose: print('prob, volume, weight', volume * www, volume, www)
+            #if verbose: print('\n--------------')
             totalprob += volume * www
-            iii+=1
+            #iii+=1
 
         deg2meter = 111e3
         vol = 2*dh*1000 * (2*dd*deg2meter)**2
@@ -1358,6 +1384,12 @@ def getvolume(mean, cov, x,y,z,dh,dz, verbose=False):
     """
     mean and cov of gaussian
     rv is multivariate_normal object
+    x, y, z : float. center position.
+    dh : float. half width/ length
+    dz : float. half height.
+    Returns 
+    volume under portion of 3d Gaussian.
+
     """
     rv = multivariate_normal(mean,cov)
 

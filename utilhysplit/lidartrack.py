@@ -77,13 +77,13 @@ class LidarTrack(object):
        dist2pnt is a method which returns the distance from a sgeo point to the line2 object.
     """
  
-    def __init__(self, coords, drange, bffr=0.05):
-        self.drange  =  drange       
+    def __init__(self, coords, bffr=0.05):
+        #self.drange  =  drange       
         self.coords = coords               #list of lat/lon coordinates
         self.line = sgeo.linestring.LineString(coordinates = coords)     #line given by lat-lon
         #print 'BUFFER VALUE' , bffr
-        #map = Basemap(projection="sinu", lon_0=0,  resolution='c')
-        #x , y = map(zip(*coords)[0], zip(*coords)[1])
+        map = Basemap(projection="sinu", lon_0=0,  resolution='c')
+        x , y = map(zip(*coords)[0], zip(*coords)[1])
         self.map = map
         self.line2 = sgeo.linestring.LineString(coordinates = zip(x,y))  #line give by projected coordinated
         self.line_plus = self.line.buffer(bffr)
@@ -117,6 +117,9 @@ class LidarTrack(object):
         return test
 
     def dist2pnt(self, pnt): 
+        """
+        pnt : shapely.geometry  Point object
+        """
         x , y = self.map(pnt.x, pnt.y)
         dist = self.line2.project(sgeo.Point(x,y))
         return dist 
