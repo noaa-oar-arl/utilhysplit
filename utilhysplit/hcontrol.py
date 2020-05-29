@@ -29,7 +29,7 @@ def writeover(name, overwrite, query, verbose=False):
     checks if file already exits.
     Returns 1 if file should be written.
     Returns -1 if file should not be written.
- 
+
     Inputs
     name : str
            filename
@@ -47,7 +47,8 @@ def writeover(name, overwrite, query, verbose=False):
     """
     rval = 1
     if path.isfile(name):
-        if verbose: print('file already exists ' + name)
+        if verbose:
+            print('file already exists ' + name)
         fexists = True
         if query:
             istr = " Press y to overwrite file \n"
@@ -100,6 +101,7 @@ def writelanduse(landusedir, working_directory="./", overwrite=True,
                 print('landuse directory does not exist', landusedir)
     return rval
 
+
 class ConcGrid:
     """concentration grid as defined by 10 lines in the HYSPLIT concentration
       CONTROL file.
@@ -149,7 +151,6 @@ class ConcGrid:
         sampletype=0,
         interval=(-1, -1),
     ):
-
         """
         Parameters
         ----------
@@ -852,20 +853,13 @@ class HycsControl(object):
     """
        class which represents the HYSPLIT
        control file and all the information in it
-    """
-
-    def __init__(
-            self,
-            fname="CONTROL",
-            working_directory="./",
-            rtype="dispersion"):
-        """
-        INPUTS
+    INPUTS
         fname : str : name of control file
         working_directory : str : directory where CONTROL file is
         rtype : string : dispersion, trajectory, vmixing
-        """
-         
+    """
+
+    def __init__(self, fname="CONTROL", working_directory="./", rtype="dispersion"):
         self.fname = fname
         if working_directory[-1] != "/":
             working_directory += "/"
@@ -880,8 +874,7 @@ class HycsControl(object):
         self.num_sp = 0  # number of pollutants / species
         self.num_met = 0  # number of met files
         self.rtype = rtype  # dispersion or trajectory run or vmixing.
-
-        self.outfile = "tdump"  #output file name for trajectory 
+        self.outfile = "tdump"  # output file name for trajectory
         self.outdir = "./"
         self.run_duration = 1
         self.vertical_motion = 1
@@ -926,15 +919,7 @@ class HycsControl(object):
         self.locs.append(newloc)
         self.nlocs += 1
 
-    def add_location(
-            self,
-            line=False,
-            latlon=(
-                0,
-                0),
-            alt=10.0,
-            rate=False,
-            area=False):
+    def add_location(self, line=False, latlon=(0, 0), alt=10.0, rate=False, area=False):
         """add new emission location
            line: boolean
            latlon : tuple of floats
@@ -943,9 +928,7 @@ class HycsControl(object):
            area   :
         """
         self.nlocs += 1
-        self.locs.append(
-            ControlLoc(line=line, latlon=latlon, alt=alt, rate=rate, area=area)
-        )
+        self.locs.append(ControlLoc(line=line, latlon=latlon, alt=alt, rate=rate, area=area))
 
     def remove_locations(self, num=-99):
         """
@@ -1011,8 +994,7 @@ class HycsControl(object):
         note = ""
         sp28 = " " * 28
 
-        rval = writeover(self.wdir + self.fname, overwrite, query,
-                         verbose=verbose)
+        rval = writeover(self.wdir + self.fname, overwrite, query, verbose=verbose)
         if rval == -1:
             return rval
 
@@ -1151,13 +1133,9 @@ class HycsControl(object):
             for ln in contentA:
                 content.append(ln.split("#")[0])
             try:
-                self.date = datetime.datetime.strptime(
-                    content[0].strip(), "%y %m %d %H"
-                )
+                self.date = datetime.datetime.strptime(content[0].strip(), "%y %m %d %H")
             except BaseException:
-                self.date = datetime.datetime.strptime(
-                    content[0].strip(), "%y %m %d %H %M"
-                )
+                self.date = datetime.datetime.strptime(content[0].strip(), "%y %m %d %H %M")
             self.nlocs = int(content[1].strip())
             zz = 2
             for ii in range(zz, zz + self.nlocs):
@@ -1213,10 +1191,8 @@ class HycsControl(object):
             zz += 1
             temp = int(content[zz].strip())
             if temp != self.num_sp:
-                print(
-                    "warning: number of species for deposition",
-                    " not equal to number of species",
-                )
+                print("warning: number of species for deposition",
+                      " not equal to number of species")
             nn = 0
             for ii in range(zz, zz + 5 * self.num_sp, 5):
                 lines = []
@@ -1256,4 +1232,3 @@ class HycsControl(object):
 def roundtime(dto):
     """rounds input datetime to day at 00 H"""
     return datetime.datetime(dto.year, dto.month, dto.day, 0, 0)
-
