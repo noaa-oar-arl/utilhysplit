@@ -9,3 +9,5 @@ UPDATES
 
 5/8/2020 pardump.py was moved to monetio
 
+6/11/2020 Added utilvolc folder: contains utilities for volcano hysplit applications and volcat data manipulation
+
