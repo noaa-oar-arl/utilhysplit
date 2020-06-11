@@ -20,12 +20,12 @@ setup(name='utilhysplit',
           ]
       },
       keywords=[
-          'model', 'verification', 'hysplit', 
-          'evaluation'
+          'model', 'verification', 'hysplit',
+          'evaluation', 'volcat'
       ],
-      description='Utilities for use with HYSPLIT',
+      description='Utilities for use with HYSPLIT and VOLCAT',
       install_requires=[
-          'pandas', 'netcdf4', 'xarray', 'matplotlib',
-          'seaborn', 'cartopy', 'monetio'
+          'pandas', 'netcdf4', 'xarray', 'matplotlib', 'lxml', 'scipy',
+          'seaborn', 'cartopy', 'monetio', 'datetime', 'numpy'
       ])
-      #extra_requires={'xesmf;platform_system!="Windows"'})
+# extra_requires={'xesmf;platform_system!="Windows"'})
