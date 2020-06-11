@@ -14,13 +14,36 @@ import matplotlib.pyplot as plt
 optionparser input which will plot time steps"""
 
 
+def get_height_km(a,b,c,num):
+    # return height in km
+    return (a*num**2 + b*num + c)/1000.0
+
 class HysplitMessageFile(object):
     """Class to read the Hysplit Message File.
     Currently looks at how time step evolves over the run"""
 
     def __init__(self, fname):
         self.fname = fname
-        self.read()
+        #self.read()
+
+    def get_levels(self):
+        """
+        returns heights of HYSPLIT vertical levels in km.
+        """
+        with open(self.fname, 'r', errors="ignore") as fid:
+             lines = fid.readlines(10000)
+        lev = [x for x in lines if 'nlvl' in x]
+        iii = lines.index(lev[0])
+        kbls = [x for x in lines if 'kbls' in x]
+        jjj = lines.index(kbls[0])
+        temp = lines[iii:jjj]
+        aaa = float(temp[1].split()[3])
+        bbb = float(temp[1].split()[4])
+        ccc = float(temp[1].split()[5])
+        nlevs = int(temp[0].split()[1])
+        levs = [float(x) for x in temp[2].split()[1:]]
+        levs_km = [get_height_km(aaa,bbb,ccc,x) for x in range(1,nlevs+1)]
+        return levs_km
 
     def read(self):
         self.flags = []
