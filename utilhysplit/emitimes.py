@@ -90,6 +90,24 @@ class EmiTimes(object):
     def modify_header(self, hstring):
         self.header = hstring
 
+    def select_species(self,spnum):
+        """
+        Returns new EmiTimes class with only one species in it.
+        """
+        if isinstance(spnum, int): spnum = [spnum]
+        newclass = EmiTimes()
+        newclass.cycle_list = [x.select_species(spnum) for x in self.cycle_list]        
+        newclass.sphash = {}
+        newclass.splist = []
+        iii=1
+        for sp in spnum:
+            newclass.sphash[iii] = self.sphash[sp]
+            newclass.splist.append(iii)
+            iii+=1
+        newclass.header = newclass.header_str()
+        newclass.filename = self.filename
+        return newclass 
+ 
     def set_species(self, sphash):
         for val in self.splist:
             # if there is a species not
@@ -116,6 +134,7 @@ class EmiTimes(object):
             spnum = ec.splist[-1]
             if spnum > maxsp:
                 maxsp = spnum
+            print('spnum', spnum, maxsp)
         return maxsp
 
     def findmaxrec(self):
@@ -142,12 +161,14 @@ class EmiTimes(object):
         """
         # make sure all cycles have same number of species.
         self.splist = list(range(1, self.findmaxsp() + 1))
+        print('NUM SPECIES', self.splist)
         # make sure that there is a name for each species.
         self.set_species(self.sphash)
         # print(splist)
         for ecycle in self.cycle_list:
             ecycle.splist = self.splist
-            ecycle.fill_species()
+            if len(self.splist) > 1:
+                ecycle.fill_species()
         # make sure all cycles have same number of records
         maxrec = self.findmaxrec()
         with open(filename, "w") as fid:
@@ -200,10 +221,14 @@ class EmiTimes(object):
             # if it does not then get the splist from num_species input.
             if not self.header2sp():
                 self.splist = np.arange(1, num_species + 1)
+                for sp in self.splist:
+                    if sp not in self.sphash.keys():
+                       self.sphash[sp] = 'P{:03d}'.format(int(sp))
             iii = 2
             while iii < len(lines):
                 if verbose:
                     print("NEW CYCLE")
+                    print("Number of species {}".format(num_species))
                 # pass on particle species info to the EmitCycle object.
                 ec = EmitCycle(splist=self.splist)
                 # the third line (0,1,2) is the cycle header line.
@@ -290,6 +315,7 @@ class EmitCycle(object):
     def __init__(self, sdate=None, duration=None, splist=[1]):
         self.sdate = sdate
         self.duration = duration  # duration of the cycle.
+        # list of EmitLine objects
         self.recordra = []
         # number of records in a cycle.
         self.nrecs = 0
@@ -317,6 +343,26 @@ class EmitCycle(object):
                 x.height))
         return -1
 
+    def select_species(self, spnum):
+        """
+        spnum : int or list of ints.
+
+        returns EmitCycle object with only lines for species
+        that match spnum.
+        """
+        if isinstance(spnum, int): spnum = [spnum]
+        print(spnum)
+        #newlist =  [x for x in self.recordra if x.spnum == spnum[0]]
+        newlist =  [x for x in self.recordra if x.spnum in spnum]
+        newcycle = EmitCycle()
+        newcycle.splist = list(np.arange(1,len(spnum)+1))
+        newcycle.sdate = self.sdate
+        newcycle.duration = self.duration
+        newcycle.nrecs = len(newlist)
+        newcycle.nlocs = self.nlocs
+        newcycle.recordra = newlist
+        return newcycle
+
     def fill_species(self):
         """
         make sure one record written for each species.
@@ -335,7 +381,6 @@ class EmitCycle(object):
         # nlist = sorted(nlist, key=itemgetter(0))
         # list of all species numbers.
         slist = list(set(slist))
-        alist = []
         # list with one species for each date, lat, lon, height location.
         alist = []
         for nnn in nlist:
@@ -419,7 +464,7 @@ class EmitCycle(object):
         # print('FILENAME EMIT', filename)
         with open(filename, "a") as fid:
             # fid.write(self.header_str())
-            fid.write(datestr + " " + self.duration + " " + str(maxrec) + "\n")
+            fid.write(datestr + " " + str(self.duration) + " " + str(maxrec) + "\n")
             for record in self.recordra:
                 fid.write(str(record))
             for record in self.dummy_recordra:
