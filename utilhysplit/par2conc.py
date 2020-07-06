@@ -235,10 +235,10 @@ def fixlondf(df, colname='lon', neg=True):
     return df
 
 
-def fixlonra(ra):
-    newlon = []
-    for lon in ra:
-        newloeturn newlon
+#def fixlonra(ra):
+#    newlon = []
+#    for lon in ra:
+#        newloeturn newlon
 
 
 def fixlon(x):
@@ -1186,9 +1186,11 @@ class VolcPar:
         self.ymax = 9
         self.pdict = {}
 
-    def read_pardump(self, century=2000):
-        pd = pardump.Pardump(fname=self.tname)
-        self.df = pd.read(century=century)
+    def read_pardump(self, drange=None, century=2000):
+        self.df  = pardump.open_dataset(fname=self.tname, drange=drange,
+                   century=century)
+        #pd = pardump.Pardump(fname=self.tname)
+        #self.df = pd.read(century=century)
 
     # def key2time(self):
     #    datelist=[]

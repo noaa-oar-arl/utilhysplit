@@ -9,6 +9,7 @@ import datetime
    class EmitLine
 """
 
+##Cannot handle multiple species.
 
 
 class EmitTimes(object):
