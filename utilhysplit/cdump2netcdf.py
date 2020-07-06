@@ -170,6 +170,20 @@ class cdump2awips:
         fid.mass_unit = self.munit
         return fid
 
+
+    def make_conc_level(self, fid, variable_name, min_level, max_level):
+        coordlist = ('time', 'ensid', 'latitude', 'longitude')
+        concid = fid.createVariable(variable_name,  'f4', coordlist)
+        concid.units = munit + '/m3'
+        concid.long_name = 'Concentration Array'
+        concid.bottolevel_meters = min_meters
+        concid.toplevel_meters= max_meters
+        concid.bottomlevel =  min_level
+        #top, bottom = get_topbottom(lev1)
+        concid.toplevel = maxlevel
+        return concid
+
+
     def make_dataset(self,iii):
         xrash = self.xrash.copy()
         munit = self.munit
@@ -203,29 +217,12 @@ class cdump2awips:
         # DEFINE A DIFFERENT VARIABLE for EACH LEVEL.
         # DIMENSIONS are ensemble tag, latitude, longitude
         levs = xrash.z.values
-        lev1, lev2, lev3 = handle_levels(levs)
+        #lev1, lev2, lev3 = handle_levels(levs)
 
-        coordlist = ('time', 'ensid', 'latitude', 'longitude')
-        concidl1 = fid.createVariable('Flight_levelA', 'f4', coordlist)
-        concidl1.units = munit + '/m3'
-        concidl1.long_name = 'Concentration Array'
-        concidl1.bottomlevel = 'FL0'
-        top, bottom = get_topbottom(lev1)
-        concidl1.toplevel = top
+        concid_list = []
+        for level in xrash.z.values:
+            concid_list.append(self.make_conc_level())
 
-        concidl2 = fid.createVariable('Flight_levelB', 'f4', coordlist)
-        concidl2.units = munit + '/m3'
-        concidl2.long_name = 'Concentration Array'
-        concidl2.bottomlevel = top
-        top, bottom = get_topbottom(lev2)
-        concidl2.toplevel = top
-
-        concidl3 = fid.createVariable('Flight_levelC', 'f4', coordlist)
-        concidl3.units = munit + '/m3'
-        concidl3.long_name = 'Concentration Array'
-        concidl3.bottomlevel = top
-        top, bottom = get_topbottom(lev3)
-        concidl3.toplevel = top
 
         massid = fid.createVariable('MassLoading', 'f4', coordlist)
         massid.units = munit + '/m2'
@@ -281,15 +278,23 @@ class cdump2awips:
         print(temp.values.shape)
         print('date', date1, type(lev1))
         #concid[:] = xrash.loc[:,date1].values
+
+        iii=0
         mult = 1
-        concidl1[:] = makeconc(self.xrash.copy(), date1, list(lev1),
-                               dotranspose=False, mult=mult)
-
-        concidl2[:] = makeconc(self.xrash.copy(), date1, list(lev2),
-                               dotranspose=False, mult=mult)
-
-        concidl3[:] = makeconc(self.xrash.copy(), date1, list(lev3),
-                               dotranspose=False, mult=mult)
+        for concid in concid_list:
+            lev = self.xrash.z.values[iii]
+            concid[:] = makeconc(self.xrash.copy(),date1,lev,
+                                 dotranspose=False,
+                                 mult=mult)
+        #mult = 1
+        #concidl1[:] = makeconc(self.xrash.copy(), date1, list(lev1),
+        #                       dotranspose=False, mult=mult)
+#
+#        concidl2[:] = makeconc(self.xrash.copy(), date1, list(lev2),
+#                               dotranspose=False, mult=mult)
+#
+#        concidl3[:] = makeconc(self.xrash.copy(), date1, list(lev3),
+#                               dotranspose=False, mult=mult)
 
         massid[:] = makeconc(self.mass, date1, dotranspose=False, level=None)
 

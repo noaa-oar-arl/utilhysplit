@@ -157,7 +157,7 @@ def get_forecast_str(metid, FCTDIR='/pub/forecast'):
     return metdir + metfilename
 
 def getmetfiles(strfmt, sdate, runtime,
-                altstrfmt):
+                altstrfmt=None):
     """
     INPUTS
     strfmt : string
@@ -299,6 +299,7 @@ class MetFiles:
         sdate : datetime.datetime ojbect
         runtime : int (hours of runtime)
         """
+        self.verbose=True
         nlist = []
         sdate = sdate.replace(tzinfo=None)
         if not isinstance(self.mdt, datetime.timedelta):
@@ -320,13 +321,15 @@ class MetFiles:
         zzz = 0
         while not done:
             if "week" in self.strfmt:
-                self.mdt = datetime.timedelta(hours=7 * 24)
+                # need to check every day otherwise when starting
+                # midweek may skip some weeks at end of month.
+                self.mdt = datetime.timedelta(hours=1 * 24)
                 temp = parse_week(self.strfmt, edate)
             else:
                 temp = edate.strftime(self.strfmt)
             edate = edate + self.mdt
-            #if not path.isfile(temp):
-            #    temp = temp.lower()
+            if not path.isfile(temp):
+                temp = temp.lower()
             if not path.isfile(temp):
                 print("WARNING", temp, " meteorological file does not exist")
                 #temp = self.altmet.makefilelist(edate, self.altmet.mdt)

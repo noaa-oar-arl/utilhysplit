@@ -10,6 +10,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import subprocess
+import seaborn as sns
 
 """
 NAME: statmain.py
@@ -149,6 +150,16 @@ def cdf(data):
 def plot_cdf(sdata, y, ax):
     ax.step(sdata, y, '-r')
 
+class EnsembleTimeSeries:
+
+    def __init__(self, obs=pd.Series(), fc=pd.Series(), stn=None):
+        self.df = pd.DaataFrame()
+        if not obs.empty and not fc.empty:
+           self.df = self.create_df(obs,fc)
+
+    def create_df(self,obs,fc):
+        return -1
+
 ######following methods create and analyze an obsra. Which is a pandas dataframe with matched observations and forecasts by date.
 class MatchedData(object):
 
@@ -233,6 +244,7 @@ class MatchedData(object):
         """
         returns pearson correlation coefficient
         """
+       
         corr1 = self.obsra.corr()
         return corr1.at['fc','obs']
 
@@ -297,8 +309,8 @@ class MatchedData(object):
         for nnn in nlist:
            alist1.append(ts1.autocorr(lag=nnn)) 
            alist2.append(ts2.autocorr(lag=nnn))
-        ax.plot(nlist, alist1, 'k.', label='obs')
-        ax.plot(nlist, alist2, 'b.', label='fc')
+        ax.plot(nlist, alist1, '-k.', label='obs')
+        ax.plot(nlist, alist2, '-b.', label='fc')
         
 
     def plotscatter(self, ax):
