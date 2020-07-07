@@ -461,10 +461,11 @@ class EmitCycle(object):
         # if len(self.splist)>1: self.fill_species()
         maxrec = self.nrecs + self.drecs
         datestr = self.sdate.strftime("%Y %m %d %H ")
-        # print('FILENAME EMIT', filename)
+        durationstr = '{:d}'.format(int(self.duration.seconds/3600+\
+                                        self.duration.days*24))
         with open(filename, "a") as fid:
             # fid.write(self.header_str())
-            fid.write(datestr + " " + str(self.duration) + " " + str(maxrec) + "\n")
+            fid.write(datestr + " " + durationstr + " " + str(maxrec) + "\n")
             for record in self.recordra:
                 fid.write(str(record))
             for record in self.dummy_recordra:
