@@ -144,6 +144,7 @@ def cdf(data):
     data should be a list of data.
     """
     sdata = np.sort(data)
+    # y axis goes from 0 to 1
     y = 1. * np.arange(sdata.size) / float(sdata.size-1)
     return sdata, y
 

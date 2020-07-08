@@ -9,6 +9,7 @@ import datetime
 import seaborn as sns
 import os
 import matplotlib.pyplot as plt
+from utilhysplit.evaluation.statmain import cdf
 
 """
 FUNCTIONS
@@ -36,6 +37,49 @@ Use Examples
 maketestra :
 exampleATL
 """
+
+def listvals(dra):
+    """
+    returns 1d list of values in the data-array
+    """
+    vals = dra.values
+    vshape = np.array(vals.shape)
+    return vals.reshape(np.prod(vshape))
+
+def ens_cdf(dra, timelist=None, source=0, threshold=0):
+    """
+    produces plots of cumulative distribution functions.
+    dra : xarray DataArray produced by combine_dataset function.
+    timelist : list of times in the time coordinate to produce plots for
+    source : int : index of source to use.
+    threshold : float : produce CDF for values > threshold.
+    """
+    # select the source of interest
+    from utilhysplit.evaluation.statmain import cdf
+    fig = plt.figure(1)
+    ax = fig.add_subplot(1,1,1)
+    dra = dra.isel(source=source)
+    enslist = dra.ens.values
+    clrs = ['r','y','g','c','b','k']
+    cdflist = []
+    for ens in enslist:
+        print('working on ', ens)
+        subdra= dra.sel(ens=ens)
+        mass = hysplit.hysp_massload(subdra)
+        if not isinstance(timelist,list) and not isinstance(timelist,np.ndarray):
+           timelist = [mass.time.values[0]]
+        iii=0
+        for tm in timelist:
+            print('working on ', tm)
+            tmass = mass.sel(time=tm)
+            # create cdf from values above threshold
+            sdata, y = cdf([x for x in listvals(tmass) if x > threshold])
+            # plot as step function.
+            ax.step(sdata, y, '-'+clrs[iii])
+            iii+=1
+            if iii > len(clrs)-1: iii=0
+        ax.set_xscale('log')
+    return -1
 
 def draw_map(fignum, fs=20):
     proj = ccrs.PlateCarree()
