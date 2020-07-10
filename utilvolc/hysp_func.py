@@ -12,7 +12,7 @@ calc_aml: determines ash mass loading for each altitude layer  from HYSPLIT
 hysp_thresh: calculates mask array for ash mass loading threshold from HYSPLIT
 """
 from monetio.models import hysplit
-from utilhysplit.utilvolc import volcMER
+from utilvolc import volcMER
 import xarray as xr
 import numpy as np
 
