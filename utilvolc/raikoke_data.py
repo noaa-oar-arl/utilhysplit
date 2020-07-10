@@ -2,7 +2,8 @@ import datetime
 import os.path as path
 import numpy as np
 import numpy.ma as ma
-from utilhysplit.utilvolc import volcat
+#from utilhysplit.utilvolc import volcat
+from utilvolc import volcat
 
 
 class RaikokeVolcat:
