@@ -253,6 +253,8 @@ class Par2Conc:
         self.df = df      # pandas DataFrame
         self.fitlist = []  # collection of MassFit objects.
         self.dra = None   # array with concentrations.
+                          # not in MONET format but get_conc and monet_conc
+                          # both return array converted to MONET format.
 
     def choose_time(self,
                     time_average=None):
@@ -412,6 +414,23 @@ def make_bnds(dfa):
     bnds['lonmax'] = np.max(dfa['lon'].values)
     return bnds
 
+def get_lra(lmin, lmax, dd):
+    """
+    helps make sure that multiple grids can be added
+    in the xarray.
+    TO DO : needs to be generalized to all values of dd.
+            dh should be added as well.
+    """
+    if dd in [0.1, 0.05, 0.02]:
+        qqq = 10
+    elif dd in [0.01, 0.005, 0.002]:
+        qqq = 100
+    else:
+        qqq = 1
+    lmin = (np.floor(lmin * qqq)) / qqq
+    lmax = (np.ceil(lmax * qqq)) / qqq
+    lra = np.arange(lmin, lmax, dd)
+    return lra
 
 class MassFit():
 
@@ -742,25 +761,6 @@ class MassFit():
             htra = htra * 1000.0
         return htra
 
-    def get_lra(self, lmin, lmax, dd):
-        """
-        helps make sure that multiple grids can be added
-        in the xarray.
-        TO DO : needs to be generalized to all values of dd.
-                dh should be added as well.
-        """
-        if dd in [0.1, 0.05, 0.02]:
-            qqq = 10
-        elif dd in [0.01, 0.005, 0.002]:
-            qqq = 100
-        else:
-            qqq = 1
-        lmin = (np.floor(lmin * qqq)) / qqq
-        lmax = (np.ceil(lmax * qqq)) / qqq
-        lra = np.arange(lmin, lmax, dd)
-        return lra
-
-
     def totalgrid(self, dd, dh, buf):
         """
         returns lat, lon, ht arrays based
@@ -775,8 +775,8 @@ class MassFit():
         lonmax = np.max(lon)+buf
         htmin = np.min(ht)-buf
         htmax = np.max(ht)+buf
-        latra = self.get_lra(latmin, latmax, dd)
-        lonra = self.get_lra(lonmin, lonmax, dd)
+        latra = get_lra(latmin, latmax, dd)
+        lonra = get_lra(lonmin, lonmax, dd)
         htra = self.get_ht_ra(htmin, htmax, dh)
         return latra, lonra, htra
 
@@ -802,13 +802,17 @@ class MassFit():
         lonmax = lon+dd+bufx
         htmin = ht - bufh
         htmax = ht + dh + bufh
-        latra = self.get_lra(latmin, latmax, dd)
-        lonra = self.get_lra(lonmin, lonmax, dd)
+        latra = get_lra(latmin, latmax, dd)
+        lonra = get_lra(lonmin, lonmax, dd)
         htra = self.get_ht_ra(htmin, htmax, dh)
         #latra = np.array([latmin,lat,latmax])
         #lonra = np.array([lonmin,lon,lonmax])
         #htra = np.array([htmin,ht,htmax])
         return latra, lonra, htra
+
+
+    def monet_conc(self):
+        return monet.monet_accessor._dataset_to_monet(self.dra, lat_name='y', lon_name='x')
 
 
     def get_conc(self,
@@ -823,8 +827,9 @@ class MassFit():
                  verbose=False):
         # if lat,lon,ht not specified then find conc over whole area.
         latra,lonra,htra = self.get_grid(dd,dh,buf,lat,lon,ht)
-        self.get_conc2(dd,dh,buf,latra,lonra,htra,time=time,mass=mass)
-        return self.dra
+        self.get_conc2(dd,dh,latra,lonra,htra,buf=buf,time=time,mass=mass)
+        dra = monet.monet_accessor._dataset_to_monet(self.dra, lat_name='y', lon_name='x')
+        return dra
 
 
     def get_grid(self,dd,dh,buf,lat=None,lon=None,ht=None):
@@ -891,14 +896,15 @@ class MassFit():
                            coords=coords,
                            dims=dims)
         # add time dimensions
-        if time:
-            dra['time'] = time
-            dra = self.dra.expand_dims(dim='time')
+        #if time:
+        #    dra['time'] = time
+        #    dra = self.dra.expand_dims(dim='time')
 
         # modify xarray.
-        self.dra = monet.monet_accessor._dataset_to_monet(dra, lat_name='y', lon_name='x')
-
-        return self.dra
+        #self.dra = monet.monet_accessor._dataset_to_monet(dra, lat_name='y', lon_name='x')
+        self.dra = dra
+        #return self.dra
+        return dra
 
     def plotconc(self, dra):
         dra2 = dra.sum(dim='z')
@@ -1305,26 +1311,56 @@ def combine_mfitlist(mfitlist, dd=None, dh=None, buf=None,
     iii = 0
     concra = xr.DataArray(None)
     conclist = []
-
+    hlist = []
+    totlat = []
+    totlon = []
+    totht = []
     # put all concentration arrays on the same grid.
-    latra, lonra, htra = mfitlist[0].get_grid(dd,dh,buf)
+    #latra, lonra, htra = mfitlist[-1].get_grid(dd,dh,buf)
     for mfit in mfitlist:
+        latra, lonra, htra = mfit.get_grid(dd,dh,buf)
         conc = mfit.get_conc2(dd=dd,
                              dh=dh,
                              latra=latra,
                              lonra=lonra,
                              htra=htra,
                              buf=buf)
+      
+        totht.append(htra)
+        totlat.append(latra)
+        totlon.append(lonra) 
         #print(conc.coords)
         conclist.append(conc)
-        #if iii == 0:
-        #    concra = conc
-        #else:
-    concra = xr.concat(conclist, dim='time')
-        #iii += 1
+        # get an expanded dataset that encompasses full area.
+        if iii == 0:
+           xnew = conc.copy()
+        else:
+           a, xnew = xr.align(conc, xnew,
+                     join="outer") 
+        iii+=1
+    iii=0
+    for temp in conclist:
+        aaa, bbb = xr.align(temp, xnew, join="outer")
+        aaa = aaa.fillna(0)
+        bbb = bbb.fillna(0)     
+        aaa.expand_dims("time")
+        aaa["time"] = iii
+        hlist.append(aaa) 
+        iii+=1
+    concra = xr.concat(hlist, "time")
+    concra = xr.concat(conclist, "time")
     if 'time' not in concra.dims:
         concra = concra.expand_dims('time')
-    return concra
+
+    concra = concra.fillna(0)
+    if 'time' not in concra.dims:
+        concra = concra.expand_dims('time')
+    concra = monet.monet_accessor._dataset_to_monet(concra, lat_name='y', lon_name='x')
+    return concra  
+
+
+def get_latlongrid(lonra, latra,htra):
+    return -1
 
 
 def height_correction(zaprime, zter, msl=True):
