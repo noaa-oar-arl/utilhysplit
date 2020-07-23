@@ -5,7 +5,6 @@ from scipy.stats import multivariate_normal
 import monet
 import matplotlib.pyplot as plt
 import monetio.models.pardump as pardump
-from Tools import volcMER
 import sys
 import os
 import seaborn as sns
@@ -761,6 +760,7 @@ class MassFit():
         lra = np.arange(lmin, lmax, dd)
         return lra
 
+
     def totalgrid(self, dd, dh, buf):
         """
         returns lat, lon, ht arrays based
@@ -810,6 +810,7 @@ class MassFit():
         #htra = np.array([htmin,ht,htmax])
         return latra, lonra, htra
 
+
     def get_conc(self,
                  dd,
                  dh,
@@ -820,17 +821,34 @@ class MassFit():
                  lon=None,
                  ht=None,
                  verbose=False):
-
-        if not mass:
-            mass = self.mass
-
         # if lat,lon,ht not specified then find conc over whole area.
+        latra,lonra,htra = self.get_grid(dd,dh,buf,lat,lon,ht)
+        self.get_conc2(dd,dh,buf,latra,lonra,htra,time=time,mass=mass)
+        return self.dra
+
+
+    def get_grid(self,dd,dh,buf,lat=None,lon=None,ht=None):
+        # returns arrays that can be used as input to get_conc2.
         if not lat:
             latra, lonra, htra = self.totalgrid(dd, dh, buf)
         else:
             latra, lonra, htra = self.partialgrid(lat, lon, ht, dd, dh, buf)
+        return latra, lonra, htra 
 
-        # create the sampling grid
+    def get_conc2(self,
+                 dd,
+                 dh,
+                 latra,
+                 lonra,
+                 htra,
+                 buf=0.2,
+                 time=None,
+                 mass=None,
+                 verbose=False):
+
+        if not mass:
+            mass = self.mass
+
         x, y, z = np.meshgrid(lonra, latra, htra)
         xra2 = np.array([x.ravel(), y.ravel(), z.ravel()]).T
 
@@ -1286,18 +1304,24 @@ def combine_mfitlist(mfitlist, dd=None, dh=None, buf=None,
     """
     iii = 0
     concra = xr.DataArray(None)
+    conclist = []
+
+    # put all concentration arrays on the same grid.
+    latra, lonra, htra = mfitlist[0].get_grid(dd,dh,buf)
     for mfit in mfitlist:
-        conc = mfit.get_conc(dd=dd,
+        conc = mfit.get_conc2(dd=dd,
                              dh=dh,
-                             buf=buf,
-                             lat=lat,
-                             lon=lon,
-                             ht=ht)
-        if iii == 0:
-            concra = conc
-        else:
-            concra = xr.concat([concra, conc], dim='time')
-        iii += 1
+                             latra=latra,
+                             lonra=lonra,
+                             htra=htra,
+                             buf=buf)
+        #print(conc.coords)
+        conclist.append(conc)
+        #if iii == 0:
+        #    concra = conc
+        #else:
+    concra = xr.concat(conclist, dim='time')
+        #iii += 1
     if 'time' not in concra.dims:
         concra = concra.expand_dims('time')
     return concra
