@@ -414,6 +414,48 @@ def make_bnds(dfa):
     bnds['lonmax'] = np.max(dfa['lon'].values)
     return bnds
 
+
+def reindex(dra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon):
+    latra = dra.y.values
+    lonra = dra.x.values
+    ilat, ilon = get_new_indices(latra,lonra,llcrnr_lat,
+                                llcrnr_lon,nlat,nlon,dlat,dlon)
+    dra = dra.assign_coords(y=ilat)   
+    dra = dra.assign_coords(x=ilon)   
+    mgrid = np.meshgrid(lonra, latra)
+    dra = dra.assign_coords(longitude=(("y","x"),mgrid[0]))    
+    dra = dra.assign_coords(latitude=(("y","x"),mgrid[1]))    
+    return dra
+
+
+def get_new_indices(latra, lonra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon):
+    """
+    return integer indices for latitude and longitude arrays.
+    """
+    print(llcrnr_lat, nlat, dlat)
+    print(llcrnr_lon, nlon, dlon)
+
+    # These are arrays for the entire grid.
+    lat = np.arange(llcrnr_lat, llcrnr_lat + nlat* dlat, dlat)  
+    lon = np.arange(llcrnr_lon, llcrnr_lon + nlon* dlon, dlon)  
+
+    print(lat)
+    print(latra[0],latra[-1])
+
+    print(lon)
+    print(lonra[0],lonra[-1])
+    # these find the new indices
+    a = np.where(np.isclose(lat, latra[0]))[0][0]
+    b = np.where(np.isclose(lat, latra[-1]))[0][0]
+    ilat = np.arange(a,b+1,1)
+
+    a = np.where(np.isclose(lon, lonra[0]))[0][0]
+    b = np.where(np.isclose(lon, lonra[-1]))[0][0]
+    ilon = np.arange(a,b+1,1)
+
+    return ilat, ilon 
+
+
 def get_lra(lmin, lmax, dd):
     """
     helps make sure that multiple grids can be added
@@ -1310,13 +1352,14 @@ def combine_mfitlist(mfitlist, dd=None, dh=None, buf=None,
     """
     iii = 0
     concra = xr.DataArray(None)
+    templist = []
     conclist = []
-    hlist = []
-    totlat = []
-    totlon = []
-    totht = []
-    # put all concentration arrays on the same grid.
-    #latra, lonra, htra = mfitlist[-1].get_grid(dd,dh,buf)
+    minlat = 90
+    minlon = 180
+    maxlat = -90
+    maxlon = -180 
+
+    # fit all time periods and put arrays in a list. 
     for mfit in mfitlist:
         latra, lonra, htra = mfit.get_grid(dd,dh,buf)
         conc = mfit.get_conc2(dd=dd,
@@ -1325,38 +1368,61 @@ def combine_mfitlist(mfitlist, dd=None, dh=None, buf=None,
                              lonra=lonra,
                              htra=htra,
                              buf=buf)
-      
-        totht.append(htra)
-        totlat.append(latra)
-        totlon.append(lonra) 
-        #print(conc.coords)
-        conclist.append(conc)
+        minlat = np.min([minlat, np.min(latra)])      
+        minlon = np.min([minlon, np.min(lonra)])      
+        maxlat = np.max([maxlat, np.max(latra)])      
+        maxlon = np.max([maxlon, np.max(lonra)])      
+        templist.append(conc)
+
+    # re-index all the arrays to the largest grid.
+    #print('MINE MAX LAT', minlat,maxlat,dd)
+    for conc in templist:
+         nlat = np.abs(np.ceil((maxlat-minlat) / dd)) + 1
+         nlon = np.abs(np.ceil((maxlon-minlon) / dd)) + 1
+         conc2 = reindex(conc,minlat,minlon,nlat,nlon,dd,dd)
+         conclist.append(conc2)
+
+    # create xarray to align to.
+    iii=0 
+    for conc in conclist:
         # get an expanded dataset that encompasses full area.
-        if iii == 0:
-           xnew = conc.copy()
-        else:
-           a, xnew = xr.align(conc, xnew,
-                     join="outer") 
-        iii+=1
+       if iii == 0:
+          xnew = conc.copy()
+       else:
+          a, xnew = xr.align(conc, xnew,
+                    join="outer") 
+       iii+=1
+    # align all arrays to largest one.
     iii=0
+    templist = []
     for temp in conclist:
         aaa, bbb = xr.align(temp, xnew, join="outer")
         aaa = aaa.fillna(0)
-        bbb = bbb.fillna(0)     
         aaa.expand_dims("time")
         aaa["time"] = iii
-        hlist.append(aaa) 
+        templist.append(aaa) 
         iii+=1
-    concra = xr.concat(hlist, "time")
-    concra = xr.concat(conclist, "time")
-    if 'time' not in concra.dims:
-        concra = concra.expand_dims('time')
 
+    # concatenate the aligned arrays.
+    concra = xr.concat(templist, "time")
+
+    # fill nans with 0
     concra = concra.fillna(0)
-    if 'time' not in concra.dims:
-        concra = concra.expand_dims('time')
-    concra = monet.monet_accessor._dataset_to_monet(concra, lat_name='y', lon_name='x')
-    return concra  
+
+    # add time dimesion if not there.
+    #if 'time' not in concra.dims:
+    #    concra = concra.expand_dims('time')
+
+    # get the right lat lon coordinates
+    concra = concra.drop('latitude')
+    concra = concra.drop('longitude')
+    latra = np.arange(minlat, maxlat+dd, dd)
+    lonra = np.arange(minlon, maxlon+dd, dd)
+    mgrid = np.meshgrid(lonra, latra)
+    concra = concra.assign_coords(longitude=(("y","x"),mgrid[0]))    
+    concra = concra.assign_coords(latitude=(("y","x"),mgrid[1]))    
+
+    return concra 
 
 
 def get_latlongrid(lonra, latra,htra):
