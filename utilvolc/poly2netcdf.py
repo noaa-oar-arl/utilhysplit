@@ -1,10 +1,12 @@
 import xarray as xr
 import shapely.geometry as sgeo
 from affine import Affine
+import numpy as np
+from rasterio import features
 
 def transform_from_latlon(lat,lon):
     lat = np.asarray(lat)
-    lon = np.asaray(lon)
+    lon = np.asarray(lon)
     trans = Affine.translation(lon[0],lat[0])
     scale = Affine.scale(lon[1]-lon[0],lat[1]-lat[0])
     return trans * scale
@@ -46,7 +48,7 @@ def match_dates(dlist1, dlist2):
     not2 = [x for x in dlist2 if x not in m1]
     return matched, not1, not2
 
-def process_xra(cxra):
+def process_xra(cxra, globalhash = {},atthash={'jobid':'999'}):
     # take an xarray with source and ens dimensions and make a dataset
     # with variables.
     newxra = cxra.stack(newvar = ('ens','source'))
@@ -57,11 +59,14 @@ def process_xra(cxra):
     # create attributes for the variable
     for var in newvars:
         newnames[var] = str.join('_',var)
-        newxra[var].attrs.update('metid',var[0])
-        newxra[var].attrs.update('sourceid',var[1])
-        newxra[var].attrs.update('model','HYSPLIT')
+        newxra[var].attrs.update({'metid':var[0]})
+        newxra[var].attrs.update({'sourceid':var[1]})
+        newxra[var].attrs.update({'model':'HYSPLIT'})
+        newxra[var].attrs.update(atthash) 
+
     # rename the stacked variables
     newxra = newxra.rename(newnames) 
+    newxra.attrs.update(globalhash)
     return newxra 
 
 
@@ -74,6 +79,13 @@ class Poly2xra:
         # create these in create_transform 
         self.outshape = None
         self.transform = None
+
+    def create2(self,vaac_poly_list, cxra,globalhash={},atthash={}):
+        ns2 = self.create1(vaac_poly_list, cxra)
+        dset = process_xra(cxra,globalhash,atthash)
+        newra = xr.merge([dset,ns2])
+        newra.attrs.update(globalhash)
+        return newra 
  
     def create_transform(self,cxra):
         """
@@ -85,7 +97,7 @@ class Poly2xra:
 
         latitude = cxra.latitude  
         longitude = cxra.longitude
-        poly1= sgeo.Polygon(pts) 
+        #poly1= sgeo.Polygon(pts) 
         outshape = latitude.shape  
         
         latitude = cxra.latitude[:,0]
@@ -102,16 +114,19 @@ class Poly2xra:
                 fill=0,
                 tag='poly100',
                 coordhash={}):
-    """
-    vaac_poly_list : list of VaacPoly objects
-    times should match the times in the cxra
-    cxra : xarray object with model data
-    
-    fill : value to fill in area around polygon
-     
-    RETURNS:
-    ns2 : DataArray with VAAC polygon.
-    """
+        """
+        vaac_poly_list : list of VaacPoly objects
+        times should match the times in the cxra
+        cxra : xarray object with model data
+        
+        fill : value to fill in area around polygon
+         
+        RETURNS:
+        ns2 : DataArray with VAAC polygon.
+        """
+        sp1 = self.sp1
+        sp2 = self.sp2
+        spatial_coords = {sp1:cxra.coords[sp1],sp2:cxra.coords[sp2]}
         self.create_transform(cxra)
         iii=0 
 
@@ -119,11 +134,11 @@ class Poly2xra:
         for vpoly in  vaac_poly_list:
             
             poly1 =  vpoly.polygon 
-            raster = features.rasterize([poly1], out_shape=outshape,
-                                     fill=fill, transform=transform,
+            raster = features.rasterize([poly1], out_shape=self.outshape,
+                                     fill=fill, transform=self.transform,
                                      dtype=float)
             newxra = xr.DataArray(raster,coords=spatial_coords, dims=(sp2,sp1))
-
+            print('adding', vpoly.time,iii)
             coordhash['time'] = vpoly.time
             ns2 = newxra.assign_coords(coordhash)
 
@@ -139,8 +154,8 @@ class Poly2xra:
                polyra = xr.concat([polyra,ns2],'time')
             iii+=1
 
-        ns2.name = tag
-        return ns2
+        polyra.name = tag
+        return polyra.transpose('time','z','y','x')
 
     def add_height(self, ns2, cxra, polyheight):
         iii=0
@@ -148,8 +163,9 @@ class Poly2xra:
         for zval in cxra.z.values:
             ntemp = ns2.assign_coords({'z':zval})
             # if above top heigh tof polygon set values to 0
-            if zval > polyheight:
-               ntemp = ntemp * 0 
+            #if zval > polyheight:
+             
+            #   ntemp = ntemp * 0 
             concatlist.append(ntemp)
         # concatenate along z dimension.
         return xr.concat(concatlist, 'z')  
