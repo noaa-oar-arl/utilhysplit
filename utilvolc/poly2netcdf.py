@@ -57,12 +57,34 @@ def process_xra(cxra, globalhash = {},atthash={'jobid':'999'}):
     newnames = {}
     attr1 = {}
     # create attributes for the variable
+    iii=0
     for var in newvars:
-        newnames[var] = str.join('_',var)
+        #str1 = str(var[1])
+        #print(var, type(var[1]))
+        if not isinstance(var[1], str):
+           str1 = 'DataInsertion{}'.format(iii)
+           str2 = 'DataInsertion'       
+           atthash['InsertionTime'] = str(var[1])
+        else:   
+           str1 = str(var[1])
+        #if isinstance(var[1], np.datetime64):
+        #   str1 = 'DataInsertion{}'.format(iii)
+        #   atthash['InsertionTime'] = str(var[1])
+        #   print('here ', str1)
+        #elif isinstance(var[1],str):
+        #   str1 = var[1]
+        #   print('Bhere ', str1)
+        #else:
+        #   str1 = ''    
+        #   print('Chere ', str1)
+        newnames[var] = str.join('_',[var[0],str1])
+        #print(newnames)
         newxra[var].attrs.update({'metid':var[0]})
-        newxra[var].attrs.update({'sourceid':var[1]})
+        newxra[var].attrs.update({'sourceid':str1})
         newxra[var].attrs.update({'model':'HYSPLIT'})
+        newxra[var].attrs.update({'runtype':str2})
         newxra[var].attrs.update(atthash) 
+        iii+=1
 
     # rename the stacked variables
     newxra = newxra.rename(newnames) 
