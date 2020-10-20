@@ -63,6 +63,55 @@ cdump_plot
 
 """
 
+# What does predict_proba return?
+# "returns the probability each Gaussian (state) in the model given each sample.
+# shape is n_samples x n_components
+# So probability that a point belongs in one of the Gaussians? 
+# 
+
+    
+
+
+def scatter(xra, gfit, ax=None, labels='labels', dim="ht", cmap="bone"):
+    """
+    create scatter plot
+    """
+    cmap = plt.get_cmap(cmap)
+    if cmap=='bone':
+       new=cmap(np.linspace(0.1,1,256))
+       cmap = ListedColormap(new)
+    ax = ax or plt.gca()
+    z = gfit.predict(xra)
+    resp = gfit.predict_proba(xra)
+    probmax = [np.max(x) for x in resp]
+    score = gfit.score_samples(xra)
+    if dim == "ht":
+        xxx = xra[:, 0]
+        yyy = xra[:, 1]
+    elif dim == "lat":
+        xxx = xra[:, 0]
+        yyy = xra[:, 2]
+    elif dim == "lon":
+        xxx = xra[:, 1]
+        yyy = xra[:, 2]
+    elif dim == "3d":
+        xxx = xra[:, 0]
+        yyy = xra[:, 1]
+        zzz = xra[:,2]
+    if dim=='3d':
+       ax.scatter(xxx, yyy, zzz, c=z, s=1, cmap=cmap)
+    else:
+        if labels=='labels':
+            ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
+        elif labels=='score':
+            cb = ax.scatter(xxx, yyy, c=score, s=1, cmap=cmap)
+            cbar = plt.colorbar(cb)
+            cbar.set_label('log probability') 
+        elif labels=='probmax':
+            cb = ax.scatter(xxx, yyy, c=probmax, s=1, cmap=cmap)
+            plt.colorbar(cb)
+        ax.axis("equal")
+
 
 def get_thickness(df, t1, t2):
     df2 = df[df["ht"] > t1]
@@ -212,6 +261,38 @@ def par2fit(
         sys.exit()
     mfit = MassFit(gmm, xra, mass,min_par_num=min_par_num)
     return mfit
+
+def df2ra(
+    pdumpdf, 
+    msl=True,
+    htmult = 1 / 1000.0  # convert height to km
+    ):
+    df2 = pdumpdf.copy()
+    # df2 = df2[df2['poll']==species]
+    lon = df2["lon"].values
+    lat = df2["lat"].values
+    hval = "ht"
+    if "agl" in df2.columns.values:
+        if msl:
+            df2["msl"] = df2.apply(lambda row: row["agl"] + row["grdht"], axis=1)
+            hval = "msl"
+        else:
+            hval = "agl"
+    ht = df2[hval].values * htmult
+    xra = get_xra(lon, lat, ht)
+    return xra
+
+def get_bic(
+    pdumpdf, 
+    method="gmm", 
+    pfit=None, 
+    msl=True, 
+    wcp=1e3,
+    htmult = 1 / 1000.0  # convert height to km
+    ):
+    xra = df2ra(pdumpdf,msl=msl,htmult=htmult)
+    nnn, aic, bic = find_criteria(xra, plot=True)
+    return nnn,aic,bic
 
 
 class ParArgs:
@@ -576,11 +657,14 @@ class MassFit:
         """
         create scatter plot
         """
+        cmap = plt.get_cmap(cmap)
+        if cmap=='bone':
+           new=cmap(np.linspace(0.1,1,256))
+           cmap = ListedColormap(new)
         ax = ax or plt.gca()
         xra = self.xra
         z = self.gfit.predict(xra)
         resp = self.gfit.predict_proba(self.xra)
-        cmap = plt.get_cmap(cmap)
         if dim == "ht":
             xxx = xra[:, 0]
             yyy = xra[:, 1]
@@ -590,12 +674,20 @@ class MassFit:
         elif dim == "lon":
             xxx = xra[:, 1]
             yyy = xra[:, 2]
+        elif dim == "3d":
+            xxx = xra[:, 0]
+            yyy = xra[:, 1]
+            zzz = xra[:,2]
 
-        if labels:
-            ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
+        if dim=='3d':
+           ax.scatter(xxx, yyy, zzz, c=z, s=1, cmap=cmap)
         else:
-            ax.scatter(xxx, yyy, c=resp, cmape=cmap)
-        ax.axis("equal")
+            if labels:
+                ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
+            else:
+                ax.scatter(xxx, yyy, c=resp, cmap=cmap)
+
+            ax.axis("equal")
         return z
 
     def plot_means(self, dim="ht"):
@@ -850,8 +942,32 @@ class MassFit:
                 covariance = covar
             yield position, covariance, www
 
-    def plot_centers(self, ax=None, dim="ht", sym='k*', MarkerSize=2):
+   
+
+
+    def plot_centers3d(self, ax=None,  sym='k*', clr=None, MarkerSize=2):
+        centerlist = []        
+        gfit = self.gfit
+        if not clr: clr = sym[0]
+        #sns.set_style('whitegrid')
+        if not ax:
+            fig = plt.figure()
+            ax = fig.add_subplot(111,projection='3d')
+        for pos, covar, www in zip(gfit.means_, gfit.covariances_, gfit.weights_):
+            #position = np.array([pos[c1], pos[c2]])
+            #print(pos)
+            #ax.scatter(pos[0],pos[1],pos[2])
+            #if clr:
+            #   b = np.ones(len(pos))
+            #   clr = [clr for x in b] 
+            ax.scatter(pos[0],pos[1],pos[2],c=[clr],s=MarkerSize,marker=sym[1])
+        plt.tight_layout()
+
+
+    def plot_centers(self, ax=None, dim="ht", sym='k*',clr=None, MarkerSize=2):
+        centerlist = []
         ax = ax or plt.gca()
+        if not clr: clr=sym[0]
         gfit = self.gfit
         if dim == "ht":
             c1 = 0
@@ -864,7 +980,13 @@ class MassFit:
             c2 = 2
         for pos, covar, www in zip(gfit.means_, gfit.covariances_, gfit.weights_):
             #position = np.array([pos[c1], pos[c2]])
-            plt.plot(pos[c1],pos[c2],sym, MarkerSize=MarkerSize)
+            plt.plot(pos[c1],pos[c2],marker=sym[1], 
+                     markerfacecolor=clr, 
+                     markeredgecolor=clr, 
+                     MarkerSize=MarkerSize)
+            centerlist.append([pos[c1],pos[c2]])
+        return centerlist
+
 
     def plot_gaussians(self, ax=None, dim="ht", saturation=0.5):
         """
@@ -1171,15 +1293,18 @@ def check_n(xra,nnn,min_par_num=50):
     n_max = int(parnum / min_par_num)
     return np.min([n_max,nnn])
 
-def find_n(xra, n_max=0, step=1, plot=True):
-    """
-    try to find optimum number of gaussians to use for fit.
 
-    """
-    sns.set()
-    sns.set_style('white')
-    fig = plt.figure(1)
-    ax = fig.add_subplot(1, 1, 1)
+def find_n(xra,n_max=0,step=1,plot=True):
+    if n_max==0: n_max = find_nmax(xra)
+    n_components, aic, bic = find_criteria(xra,n_max,step,plot)
+    alist = list(zip(n_components,aic))
+    amin = min(alist,key=lambda t:t[1])
+    blist = list(zip(n_components,bic))
+    bmin = min(blist,key=lambda t:t[1])
+    
+    return amin[0], bmin[0]
+
+def find_nmax(xra):
     min_par_num = 50
     parnum = len(xra)
     n_max = int(parnum / min_par_num)
@@ -1188,8 +1313,22 @@ def find_n(xra, n_max=0, step=1, plot=True):
         n_max = 21
     if n_max > 30:
         n_max = 80
-    logger.info("find_n function NMAX {} {}".format(n_max, len(xra)))
-    n_components = np.arange(1, n_max, step)
+    return n_max
+   
+def find_criteria(xra, n_min=5, n_max=0, step=1, plot=True):
+    """
+    xra : 
+    n_min : integer
+    n_max : integer
+    step : integer
+    plot : boolean
+
+    """
+    sns.set()
+    sns.set_style('white')
+    fig = plt.figure(1)
+    ax = fig.add_subplot(1, 1, 1)
+    n_components = np.arange(n_min, n_max, step)
     # get list of fits using each
     models = [
         GMM(n, covariance_type="full", random_state=0).fit(xra) for n in n_components
@@ -1205,7 +1344,7 @@ def find_n(xra, n_max=0, step=1, plot=True):
         plt.ylabel('AIC or BIC')
         plt.savefig('AICBIC.png')
         # ax.xlabel('n_components')
-    return np.argmin(bic), np.argmin(aic)
+    return n_components, aic, bic
 
 
 def get_xra(lon, lat, ht=None):
@@ -1475,6 +1614,7 @@ class VolcPar:
 
 def average_mfitlist(mfitlist, dd=None, dh=None, buf=None, lat=None, lon=None, ht=None):
     """
+    mfitlist : list of MassFit objects
     returns xarray DataArray
     """
     logger.debug("Running average_mfitlist in par2conc")
@@ -1601,6 +1741,10 @@ def height_correction(zaprime, zter, msl=True, zmdl=25000):
 
 
 def process_under(under):
+    """
+    under : xarray
+    helper function for shift_underground and reflect_underground.
+    """
     lastz = under.z.values[-1]
     under = under.sum(dim="z")
     under = under.assign_coords(z=lastz)
@@ -1610,6 +1754,7 @@ def process_under(under):
 
 def shift_underground(dra):
     """
+    dra : xarray
     Takes all mass that is underground and puts it in the first level.
     """
     import math
@@ -1631,6 +1776,7 @@ def shift_underground(dra):
 
 def reflect_underground(dra):
     """
+    dra : xarray
     reflects mass that is in first 3 levels underground
     onto first three levels above ground.
     """
