@@ -251,7 +251,7 @@ class EmiTimes(object):
         sdate: datetime object
                start time of cycle.
         duration : integer
-               duratio in hours of cycle.
+               duration in hours of cycle.
         """
         self.ncycles += 1
         ec = EmitCycle(sdate, duration)
@@ -312,9 +312,10 @@ class EmitCycle(object):
 
     # def __init__(self, filename='EMITIMES.txt'):
 
-    def __init__(self, sdate=None, duration=None, splist=[1]):
+    def __init__(self, sdate=None, duration=9999, splist=[1]):
         self.sdate = sdate
-        self.duration = duration  # duration of the cycle.
+        #self.duration = duration  # duration of the cycle.
+        self.duration = datetime.timedelta(hours=duration)
         # list of EmitLine objects
         self.recordra = []
         # number of records in a cycle.
@@ -461,7 +462,7 @@ class EmitCycle(object):
         # if len(self.splist)>1: self.fill_species()
         maxrec = self.nrecs + self.drecs
         datestr = self.sdate.strftime("%Y %m %d %H ")
-        durationstr = '{:d}'.format(int(self.duration.seconds/3600+\
+        durationstr = '{:04d}'.format(int(self.duration.seconds/3600+\
                                         self.duration.days*24))
         with open(filename, "a") as fid:
             # fid.write(self.header_str())

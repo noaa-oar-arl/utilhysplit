@@ -1,6 +1,7 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import datetime
 from os import path
+import logging
 
 # from pylab import matrix
 """
@@ -23,6 +24,7 @@ FUNCTIONS
    writelanduse - writes ASCDATA.CFG file.
 """
 
+logger = logging.getLogger(__name__)
 
 def writeover(name, overwrite, query, verbose=False):
     """
@@ -214,10 +216,15 @@ class ConcGrid:
 
     def get_nlev(self):
         """
-        computes self.levels from self.nlev
+        computes self.nlev from self.levels
         """
-        if self.nlev == -1:
-            self.nlev = len(self.levels)
+        #if self.nlev == -1:
+        self.nlev = len(self.levels)
+
+
+    def set_levels(self,levels):
+        self.levels = levels
+        self.get_nlev()
 
     def __str__(self):
         """string method will output ten lines suitable for inserting into a
@@ -652,7 +659,15 @@ class NameList:
         """
         add one line
         """
+        if name.lower() == 'poutf':
+           if value[0] != "'":
+              value = "'" + value 
+           if value[-1] != "'":
+              value = value + "'"
+
         self.nlist[name.lower()] = value
+
+
 
     def rename(self, name, working_directory=""):
         """
@@ -926,6 +941,8 @@ class HycsControl(object):
            rate   :
            area   :
         """
+        cstr = str(ControlLoc(line=False, latlon=latlon, alt=alt, rate=rate, area=area))
+        logger.debug('Adding location ' + cstr)
         self.nlocs += 1
         self.locs.append(ControlLoc(line=False, latlon=latlon, alt=alt, rate=rate, area=area))
 
@@ -997,8 +1014,8 @@ class HycsControl(object):
         """writes CONTROL file to text file
            self.wdir + self.fname
            metgrid option will write a 1 before the number of met files.
-           overwrite - if False then will not overwrite an exisitng file
-           query - if True will ask before overwriting an exisiting file.
+           overwrite - if False then will not overwrite an existing file
+           query - if True will ask before overwriting an existing file.
         """
         note = ""
         sp28 = " " * 28
