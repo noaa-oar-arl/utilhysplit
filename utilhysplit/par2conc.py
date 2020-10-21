@@ -47,6 +47,7 @@ get_gmm
 get_bgm
 get_xra
 find_n
+scatter
 
 average_mfitlist
 threshold
@@ -63,18 +64,19 @@ cdump_plot
 
 """
 
-# What does predict_proba return?
-# "returns the probability each Gaussian (state) in the model given each sample.
-# shape is n_samples x n_components
-# So probability that a point belongs in one of the Gaussians? 
-# 
-
-    
-
 
 def scatter(xra, gfit, ax=None, labels='labels', dim="ht", cmap="bone"):
     """
     create scatter plot
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    gfit : Can be MassFit gfit attribute.
+    ax : matplotlib axes
+    cmap : colormap to use
+    dim : str (ht, lat, lon, 3d) If 3d will create 3d plot. Otherwise 2D
+          projection onto axis not named is created (e.g. specifying dim='ht'
+          creates scatter plot with latitude and longitude axes.
+    labels : str (labels, score, probmax)
     """
     cmap = plt.get_cmap(cmap)
     if cmap=='bone':
@@ -82,8 +84,13 @@ def scatter(xra, gfit, ax=None, labels='labels', dim="ht", cmap="bone"):
        cmap = ListedColormap(new)
     ax = ax or plt.gca()
     z = gfit.predict(xra)
+    # predict posterior probability of each component given the data.
+    # "returns the probability each Gaussian (state) in the model given each sample.
+    # shape is n_samples times  n_components
+    # For each point (n_samples), a probability for each Gaussian (n_components) in the fit is returned. 
     resp = gfit.predict_proba(xra)
     probmax = [np.max(x) for x in resp]
+    # compute the weighted log probabilities for each sample.
     score = gfit.score_samples(xra)
     if dim == "ht":
         xxx = xra[:, 0]
@@ -295,28 +302,34 @@ def get_bic(
     return nnn,aic,bic
 
 
-class ParArgs:
-    def __init__(self, stime, tmave, splist=None, sorti=None, htmin=None, htmax=None):
-        self.stime = stime
-        self.tmave = tmave
-        self.splist = splist
-        self.sorti = sorti
-        self.htmin = htmin
-        self.htmax = htmax
-
+#class ParArgs:
+#    
+#    def __init__(self, stime, tmave, splist=None, sorti=None, htmin=None, htmax=None):
+#        self.stime = stime
+#        self.tmave = tmave
+#        self.splist = splist
+#        self.sorti = sorti
+#        self.htmin = htmin
+#        self.htmax = htmax
 
 def fixlondf(df, colname="lon", neg=True):
+    """
+    df : pandas DataFrame
+    colname : str. name of column with longitude values to be converted.
+    neg : boolean
+   
+    if neg=False 
+    convert longitude to degrees east (all positive values)
+
+    if neg==True
+    convert longitude to degrees west (all negative values). 
+
+    """
     if not neg:
         df[colname] = df.apply(lambda row: fixlon(row[colname]), axis=1)
     else:
         df[colname] = df.apply(lambda row: fixlon(row[colname]) - 360, axis=1)
     return df
-
-
-# def fixlonra(ra):
-#    newlon = []
-#    for lon in ra:
-#        newloeturn newlon
 
 
 def fixlon(x):
@@ -472,7 +485,6 @@ def draw_ellipse(position, covariance, ax=None, **kwargs):
 
 def get_kde(bandwidth, kernel="gaussian"):
     from sklearn.neighbors import KernelDensity
-
     kde = KernelDensity(bandwidth=bandwidth, kernel=kernel)
     return kde
 
@@ -487,6 +499,11 @@ def make_bnds(dfa):
 
 
 def reindex(dra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon):
+    # for xr.align to work properly, the coordinates
+    # need to be integers.
+    # This function used in a list comprehension changes the lat-lon coordinates to ints.
+    # by applying the reindex function to all xarrays in templist.
+    # re-index all the arrays to the largest grid.
     latra = dra.y.values
     lonra = dra.x.values
     ilat, ilon = get_new_indices(
@@ -1229,6 +1246,10 @@ class MassFit:
 
 
 def use_gmm(gmm, xra, mass=1, label=True, ax=None):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    """
     ax = ax or plt.gca()
     gfit = gmm.fit(xra)
     labels = gfit.predict(xra)
@@ -1289,12 +1310,20 @@ def plot_gmm(lonra, latra, massload):
     plt.colorbar(cb)
 
 def check_n(xra,nnn,min_par_num=50):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    """
     parnum = len(xra)
     n_max = int(parnum / min_par_num)
     return np.min([n_max,nnn])
 
 
 def find_n(xra,n_max=0,step=1,plot=True):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    """
     if n_max==0: n_max = find_nmax(xra)
     n_components, aic, bic = find_criteria(xra,n_max,step,plot)
     alist = list(zip(n_components,aic))
@@ -1305,6 +1334,10 @@ def find_n(xra,n_max=0,step=1,plot=True):
     return amin[0], bmin[0]
 
 def find_nmax(xra):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    """
     min_par_num = 50
     parnum = len(xra)
     n_max = int(parnum / min_par_num)
@@ -1317,7 +1350,8 @@ def find_nmax(xra):
    
 def find_criteria(xra, n_min=5, n_max=0, step=1, plot=True):
     """
-    xra : 
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
     n_min : integer
     n_max : integer
     step : integer
@@ -1354,7 +1388,8 @@ def get_xra(lon, lat, ht=None):
     ht  : numpy array of heights
     return 
     xra : numpy array
-    suitable for
+          list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
     """
     if isinstance(ht, np.ndarray):
         xra = np.array(list(zip(lon, lat, ht)))
@@ -1363,11 +1398,14 @@ def get_xra(lon, lat, ht=None):
     return xra
 
 
-def compare_fits(fit1, fit2, method="gmm"):
-    return -1
+#def compare_fits(fit1, fit2, method="gmm"):
+#    return -1
 
 
 def copy_fit(bgm, method="bgm"):
+    """
+    creates a copy of a fit
+    """
     n_clusters = bgm.n_components
     covartype = bgm.covariance_type
     n_init = bgm.n_init
