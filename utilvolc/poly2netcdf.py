@@ -3,6 +3,7 @@ import shapely.geometry as sgeo
 from affine import Affine
 import numpy as np
 from rasterio import features
+import matplotlib.pyplot as plt
 
 def transform_from_latlon(lat,lon):
     lat = np.asarray(lat)
@@ -18,7 +19,7 @@ class VaacPoly():
         """
         Helper class for poly2xra
         pts : set of tuples defining a polygon
-              (latitude, longitude)
+              (longitude,latitude)
         time : datetime object
                time that polygon is valid for.
         value : float or int
@@ -30,6 +31,11 @@ class VaacPoly():
         self.time = time
         self.tag =  tag
         self.height = self.checkht(height)
+
+    def plot(self):
+        x,y = self.polygon.exterior.xy
+        plt.plot(x,y)
+ 
 
     def checkht(self, height):
         if isinstance(height, str) and 'fl' in height.lower():
@@ -102,7 +108,23 @@ class Poly2xra:
         self.outshape = None
         self.transform = None
 
+    def create3(self,vaac_poly_list, cxra,globalhash={},atthash={}):
+        """
+        vaac_poly_list : list of VaacPoly objects
+        cxra : xarray dataset
+        """
+
+        ns2 = self.create1(vaac_poly_list, cxra)
+        dset = cxra
+        newra = xr.merge([dset,ns2])
+        newra.attrs.update(globalhash)
+        return newra 
+
     def create2(self,vaac_poly_list, cxra,globalhash={},atthash={}):
+        """
+        vaac_poly_list : list of VaacPoly objects
+        cxra : xarray data-array
+        """
         ns2 = self.create1(vaac_poly_list, cxra)
         dset = process_xra(cxra,globalhash,atthash)
         newra = xr.merge([dset,ns2])
@@ -115,7 +137,7 @@ class Poly2xra:
         """
         sp1 = 'x'
         sp2 = 'y'
-        spatial_coords = {sp1:cxra.coords[sp1],sp2:cxra}
+        #spatial_coords = {sp1:cxra.coords[sp1],sp2:cxra.coords[sp2]}
 
         latitude = cxra.latitude  
         longitude = cxra.longitude
@@ -125,7 +147,11 @@ class Poly2xra:
         latitude = cxra.latitude[:,0]
         longitude = cxra.longitude[0]
         transform = transform_from_latlon(latitude,longitude)
-
+        print(latitude.shape)
+        print('--------------------------')
+        print(longitude.shape)
+        print('--------------------------')
+        print(transform)
         self.outshape = outshape
         self.transform = transform
         return outshape, transform, latitude, longitude
@@ -159,11 +185,12 @@ class Poly2xra:
             raster = features.rasterize([poly1], out_shape=self.outshape,
                                      fill=fill, transform=self.transform,
                                      dtype=float)
+            print('max in raster', np.max(raster))
             newxra = xr.DataArray(raster,coords=spatial_coords, dims=(sp2,sp1))
             print('adding', vpoly.time,iii)
             coordhash['time'] = vpoly.time
             ns2 = newxra.assign_coords(coordhash)
-
+            print('max value', np.max(ns2))
             for coordval in coordhash.keys():
                 ns2 = ns2.expand_dims(coordval)
           
