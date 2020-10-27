@@ -1,25 +1,26 @@
-from sklearn.mixture import BayesianGaussianMixture as BGM
-from sklearn.mixture import GaussianMixture as GMM
-from sklearn.cluster import KMeans
-from scipy.stats import multivariate_normal
-import monet
-import matplotlib.pyplot as plt
-import monetio.models.pardump as pardump
 import sys
 import os
-import seaborn as sns
 import datetime
+import logging
+import warnings
 import pandas as pd
 import xarray as xr
 
-# import matplotlib.pyplot as plt
-# import textwrap
-import cartopy.crs as ccrs
-import cartopy.feature as cfeat
+import matplotlib.pyplot as plt
+import matplotlib.colors
+import seaborn as sns
+
+# import cartopy.crs as ccrs
+# import cartopy.feature as cfeat
 import numpy as np
-import numpy.ma as ma
-import warnings
-import logging
+
+# import numpy.ma as ma
+from scipy.stats import multivariate_normal
+from sklearn.mixture import BayesianGaussianMixture as BGM
+from sklearn.mixture import GaussianMixture as GMM
+from sklearn.cluster import KMeans
+import monetio.models.pardump as pardump
+import monet
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 # import reventador as reventador
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 """
 Functions and classes to convert pardump file
-output to concentrations using mixture models or 
+output to concentrations using mixture models or
 kernel density estimation.
 the KDE functionality is very basic.
 
@@ -47,6 +48,7 @@ get_gmm
 get_bgm
 get_xra
 find_n
+scatter
 
 average_mfitlist
 threshold
@@ -64,6 +66,61 @@ cdump_plot
 """
 
 
+def scatter(xra, gfit, ax=None, labels="labels", dim="ht", cmap="bone"):
+    """
+    create scatter plot
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    gfit : Can be MassFit gfit attribute.
+    ax : matplotlib axes
+    cmap : colormap to use
+    dim : str (ht, lat, lon, 3d) If 3d will create 3d plot. Otherwise 2D
+          projection onto axis not named is created (e.g. specifying dim='ht'
+          creates scatter plot with latitude and longitude axes.
+    labels : str (labels, score, probmax)
+    """
+    cmap = plt.get_cmap(cmap)
+    if cmap == "bone":
+        new = cmap(np.linspace(0.1, 1, 256))
+        cmap = matplotlib.colors.ListedColormap(new)
+    ax = ax or plt.gca()
+    z = gfit.predict(xra)
+    # predict posterior probability of each component given the data.
+    # "returns the probability each Gaussian (state) in the model given each sample.
+    # shape is n_samples times  n_components
+    # For each point (n_samples), a probability for each Gaussian (n_components) in the fit is returned.
+    resp = gfit.predict_proba(xra)
+    probmax = [np.max(x) for x in resp]
+    # compute the weighted log probabilities for each sample.
+    score = gfit.score_samples(xra)
+    if dim == "ht":
+        xxx = xra[:, 0]
+        yyy = xra[:, 1]
+    elif dim == "lat":
+        xxx = xra[:, 0]
+        yyy = xra[:, 2]
+    elif dim == "lon":
+        xxx = xra[:, 1]
+        yyy = xra[:, 2]
+    elif dim == "3d":
+        xxx = xra[:, 0]
+        yyy = xra[:, 1]
+        zzz = xra[:, 2]
+    if dim == "3d":
+        ax.scatter(xxx, yyy, zzz, c=z, s=1, cmap=cmap)
+    else:
+        if labels == "labels":
+            ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
+        elif labels == "score":
+            cb = ax.scatter(xxx, yyy, c=score, s=1, cmap=cmap)
+            cbar = plt.colorbar(cb)
+            cbar.set_label("log probability")
+        elif labels == "probmax":
+            cb = ax.scatter(xxx, yyy, c=probmax, s=1, cmap=cmap)
+            plt.colorbar(cb)
+        ax.axis("equal")
+
+
 def get_thickness(df, t1, t2):
     df2 = df[df["ht"] > t1]
     df2 = df2[df2["ht"] <= t2]
@@ -79,7 +136,7 @@ def threshold(cra, tval=3, tp="log", fillna=True):
 
     if tp == "log":
         maxlog = np.max(np.log10(cra))
-        minlog = np.min(np.log10(cra))
+        # minlog = np.min(np.log10(cra))
         thresh = 10 ** (maxlog - tval)
     else:
         thresh = tval
@@ -120,14 +177,14 @@ def merge_pdat(pardf, datdf):
 
 
 def par2fit(
-    pdumpdf, 
-    mult=1, 
-    method="gmm", 
-    pfit=None, 
-    nnn=None, 
-    msl=True, 
+    pdumpdf,
+    mult=1,
+    method="gmm",
+    pfit=None,
+    nnn=None,
+    msl=True,
     wcp=1e3,
-    min_par_num=50
+    min_par_num=50,
 ):  # used for Bayesian Gaussian Mixture
     """
     INPUT
@@ -164,12 +221,12 @@ def par2fit(
 
     htmult = 1 / 1000.0  # convert height to km
     bic = True
-    mfithash = {}
-    iii = 0
+    # mfithash = {}
+    # iii = 0
     df2 = pdumpdf.copy()
     # df2 = df2[df2['poll']==species]
     mass = df2["pmass"].sum() * mult
-    logger.debug('par2fit mult {} mass {}'.format(mult,mass))
+    logger.debug("par2fit mult {} mass {}".format(mult, mass))
     lon = df2["lon"].values
     lat = df2["lat"].values
     hval = "ht"
@@ -210,21 +267,61 @@ def par2fit(
     else:
         print("Not valid method ", method)
         sys.exit()
-    mfit = MassFit(gmm, xra, mass,min_par_num=min_par_num)
+    mfit = MassFit(gmm, xra, mass, min_par_num=min_par_num)
     return mfit
 
 
-class ParArgs:
-    def __init__(self, stime, tmave, splist=None, sorti=None, htmin=None, htmax=None):
-        self.stime = stime
-        self.tmave = tmave
-        self.splist = splist
-        self.sorti = sorti
-        self.htmin = htmin
-        self.htmax = htmax
+def df2ra(pdumpdf, msl=True, htmult=1 / 1000.0):  # convert height to km
+    df2 = pdumpdf.copy()
+    # df2 = df2[df2['poll']==species]
+    lon = df2["lon"].values
+    lat = df2["lat"].values
+    hval = "ht"
+    if "agl" in df2.columns.values:
+        if msl:
+            df2["msl"] = df2.apply(lambda row: row["agl"] + row["grdht"], axis=1)
+            hval = "msl"
+        else:
+            hval = "agl"
+    ht = df2[hval].values * htmult
+    xra = get_xra(lon, lat, ht)
+    return xra
+
+
+def get_bic(
+    pdumpdf,
+    msl=True,
+    htmult=1 / 1000.0,  # convert height to km
+):
+    xra = df2ra(pdumpdf, msl=msl, htmult=htmult)
+    nnn, aic, bic = find_criteria(xra, plot=True)
+    return nnn, aic, bic
+
+
+# class ParArgs:
+#
+#    def __init__(self, stime, tmave, splist=None, sorti=None, htmin=None, htmax=None):
+#        self.stime = stime
+#        self.tmave = tmave
+#        self.splist = splist
+#        self.sorti = sorti
+#        self.htmin = htmin
+#        self.htmax = htmax
 
 
 def fixlondf(df, colname="lon", neg=True):
+    """
+    df : pandas DataFrame
+    colname : str. name of column with longitude values to be converted.
+    neg : boolean
+
+    if neg=False
+    convert longitude to degrees east (all positive values)
+
+    if neg==True
+    convert longitude to degrees west (all negative values).
+
+    """
     if not neg:
         df[colname] = df.apply(lambda row: fixlon(row[colname]), axis=1)
     else:
@@ -232,20 +329,17 @@ def fixlondf(df, colname="lon", neg=True):
     return df
 
 
-# def fixlonra(ra):
-#    newlon = []
-#    for lon in ra:
-#        newloeturn newlon
-
-
-def fixlon(x):
-    if x < 0:
-        return 360 + x
+def fixlon(xvar):
+    if xvar < 0:
+        return 360 + xvar
     else:
-        return x
+        return xvar
 
 
 class Par2Conc:
+    """
+    This class needs to be re-written.
+    """
     def __init__(self, df):
         self.df = df  # pandas DataFrame
         self.fitlist = []  # collection of MassFit objects.
@@ -254,7 +348,7 @@ class Par2Conc:
         # both return array converted to MONET format.
 
     def choose_time(self, time_average=None):
-        """ 
+        """
         time_average minutes
         """
         self.tmave = time_average
@@ -278,35 +372,19 @@ class Par2Conc:
         pdn = fixlondf(pdn)
         return pdn
 
-    def timeloop(self, timestep, parargs):
+    def timeloop(self, timestep, parargs, tmave):
+        # TO DO check this.
         iii == 0
         mfitlist = []
         for time in timelist:
-            df = subsetdf(time, tmave, parargs)
+            df = self.subsetdf(time, tmave, parargs)
             if iii == 0:
                 mfit = par2fit(df, method="bgm", nnn=50)
             else:
                 mfit = par2fit(df, method="p_bgm", pfit=pfit, nnn=50)
             pfit = mfit.gfit
             mfitlist.append(mfit)
-
-    def addfit(
-        self,
-        time=None,
-        sp=[1],
-        mult=1,
-        method="gmm",
-        dd=0.01,
-        dh=0.1,
-        nnn=None,
-        bnds=None,
-        thk=None,
-        msl=True,
-        wcp=1e3,
-    ):
-
-        return -1
-
+            iii += 1
 
 def fit_timeloop(
     pardf, nnn, maxht=None, mlist=None, method="gmm", warm_start=True,
@@ -406,12 +484,17 @@ def make_bnds(dfa):
 
 
 def reindex(dra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon):
+    # for xr.align to work properly, the coordinates
+    # need to be integers.
+    # This function used in a list comprehension changes the lat-lon coordinates to ints.
+    # by applying the reindex function to all xarrays in templist.
+    # re-index all the arrays to the largest grid.
     latra = dra.y.values
     lonra = dra.x.values
     ilat, ilon = get_new_indices(
         latra, lonra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon
     )
-    
+
     dra = dra.assign_coords(y=ilat)
     dra = dra.assign_coords(x=ilon)
     mgrid = np.meshgrid(lonra, latra)
@@ -426,7 +509,8 @@ def reindex(dra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon):
 
 
 def findclose(lat, latval):
-    return np.where(np.isclose(lat,latval))[0][0]
+    return np.where(np.isclose(lat, latval))[0][0]
+
 
 def get_new_indices(latra, lonra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon):
     """
@@ -437,17 +521,17 @@ def get_new_indices(latra, lonra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon
     lon = np.arange(llcrnr_lon, llcrnr_lon + nlon * dlon, dlon)
 
     # these find the new indices
-    #a = np.where(np.isclose(lat, latra[0]))[0][0]
-    #b = np.where(np.isclose(lat, latra[-1]))[0][0]
-    #ilat = np.arange(a, b + 1, 1)
-    ilat2 = [findclose(lat,latra[x]) for x in np.arange(0,len(latra))]
-    #print('HERE', ilat)
-    #print('HERE2', ilat2)
+    # a = np.where(np.isclose(lat, latra[0]))[0][0]
+    # b = np.where(np.isclose(lat, latra[-1]))[0][0]
+    # ilat = np.arange(a, b + 1, 1)
+    ilat2 = [findclose(lat, latra[x]) for x in np.arange(0, len(latra))]
+    # print('HERE', ilat)
+    # print('HERE2', ilat2)
 
-    #a = np.where(np.isclose(lon, lonra[0]))[0][0]
-    #b = np.where(np.isclose(lon, lonra[-1]))[0][0]
-    #ilon = np.arange(a, b + 1, 1)
-    ilon2 = [findclose(lon,lonra[x]) for x in np.arange(0,len(lonra))]
+    # a = np.where(np.isclose(lon, lonra[0]))[0][0]
+    # b = np.where(np.isclose(lon, lonra[-1]))[0][0]
+    # ilon = np.arange(a, b + 1, 1)
+    ilon2 = [findclose(lon, lonra[x]) for x in np.arange(0, len(lonra))]
 
     return ilat2, ilon2
 
@@ -475,13 +559,13 @@ class MassFit:
 
     """
     For gmm
-    If we can keep giving it different xra values then we can 
+    If we can keep giving it different xra values then we can
     """
 
-    def __init__(self, gmm, xra, mass=1,min_par_num=50):
+    def __init__(self, gmm, xra, mass=1, min_par_num=50):
         """
-        gmm : GuassianModelMixture object 
-              OR KED or BGM 
+        gmm : GuassianModelMixture object
+              OR KED or BGM
 
         xra : list of (longitude, latitude, height) points
         mass: float : mass represented by latitude longitude points
@@ -502,7 +586,7 @@ class MassFit:
         self.mass = mass
         self.htunits = self.get_ht_units()
 
-    def check_n_components(self,min_par_num=50,min_n=2):
+    def check_n_components(self, min_par_num=50, min_n=2):
         """
         makes sure that number of gaussians to fit is not to large
         compared to number of particles.
@@ -514,15 +598,17 @@ class MassFit:
         # max number of gaussians to fit given that
         # want at least min_par_num per gaussian.
         # cannot be less than min_n.
-        n_max = np.max([min_n,int(parnum / min_par_num)])
+        n_max = np.max([min_n, int(parnum / min_par_num)])
         # new number of gaussians to fit.
-        new_n = np.min([n_max,nnn])
+        new_n = np.min([n_max, nnn])
         # decide if change is needed.
         if new_n != nnn:
-           logger.warning('Changing n_components to {} from {} parnum {}'.format(
-                                                         new_n, nnn, parnum))
-           self.gmm.n_components = new_n
-     
+            logger.warning(
+                "Changing n_components to {} from {} parnum {}".format(
+                    new_n, nnn, parnum
+                )
+            )
+            self.gmm.n_components = new_n
 
     def fitloop(self):
         """
@@ -531,13 +617,15 @@ class MassFit:
         """
         iii = 0
         if not self.getfit():
-           return self.fit
+            return self.fit
         while not self.gfit.converged_:
             self.gmm.tol += 0.001
             logger.warning("Increasing tolerance {}".format(self.gmm.tol))
-            if not self.getfit(): break
+            if not self.getfit():
+                break
             iii += 1
-            if iii > 10: break
+            if iii > 10:
+                break
         return self.fit
 
     def getfit(self):
@@ -545,14 +633,14 @@ class MassFit:
         try:
             self.gfit = self.gmm.fit(self.xra)
         except:
-            logger.warning('MassFit getfit method: Could not fit')
-            logger.warning('xra length {}'.format(len(self.xra)))
+            logger.warning("MassFit getfit method: Could not fit")
+            logger.warning("xra length {}".format(len(self.xra)))
             self.fit = False
             return self.fit
 
         if not self.gfit.converged_:
             logger.warning("Fit did not converge tolderance {}".format(self.gmm.tol))
-        return self.fit 
+        return self.fit
 
     def get_ht_units(self):
         if self.xra.shape[1] == 3:
@@ -576,11 +664,14 @@ class MassFit:
         """
         create scatter plot
         """
+        cmap = plt.get_cmap(cmap)
+        if cmap == "bone":
+            new = cmap(np.linspace(0.1, 1, 256))
+            cmap = matplotlib.colors.ListedColormap(new)
         ax = ax or plt.gca()
         xra = self.xra
         z = self.gfit.predict(xra)
         resp = self.gfit.predict_proba(self.xra)
-        cmap = plt.get_cmap(cmap)
         if dim == "ht":
             xxx = xra[:, 0]
             yyy = xra[:, 1]
@@ -590,18 +681,25 @@ class MassFit:
         elif dim == "lon":
             xxx = xra[:, 1]
             yyy = xra[:, 2]
+        elif dim == "3d":
+            xxx = xra[:, 0]
+            yyy = xra[:, 1]
+            zzz = xra[:, 2]
 
-        if labels:
-            ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
+        if dim == "3d":
+            ax.scatter(xxx, yyy, zzz, c=z, s=1, cmap=cmap)
         else:
-            ax.scatter(xxx, yyy, c=resp, cmape=cmap)
-        ax.axis("equal")
+            if labels:
+                ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
+            else:
+                ax.scatter(xxx, yyy, c=resp, cmap=cmap)
+
+            ax.axis("equal")
         return z
 
     def plot_means(self, dim="ht"):
         for pos, covar, www in self.generate_gaussians(dim):
             plt.scatter(pos[0], pos[1], s=100 * www)
-
 
     def auto_find(self):
         # get positions of centers of Gaussians
@@ -616,12 +714,12 @@ class MassFit:
         htr = [np.min(hts), np.max(hts)]
         return latr, lonr, htr
 
-    def quickconc(self, mult, latr, lonr, htr, auto=False,  massload=True):
+    def quickconc(self, mult, latr, lonr, htr, auto=False, massload=True):
         """
-        quick conc is SLOW.
+        quick conc is pretty slow.
         """
         # Create empty xarray with  latitude - longitude grid
-        df = pd.DataFrame()
+        # df = pd.DataFrame()
 
         dlist = []
         latlist = []
@@ -631,23 +729,22 @@ class MassFit:
         buflat = 0
         buflon = 0
         bufht = 0
-        #ddd = 0.25 / 2.0
+        # ddd = 0.25 / 2.0
         ddd = 0.25 / 2.0
         fdd = ddd * 2.0
 
         # 1 km height resolution.
-        dddz = 1  / 2.0
-        fdddz = dddz*2
+        dddz = 1 / 2.0
+        fddz = dddz * 2
 
         if auto:
-        # get positions of centers of Gaussians
+            # get positions of centers of Gaussians
             latr, lonr, htr = auto_find()
-
 
         if massload:
             # find mid height
-            htmid = (htr[0]+bufht + (htr[1]+bufht - htr[0]-bufht) / 2.0)
-            dddz = (htr[1]+bufht - htmid)
+            htmid = htr[0] + bufht + (htr[1] + bufht - htr[0] - bufht) / 2.0
+            dddz = htr[1] + bufht - htmid
             fddz = dddz * 2
             zmin = htmid
             zmax = htmid
@@ -666,23 +763,23 @@ class MassFit:
         lon = lonmin
         ht = zmin
 
-        print(latmin, latmax)
-        print(lonmin, lonmax)
-        print(zmin,zmax)
+        #print(latmin, latmax)
+        #print(lonmin, lonmax)
+        #print(zmin, zmax)
 
         done = False
         iii = 0
         while not done:
-            #print('working on ', iii, lat, lon, ht, zmax)
+            # print('working on ', iii, lat, lon, ht, zmax)
             if iii % 100 == 0:
-                print('working on ', iii, lat, lon, ht, zmax)
+                print("working on ", iii, lat, lon, ht, zmax)
                 logger.debug("working {}".format(iii))
             conc = self.calcconc(
                 ddd, dddz, pos=[lon, lat, ht], check=False, verbose=False
             )
             # if massloading then multipy by height.
             if massload:
-               conc = conc * 1000 * 2 * dddz 
+                conc = conc * 1000 * 2 * dddz
             dlist.append(conc * mult)
             iii += 1
             lat += ddd * 2
@@ -701,15 +798,15 @@ class MassFit:
         lonlist = np.arange(lonmin, lonmax + fdd, fdd)
         zlist = np.arange(zmin, zmax + fddz, fddz)
         if massload:
-           zlist = [zmin] 
+            zlist = [zmin]
 
         dra = np.array(dlist)
         try:
             dra = dra.reshape(len(zlist), len(lonlist), len(latlist))
         except:
-            print('ERROR in reshaping array')
+            print("ERROR in reshaping array")
             print(dra.shape)
-            print(len(zlist), len(lonlist),len(latlist))
+            print(len(zlist), len(lonlist), len(latlist))
             return dra
 
         dset = xr.DataArray(
@@ -717,15 +814,14 @@ class MassFit:
         )
 
         return dset
-        #return dlist, latlist, lonlist, zlist
+        # return dlist, latlist, lonlist, zlist
 
-    def get_sublist(self, pos):
-        zlist = self.sort_fits()
-        cutoff = 1
-        for mean, cov, www in zlist:
-            ddd = 0
-            for iii in [0, 1, 2]:
-                ddd += (mean[iii] - pos[iii]) ** 2
+    #def get_sublist(self, pos):
+    #    zlist = self.sort_fits()
+    #    for mean, cov, www in zlist:
+    #        ddd = 0
+    #        for iii in [0, 1, 2]:
+    #            ddd += (mean[iii] - pos[iii]) ** 2
 
     def getcenter(self):
         zlist = self.sort_fits()
@@ -735,28 +831,28 @@ class MassFit:
         ht = mean[2]
         return (lon, lat, ht)
 
-    def getcenters(self):
+    #def getcenters(self):
         # get positions of centers of Gaussians
-        zlist = self.sort_fits()
-        means = list(zip(*zlist))[0]
-        temp = list(zip(*means))
-        lats = temp[1]
-        lons = temp[0]
-        hts = temp[2]
-        latr = [np.min(lats), np.max(lats)]
-        lonr = [np.min(lons), np.max(lons)]
-        htr = [np.min(hts), np.max(hts)]
+    #    zlist = self.sort_fits()
+    #    means = list(zip(*zlist))[0]
+    #    temp = list(zip(*means))
+    #    lats = temp[1]
+    #    lons = temp[0]
+    #    hts = temp[2]
+    #    latr = [np.min(lats), np.max(lats)]
+    #    lonr = [np.min(lons), np.max(lons)]
+    #    htr = [np.min(hts), np.max(hts)]
 
-    def make_pos_list(self, dd, dh):
-        zlist = self.sort_fits()
-        plist = []
-        means = list(zip(*zlist))[0]
-        dblat = 1
-        dblon = 1
-        dbz = 1
+    #def make_pos_list(self, dd, dh):
+    #    zlist = self.sort_fits()
+    #    plist = []
+    #    means = list(zip(*zlist))[0]
+    #    dblat = 1
+    #    dblon = 1
+    #    dbz = 1
 
-    def mass_load(self, pos, span, dlat, dlon, dh):
-        return -1 
+    #def mass_load(self, pos, span, dlat, dlon, dh):
+    #    return -1
 
     def calcconc(self, dd, dh, pos, check=True, verbose=True):
         """
@@ -764,19 +860,19 @@ class MassFit:
         width, lenght, height defined by dd and dh.
         """
         # calculate probablitilies with CDF's.
-        iii = 0
+        # iii = 0
         totalprob = 0
         lat = pos[1]
         lon = pos[0]
         ht = pos[2]
         # if verbose: print('Position', lat,lon,ht)
-        if check:
+        #if check:
             # retrieve values at sampling grid locations.
-            score = self.gfit.score_samples([[lon, lat, ht]])
+            #score = self.gfit.score_samples([[lon, lat, ht]])
             # this should approximate the "area" under the curve.
             # which for small volumes should be very close
             # to what you get from using the CDF method.
-            prob = np.exp(score) * (2 * dd) ** 2 * 2 * dh
+            #prob = np.exp(score) * (2 * dd) ** 2 * 2 * dh
 
         for mean, cov, www in self.generate_gaussians(dim=None):
             # The cdf method computes the cumulative distribution function.
@@ -793,7 +889,7 @@ class MassFit:
             # iii+=1
 
         deg2meter = 111e3
-        dlon = 2*dd*deg2meter *np.cos(lat* np.pi/180.0)
+        dlon = 2 * dd * deg2meter * np.cos(lat * np.pi / 180.0)
         vol = 2 * dh * 1000 * (2 * dd * deg2meter) * dlon
         conc = totalprob * self.mass / vol
 
@@ -811,7 +907,7 @@ class MassFit:
             conc2 = self.get_conc(vv, vv, buf=[dd, dh], lat=lat, lon=lon, ht=ht)
             # print("get_conc function", conc2.mean(), self.one)
             # print("conc this function", conc, totalprob)
-            # print("conc 1 pt estimation ", prob * self.mass / vol, prob)
+            #if check and verbose:  print("conc 1 pt estimation ", prob * self.mass / vol, prob)
         return conc
 
     def sort_fits(self):
@@ -825,8 +921,6 @@ class MassFit:
     def generate_gaussians(self, dim="ht"):
         """
         """
-        gfit = self.gfit
-        wfactor = 0.5 / self.gfit.weights_.max()
         if dim == "ht":
             c1 = 0
             c2 = 1
@@ -850,8 +944,30 @@ class MassFit:
                 covariance = covar
             yield position, covariance, www
 
-    def plot_centers(self, ax=None, dim="ht", sym='k*', MarkerSize=2):
+    def plot_centers3d(self, ax=None, sym="k*", clr=None, MarkerSize=2):
+        #centerlist = []
+        gfit = self.gfit
+        if not clr:
+            clr = sym[0]
+        # sns.set_style('whitegrid')
+        if not ax:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection="3d")
+        for pos, covar, www in zip(gfit.means_, gfit.covariances_, gfit.weights_):
+            # position = np.array([pos[c1], pos[c2]])
+            # print(pos)
+            # ax.scatter(pos[0],pos[1],pos[2])
+            # if clr:
+            #   b = np.ones(len(pos))
+            #   clr = [clr for x in b]
+            ax.scatter(pos[0], pos[1], pos[2], c=[clr], s=MarkerSize, marker=sym[1])
+        plt.tight_layout()
+
+    def plot_centers(self, ax=None, dim="ht", sym="k*", clr=None, MarkerSize=2):
+        centerlist = []
         ax = ax or plt.gca()
+        if not clr:
+            clr = sym[0]
         gfit = self.gfit
         if dim == "ht":
             c1 = 0
@@ -863,8 +979,17 @@ class MassFit:
             c1 = 0
             c2 = 2
         for pos, covar, www in zip(gfit.means_, gfit.covariances_, gfit.weights_):
-            #position = np.array([pos[c1], pos[c2]])
-            plt.plot(pos[c1],pos[c2],sym, MarkerSize=MarkerSize)
+            # position = np.array([pos[c1], pos[c2]])
+            plt.plot(
+                pos[c1],
+                pos[c2],
+                marker=sym[1],
+                markerfacecolor=clr,
+                markeredgecolor=clr,
+                MarkerSize=MarkerSize,
+            )
+            centerlist.append([pos[c1], pos[c2]])
+        return centerlist
 
     def plot_gaussians(self, ax=None, dim="ht", saturation=0.5):
         """
@@ -976,22 +1101,22 @@ class MassFit:
         lon=None,
         ht=None,
         verbose=False,
-        method='single_point'
+        method="single_point",
     ):
         # if lat,lon,ht not specified then find conc over whole area.
         latra, lonra, htra = self.get_grid(dd, dh, buf, lat, lon, ht)
 
         # probability at single point represents probability in the whole volume
         # works well for small volumes
-        if method == 'single_point':
-            self.get_conc2(dd, dh, latra, lonra, htra,  time=time, mass=mass)
+        if method == "single_point":
+            self.get_conc2(dd, dh, latra, lonra, htra, time=time, mass=mass)
 
         # probability 'under curve' calculated using the cumulative distribution
-        # function. Should be used for larger volumes. My produce error with
-        # very small volumes because involves subtraction of small floats. 
-        elif method == 'cdf':
-            self.get_conc3(dd, dh, latra, lonra, htra, buf=buf, time=time,
-                           mass=mass)
+        # function. Should be used for larger volumes. May produce error with
+        # very small volumes because involves subtraction of small floats.
+        # elif method == 'cdf':
+        #    self.get_conc3(dd, dh, latra, lonra, htra, buf=buf, time=time,
+        #                   mass=mass)
         dra = monet.monet_accessor._dataset_to_monet(
             self.dra, lat_name="y", lon_name="x"
         )
@@ -1010,7 +1135,7 @@ class MassFit:
     ):
 
         if not mass:
-            logger.debug('using mass{}'.format(self.mass))
+            logger.debug("using mass{}".format(self.mass))
             mass = self.mass
         x, y, z = np.meshgrid(lonra, latra, htra)
         xra2 = np.array([x.ravel(), y.ravel(), z.ravel()]).T
@@ -1023,16 +1148,16 @@ class MassFit:
 
         # sum over whole volume should be one
         self.one = prob.sum()
-        #logger.debug("ONE is {}".format(self.one))
+        # logger.debug("ONE is {}".format(self.one))
 
         # multiply probability by total mass
         # to get the mass in that volume.
         # Divide by volume (in m^3) to get
         # concentration.
         deg2meter = 111e3
-        #dlon = np.min(latra) + (np.max(latra)-np.min(latra))/2
-        #dlon = dd * deg2meter * np.cos(dlon *np.pi /180.0)
-        dlon = dd * deg2meter 
+        # dlon = np.min(latra) + (np.max(latra)-np.min(latra))/2
+        # dlon = dd * deg2meter * np.cos(dlon *np.pi /180.0)
+        dlon = dd * deg2meter
         volume = dh * (dd * deg2meter) * dlon
         if self.htunits == "km":
             volume = volume * 1000.0
@@ -1107,6 +1232,10 @@ class MassFit:
 
 
 def use_gmm(gmm, xra, mass=1, label=True, ax=None):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    """
     ax = ax or plt.gca()
     gfit = gmm.fit(xra)
     labels = gfit.predict(xra)
@@ -1115,7 +1244,7 @@ def use_gmm(gmm, xra, mass=1, label=True, ax=None):
     else:
         ax.scatter(xra[:, 0], xra[:, 1])
     ax.axis("equal")
-    wfactor = 0.5 / gmm.weights_.max()
+    #wfactor = 0.5 / gmm.weights_.max()
     # for pos, covar, www in zip(gfit.means_, gfit.covariances_, gfit.weights_):
     #    draw_ellipse(pos, covar, alpha=www * wfactor)
     # Z1 = gfit.score_samples(xra)
@@ -1148,7 +1277,7 @@ def use_gmm(gmm, xra, mass=1, label=True, ax=None):
     # clevs = [-10,-5,-1, 0, 1,5,10,50,100]
     deg2meter = 111e3
     area = (dd * deg2meter) ** 2
-    massload = np.exp(score) * dd ** 2 * mass / area
+    #massload = np.exp(score) * dd ** 2 * mass / area
     massload = np.exp(score) * dd ** 2 * mass / area
     # cb = ax.contour(lonra, latra, np.exp(score)* dd**2 * mass / area)
     cb = ax.contour(lonra, latra, massload)
@@ -1156,30 +1285,48 @@ def use_gmm(gmm, xra, mass=1, label=True, ax=None):
     return massload, score, gfit
 
 
-def plot_gmm(lonra, latra, massload):
-    clevs = [0.1, 1, 5, 10, 20, 50]
-    if clevs:
-        cb = ax.contour(
-            lonra, latra, np.exp(score) * dd ** 2 * mass / area, levels=clevs
-        )
-    else:
-        cb = ax.contour(lonra, latra, np.exp(score) * dd ** 2 * mass / area,)
-    plt.colorbar(cb)
+#def plot_gmm(lonra, latra, massload):
+#    clevs = [0.1, 1, 5, 10, 20, 50]
+#    if clevs:
+#        cb = ax.contour(
+#            lonra, latra, np.exp(score) * dd ** 2 * mass / area, levels=clevs
+#        )
+#    else:
+#        cb = ax.contour(lonra, latra, np.exp(score) * dd ** 2 * mass / area,)
+#    plt.colorbar(cb)
 
-def check_n(xra,nnn,min_par_num=50):
+
+def check_n(xra, nnn, min_par_num=50):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    """
     parnum = len(xra)
     n_max = int(parnum / min_par_num)
-    return np.min([n_max,nnn])
+    return np.min([n_max, nnn])
+
 
 def find_n(xra, n_max=0, step=1, plot=True):
     """
-    try to find optimum number of gaussians to use for fit.
-
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
     """
-    sns.set()
-    sns.set_style('white')
-    fig = plt.figure(1)
-    ax = fig.add_subplot(1, 1, 1)
+    if n_max == 0:
+        n_max = find_nmax(xra)
+    n_components, aic, bic = find_criteria(xra, n_max, step, plot)
+    alist = list(zip(n_components, aic))
+    amin = min(alist, key=lambda t: t[1])
+    blist = list(zip(n_components, bic))
+    bmin = min(blist, key=lambda t: t[1])
+
+    return amin[0], bmin[0]
+
+
+def find_nmax(xra):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    """
     min_par_num = 50
     parnum = len(xra)
     n_max = int(parnum / min_par_num)
@@ -1188,8 +1335,24 @@ def find_n(xra, n_max=0, step=1, plot=True):
         n_max = 21
     if n_max > 30:
         n_max = 80
-    logger.info("find_n function NMAX {} {}".format(n_max, len(xra)))
-    n_components = np.arange(1, n_max, step)
+    return n_max
+
+
+def find_criteria(xra, n_min=5, n_max=0, step=1, plot=True):
+    """
+    xra : list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
+    n_min : integer
+    n_max : integer
+    step : integer
+    plot : boolean
+
+    """
+    sns.set()
+    sns.set_style("white")
+    fig = plt.figure(1)
+    ax = fig.add_subplot(1, 1, 1)
+    n_components = np.arange(n_min, n_max, step)
     # get list of fits using each
     models = [
         GMM(n, covariance_type="full", random_state=0).fit(xra) for n in n_components
@@ -1201,11 +1364,11 @@ def find_n(xra, n_max=0, step=1, plot=True):
         ax.plot(n_components, [m.aic(xra) for m in models], label="AIC")
         ax.legend(loc="best")
         plt.tight_layout()
-        plt.xlabel('Number of Gaussians')
-        plt.ylabel('AIC or BIC')
-        plt.savefig('AICBIC.png')
+        plt.xlabel("Number of Gaussians")
+        plt.ylabel("AIC or BIC")
+        plt.savefig("AICBIC.png")
         # ax.xlabel('n_components')
-    return np.argmin(bic), np.argmin(aic)
+    return n_components, aic, bic
 
 
 def get_xra(lon, lat, ht=None):
@@ -1213,9 +1376,10 @@ def get_xra(lon, lat, ht=None):
     lon : numpy array of longitude
     lat : numpy array of latitude
     ht  : numpy array of heights
-    return 
+    return
     xra : numpy array
-    suitable for
+          list of (longitude, latitude, height) points.
+          Can be MassFit xra attribute
     """
     if isinstance(ht, np.ndarray):
         xra = np.array(list(zip(lon, lat, ht)))
@@ -1224,11 +1388,14 @@ def get_xra(lon, lat, ht=None):
     return xra
 
 
-def compare_fits(fit1, fit2, method="gmm"):
-    return -1
+# def compare_fits(fit1, fit2, method="gmm"):
+#    return -1
 
 
 def copy_fit(bgm, method="bgm"):
+    """
+    creates a copy of a fit
+    """
     n_clusters = bgm.n_components
     covartype = bgm.covariance_type
     n_init = bgm.n_init
@@ -1290,7 +1457,7 @@ def get_bgm(n_clusters=10, wcp=1.0e3, tol=None):
     init_params = "kmeans"  # alternative is kmeans
     # wcpt = 'dirichlet_process'       #wcp shouldbe (float, float)
     wcpt = "dirichlet_distribution"  # wcp should be float
-    warm_start = False
+    #warm_start = False
     verbose = False
     n_init = 1
     max_iter = 500
@@ -1301,7 +1468,7 @@ def get_bgm(n_clusters=10, wcp=1.0e3, tol=None):
         n_components=n_clusters,
         covariance_type=covartype,
         n_init=n_init,
-        weight_concentration_prior = wcp,
+        weight_concentration_prior=wcp,
         weight_concentration_prior_type=wcpt,
         init_params=init_params,
         max_iter=max_iter,
@@ -1356,7 +1523,6 @@ def cluster_pars(xra, n_clusters=0):
         # best results are kept
         n_init = 1
         #
-        warm_start = False
         verbose = False
         gmm = GMM(
             n_components=n_clusters,
@@ -1383,13 +1549,13 @@ def cluster_pars(xra, n_clusters=0):
 #    lonra = bnds[1] + jra * dlen
 
 
-def temp():
-    rC = RevPars("PARDUMP.C")
-    rC.read_pardump()
-    pdict = rC.pdict
-    key1 = "201902252000"
-    dfc = pdict[key1]
-    mpts = par2conc(dfc, obs, 1, 9000)
+#def temp():
+#    rC = RevPars("PARDUMP.C")
+#    rC.read_pardump()
+#    pdict = rC.pdict
+#    key1 = "201902252000"
+#    dfc = pdict[key1]
+#    mpts = par2conc(dfc, obs, 1, 9000)
 
 
 class VolcPar:
@@ -1415,10 +1581,10 @@ class VolcPar:
     #    #self.datetlist = datelist
     #    return datelist
 
-    # def getbytime(self,time):
-    #    # returns a dataframe for that time.
-    #    dstr = time.strftime(self.strfmt)
-    #    return self.pdict[dstr]
+    def getbytime(self,time):
+        # returns a dataframe for that time.
+        dstr = time.strftime(self.strfmt)
+        return self.pdict[dstr]
 
     def findsource(self, sorti):
         done = False
@@ -1452,7 +1618,7 @@ class VolcPar:
             dfsource = self.findsource(sorti)
             x.extend(dfsource["date"])
             y.extend(dfsource["ht"])
-        x2 = self.time2int(x)
+        x2 = time2int(x)
         # put time into minutes since start
         x2 = np.array(x2) / 60.0
         # put height into km
@@ -1464,17 +1630,18 @@ class VolcPar:
         # sns.heatmap(x,y)
         return x2, y
 
-    def time2int(self, timelist):
-        newlist = []
-        tmin = np.min(timelist)
-        for ttt in timelist:
-            val = ttt - tmin
-            newlist.append(val.seconds)
-        return newlist
+def time2int(timelist):
+    newlist = []
+    tmin = np.min(timelist)
+    for ttt in timelist:
+        val = ttt - tmin
+        newlist.append(val.seconds)
+    return newlist
 
 
 def average_mfitlist(mfitlist, dd=None, dh=None, buf=None, lat=None, lon=None, ht=None):
     """
+    mfitlist : list of MassFit objects
     returns xarray DataArray
     """
     logger.debug("Running average_mfitlist in par2conc")
@@ -1511,9 +1678,7 @@ def combine_mfitlist(
     # lat-lon grid can be created later.
     for mfit in mfitlist:
         latra, lonra, htra = mfit.get_grid(dd, dh, buf, lat, lon, ht)
-        conc = mfit.get_conc2(
-            dd=dd, dh=dh, latra=latra, lonra=lonra, htra=htra
-        )
+        conc = mfit.get_conc2(dd=dd, dh=dh, latra=latra, lonra=lonra, htra=htra)
         minlat = np.min([minlat, np.min(latra)])
         minlon = np.min([minlon, np.min(lonra)])
         maxlat = np.max([maxlat, np.max(latra)])
@@ -1601,6 +1766,10 @@ def height_correction(zaprime, zter, msl=True, zmdl=25000):
 
 
 def process_under(under):
+    """
+    under : xarray
+    helper function for shift_underground and reflect_underground.
+    """
     lastz = under.z.values[-1]
     under = under.sum(dim="z")
     under = under.assign_coords(z=lastz)
@@ -1610,6 +1779,7 @@ def process_under(under):
 
 def shift_underground(dra):
     """
+    dra : xarray
     Takes all mass that is underground and puts it in the first level.
     """
     import math
@@ -1631,6 +1801,7 @@ def shift_underground(dra):
 
 def reflect_underground(dra):
     """
+    dra : xarray
     reflects mass that is in first 3 levels underground
     onto first three levels above ground.
     """
@@ -1679,38 +1850,6 @@ def reflect_underground(dra):
     return new
 
 
-class GridClass:
-    def __init__(lat, lon, ht, dlat, dlon, dz, nlat, nlon, nz):
-
-        self.llcrnr_lat = lat
-        self.llcrnr_lon = lon
-        self.llcrnr_ht = ht
-
-        self.dlon = dlon
-        self.dlat = dlat
-        self.dz = dz
-
-        self.nlon = nlon
-        self.nlat = nlat
-        self.nz = nz
-
-    def makegrid(self):
-        """
-        """
-        # checked HYSPLIT code. the grid points
-        # do represent center of the sampling area.
-        slat = self.llcrnr_lat * self.dlat
-        slon = self.llcrnr_lon * self.dlon
-        sht = self.llcrnr_ht * self.dz
-        lat = np.arange(slat, slat + self.nlat * self.dlat, self.dlat)
-        lon = np.arange(slon, slon + self.nlon * self.dlon, self.dlon)
-        ht = np.arange(sht, sht + self.nz * dz, dz)
-        # lonlist = [lon[x - 1] for x in xindx]
-        # latlist = [lat[x - 1] for x in yindx]
-        mgrid = np.meshgrid(lon, lat, ht)
-        return mgrid
-
-
 def getvolume(mean, cov, x, y, z, dh, dz, verbose=False):
     """
     mean and cov of gaussian
@@ -1718,33 +1857,33 @@ def getvolume(mean, cov, x, y, z, dh, dz, verbose=False):
     x, y, z : float. center position.
     dh : float. half width/ length
     dz : float. half height.
-    Returns 
+    Returns
     volume under portion of 3d Gaussian.
 
     """
     rv = multivariate_normal(mean, cov)
 
-    a1 = rv.cdf([x + dh, y + dh, z + dz])
-    a5 = rv.cdf([x - dh, y + dh, z - dz])
-    a8 = rv.cdf([x - dh, y + dh, z + dz])
-    a4 = rv.cdf([x + dh, y + dh, z - dz])
+    aa1 = rv.cdf([x + dh, y + dh, z + dz])
+    aa5 = rv.cdf([x - dh, y + dh, z - dz])
+    aa8 = rv.cdf([x - dh, y + dh, z + dz])
+    aa4 = rv.cdf([x + dh, y + dh, z - dz])
 
-    a6 = rv.cdf([x + dh, y - dh, z + dz])
-    a2 = rv.cdf([x - dh, y - dh, z - dz])
-    a3 = rv.cdf([x + dh, y - dh, z - dz])
-    a7 = rv.cdf([x - dh, y - dh, z + dz])
+    aa6 = rv.cdf([x + dh, y - dh, z + dz])
+    aa2 = rv.cdf([x - dh, y - dh, z - dz])
+    aa3 = rv.cdf([x + dh, y - dh, z - dz])
+    aa7 = rv.cdf([x - dh, y - dh, z + dz])
 
-    v1 = (a1 + a5) - (a8 + a4)
-    v2 = (a6 + a2) - (a3 + a7)
+    v1 = (aa1 + aa5) - (aa8 + aa4)
+    v2 = (aa6 + aa2) - (aa3 + aa7)
 
     if verbose:
-        print(a1, a5)
+        print(aa1, aa5)
     if verbose:
-        print(a8, a4)
+        print(aa8, aa4)
     if verbose:
-        print(a6, a2)
+        print(aa6, aa2)
     if verbose:
-        print(a7, a3)
+        print(aa7, aa3)
     volume = v1 - v2
     if verbose:
         print("volume, V1, V2", volume, "=", v1, "-", v2)
