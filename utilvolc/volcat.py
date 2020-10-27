@@ -103,7 +103,7 @@ def get_height(dset):
     height = dset.ash_cth
     box = bbox(height)
     height = height[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-    #height = height.where(height != height._FillValue, drop=True)
+    height = height.where(height != height._FillValue)
     return height
 
 
@@ -113,7 +113,7 @@ def get_radius(dset):
     radius = dset.ash_r_eff
     box = bbox(radius)
     radius = radius[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-    #radius = radius.where(radius != radius._FillValue, drop=True)
+    radius = radius.where(radius != radius._FillValue)
     return radius
 
 
@@ -123,7 +123,7 @@ def get_mass(dset):
     mass = dset.ash_mass
     box = bbox(mass)
     mass = mass[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-    #mass = mass.where(mass != mass._FillValue, drop=True)
+    mass = mass.where(mass != mass._FillValue)
     return mass
 
 
