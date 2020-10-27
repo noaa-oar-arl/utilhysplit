@@ -17,6 +17,7 @@ Functions:
 -------------
 open_dataset: opens single VOLCAT file
 open_mfdataset: opens multiple VOLCAT files
+bbox: finds bounding box around data - used for trimming arrays
 _get_time: set time dimension for VOLCAT data
 _get_latlon: rename lat/lon, set coordinates of VOLCAT data
 get_height: returns array of ash top height from VOLCAT
