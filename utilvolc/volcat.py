@@ -47,8 +47,6 @@ def open_dataset2(fname):
       #dset = _get_time(dset)
       return dset
 
-
-
 def open_mfdataset(fname):
       """Opens multiple VOLCAT files"""
       print(fname)
@@ -165,7 +163,7 @@ def plot_gen(dset, ax,  val='mass', time=None, plotmap=True,
       lat=mass.latitude
       lon=mass.longitude
       if plotmap:
-          m=plt.axes(projection=ccrs.PlateCarree())
+          m=plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
           m.add_feature(cfeat.LAND)
           m.add_feature(cfeat.COASTLINE)
           m.add_feature(cfeat.BORDERS)
