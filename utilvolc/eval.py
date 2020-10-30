@@ -1,4 +1,7 @@
 import xarray as xr
+import matplotlib.pyplot as plt
+import cartopy
+import numpy as np
 
 def getDI(x):
     if not x: return False
@@ -10,11 +13,18 @@ class UpdateProbs:
 
     def __init__(self):
         self.probE1 = 0.999
-        self.probE2 = 1-self.probE1
+        self.probE2 = 0.001
 
         self.prior = xr.DataArray()
         self.poly = xr.DataArray()
         self.post = xr.DataArray()
+
+        self.prior_minlev = self.set_prior_minlev(0.001)
+
+    def set_prior_minlev(self,minlev):
+        # prior may have 0 values which cannot
+        # be updated. Set to low value instead.
+        self.prior_minlev = minlev
         
 
     def set_confidence(self,clevel):
@@ -37,7 +47,7 @@ class UpdateProbs:
 
         if clevel == 'perfect':
             probE1=0.999
-            probE2=0.001
+            probE2=0.0001
         elif clevel == 'high':
             probE1=0.90
             probE2=0.25
@@ -47,9 +57,10 @@ class UpdateProbs:
         elif clevel == 'low':
             probE1=0.90
             probE2=0.75
+
         self.probE1 = probE1
         self.probE2 = probE2
-   
+  
     def makePE1(self, poly):
         temp = poly * self.probE1
         # creates nan where it is 0.
@@ -66,13 +77,12 @@ class UpdateProbs:
         temp2 = temp2.fillna(1)
         return temp2
 
-
-    def process_prior(self, prior, minlev=0.001):
+    def process_prior(self, prior):
         """
         replace 0 values with minlev values
         """
         temp = prior.where(prior!=0)
-        temp = temp.fillna(minlev)
+        temp = temp.fillna(self.prior_minlev)
         return temp
 
     def update_prob(self, prior, poly):
@@ -103,6 +113,76 @@ def get_ATL(xdset,thresh=0.2):
     levels= ensra.z.values
      
     return ATL(ensra, time, enslist,thresh,levels)
+
+
+def plotATL(rtot):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+    x = rtot.longitude
+    y = rtot.latitude
+    temp = rtot.max(dim='z')
+    zvals = rtot.z.values
+    nz = len(zvals)
+    if nz>1: 
+       nrow= 2  
+       ncol = int(np.ceil(nz/ nrow))
+    else:
+       nrow = 1
+       ncol = 1
+ 
+    z = temp.where(temp!=0)
+    transform = cartopy.crs.PlateCarree()
+    fig,axarr = plt.subplots(nrows=nrow,ncols=ncol,figsize=(10,10),
+                             constrained_layout=False,
+                             subplot_kw={'projection':transform})
+    
+    if nrow > 1: 
+        axlist = axarr.flatten()
+    else:
+        axlist = [axarr]
+    iii=0
+    for ax in axlist:
+        z = rtot.isel(z=iii)
+        z = z.where(z!=0)
+        label = meter2FL(rtot.z.values[iii])
+        cb = ATLsubplot(ax,x,y,z,transform,label)
+        iii+=1
+    plt.colorbar(cb) 
+
+def meter2FL(meters):
+    return 'FL{:2.0f}'.format(meters/30.48)
+
+def ATLsubplot(ax, x,y,z,transform,label=''):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+    #ax = plt.axes(projection=transform)
+    #ax = plt.axes(project=cartopy.crs.PlateCarree())
+    cmap = 'viridis'
+    cb2 = ax.pcolormesh(x,y,z,cmap=cmap,transform=transform)
+    ax.add_feature(cartopy.feature.OCEAN) 
+    ax.add_feature(cartopy.feature.LAND) 
+  
+    ax.set_aspect('auto', adjustable=None)
+
+    #divider = make_axes_locatable(ax)
+    #cax = divider.append_axes('right',size='5%',pad=0.05)
+
+    #cb = plt.colorbar(cb2)
+    #cb.ax.tick_params(labelsize=10)
+    gl = ax.gridlines(crs=transform, draw_labels=True,
+                      linewidth=1, color='gray', alpha=0.5, linestyle='--')
+    gl.top_labels = False
+    gl.bottom_labels = True
+    gl.right_labels = False
+    gl.left_labels = True
+    gl.xformatter = LONGITUDE_FORMATTER
+    gl.yformatter = LATITUDE_FORMATTER
+    gl.xlabel_style = {'size': 10, 'color': 'gray'}
+    gl.ylabel_style = {'size': 10, 'color': 'gray'}
+    #ax.text(0.1,0.1,label,transform=transform) 
+    ax.text(0.5,-0.15,label,va='bottom',ha='center',rotation='horizontal',
+            rotation_mode='anchor', transform=ax.transAxes,size=15)
+    return cb2 
 
 def ATL(revash, time, enslist, thresh=0.2, level=1):
      """
