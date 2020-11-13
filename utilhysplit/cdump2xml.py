@@ -28,8 +28,8 @@ class ColorMaker:
         """
         self.transparency=transparency
         self.clist=[]
-        self.get_cmap(cname,nvals)
         self.ctype = ctype
+        self.get_cmap(cname,nvals)
   
     def __call__(self):
         """
