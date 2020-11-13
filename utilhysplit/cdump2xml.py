@@ -29,6 +29,7 @@ class ColorMaker:
         self.transparency=transparency
         self.clist=[]
         self.get_cmap(cname,nvals)
+        self.ctype = ctype
   
     def __call__(self):
         """
@@ -53,11 +54,16 @@ class ColorMaker:
         cmap = matplotlib.cm.get_cmap(cname)
         cvals = cmap.N
         cspace = int(cvals/nvals)
-        for iii in range(0,cvals,cspace):
-            if ctype == 'hex':
-                self.clist.append(self.rgb_to_hex(cmap(iii)))
-            else:
-                self.clist.append(cmap[iii])
+        if self.ctype == 'hex'
+            self.clist = [self.rgb_to_hex(cmap[x] for x in range(0,cvals,cpace)]
+        else:
+            self.clist = [cmap[x] for x in range(0,cvals,cpace)]
+             
+        #for iii in range(0,cvals,cspace):
+        #    if ctype == 'hex':
+        #        self.clist.append(self.rgb_to_hex(cmap(iii)))
+        #    else:
+        #        self.clist.append(cmap[iii])
 
 def generate_kmz(filenames, kmz_filename,compression_level):
     for f in filenames:
