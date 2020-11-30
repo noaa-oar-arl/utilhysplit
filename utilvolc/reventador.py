@@ -18,9 +18,9 @@ import utilvolc.reventador_volcat as volcat
 class ReventadorVolcat:
     # for easy retrieval of data for eruption on 2019 Feb 25
 
-    def __init__(self):     
+    def __init__(self,tdir):     
         # location of data
-        self.directory="/pub/ECMWF/JPSS/VOLCAT/Reventador/Ash/"
+        self.directory=tdir
         # hours available
         self.hr=['15','16','17','18','19','20','21','22']
         # minutes available
