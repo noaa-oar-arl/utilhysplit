@@ -31,18 +31,31 @@ plot_mass: plots ash mass loading from VOLCAT
 """
 
 
-def open_dataset(fname):
+def open_dataset(fname, pc_correct=True):
     """Opens single VOLCAT file"""
     print(fname)
     dset = xr.open_dataset(fname, mask_and_scale=False, decode_times=False)
-    dset = dset.rename({"Dim1": 'y', "Dim0": 'x'})
-    dset = _get_latlon(dset)
+    # not needed for new Bezy data.
+    try:
+        dset = dset.rename({"Dim1": 'y', "Dim0": 'x'})
+    except:
+        pass
+    # use parallax corrected if available and flag is set.
+    if 'pc_latitude' in dset.data_vars and pc_correct:
+        # rename uncorrected values
+        dset = \
+             dset.rename({'latitude':'uc_latitude','longitude':'uc_longitude'})
+        # rename corrected values
+        dset = \
+             dset.rename({'pc_latitude':'latitude','pc_longitude':'longitude'})
+        dset.attrs.update({'parallax corrected coordinates':'True'})  
+    else:  
+        dset.attrs.update({'parallax corrected coordinates':'False'})  
+    dset = _get_latlon(dset,'latitude','longitude')
     dset = _get_time(dset)
     return dset
 
 
-<<<<<<< HEAD
-=======
 def open_dataset2(fname):
     """Opens single VOLCAT file in reventador format """
     print(fname)
@@ -53,8 +66,8 @@ def open_dataset2(fname):
     return dset
 
 
->>>>>>> 123852ebc9899aa4e6f3ba5a9e4dd717d7e2387e
 def open_mfdataset(fname):
+    # 12/1/2020 Not modified for new files (Bezy) 
     """Opens multiple VOLCAT files"""
     print(fname)
     dset = xr.open_mfdataset(fname, concat_dim='time', decode_times=False, mask_and_scale=False)
@@ -86,8 +99,8 @@ def bbox(darray):
     return bbox
 
 
-def _get_latlon(dset):
-    dset = dset.set_coords(['latitude', 'longitude'])
+def _get_latlon(dset,name1='latitude',name2='longitude'):
+    dset = dset.set_coords([name1, name2])
     return dset
 
 
@@ -102,35 +115,38 @@ def _get_time(dset):
 
 # Extracting variables
 
+def get_data(dset,vname):
+    gen = dset.data_vars[vname]
+    box = bbox(gen)
+    gen = gen[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
+    gen = gen.where(gen != gen._FillValue)
+    return gen
 
-def get_height(dset):
+def check_names(dset,vname,checklist):
+    if vname:
+        return get_data(dset,vname)
+    for val in checklist:
+        if val in dset.data_vars:
+           return get_data(dset,val)
+    return xr.DataArray()
+
+def get_height(dset,vname=None):
     """Returns array with retrieved height of the highest layer of ash."""
     """Default units are km above sea-level"""
-    height = dset.ash_cth
-    box = bbox(height)
-    height = height[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-    height = height.where(height != height._FillValue)
-    return height
+    checklist = ['ash_cth','ash_cloud_height']
+    return check_names(dset,vname,checklist)
 
-
-def get_radius(dset):
+def get_radius(dset,vname=None):
     """Returns 2d array of ash effective radius"""
     """Default units are micrometer"""
-    radius = dset.ash_r_eff
-    box = bbox(radius)
-    radius = radius[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-    radius = radius.where(radius != radius._FillValue)
-    return radius
+    checklist = ['ash_r_eff','effective_radius_of_ash']
+    return check_names(dset,vname,checklist)
 
-
-def get_mass(dset):
+def get_mass(dset,vname=None):
     """Returns 2d array of ash mass loading"""
     """Default units are grams / meter^2"""
-    mass = dset.ash_mass
-    box = bbox(mass)
-    mass = mass[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-    mass = mass.where(mass != mass._FillValue)
-    return mass
+    checklist = ['ash_mass','ash_mass_loading']
+    return check_names(dset,vname,checklist)
 
 
 def mass_sum(dset):
