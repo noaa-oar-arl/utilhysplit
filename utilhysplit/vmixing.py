@@ -23,7 +23,6 @@ CLASSES
 
 """
 
-
 class VmixingRun:
 
     def __init__(self, fname, cname='CONTROL', cdir='./', pid=None,
@@ -66,7 +65,6 @@ class VmixingRun:
                 rstr += '-m' + str(self.tkemin)
             rstr += '-w' + str(self.woption)
         return rstr
-
 
 
 def find_vmix_files(tdir, suffix=None,szmin=0):
@@ -437,7 +435,7 @@ def process_line(line, century):
             temp2.append(float(val))
         except:
             temp2.append(val)
-        vals.extend(temp2)
+    vals.extend(temp2)
     return vals
 
 def line2date(line, century):
