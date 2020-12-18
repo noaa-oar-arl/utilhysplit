@@ -55,6 +55,86 @@ def open_dataset(fname, pc_correct=True):
     dset = _get_time(dset)
     return dset
 
+def find_volcat(tdir, daterange=None):
+    """
+    tdir : str
+    daterange : [datetime, datetime] or None
+    Locates files in tdir which follow the volcat naming
+    convention as defined in VolcatName class.
+    If a daterange is defined will return only files 
+
+    Returns:
+    vnlist : dictionary with key=date and value=filename.
+
+    """
+    vnlist = {}
+    nflist = []
+    for (dirpath,dirnames,filenames) in walk(tdir):
+         for fln in filenames:
+             try:
+                vn = VolcatName(fln)
+             except:
+                print('Not VOLCAT filename {}'.format(fln))
+                nflist.append(fln)
+                continue
+             if daterange:
+                if vn.date < daterange[0] or vn.date > datrange[1]:
+                   continue
+             print(fln)
+             vnlist[vn.date] = vn
+    return vnlist
+
+
+class VolcatName:
+    """
+    12/18/2020 works with 'new' data format.
+    parse the volcat name to get information.
+    self.vhash is a dictionary which contains info
+    gleaned from the naming convention.
+    """
+    def __init__(self,fname):
+        self.fname=fname 
+        self.vhash = {} 
+        self.date = None
+        self.dtfmt = "s%Y%j_%H%M%S"
+
+        self.keylist = ['algorithm name']
+        self.keylist.append('satellite platform')
+        self.keylist.append('event scanning strategy') 
+        self.keylist.append('event date') 
+        self.keylist.append('event time') 
+        self.keylist.append('volcano id') 
+        self.keylist.append('description') 
+        self.keylist.append('WMO satellite id') 
+        self.keylist.append('image scanning strategy') 
+        self.keylist.append('image date') 
+        self.keylist.append('image time') 
+        self.keylist.append('feature id') 
+
+        self.parse(fname)
+
+    def __str__(self):
+        val = [self.vhash[x] for x in self.keylist]
+        return str.join('_',val)
+
+    def parse(self,fname):
+        temp = fname.split('_')
+        for val in zip(self.keylist,temp):
+            self.vhash[val[0]] = val[1]
+        # use event date?
+        dstr = '{}_{}'.format(self.vhash[self.keylist[3]],
+                              self.vhash[self.keylist[4]])
+        self.date = datetime.datetime.strptime(dstr,self.dtfmt)
+        self.vhash[self.keylist[11]] = \
+            self.vhash[self.keylist[11]].replace('.nc','')
+        return self.vhash
+
+    def create_name(self):
+        """
+        To do: returns filename given some inputs.
+        """
+        return -1
+
 
 def open_dataset2(fname):
     """Opens single VOLCAT file in reventador format """
@@ -148,18 +228,15 @@ def get_mass(dset,vname=None):
     checklist = ['ash_mass','ash_mass_loading']
     return check_names(dset,vname,checklist)
 
-
 def mass_sum(dset):
     mass = get_mass(dset)
     mass2 = mass.where(mass > 0., 0.0).values
     mass_sum = np.sum(mass2)
     return mass_sum
 
-
 def get_time(dset):
     time = dset.time_coverage_start
     return time
-
 
 def get_atherr(dset):
     """Returns array with uncertainty in ash top height from VOLCAT."""
@@ -169,14 +246,11 @@ def get_atherr(dset):
     return height_err
 
 # Trim VOLCAT array
-
-
 def trim_arrray(dset):
     """Trim the VOLCAT array around data
     Make smaller for comparison to HYSPLIT """
 
 # Plotting variables
-
 
 def plot_height(dset):
     """Plots ash top height from VOLCAT
@@ -186,7 +260,6 @@ def plot_height(dset):
     ax = fig.add_subplot(1, 1, 1)
     plot_gen(dset, ax, val='height', time=None, plotmap=True,
              title=title)
-
 
 def plot_radius(dset):
     """Plots ash effective radius from VOLCAT
