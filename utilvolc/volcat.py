@@ -76,7 +76,10 @@ def bbox(darray):
     import numpy as np
     arr = darray[0, :, :].values
     a = np.where(arr != -999.)
-    bbox = ([np.min(a[0]-3), np.min(a[1])-3], [np.max(a[0]+3), np.max(a[1])+3])
+    if np.min(a[0]) != 0. and np.min(a[1]) != 0.:
+        bbox = ([np.min(a[0]-3), np.min(a[1])-3], [np.max(a[0]+3), np.max(a[1])+3])
+    else:
+        bbox = ([np.min(a[0]), np.min(a[1])], [np.max(a[0]), np.max(a[1])])
     return bbox
 
 
