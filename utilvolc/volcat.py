@@ -183,14 +183,13 @@ def bbox(darray):
     Input: Must be dataarray
     Outupt: Lower left corner, upper right corner of bounding box
     around data"""
-
     import numpy as np
     arr = darray[0, :, :].values
     a = np.where(arr != -999.)
-    box = (np.min(a[0]-3), np.min(a[1])-3, np.max(a[0]+3), np.max(a[1])+3)
-    tmp = list(box)
-    tmp2 = [0 if i < 0. else i for i in tmp]
-    bbox = tuple(([tmp2[0], tmp2[1]], [tmp2[2], tmp2[3]]))
+    if np.min(a[0]) != 0. and np.min(a[1]) != 0.:
+        bbox = ([np.min(a[0]-3), np.min(a[1])-3], [np.max(a[0]+3), np.max(a[1])+3])
+    else:
+        bbox = ([np.min(a[0]), np.min(a[1])], [np.max(a[0]), np.max(a[1])])
     return bbox
 
 def _get_latlon(dset,name1='latitude',name2='longitude'):
@@ -257,13 +256,11 @@ def get_atherr(dset):
     height_err = height_err.where(height_err != height_err._FillValue, drop=True)
     return height_err
 
-# Trim VOLCAT array
 def trim_arrray(dset):
     """Trim the VOLCAT array around data
     Make smaller for comparison to HYSPLIT """
 
 # Plotting variables
-
 def plot_height(dset):
     """Plots ash top height from VOLCAT
     Does not save figure - quick image creation"""
@@ -281,7 +278,6 @@ def plot_radius(dset):
     ax = fig.add_subplot(1, 1, 1)
     plot_gen(dset, ax, val='radius', time=None, plotmap=True,
              title=title)
-
 
 def plot_mass(dset):
     fig = plt.figure('Ash_Mass_Loading')
