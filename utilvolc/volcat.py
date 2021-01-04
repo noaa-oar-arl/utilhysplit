@@ -1,6 +1,10 @@
 # volcat.py
 # A reader for VOLCAT data using xarray
 # For use with MONET
+import sys
+import os
+from os import walk
+import datetime
 import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
@@ -31,9 +35,8 @@ plot_mass: plots ash mass loading from VOLCAT
 """
 
 
-def open_dataset(fname, pc_correct=True):
+def open_dataset(fname, pc_correct=False):
     """Opens single VOLCAT file"""
-    print(fname)
     dset = xr.open_dataset(fname, mask_and_scale=False, decode_times=False)
     # not needed for new Bezy data.
     try:
@@ -55,7 +58,7 @@ def open_dataset(fname, pc_correct=True):
     dset = _get_time(dset)
     return dset
 
-def find_volcat(tdir, daterange=None):
+def find_volcat(tdir, daterange=None, verbose=False):
     """
     tdir : str
     daterange : [datetime, datetime] or None
@@ -74,16 +77,28 @@ def find_volcat(tdir, daterange=None):
              try:
                 vn = VolcatName(fln)
              except:
-                print('Not VOLCAT filename {}'.format(fln))
+                if verbose: print('Not VOLCAT filename {}'.format(fln))
                 nflist.append(fln)
                 continue
              if daterange:
                 if vn.date < daterange[0] or vn.date > datrange[1]:
                    continue
-             print(fln)
              vnlist[vn.date] = vn
     return vnlist
 
+def test_volcat(tdir, daterange=None, verbose=True):
+    """
+    checks the pc_latitude field for values greater than 0.
+    """
+    vnlist = find_volcat(tdir, daterange, verbose)
+    for key in vnlist.keys():
+        vname = vnlist[key].fname
+        dset = open_dataset(os.path.join(tdir,vname),pc_correct=False)
+        if np.max(dset.pc_latitude) > 0: 
+           print('passed')
+        else:
+           print('failed')
+         
 
 class VolcatName:
     """
@@ -178,11 +193,9 @@ def bbox(darray):
     bbox = tuple(([tmp2[0], tmp2[1]], [tmp2[2], tmp2[3]]))
     return bbox
 
-
 def _get_latlon(dset,name1='latitude',name2='longitude'):
     dset = dset.set_coords([name1, name2])
     return dset
-
 
 def _get_time(dset):
     import pandas as pd
@@ -194,7 +207,6 @@ def _get_time(dset):
     return dset
 
 # Extracting variables
-
 def get_data(dset,vname):
     gen = dset.data_vars[vname]
     box = bbox(gen)
