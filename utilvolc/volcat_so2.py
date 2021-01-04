@@ -38,7 +38,7 @@ def get_mass(dset):
     """ Extracts the mean mass loading of SO2
          Input: xarray of data
          Output: mass loading mean in g/m^2 (not DU) """
-    mass_loading_mean = dset.mass_loading_mean
+    mass_load_mean = dset.mass_loading_mean
     # Return units of g/m^2 not DU
     conv = (2.6867E20) * (64.066) * (1/(6.022E23))
     mass_loading_mean = mass_load_mean * conv

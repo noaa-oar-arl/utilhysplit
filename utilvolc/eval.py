@@ -111,11 +111,10 @@ def get_ATL(xdset,thresh=0.2):
     time = ensra.time.values[0]  
     enslist = ensra.ens.values
     levels= ensra.z.values
-     
     return ATL(ensra, time, enslist,thresh,levels)
 
 
-def plotATL(rtot):
+def plotATL(rtot, vlist):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
     x = rtot.longitude
@@ -145,30 +144,36 @@ def plotATL(rtot):
         z = rtot.isel(z=iii)
         z = z.where(z!=0)
         label = meter2FL(rtot.z.values[iii])
-        cb = ATLsubplot(ax,x,y,z,transform,label)
+        cb = ATLsubplot(ax,x,y,z,transform,label,vlist)
         iii+=1
     plt.colorbar(cb) 
 
 def meter2FL(meters):
     return 'FL{:2.0f}'.format(meters/30.48)
 
-def ATLsubplot(ax, x,y,z,transform,label=''):
+def ATLsubplot(ax, x,y,z,transform,label='',vlist=None,
+               levels=[1,5,10,15,20]):
+    from matplotlib.colors import BoundaryNorm
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-    #ax = plt.axes(projection=transform)
-    #ax = plt.axes(project=cartopy.crs.PlateCarree())
-    cmap = 'viridis'
-    cb2 = ax.pcolormesh(x,y,z,cmap=cmap,transform=transform)
+      
+    cmap = plt.get_cmap('viridis')
+    norm = BoundaryNorm(levels,ncolors=cmap.N,clip=False)
+    cb2 = ax.pcolormesh(x,y,z,cmap=cmap,transform=transform,norm=norm)
+    ax.plot(vlist[0],vlist[1],'r^')
     ax.add_feature(cartopy.feature.OCEAN) 
-    ax.add_feature(cartopy.feature.LAND) 
-  
+    #ax.add_feature(cartopy.feature.LAND) 
+    ax.add_feature(cartopy.feature.BORDERS) 
+    ax.coastlines('50m')
+ 
+    # This allows latitude and longitude axis
+    # to have different scales. 
     ax.set_aspect('auto', adjustable=None)
-
-    #divider = make_axes_locatable(ax)
-    #cax = divider.append_axes('right',size='5%',pad=0.05)
-
-    #cb = plt.colorbar(cb2)
-    #cb.ax.tick_params(labelsize=10)
+    # this will increase data limit to keep aspect ratio 1
+    #ax.set_aspect(1, adjustable='datalim')
+    # this will adjust axxes to  keep aspect ratio 1
+    # when this is used, text is often mis-placed.
+    #ax.set_aspect(1, adjustable='box')
     gl = ax.gridlines(crs=transform, draw_labels=True,
                       linewidth=1, color='gray', alpha=0.5, linestyle='--')
     gl.top_labels = False
@@ -182,6 +187,7 @@ def ATLsubplot(ax, x,y,z,transform,label=''):
     #ax.text(0.1,0.1,label,transform=transform) 
     ax.text(0.5,-0.15,label,va='bottom',ha='center',rotation='horizontal',
             rotation_mode='anchor', transform=ax.transAxes,size=15)
+    #ax.plot(vlist[0],vlist[1],'r^')
     return cb2 
 
 def ATL(revash, time, enslist, thresh=0.2, level=1):
@@ -189,7 +195,6 @@ def ATL(revash, time, enslist, thresh=0.2, level=1):
      Returns array with number of ensemble members above
      given threshold at each location.
      """
-
      #import matplotlib.pyplot as plt
      #sns.set_style('whitegrid')
      source=0
@@ -217,14 +222,7 @@ def ATL(revash, time, enslist, thresh=0.2, level=1):
             r2.expand_dims('z')
             rtot = xr.concat([rtot,r2],'z')
          iii+=1 
-     #print(rtot)
      # This gives you maximum value that were above concentration 
      # at each location.
      return rtot
-     #if iii>1:rtot = rtot.max(dim='z')
-     #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
-     # sum up all the ones. This tells you how many
-     # ensemble members were above threshold at each location. 
-     #r2 = r2.sum(dim=['ens'])
-     #return rtot
 

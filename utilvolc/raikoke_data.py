@@ -9,9 +9,6 @@ from utilhysplit.evaluation.ensemble_tools import ashcmap
 import utilhysplit.evaluation.ensemble_tools as et
 from matplotlib.colors import BoundaryNorm
 
-
-
-
 def get_polygon(tdir):
     """
     tdir: str where file is located
@@ -134,7 +131,7 @@ class RaikokeVolcat:
         """
         fname = self.create_name(date)
         print('trying to open ', fname)
-        dset = volcat.open_dataset(fname)
+        dset = volcat.open_dataset(fname,pc_correct=False)
         return dset
 
     def combine_dsets(self, daylist=None, hlist=None, mlist=None):
