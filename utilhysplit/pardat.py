@@ -18,12 +18,12 @@ class ParDat:
         """
         self.fname = fname
         self.stime = stime #start time of simulation
-        self.keepvals =
+        self.keepvals = \
                       ['dtime','index','site','lat','lon',
                        'agl','grdht','foot','dmass']
-        self.colnames =
+        self.colnames = \
                       ['date','sorti','site','lat','lon',
-                       'agl','grdht','foot','pmass']
+                       'agl','grdht','foot','dmass']
         self.df = self.read()
         self.df = self.process(self.df)
 
@@ -38,6 +38,7 @@ class ParDat:
         df = df[self.keepvals]
         df.columns = self.colnames
         self.df = df
+        #self.df['pmass'] = 1
         return df
 
 

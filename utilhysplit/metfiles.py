@@ -299,7 +299,7 @@ class MetFiles:
         sdate : datetime.datetime ojbect
         runtime : int (hours of runtime)
         """
-        self.verbose=True
+        #self.verbose=True
         nlist = []
         sdate = sdate.replace(tzinfo=None)
         if not isinstance(self.mdt, datetime.timedelta):
