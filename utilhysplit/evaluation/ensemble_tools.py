@@ -62,22 +62,22 @@ def ens_cdf(dra, timelist=None, source=0, threshold=0):
     enslist = dra.ens.values
     clrs = ['r','y','g','c','b','k']
     cdflist = []
+    iii=0
     for ens in enslist:
-        print('working on ', ens)
+        #print('working on ', ens)
         subdra= dra.sel(ens=ens)
         mass = hysplit.hysp_massload(subdra)
         if not isinstance(timelist,list) and not isinstance(timelist,np.ndarray):
            timelist = [mass.time.values[0]]
-        iii=0
         for tm in timelist:
-            print('working on ', tm)
+            #print('working on ', tm)
             tmass = mass.sel(time=tm)
             # create cdf from values above threshold
             sdata, y = cdf([x for x in listvals(tmass) if x > threshold])
             # plot as step function.
             ax.step(sdata, y, '-'+clrs[iii])
-            iii+=1
-            if iii > len(clrs)-1: iii=0
+        if iii > len(clrs)-1: iii=0
+        iii+=1
         ax.set_xscale('log')
     return -1
 
@@ -168,6 +168,9 @@ def readnc(name):
     return dra
 
 def ashcmap(t=1):
+     """
+     possible colormaps for plotting volcanic ash.
+     """
      import matplotlib
      #cmap = matplotlib.cm.cubehelix(np.linspace(0,1,20)) 
      #cmap = matplotlib.cm.RdGy(np.linspace(0,1,20)) 
@@ -178,7 +181,6 @@ def ashcmap(t=1):
          cmap=sns.diverging_palette(200,1,as_cmap=True, center='light',l=10)
      elif t==3:
          cmap=sns.diverging_palette(200,1,as_cmap=True, center='dark',l=70)
-
      return cmap
 
 #_______________________________________________________________________
@@ -255,8 +257,6 @@ def plotmaxconc(revash, time, enslist, level=1,clevs=None, dim='y', tp='contourf
     time : datetime object
     enslist : list of ints
     """
-
-
     rtot = maxconc(revash, time, enslist, level, dim)
     ax = plt.gca()
     clrs, levs = getclrslevs(rtot)
@@ -272,7 +272,7 @@ def plotmaxconc(revash, time, enslist, level=1,clevs=None, dim='y', tp='contourf
     elif dim=='z': 
        xcoord = revash.longitude.isel(y=0).values
        ycoord = revash.latitude.isel(x=0).values
-    print('LEVS', clrs, levs)
+    #print('LEVS', clrs, levs)
     #if dim=='z':
     #    fig, ax = k.draw_map(1)
     #else:
@@ -354,7 +354,8 @@ def ATL(revash, time, enslist, thresh=0.2, level=1):
          r2 = revash.sel(time=time)
          r2 = r2.sel(ens=enslist)
          r2 = r2.sel(z=lev)
-         r2 = r2.isel(source=source)
+         if 'source' in r2.coords:
+             r2 = r2.isel(source=source)
          # place zeros where it is below threshold
          r2 = r2.where(r2>=thresh)
          r2 = r2.fillna(0)
@@ -370,19 +371,26 @@ def ATL(revash, time, enslist, thresh=0.2, level=1):
             r2.expand_dims('z')
             rtot = xr.concat([rtot,r2],'z')
          iii+=1 
-     print(rtot)
+     #print(rtot)
      # This gives you maximum value that were above concentration 
      # at each location.
-     if iii>1:rtot = rtot.max(dim='z')
+     return rtot
+     #if iii>1:rtot = rtot.max(dim='z')
      #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
      # sum up all the ones. This tells you how many
      # ensemble members were above threshold at each location. 
      #r2 = r2.sum(dim=['ens'])
-     return rtot
+     #return rtot
 
 def plotATL(ax, revash, time, enslist, level, thresh=0.2, clevs=None):
+    sns.set()
+    sns.set_style('white')
     rtot = ATL(revash, time, enslist, thresh, level)
-    cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
+    # flatten to 2d
+    if 'z' in rtot.coords:
+        rtot = rtot.max(dim='z')
+    #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
+    cmap = sns.choose_colorbrewer_palette('autumn', as_cmap=True)
     cb2 = ax.pcolormesh(rtot.longitude, rtot.latitude, rtot, cmap=cmap) 
     #if not clevs:
     #    cb2 = plt.contourf(rtot.longitude, rtot.latitude, rtot, cmap=cmap) 
@@ -393,7 +401,12 @@ def plotATL(ax, revash, time, enslist, level, thresh=0.2, clevs=None):
     return  
 
 def ens_mean(revash,time,enslist,level=1):
-    import matplotlib.pyplot as plt
+    """
+    revash : xarray
+    time : datetime object : date in time coordinate
+    enslist: list of integers.
+    level : int : index of level in z coordinate.
+    """
     source=0
     sns.set()
     m2 = revash.sel(time=time)
