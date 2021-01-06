@@ -58,7 +58,7 @@ def open_dataset(fname, pc_correct=False):
     dset = _get_time(dset)
     return dset
 
-def find_volcat(tdir, daterange=None, verbose=False):
+def find_volcat(tdir, vid=None, daterange=None, verbose=False):
     """
     tdir : str
     daterange : [datetime, datetime] or None
@@ -70,7 +70,7 @@ def find_volcat(tdir, daterange=None, verbose=False):
     vnlist : dictionary with key=date and value=filename.
 
     """
-    vnlist = {}
+    vnhash = {}
     nflist = []
     for (dirpath,dirnames,filenames) in walk(tdir):
          for fln in filenames:
@@ -83,8 +83,14 @@ def find_volcat(tdir, daterange=None, verbose=False):
              if daterange:
                 if vn.date < daterange[0] or vn.date > datrange[1]:
                    continue
-             vnlist[vn.date] = vn
-    return vnlist
+             if vid and vn.vhash['volcano id'] != vid: continue
+             if vn.date not in vnhash.keys():
+                vnhash[vn.date] = vn
+             else: 
+                print('two files with same date')
+                print(vnhash[vn.date].compare(vn))
+                
+    return vnhash
 
 def test_volcat(tdir, daterange=None, verbose=True):
     """
@@ -127,6 +133,19 @@ class VolcatName:
         self.keylist.append('feature id') 
 
         self.parse(fname)
+
+    def compare(self, other):
+        """
+        othe is another VolcatName object.
+        Returrns
+        dictionary of information which is different.
+        values is a  tuple of (other value, self value).
+        """ 
+        diffhash = {}
+        for key in self.keylist:
+            if other.vhash[key] != self.vhash[key]:
+                diffhash[key] = (other.vhash[key], self.vhash[key])
+        return diffhash
 
     def __str__(self):
         val = [self.vhash[x] for x in self.keylist]
