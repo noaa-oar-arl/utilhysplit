@@ -136,8 +136,8 @@ class VolcatName:
 
     def compare(self, other):
         """
-        othe is another VolcatName object.
-        Returrns
+        other is another VolcatName object.
+        Returns
         dictionary of information which is different.
         values is a  tuple of (other value, self value).
         """ 
