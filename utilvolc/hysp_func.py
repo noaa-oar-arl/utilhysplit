@@ -1,15 +1,17 @@
 # hysp_func.py
-# Functions for manipulating HYSPLIT data
 # For use with MONET
 """Functions for manipulating HYSPLIT data.
 -------------
 Functions:
 -------------
-hysp_heights: determines ash top height from HYSPLIT
+get_latlongrid: determines thelatitude and longitude grid from the dataset
+getlatlon: returns 1d arrays of latitude and longitude
 hysp_massload: determines total mass loading from HYSPLIT
+hysp_heights: determines ash top height from HYSPLIT
 calc_MER: determines Mass Eruption Rate from HYSPLIT
 calc_aml: determines ash mass loading for each altitude layer  from HYSPLIT
 hysp_thresh: calculates mask array for ash mass loading threshold from HYSPLIT
+
 """
 from monetio.models import hysplit
 from utilvolc import volcMER
