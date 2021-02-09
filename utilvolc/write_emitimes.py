@@ -64,7 +64,11 @@ def write_cyl_file(wdir, date_time, lat, lon, volcname, radius, dr, duration, po
 
 class InsertVolcat:
 
-    def __init__(self, wdir, vdir, date_time, pollnum, pollpercents, duration):
+    def __init__(self, wdir, 
+                 vdir, date_time, duration,
+                 pollpercents=1,
+                 pollnum=1,  
+                 vname=None):
         """
         Class of tools for inserting volcat data into hysplit
         -------------
@@ -89,6 +93,10 @@ class InsertVolcat:
         self.pollnum = pollnum
         self.pollpercents = pollpercents
         self.duration = duration
+        self.vname = vname
+
+    def add_vname(self, vname):
+        self.vname = vname
 
     def find_fname(self):
         """ Determines filename for volcat file"""
