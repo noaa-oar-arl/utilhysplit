@@ -12,7 +12,7 @@ from mpl_toolkits.basemap import Basemap
 
 ##For a line source,  emission for the source defined in first line
 
-"""class EmitTimes 
+"""class EmitCyl
    function circpts"""
 
 def circpts(x0, y0, r, dtheta=10):
@@ -21,7 +21,7 @@ def circpts(x0, y0, r, dtheta=10):
     yp = r * np.sin(theta) + y0
     return np.array(xp), np.array(yp)
 
-class EmitTimes(object):
+class EmitCyl(oject):
 
    def __init__(self, filename='EMITIMES.txt'):
        """write EMITIMES file header"""
@@ -179,7 +179,7 @@ class EmitTimes(object):
        emitfile.close()                      
            
 def example(sdate, duration, lat, lon, altitude, filename, radius, dr):
-    efile = EmitTimes(filename = filename)
+    efile = EmitCyl(filename = filename)
     efile.cyl_source(sdate, lat, lon, radius = radius, dr = dr, pollnum = 1, dh = altitude)
 
 
