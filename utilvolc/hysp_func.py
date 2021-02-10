@@ -96,11 +96,12 @@ def hysp_heights(dset, threshold):
     return top_height
 
 
-def calc_MER(dset):
+def calc_MER(dset, attr='Starting Locations'):
     """ Calculate Mass Eruption Rate (kg/s) using Mastin's 2009 equation
-    Then converting to units of g/hr then g/m^2 """
+    Then converting to units of g/hr then g/m^2 
+    attr: name of attribute containing starting location altitude (string)"""
     # Extract starting locations and plume height - plume height needed for Mass calc.
-    stlocs = dset.attrs['Starting Locations']
+    stlocs = dset.attrs[attr]
     plume = (stlocs[-1][-1] - stlocs[0][-1])/1000  # Put height in km
     # Calculate mass erution rate (Mastin 2009)
     MER = volcMER.mastinMER(plume)
