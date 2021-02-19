@@ -134,7 +134,6 @@ class EmiTimes(object):
             spnum = ec.splist[-1]
             if spnum > maxsp:
                 maxsp = spnum
-            print('spnum', spnum, maxsp)
         return maxsp
 
     def findmaxrec(self):
