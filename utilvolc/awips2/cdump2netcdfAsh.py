@@ -19,6 +19,9 @@ import hysplit
 # dimension order is time, ensid, latitude, longitude
 # one time period per file.
 
+# AWIPS2 expects netcdf files to have only one time period per file.
+# It can read a zipped file consisting of multiple netcdf files, one for each time period.
+
 logger = logging.getLogger(__name__)
 
 def mass_loading(xrash):
@@ -324,8 +327,6 @@ def makeconc(xrash, date1, level, mult=1, dotranspose=False, verbose=False):
 
 def maketestblist(dname='./'):
     # Need list of tuples. (filename, sourcetag, mettag)
-    d1 = datetime.datetime(2008, 8, 8, 12)
-    d2 = datetime.datetime(2008, 8, 8, 13)
     blist = []
     dname = dname
     fname = "cdump.Aegec00"
@@ -336,21 +337,17 @@ def maketestblist(dname='./'):
 
 def maketestncfile():
     blist = maketestblist()
+    # base name of the netcdf file.
     oname = "out.nc"
-    d1 = datetime.datetime(2008, 8, 8, 12)
-    d2 = datetime.datetime(2008, 8, 8, 13)
+    # xarray dataset produced by hysplit.combine_dataset.
     xrash = maketestra()
-    cdump2awips(xrash, oname)
+    # 
+    Cdump2Awips(xrash, oname)
+    fnames = c2n.create_all_files()
 
 def maketestra():
-    d1 = datetime.datetime(2008, 8, 8, 10)
-    d2 = datetime.datetime(2008, 8, 8, 13)
-    # d1 = None
-    # d2 = None
     blist = maketestblist()
-    if d1 and d2:
-        drange = [d1, d2]
-    else:
-        drange = None
-    xrash = hysplit.combine_dataset(blist, drange=drange)
+    # xrash is an xarray dataset which can be input into
+    # Cdump2Awips class initialization.
+    xrash = hysplit.combine_dataset(blist)
     return xrash
