@@ -342,8 +342,10 @@ def maketestncfile():
     # xarray dataset produced by hysplit.combine_dataset.
     xrash = maketestra()
     # 
-    Cdump2Awips(xrash, oname)
+    c2n = Cdump2Awips(xrash, oname)
     fnames = c2n.create_all_files()
+    return fnames
+
 
 def maketestra():
     blist = maketestblist()
