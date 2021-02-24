@@ -6,7 +6,9 @@ import numpy as np
 import logging
 import pandas as pd
 from netCDF4 import Dataset
+#from monetio.models import hysplit
 import hysplit
+
 # 01/28/2020 AMC cdump2awips created to make a netcdf file appropriate for input into AWIPS
 # hysplit.py was modified in the forked version of MONET to make this work.
 
@@ -187,7 +189,8 @@ class Cdump2Awips:
         lon = fid.createDimension("longitude", lon_shape)
         # level = fid.createDimension('levels',len(levelra))
 
-        clevs = [0.02,0.2, 2, 5, 10, 100]
+        #clevs = [0.02,0.2, 2, 5, 10, 100]
+        clevs = [0.2, 2, 5, 10, 100]
         clevels = fid.createDimension("contour_levels", len(clevs))
         ens_shape = xrash.coords["ensemble"].shape[0]
         # add ensemble mean, ensemble standard deviation,
@@ -270,17 +273,14 @@ class Cdump2Awips:
 
         mult = 1
         for jjj, concid in enumerate(concid_list):
-            # logger.debug('adding concentration info')
             lev = self.xrash.z.values[jjj]
             concid[:] = makeconc(
                 self.xrash.copy(), date1, lev, dotranspose=True, mult=mult
             )
-        # logger.debug('adding massloading info')
         massid[:] = makeconc(self.mass, date1, dotranspose=True, level=None)
 
         latid[:] = latra
         lonid[:] = lonra
-        # levelid[:] = levelra
         timeid[:] = t1
         time_bnds[:] = [[t1, t2]]
         # these may be duplicated since ensemble and source
@@ -317,6 +317,7 @@ def makeconc(xrash, date1, level, mult=1, dotranspose=False, verbose=False):
     else:
         c1 = mult * xrash.sel(time=date1, z=level)
     # this line is for netcdf awips output
+    c1 = c1.expand_dims('time')
     if dotranspose:
         c1 = c1.transpose("time", "ensemble", "y", "x", transpose_coords=True)
     if verbose:
