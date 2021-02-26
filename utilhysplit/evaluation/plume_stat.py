@@ -63,37 +63,6 @@ class CalcScores:
         self.arr2 = self.binxra2 - self.match
         self.totalpts = self.binxra1.shape[0] * self.binxra1.shape[1]
 
-    # Convert xra1 and xra2 to binary arrays
-    @classmethod
-    def binxra1(self):
-        self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
-        return self.binxra1
-
-    @classmethod
-    def binxra2(self):
-        self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
-        return self.binxra2
-    # Determining hits or matches (obs yes, forecast yes)
-    @classmethod
-    def match(self):
-        self.match = self.binxra1 * self.binxra2
-        return self.match
-    # Determining misses for forecast array (obs yes, forecast no)
-    @classmethod
-    def arr1(self):
-        self.arr1 = self.binxra1 - self.match
-        return self.arr1
-    # Determining false alarm for forecast array (forecast yes, obs no)
-    @classmethod
-    def arr2(self):
-        self.arr2 = self.binxra2 - self.match
-        return self.arr2
-    # xra1 and xra2 are the same shape, determining total points in each array
-    @classmethod
-    def totalpts(self):
-        self.totalpts = self.binxra1.shape[0] * self.binxra1.shape[1]
-        return self.totalpts
-
     def calc_csi(self):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
 
