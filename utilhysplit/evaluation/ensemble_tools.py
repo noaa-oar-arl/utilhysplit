@@ -189,7 +189,6 @@ FUNCTIONS
 maxconc : returns maximum concentration along a dimension(x,y, or z)
 """
 
-
 def maxconc(revash, time, enslist, level, dim='y'):
     """
     Returns maximum concetration along a dimension, x, y, or z.
@@ -216,82 +215,6 @@ def maxconc(revash, time, enslist, level, dim='y'):
             rtot = rtot.isel(ens=0)
     return rtot
 
-def getclrslevs2(rtot):
-    clrs = []
-    clrs.append(sns.xkcd_rgb['red']) 
-    clrs.append(sns.xkcd_rgb['orange']) 
-    clrs.append(sns.xkcd_rgb['peach']) 
-    clrs.append(sns.xkcd_rgb['yellow']) 
-    clrs.append(sns.xkcd_rgb['olive']) 
-    clrs.append(sns.xkcd_rgb['grass green']) 
-    clrs.append(sns.xkcd_rgb['dark teal']) 
-    clrs.append(sns.xkcd_rgb['baby blue']) 
-    clrs.append(sns.xkcd_rgb['bright blue']) 
-    clrs.append(sns.xkcd_rgb['indigo']) 
-    levs = list(np.arange(1,20,2))
-    return clrs, levs 
-
-def getclrslevs(rtot):
-    clrs = []
-    clrs.append(sns.xkcd_rgb['light grey']) 
-    clrs.append(sns.xkcd_rgb['grey']) 
-    clrs.append(sns.xkcd_rgb['mauve']) 
-    clrs.append(sns.xkcd_rgb['dark pink']) 
-    clrs.append(sns.xkcd_rgb['magenta']) 
-    if np.max(rtot<5):
-        #levs = [0.01,0.1,0.2,2,4] 
-        levs = [0.01,0.2,2,4,10] 
-    elif np.max(rtot<10):
-        levs = [0.01,0.2,2,4,10] 
-    elif np.max(rtot<20):
-        levs = [0.2,2,4,10,20] 
-    elif np.max(rtot<50):
-        levs = [0.2,2,4,10,50] 
-    elif np.max(rtot<100):
-        levs = [0.2,2,4,10,100] 
-    return clrs, levs
-
-
-def plotmaxconc(revash, time, enslist, level=1,clevs=None, dim='y', tp='contourf'):
-    """
-    time : datetime object
-    enslist : list of ints
-    """
-    rtot = maxconc(revash, time, enslist, level, dim)
-    ax = plt.gca()
-    clrs, levs = getclrslevs(rtot)
-    #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
-    #cmap = ashcmap()
-    if dim=='y':
-       xcoord = revash.longitude.isel(y=0).values
-       if np.min(xcoord)>180: xcoord = xcoord-360
-       ycoord = rtot.z/1000.0
-    elif dim=='x': 
-       xcoord = revash.latitude.isel(x=0).values
-       ycoord = rtot.z/1000.0
-    elif dim=='z': 
-       xcoord = revash.longitude.isel(y=0).values
-       ycoord = revash.latitude.isel(x=0).values
-    #print('LEVS', clrs, levs)
-    #if dim=='z':
-    #    fig, ax = k.draw_map(1)
-    #else:
-    #    fig, ax = k.get_fig(1)
-    if tp == 'contourf':
-        cb2 = ax.contourf(xcoord,ycoord, rtot, colors=clrs,
-                             levels=levs) 
-    elif tp == 'contour':
-        cb2 = ax.contour(xcoord,ycoord, rtot, colors=clrs,
-                             levels=levs) 
-    elif tp == 'pcolormesh':
-        cmap = plt.get_cmap('summer')
-        levs = [0.001,0.01,0.1,0.5,1,2.5,5,10]
-        norm = BoundaryNorm(levs,ncolors=cmap.N, clip=True)
-        cb2 = ax.pcolormesh(xcoord,ycoord, rtot, cmap=cmap,
-                             norm=norm) 
-    plt.colorbar(cb2)
-    return ax, rtot
-
 def topheight(revash, time,ens, level,thresh=0.01,tp=0):
      source=0
      if isinstance(level, int):
@@ -317,88 +240,68 @@ def topheight(revash, time,ens, level,thresh=0.01,tp=0):
          rht = rtot.max(dim='z')
      return  rht
 
-def ATLmass(dra, time, enslist=None,thresh=0.1):
-     """
-     convert to mass loading and then calculate
-     applied threshold level.
-     """
-     from monetio.models import hysplit
-     source=0
-     r2 = dra.sel(time=time)
-     r2 = r2.isel(source=source)
-     if enslist:
-        r2 = r2.isel(ens=enslist)
-     r2 = hysplit.hysp_massload(r2)
-     # place zeros where it is below threshold
-     r2 = r2.where(r2>=thresh)
-     r2 = r2.fillna(0)
-     # place onces where it is above threshold
-     r2 = r2.where(r2<thresh)
-     r2 = r2.fillna(1)
-     r2 = r2.sum(dim=['ens'])
-     return r2
 
-def ATL(revash, time, enslist, thresh=0.2, level=1):
-     """
+def ATL(revash, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=False):
+    """
+     revash: xr dataarray produced by combine_dataset or by hysp_massload
+     enslist : list of values to use fo 'ens' coordinate
+     sourcelist : list of values to use for 'source' coordinate
+     level : integer or list of integers of vertical levels to use.
+     
+
      Returns array with number of ensemble members above
      given threshold at each location.
+     norm : boolean
+            if True return percentage of members.
+            if False return number of members.
      """
+    rev = revash.copy()
+    # if a massloading dataset with no z coordinate is input.
+    # then expand dimension to z so can process.
 
-     #import matplotlib.pyplot as plt
-     #sns.set_style('whitegrid')
-     source=0
-     if isinstance(level, int):
-        level=[level]
-     iii=0
-     for lev in level:
-         r2 = revash.sel(time=time)
-         r2 = r2.sel(ens=enslist)
-         r2 = r2.sel(z=lev)
-         if 'source' in r2.coords:
-             r2 = r2.isel(source=source)
-         # place zeros where it is below threshold
-         r2 = r2.where(r2>=thresh)
-         r2 = r2.fillna(0)
-         # place onces where it is above threshold
-         r2 = r2.where(r2<thresh)
-         r2 = r2.fillna(1)
-         # ensemble members were above threshold at each location. 
-         r2 = r2.sum(dim=['ens'])
-         if iii==0: 
-            rtot = r2
-            rtot.expand_dims('z')
-         else:
-            r2.expand_dims('z')
-            rtot = xr.concat([rtot,r2],'z')
-         iii+=1 
-     #print(rtot)
-     # This gives you maximum value that were above concentration 
-     # at each location.
-     return rtot
-     #if iii>1:rtot = rtot.max(dim='z')
-     #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
-     # sum up all the ones. This tells you how many
-     # ensemble members were above threshold at each location. 
-     #r2 = r2.sum(dim=['ens'])
-     #return rtot
+    if 'z' not in rev.coords:
+        rev = rev.expand_dims('z')
 
-def plotATL(ax, revash, time, enslist, level, thresh=0.2, clevs=None):
-    sns.set()
-    sns.set_style('white')
-    rtot = ATL(revash, time, enslist, thresh, level)
-    # flatten to 2d
-    if 'z' in rtot.coords:
-        rtot = rtot.max(dim='z')
-    #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
-    cmap = sns.choose_colorbrewer_palette('autumn', as_cmap=True)
-    cb2 = ax.pcolormesh(rtot.longitude, rtot.latitude, rtot, cmap=cmap) 
-    #if not clevs:
-    #    cb2 = plt.contourf(rtot.longitude, rtot.latitude, rtot, cmap=cmap) 
-    #if clevs:
-    #    cb2 = plt.contourf(rtot.longitude, rtot.latitude, rtot, cmap=cmap,
-    #                       levels=clevs) 
-    plt.colorbar(cb2) 
-    return  
+    if enslist:
+        rev = rev.isel(ens=enslist)
+
+    if sourcelist:
+        rev = rev.isel(source=sourcelist)
+
+    if isinstance(level, int):
+        level = [level]
+    if not level:
+       mlen = len(rev.z.values) 
+       level = np.arange(0,mlen) 
+    # stack ensemble and source dimension into one.
+    rev = rev.stack(ensemble=("ens","source"))
+
+    # not sure if this loop over the levels is needed.
+    for iii, lev in enumerate(level):
+        #rev2 = rev.sel(ens=enslist)
+        rev2 = rev.isel(z=lev)
+        if "source" in rev2.coords:
+            rev2 = rev2.isel(source=source)
+        # place zeros where it is below threshold
+        rev2 = rev2.where(rev2 >= thresh)
+        rev2 = rev2.fillna(0)
+        # place onces where it is above threshold
+        rev2 = rev2.where(rev2 < thresh)
+        rev2 = rev2.fillna(1)
+        # ensemble members were above threshold at each location.
+        rev2 = rev2.sum(dim=["ensemble"])
+        if iii == 0:
+            rtot = rev2
+            rtot.expand_dims("z")
+        else:
+            rev2.expand_dims("z")
+            rtot = xr.concat([rtot, rev2], "z")
+    # This gives you maximum value that were above concentration
+    # at each location.
+    if norm:
+        nmembers = len(enslist)
+        rtot = rtot / nmembers
+    return rtot
 
 def ens_mean(revash,time,enslist,level=1):
     """
@@ -422,13 +325,5 @@ def ens_mean(revash,time,enslist,level=1):
     #plt.tight_layout()
     return m2
 
-def plot_ens_mean(ax, revash,time,enslist,level=1):
-    m2 = ens_mean(revash, time, enslist, level=level)
-    cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
-    cb2 = ax.contourf(m2.longitude, m2.latitude, m2, cmap=cmap) 
-    plt.colorbar(cb2) 
-    plt.tight_layout()
-    ax = plt.gca()
-    return ax
  
 
