@@ -46,40 +46,38 @@ def listvals(dra):
     vshape = np.array(vals.shape)
     return vals.reshape(np.prod(vshape))
 
-def ens_cdf(dra, timelist=None, source=0, threshold=0):
+def ens_cdf(indra, enslist=None, sourcelist=None, timelist=None, threshold=0, plot=True):
     """
     produces plots of cumulative distribution functions.
-    dra : xarray DataArray produced by combine_dataset function.
+    dra : xarray DataArray produced by combine_dataset function or hysp_massload function..
     timelist : list of times in the time coordinate to produce plots for
-    source : int : index of source to use.
     threshold : float : produce CDF for values > threshold.
     """
-    # select the source of interest
-    from utilhysplit.evaluation.statmain import cdf
+    # select sources of interest and stack.
+    dra = choose_and_stack(indra, enslist, sourcelist)
+    cdfhash = {}
+    for iii, ens in enumerate(dra.ensemble.values):
+        subdra= dra.sel(ensemble=ens)
+        if not isinstance(timelist,list) and not isinstance(timelist,np.ndarray):
+           timelist = [subdra.time.values[0]]
+        for tm in timelist:
+            print(tm, ens)
+            tvals = subdra.sel(time=tm) 
+            # create cdf from values above threshold
+            sdata, y = cdf([x for x in listvals(tvals) if x > threshold])
+            cdfhash[(tm,ens[0],ens[1])] = (sdata,y)
+    if plot: plot_cdf(cdfhash)
+    return cdfhash
+
+def plot_cdf(cdfhash,fignum=1):
     fig = plt.figure(1)
     ax = fig.add_subplot(1,1,1)
-    dra = dra.isel(source=source)
-    enslist = dra.ens.values
     clrs = ['r','y','g','c','b','k']
-    cdflist = []
-    iii=0
-    for ens in enslist:
-        #print('working on ', ens)
-        subdra= dra.sel(ens=ens)
-        mass = hysplit.hysp_massload(subdra)
-        if not isinstance(timelist,list) and not isinstance(timelist,np.ndarray):
-           timelist = [mass.time.values[0]]
-        for tm in timelist:
-            #print('working on ', tm)
-            tmass = mass.sel(time=tm)
-            # create cdf from values above threshold
-            sdata, y = cdf([x for x in listvals(tmass) if x > threshold])
-            # plot as step function.
-            ax.step(sdata, y, '-'+clrs[iii])
-        if iii > len(clrs)-1: iii=0
-        iii+=1
-        ax.set_xscale('log')
-    return -1
+    for iii, key in enumerate(cdfhash.keys()):
+        if iii > len(clrs)-1: clrs.extend(clrs)
+        ax.step(cdfhash[key][0], cdfhash[key][1], '-'+clrs[iii])
+    ax.set_xscale('log')
+    return ax
 
 def draw_map(fignum, fs=20):
     proj = ccrs.PlateCarree()
@@ -189,10 +187,10 @@ FUNCTIONS
 maxconc : returns maximum concentration along a dimension(x,y, or z)
 """
 
-def maxconc(revash, time, enslist, level, dim='y'):
+def maxconc(draash, time, enslist, level, dim='y'):
     """
     Returns maximum concetration along a dimension, x, y, or z.
-    revash : xarray DataArray
+    draash : xarray DataArray
     time   : datetime object
     enslist : list of integers, or integer
     level : list of integers (indices of vertical levels to choose).
@@ -200,29 +198,29 @@ def maxconc(revash, time, enslist, level, dim='y'):
     """
     source=0
     #L returns maximum concentration at any level.
-    r2 = revash.sel(time=time)
-    if 'ens' in revash.dims:
+    r2 = draash.sel(time=time)
+    if 'ens' in draash.dims:
         r2 = r2.isel(ens=enslist)
-    if 'source' in revash.dims:
+    if 'source' in draash.dims:
         r2 = r2.isel(source=source)
     r2 = r2.isel(z=level)
     rtot = r2.max(dim=dim)
     # find maximum among all ensemble members as well.
-    if 'ens' in revash.dims:
+    if 'ens' in draash.dims:
         if len(enslist) > 1:
             rtot = rtot.max(dim='ens')
         else:
             rtot = rtot.isel(ens=0)
     return rtot
 
-def topheight(revash, time,ens, level,thresh=0.01,tp=0):
+def topheight(draash, time,ens, level,thresh=0.01,tp=0):
      source=0
      if isinstance(level, int):
         level=[level]
      iii=0
      for lev in level:
-         lev_value = revash.z.values[lev]
-         r2 = revash.sel(time=time)
+         lev_value = draash.z.values[lev]
+         r2 = draash.sel(time=time)
          r2 = r2.isel(ens=ens)
          r2 = r2.isel(source=source, z=lev)
          # place zeros where it is below threshold
@@ -240,10 +238,36 @@ def topheight(revash, time,ens, level,thresh=0.01,tp=0):
          rht = rtot.max(dim='z')
      return  rht
 
-
-def ATL(revash, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=False):
+def choose_and_stack(indra, enslist=None, sourcelist=None):
     """
-     revash: xr dataarray produced by combine_dataset or by hysp_massload
+    Inputs:
+    indra : xarray Data Array such as produced by combine_dataset or hysp_massload 
+
+    Returns:
+    dra : xarray Data Array. 
+          "ens" and "source" dimension have been combined into one dimension. "ensemble"
+          If "z" coordinate not present it is added.
+    """
+    dra = indra.copy()
+
+    # if a massloading dataset with no z coordinate is input.
+    # then expand dimension to z so can process.
+    if 'z' not in dra.coords:
+        dra = dra.expand_dims('z')
+
+    if enslist:
+        dra = dra.isel(ens=enslist)
+
+    if sourcelist:
+        dra = dra.isel(source=sourcelist)
+
+    dra = dra.stack(ensemble=("ens","source"))
+    return dra
+
+
+def ATL(indra, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=False):
+    """
+     indra: xr dataarray produced by combine_dataset or by hysp_massload
      enslist : list of values to use fo 'ens' coordinate
      sourcelist : list of values to use for 'source' coordinate
      level : integer or list of integers of vertical levels to use.
@@ -255,47 +279,33 @@ def ATL(revash, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=Fals
             if True return percentage of members.
             if False return number of members.
      """
-    rev = revash.copy()
-    # if a massloading dataset with no z coordinate is input.
-    # then expand dimension to z so can process.
-
-    if 'z' not in rev.coords:
-        rev = rev.expand_dims('z')
-
-    if enslist:
-        rev = rev.isel(ens=enslist)
-
-    if sourcelist:
-        rev = rev.isel(source=sourcelist)
-
+    dra = indra.copy()
+    dra = choose_and_stack(indra,enslist,sourcelist)
     if isinstance(level, int):
         level = [level]
     if not level:
-       mlen = len(rev.z.values) 
+       mlen = len(dra.z.values) 
        level = np.arange(0,mlen) 
-    # stack ensemble and source dimension into one.
-    rev = rev.stack(ensemble=("ens","source"))
-
     # not sure if this loop over the levels is needed.
     for iii, lev in enumerate(level):
-        #rev2 = rev.sel(ens=enslist)
-        rev2 = rev.isel(z=lev)
-        if "source" in rev2.coords:
-            rev2 = rev2.isel(source=source)
+        #dra2 = dra.sel(ens=enslist)
+        dra2 = dra.isel(z=lev)
+        if "source" in dra2.coords:
+            dra2 = dra2.isel(source=source)
         # place zeros where it is below threshold
-        rev2 = rev2.where(rev2 >= thresh)
-        rev2 = rev2.fillna(0)
+        dra2 = dra2.where(dra2 >= thresh)
+        dra2 = dra2.fillna(0)
         # place onces where it is above threshold
-        rev2 = rev2.where(rev2 < thresh)
-        rev2 = rev2.fillna(1)
+        dra2 = dra2.where(dra2 < thresh)
+        dra2 = dra2.fillna(1)
         # ensemble members were above threshold at each location.
-        rev2 = rev2.sum(dim=["ensemble"])
+        dra2 = dra2.sum(dim=["ensemble"])
         if iii == 0:
-            rtot = rev2
+            rtot = dra2
             rtot.expand_dims("z")
         else:
-            rev2.expand_dims("z")
-            rtot = xr.concat([rtot, rev2], "z")
+            dra2.expand_dims("z")
+            rtot = xr.concat([rtot, dra2], "z")
     # This gives you maximum value that were above concentration
     # at each location.
     if norm:
@@ -303,26 +313,20 @@ def ATL(revash, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=Fals
         rtot = rtot / nmembers
     return rtot
 
-def ens_mean(revash,time,enslist,level=1):
+def ens_mean(draash,time,enslist,level=1):
     """
-    revash : xarray
+    draash : xarray
     time : datetime object : date in time coordinate
     enslist: list of integers.
     level : int : index of level in z coordinate.
     """
     source=0
     sns.set()
-    m2 = revash.sel(time=time)
+    m2 = draash.sel(time=time)
     m2 = m2.isel(ens=enslist,source=source)
     m2 = m2.mean(dim=['ens'])
     if level > 0:
         m2 = m2.isel(z=level)
-    #plt.plot(-77.656, -0.077, 'k^')     
-    #cmap = sns.choose_colorbrewer_palette('colorblind', as_cmap=True)
-    #cb2 = plt.contourf(m2.longitude, m2.latitude, m2, cmap=cmap) 
-    #plot_rev_data(time,tp='mass')
-    #plt.colorbar(cb2) 
-    #plt.tight_layout()
     return m2
 
  
