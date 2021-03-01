@@ -265,8 +265,56 @@ def choose_and_stack(indra, enslist=None, sourcelist=None):
     return dra
 
 
+def APL(indra, problev=50, enslist=None, sourcelist=None, level=None):
+    newra = APLra(indra, enslist, sourcelist, level)
+    vpi = np.where(newra.percent_level.values <=problev)
+    # if pick value lower than one available then just provide lowest level.
+    if not vpi[0]: pindex=0
+    else: pindex = vpi[0][-1]
+    return newra.sel(index=pindex) 
+
+def APLra(indra, enslist=None, sourcelist=None, level=None):
+    """
+    indra: xarray data array. currently must not have dimensions of time.
+
+
+    Returns:
+           xarray data array sorted along the 'ensemble' dimension.
+           "ensemble" dimension is replaced by "percent_level" dimension.
+    """
+
+    # Applied percentile level
+    # currently only work for mass loading.
+    dra = indra.copy()
+    dra = choose_and_stack(indra,enslist,sourcelist)
+    # change this when modifying for concentrations.
+    dra2 = dra.isel(z=0)
+    # TODO not sure what correct value for transpose_coords should be?
+    dra2 = dra2.transpose('ensemble','y','x',transpose_coords=False) 
+    coords = dra2.coords
+    coords2 = {'latitude':coords['latitude'],
+               'longitude': coords['longitude'],
+               'x': coords['x'],
+               'y': coords['y']}
+    dims = dra2.dims
+    dvalues = dra2.values.copy()
+    # sort along the ensemble axis.
+    # sort is an inplace operation. returns an empty array.
+    # TODO: check that the ensemble axis is the first one.
+    dvalues.sort(axis=0) 
+    # instead of an 'ensemble' dimension, now have an 'index' dimension.
+    newra = xr.DataArray(dvalues, dims=['index',dims[1],dims[2]], coords=coords2)
+    percents = 100*(newra.index.values+1) / len(newra.index.values)   
+    newra = newra.assign_coords(percent_level=('index',percents))
+    return newra 
+
+
+
+
 def ATL(indra, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=False):
     """
+     Applied Threshold Level (also ensemble frequency of exceedance).
+
      indra: xr dataarray produced by combine_dataset or by hysp_massload
      enslist : list of values to use fo 'ens' coordinate
      sourcelist : list of values to use for 'source' coordinate
