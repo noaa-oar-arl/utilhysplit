@@ -282,7 +282,6 @@ def APLra(indra, enslist=None, sourcelist=None, level=None):
            xarray data array sorted along the 'ensemble' dimension.
            "ensemble" dimension is replaced by "percent_level" dimension.
     """
-
     # Applied percentile level
     # currently only work for mass loading.
     dra = indra.copy()
@@ -309,9 +308,12 @@ def APLra(indra, enslist=None, sourcelist=None, level=None):
     return newra 
 
 
+def volcATL(indra):
+    newra = indra.MER * indra
+    return ATL(indra)
 
-
-def ATL(indra, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=False):
+def ATL(indra, enslist=None, sourcelist=None, 
+        thresh=0.2, level=None, norm=False, weights=1):
     """
      Applied Threshold Level (also ensemble frequency of exceedance).
 
@@ -319,7 +321,8 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=False
      enslist : list of values to use fo 'ens' coordinate
      sourcelist : list of values to use for 'source' coordinate
      level : integer or list of integers of vertical levels to use.
-     
+    
+     # weights need to add up to 1. 
 
      Returns array with number of ensemble members above
      given threshold at each location.
@@ -343,9 +346,13 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0.2, level=None, norm=False
         # place zeros where it is below threshold
         dra2 = dra2.where(dra2 >= thresh)
         dra2 = dra2.fillna(0)
-        # place onces where it is above threshold
+        # place ones where it is above threshold
         dra2 = dra2.where(dra2 < thresh)
         dra2 = dra2.fillna(1)
+        # modify for the weights
+        # each level in the 'ensemble' dimension would
+        # need to be multiplied by the individual weight.
+        # dra2 = dra2 * weights.
         # ensemble members were above threshold at each location.
         dra2 = dra2.sum(dim=["ensemble"])
         if iii == 0:
