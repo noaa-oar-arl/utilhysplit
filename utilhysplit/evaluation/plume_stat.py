@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
+from utilhysplit.evaluation import ensemble_tools as tools
 import time
 
 #from math import *
@@ -13,8 +14,8 @@ import time
 #from itertools import permutations
 #from math import pi, cos
 """
-routines to help calculates critical success index by a point by point comparison.
-data must be gridded the same.
+Routines to calculate various statistics like Critical Success Index, Fractions Skill Score, 
+Pattern Correlation, Brier Scores, and ensemble weighting schemes.
 ---------
 Class:
     CalcScores
@@ -24,6 +25,8 @@ Class:
 Functions:
     calc_bs (brier score)
     calc_bss (brier skill score)
+    calc_weightsBS (BS weights for ensemble members)
+    calc_weightsPC (PC weights for ensemble members)
 """
 
 
@@ -253,203 +256,49 @@ def calc_bss(BS, BSref):
     return BSS
 
 
-def calc_csi(xra1, xra2, area=None, nodata_value='', threshold=0, verbose=0):
-    """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
-    ra1 and ra2 need to be on the same grid.
-    See monetio.remap_nearest to remap arrays.
-
-    xra1: observations/satellite xarray
-    xra2: the forecast/model xarray
-    area: optional array of grid areas (default = None)
-    nodata_value: flag for expanded array grid cells created if ash near boundary
-    threshold: value for data threshold
-    verbose: boolean
-
+def calc_weightsBS(xra, scores):
+    """
+    Calculating the weighting scheme based on brier score values. 
+    Note, xra and scores should have the same source dimension.
+    The scores should be for the correct applied threshold level.
+    Inputs:
+        xra: binary xarray of ensemble members (source, x, y)
+        scores: scores for each ensemble member (xarray) from statistics netcdf
     Output:
-    Dictionary of values pertaining to Critical Success Index calculation
+        xraprob: ensemble relative frequency (xarray DataArray)
     """
-    area = np.array(area)
-    # Creating a csihash disctionary
-    csihash = {}
-# Go into class variables
-    # Convert xra1 and xra2 to binary arrays
-    binxra1 = xr.where(xra1 >= threshold, 1., 0.)
-    binxra2 = xr.where(xra2 >= threshold, 1., 0.)
+    a = 0
+    W = []
+    xra2 = xra
+    while a < len(xra.source):
+        weight = 1-scores[a].values
+        W.append(weight)
+        xra2[a, :, :] = xra[a, :, :] * weight
+        a += 1
 
-    # Determining hits or matches (obs yes, forecast yes)
-    match = binxra1 * binxra2
-    # Determining misses for forecast array (obs yes, forecast no)
-    arr1 = binxra1 - match
-    # Determining false alarm for forecast array (forecast yes, obs no)
-    arr2 = binxra2 - match
-    # xra1 and xra2 are the same shape, determining total points in each array
-    totalpts = binxra1.shape[0] * binxra1.shape[1]
-# End class variables
-    # Assigning a, b, and c arrays to csihash dictionary
-    csihash['hits'] = match
-    csihash['misses'] = arr1
-    csihash['false_alarms'] = arr2
-
-    # Find where data arrays have no information.
-    if nodata_value != '':
-        vpND = np.where(logical_or(xra1 == nodata_value, xra2 == nodata_value))
-        maskND = xra2[:] * 0
-        maskND[vpND] = 1
-        vp_ra1ND = np.where(logical_and(maskND == 1, arr1 == 1))
-        if vp_ra1ND[0] != []:
-            arr11[vp_ra1ND] = 0
-        vp_ra2ND = np.where(logical_and(maskND == 1, arr2 == 1))
-        if vp_ra2ND[0] != []:
-            arr2[vp_ra2ND] = 0
-
-    if area.shape == match.shape:
-        csihash['CSI'] = (match*area).sum() / ((match*area).sum() +
-                                               (arr1*area).sum() + (arr2*area).sum())
-        csihash['POD'] = (match*area).sum() / ((match*area).sum() + (arr1*area).sum())
-        csihash['FAR'] = (arr2*area).sum() / ((match*area).sum() + (arr2*area).sum())
-
-        if verbose == 1:
-            print('used area')
-            print((match*area).sum().values, (arr1*area).sum().values, (arr2*area).sum().values)
-            print('CSI: ', csihash['CSI'].values, 'POD: ',
-                  csihash['POD'].values, 'FAR: ', csihash['FAR'].values)
-    else:
-        csihash['CSI'] = match.sum() / (match.sum() + arr1.sum() + arr2.sum())
-        # hit rate or probability of detection (p 310 Wilks)
-        csihash['POD'] = match.sum() / (match.sum() + arr1.sum())
-        # false alarm ratio (p 310 Wilks)
-        csihash['FAR'] = arr2.sum() / (match.sum() + arr2.sum())
-
-        if verbose == 1:
-            print('Match: ', match.sum().values, 'Arr1: ', arr1.sum().values, 'Arr2: ', arr2.sum().values)
-        print('CSI: ', csihash['CSI'].values, 'POD: ', csihash['POD'].values, 'FAR: ', csihash['FAR'].values)
-
-    return csihash
+    xraprob = xra2.sum(dim='source') / sum(W)
+    return xraprob
 
 
-def calc_fss(ra1, ra2, threshold1=0, threshold2=0, szra=[1, 3, 5, 7], makeplots=False, verbose=0):
-    from scipy.signal import convolve2d
-    """Calculates the fraction skill score (fss)
-    See Robers and Lean (2008) Monthly Weather Review
-    and Schwartz et al (2010) Weather and Forecasting
-    for more information.
-
-    ra1: observations/satellite
-    ra2: the forecast/model
-
-    Can plot fractions if desired (double check calculations)
-    threshold1: value for data threshold
-    threshold2: value for model threshold
-    szra: a list of the number of pixels (neightborhood length) to use in fractions calculation default is to use 1, 3, 5, 7 pixels size squares
-    makeplots: boolean
-    verbose:
-
-    Return
-       df : pandas dataframe
+def calc_weightsPC(xra, scores):
     """
-    # Creating FSS dictionary
-    fss_dict = {}
-    bigN = ra1.size
-
-    # create binary fields
-    mask1 = mask_threshold(ra1, threshold=threshold1)
-    mask2 = mask_threshold(ra2, threshold=threshold2)
-
-    # loop for the convolutions
-    for sz in szra:
-        if sz == 1:
-            filter_array = np.zeros((3, 3))
-            filter_array[1, 1] = 1.
-            conv_array = (1, 1)
-        else:
-            filter_array = np.ones((sz, sz))
-            filter_array = filter_array * (1/np.sum(filter_array))
-            conv_array = np.shape(filter_array)
-
-        if verbose:
-            print('Convolution array size: ', np.shape(filter_array))
-        if verbose:
-            print('Convolution array: ', filter_array)
-
-        start = time.time()
-        frac_arr1 = convolve2d(mask1, filter_array, mode='same')
-        frac_arr2 = convolve2d(mask2, filter_array, mode='same')
-        end = time.time()
-        if verbose:
-            print('Calculation time: ', end - start)
-
-        # Calculate the Fractions Brier Score (FBS)
-        fbs = np.power(frac_arr1 - frac_arr2, 2).sum() / float(bigN)
-        print('FBS ', fbs)
-        # Calculate the worst possible FBS (assuming no overlap of nonzero fractions)
-        fbs_ref = (np.power(frac_arr1, 2).sum() + np.power(frac_arr2, 2).sum()) / float(bigN)
-        print('FBS reference', fbs_ref)
-        # Calculate the Fractional Skill Score (FSS)
-        fss = 1 - (fbs / fbs_ref)
-        print('FSS ', fss)
-        fss_tmp = dict({'Nlen': conv_array[0], 'FBS': fbs, 'FBS_ref': fbs_ref, 'FSS': fss})
-        if (makeplots == True):
-            fig = plt.figure(1)
-            ax1 = fig.add_subplot(2, 1, 1)
-            ax2 = fig.add_subplot(2, 1, 2)
-            ax1.imshow(frac_arr1)
-            ax2.imshow(frac_arr2)
-            plt.show()
-        print(' ')
-        fss_dict[sz] = fss_tmp
-    df = pd.DataFrame.from_dict(fss_dict, orient='index')
-    return df
-
-
-def calc_pcorr(xra1, xra2, threshold=0., verbose=False):
+    Calculating the weighting scheme based on pattern correlation values. 
+    Note, xra and scores should have the same source dimension.
+    The scores should be for the correct applied threshold level.
+    Inputs:
+        xra: binary xarray of ensemble members (source, x, y)
+        scores: scores for each ensemble member (xarray DataArray) from statistics netcdf
+    Output:
+        xraprob: ensemble relative frequency (xarray DataArray)
     """
-    Calculates Pattern Correlation between two arrays
-    xra1 and xra2 need to be on the same grid. 
-    See monetio.remap_nearest or monetio.remap_xesmf to remap arrays.
+    a = 0
+    W = []
+    xra2 = xra
+    while a < len(xra.source):
+        weight = scores[a].values
+        W.append(weight)
+        xra2[a, :, :] = xra[a, :, :] * weight
+        a += 1
 
-    Pattern Correlation (uncentered) = (binxra1 * binxra2) / sqrt((binxra1^2)*(binxra2^2))
-    Pattern Correlation (centered) = ((binxra1 - arr1)(binxra2 - arr2)) / sqrt(((binxra1-arr1)^2) * ((binxra2 - arr2)^2))
-
-    Inputs: 
-    xra1:  observations/satellite (xarray DataArray)
-    xra2:  the forecast/model (xarray DataArray)
-    threshold: value for data threshold, default = 0. (float)
-    verbose: boolean (True = print statements)
-
-    Outputs:
-    pcorr, pcorruncent: pattern correlation (centered), pattern correlation (uncentered)
-    """
-
-    # Convert xra1 and xra2 to binary arrays
-    binxra1 = xr.where(xra1 >= threshold, 1., 0.)
-    binxra2 = xr.where(xra2 >= threshold, 1., 0.)
-
-    # Determining hits or matches (obs yes, forecast yes)
-    match = binxra1 * binxra2
-    # Determining misses for forecast array (obs yes, forecast no)
-    arr1 = binxra1 - match
-    # Determining false alarm for forecast array (forecast yes, obs no)
-    arr2 = binxra2 - match
-    # xra1 and xra2 are the same shape, determining total points in each array
-    totalpts = binxra1.shape[0] * binxra1.shape[1]
-
-    # Everything above this coud be in class as variables - not specific to pcorr calculation
-    # Space averaged values
-    arr1avg = (arr1.sum() + match.sum()) / float(totalpts)
-    arr2avg = (arr2.sum() + match.sum()) / float(totalpts)
-
-    # Calculating centered pattern correlation - subtracts space averaged values
-    arr1corr = binxra1 - arr1avg
-    arr2corr = binxra2 - arr2avg
-    norm = ((arr1corr * arr1corr).sum()) ** 0.5 * ((arr2corr * arr2corr).sum())**0.5
-    pcorr = (arr1corr * arr2corr).sum()/norm
-
-    # Calculating uncentered pattern correlation
-    norm = ((binxra1 * binxra1).sum()) ** 0.5 * ((binxra2 * binxra2).sum())**0.5
-    pcorruncent = (match).sum()/norm
-
-    if verbose == True:
-        print('PCORR (centered)', pcorr.values)
-        print('PCORR (uncentered)', pcorruncent.values)
-
-    return pcorr, pcorruncent
+    xraprob = xra2.sum(dim='source') / sum(W)
+    return xraprob
