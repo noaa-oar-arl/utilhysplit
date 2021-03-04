@@ -72,6 +72,8 @@ def find_volcat(tdir, vid=None, daterange=None, verbose=False):
     """
     vnhash = {}
     nflist = []
+    if not os.path.isdir(tdir):
+         print('directory not valid {}'.format(tdir))
     for (dirpath,dirnames,filenames) in walk(tdir):
          for fln in filenames:
              try:
@@ -239,6 +241,72 @@ def check_names(dset,vname,checklist):
         if val in dset.data_vars:
            return get_data(dset,val)
     return xr.DataArray()
+
+
+def create_pc_plot(dset):
+    """
+    creates plots of parallax corrected vs. uncorrected values.
+    """   
+   
+    def subfunc(ax, vals):
+        ax.plot(vals[0], vals[1], 'k.', MarkerSize=1) 
+        # plot 1:1 line
+        minval = np.min(vals[0])
+        maxval = np.max(vals[0])
+        ax.plot([minval,maxval],[minval,maxval],'--r')
+
+    latitude, longitude = compare_pc(dset)
+    fig = plt.figure(1)
+    ax1 = fig.add_subplot(2,1,1)
+    ax2 = fig.add_subplot(2,1,2)
+
+    ax1.set_ylabel('uncorrected')
+    ax2.set_ylabel('uncorrected')
+    ax2.set_xlabel('corrected')
+
+    subfunc(ax1, latitude) 
+    subfunc(ax2, longitude) 
+    return fig, ax1, ax2
+
+def compare_pc(dset):
+    """
+    Returns:
+    latitude : [list of parrallax corrected values, list of uncorrected values]
+    longitude : [list of parrallax corrected values, list of uncorrected values]
+    """
+    def process(pc,val):
+        # pair corrected and uncorrected values.
+        pzip = list(zip(pc,val))
+        # remove nans
+        new = [x for x in pzip if not np.isnan(x[0])]
+        return list(zip(*new))  
+
+    pc_lat = get_pc_latitude(dset)
+    pc_lon = get_pc_longitude(dset)
+    latvals = pc_lat.latitude.values.flatten()
+    lonvals = pc_lon.longitude.values.flatten()
+    pclat = pc_lat.values.flatten()
+    pclon = pc_lon.values.flatten()
+
+    latitude = process(pclat, latvals)
+    longitude = process(pclon,lonvals)
+    return latitude, longitude 
+
+
+
+
+
+def get_pc_latitude(dset,vname=None):
+    """Returns array with retrieved height of the highest layer of ash."""
+    """Default units are km above sea-level"""
+    checklist = ['pc_latitude']
+    return check_names(dset,vname,checklist)
+
+def get_pc_longitude(dset,vname=None):
+    """Returns array with retrieved height of the highest layer of ash."""
+    """Default units are km above sea-level"""
+    checklist = ['pc_longitude']
+    return check_names(dset,vname,checklist)
 
 def get_height(dset,vname=None):
     """Returns array with retrieved height of the highest layer of ash."""
