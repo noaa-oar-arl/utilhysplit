@@ -32,7 +32,7 @@ Functions:
 
 class CalcScores:
 
-    def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=True):
+    def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False):
         """ Class of tools for calculating various Scores and Skill Scores, 
         relying on binary arrays and the 2x2 contingency table
         xra1 and xra2 need to be on the same grid.
@@ -281,7 +281,8 @@ def calc_weightsBS(xra, scores):
 
 
 def calc_weightsPC(xra, scores):
-    """
+    """Kat62020
+
     Calculating the weighting scheme based on pattern correlation values. 
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
