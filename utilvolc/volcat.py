@@ -83,7 +83,7 @@ def find_volcat(tdir, vid=None, daterange=None, verbose=False):
                 nflist.append(fln)
                 continue
              if daterange:
-                if vn.date < daterange[0] or vn.date > datrange[1]:
+                if vn.date < daterange[0] or vn.date > daterange[1]:
                    continue
              if vid and vn.vhash['volcano id'] != vid: continue
              if vn.date not in vnhash.keys():
@@ -291,9 +291,6 @@ def compare_pc(dset):
     latitude = process(pclat, latvals)
     longitude = process(pclon,lonvals)
     return latitude, longitude 
-
-
-
 
 
 def get_pc_latitude(dset,vname=None):
