@@ -407,6 +407,16 @@ def plot_gen(dset, ax,  val='mass', time=None, plotmap=True,
       plt.title(title)
       plt.show()
 
+def matchvals(pclat, pclon, mass, height):
+    fill = mass.attrs['_FillValue']
+    pclon = pclon.values.flatten()
+    pclat = pclat.values.flatten()
+    mass = mass.values.flatten()
+    height = height.values.flatten()
+    tlist = list(zip(pclat,pclon,mass,height))
+    tlist = [x for x in tlist if x[2]!=fill]
+    return tlist
+
 
 def correct_pc(dset):
     mass = get_mass(dset,clip=False)
@@ -417,20 +427,10 @@ def correct_pc(dset):
     pclat = get_pc_latitude(dset,clip=False)
     pclon = get_pc_longitude(dset,clip=False)
 
-
-    fill = mass.attrs['_FillValue']
-    vpi = np.where(mass != fill)
-    print(fill)
-    print(mass.shape)
-    print(vpi)
-    pclat = pclat[vpi].values.flatten()
-    pclon = pclon[vpi].values.flatten()
-    mlist = mass[vpi].values.flatten()
-    hlist = height[vpi].values.flatten()       
-    pclat = [x for x in pclat if not np.isnan(x)]
-    pclon = [x for x in pclon if not np.isnan(x)]
-    mlist =  [x for x in mlist if not np.isnan(x)]
-    hlist =  [x for x in hlist if not np.isnan(x)]
+    ## Not working need to create lists of
+    ## pc_lat, pc_lon, mass, height 
+    # for the places above nan.
+    tlist = matchvals(pclon,pclat,mass,height)
  
     #pclat = [x for x in pclat.values.flatten() if not np.isnan(x)]
     #pclon = [x for x in pclon.values.flatten() if not np.isnan(x)]
@@ -438,9 +438,10 @@ def correct_pc(dset):
     #hlist =  [x for x in height.values.flatten() if not np.isnan(x)]
 
     indexlist = []
-    for point in zip(pclon, pclat,mlist,hlist):
+    #for point in zip(pclon, pclat,mlist,hlist):
+    for point in tlist:
+        print(point)
         iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
-        print(iii, point[2])
         newmass = xr.where((newmass.coords['x']==iii[0]) & (newmass.coords['y']==iii[1]), 
                             point[2], newmass)         
         newhgt = xr.where((newhgt.coords['x']==iii[0]) & (newhgt.coords['y']==iii[1]), 
