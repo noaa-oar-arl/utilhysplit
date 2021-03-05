@@ -68,10 +68,9 @@ def write_parallax_corrected_files(tdir,wdir,vid=None,daterange=None, verbose=Fa
     files have same name with _pc.nc added to the end.
     These will be needed for input into MET.
     """
-    vlist = find_volcat(tdir,vid,daterange,verbose,return_val=3)
-    keylist = list(vlist.keys())
-    for key in keylist:
-        fname = vlist[key].fname
+    vlist = find_volcat(tdir,vid,daterange,verbose=verbose,return_val=2)
+    for val in vlist:
+        fname = val.fname
         dset = open_dataset(os.path.join(tdir,fname), correct_parallax=True)
         new_fname = fname.replace('.nc','_pc.nc')
         if verbose: print('writing {} to {}'.format(new_fname, wdir))
@@ -89,13 +88,13 @@ def find_volcat(tdir, vid=None, daterange=None,
 
     return_val : integer
                1 - returns dictionary
-               2 - returns list of filenames
-               3 - returns list of VolcatName objects.
+               2-  returns list of VolcatName objects.
+               3 - returns list of filenames
 
     Returns:
                1 - returns dictionary. key is date. values is VolcatName object.
-               2 - returns list of filenames
-               3 - returns list of VolcatName objects.
+               2 - returns list of VolcatName objects.
+               3 - returns list of filenames
 
     """
     vnhash = {}  # dictionary
