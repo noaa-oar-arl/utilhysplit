@@ -35,7 +35,7 @@ plot_mass: plots ash mass loading from VOLCAT
 """
 
 
-def open_dataset(fname, pc_correct=False):
+def open_dataset(fname, correct_parallax=False):
     """Opens single VOLCAT file"""
     dset = xr.open_dataset(fname, mask_and_scale=False, decode_times=False)
     # not needed for new Bezy data.
@@ -44,21 +44,42 @@ def open_dataset(fname, pc_correct=False):
     except:
         pass
     # use parallax corrected if available and flag is set.
-    if 'pc_latitude' in dset.data_vars and pc_correct:
-        # rename uncorrected values
-        dset = \
-             dset.rename({'latitude':'uc_latitude','longitude':'uc_longitude'})
-        # rename corrected values
-        dset = \
-             dset.rename({'pc_latitude':'latitude','pc_longitude':'longitude'})
-        dset.attrs.update({'parallax corrected coordinates':'True'})  
-    else:  
-        dset.attrs.update({'parallax corrected coordinates':'False'})  
     dset = _get_latlon(dset,'latitude','longitude')
     dset = _get_time(dset)
+    if 'pc_latitude' in dset.data_vars and correct_parallax:
+        dset = correct_pc(dset)
+        dset.attrs.update({'parallax corrected coordinates':'True'})  
+    elif 'pc_latitude' not in dset.data_vars and correct_parallax:
+        print('WARNING: cannot correct parallax. Data not found in file') 
+        dset.attrs.update({'parallax corrected coordinates':'False'})  
+    else:  
+        dset.attrs.update({'parallax corrected coordinates':'False'})  
     return dset
 
-def find_volcat(tdir, vid=None, daterange=None, verbose=False):
+
+def write_parallax_corrected_files(tdir,wdir,vid=None,daterange=None, verbose=False):
+    """
+    tdir : str : location of volcat files.
+    wdir : str : location to write new files 
+    vid : volcano id : if None will find all
+    daterange : [datetime, datetime] : if None will find all.
+    verbose: boolean
+    creates netcdf files with parallax corrected values.
+    files have same name with _pc.nc added to the end.
+    These will be needed for input into MET.
+    """
+    vlist = find_volcat(tdir,vid,daterange,verbose,return_val=3)
+    keylist = list(vlist.keys())
+    for key in keylist:
+        fname = vlist[key].fname
+        dset = open_dataset(os.path.join(tdir,fname), correct_parallax=True)
+        new_fname = fname.replace('.nc','_pc.nc')
+        if verbose: print('writing {} to {}'.format(new_fname, wdir))
+        dset.to_netcdf(os.path.join(wdir,new_fname))   
+
+
+def find_volcat(tdir, vid=None, daterange=None, 
+                return_val=2, verbose=False):
     """
     tdir : str
     daterange : [datetime, datetime] or None
@@ -66,12 +87,20 @@ def find_volcat(tdir, vid=None, daterange=None, verbose=False):
     convention as defined in VolcatName class.
     If a daterange is defined will return only files 
 
+    return_val : integer
+               1 - returns dictionary
+               2 - returns list of filenames
+               3 - returns list of VolcatName objects.
+
     Returns:
-    vnlist : dictionary with key=date and value=filename.
+               1 - returns dictionary. key is date. values is VolcatName object.
+               2 - returns list of filenames
+               3 - returns list of VolcatName objects.
 
     """
-    vnhash = {}
-    nflist = []
+    vnhash = {}  # dictionary
+    nflist = []  # list of filenames
+    vnlist = []  # list of filenames
     if not os.path.isdir(tdir):
          print('directory not valid {}'.format(tdir))
     for (dirpath,dirnames,filenames) in walk(tdir):
@@ -80,7 +109,6 @@ def find_volcat(tdir, vid=None, daterange=None, verbose=False):
                 vn = VolcatName(fln)
              except:
                 if verbose: print('Not VOLCAT filename {}'.format(fln))
-                nflist.append(fln)
                 continue
              if daterange:
                 if vn.date < daterange[0] or vn.date > daterange[1]:
@@ -88,11 +116,15 @@ def find_volcat(tdir, vid=None, daterange=None, verbose=False):
              if vid and vn.vhash['volcano id'] != vid: continue
              if vn.date not in vnhash.keys():
                 vnhash[vn.date] = vn
+                nflist.append(fln)
+                vnlist.append(vn)
              else: 
                 print('two files with same date')
                 print(vnhash[vn.date].compare(vn))
                 
-    return vnhash
+    if return_val == 1: return vnhash
+    elif return_val == 2: return vnlist
+    elif return_val == 3: return nflist
 
 def test_volcat(tdir, daterange=None, verbose=True):
     """
@@ -140,6 +172,7 @@ class VolcatName:
         self.keylist.append('image time') 
         self.keylist.append('feature id') 
 
+        self.pc_corrected = False
         self.parse(fname)
 
     def compare(self, other):
@@ -161,6 +194,7 @@ class VolcatName:
 
     def parse(self,fname):
         temp = fname.split('_')
+        if 'pc' in temp[-1]: self.pc_corrected=True
         for val in zip(self.keylist,temp):
             self.vhash[val[0]] = val[1]
         # use event date?
@@ -205,14 +239,14 @@ def open_mfdataset(fname):
     return dset
 
 
-def bbox(darray):
+def bbox(darray, fillvalue):
     """Returns bounding box around data
     Input: Must be dataarray
     Outupt: Lower left corner, upper right corner of bounding box
     around data"""
     import numpy as np
     arr = darray[0, :, :].values
-    a = np.where(arr != -999.)
+    a = np.where(arr != fillvalue)
     if np.min(a[0]) != 0. and np.min(a[1]) != 0.:
         bbox = ([np.min(a[0]-3), np.min(a[1])-3], [np.max(a[0]+3), np.max(a[1])+3])
     else:
@@ -235,8 +269,12 @@ def _get_time(dset):
 # Extracting variables
 def get_data(dset,vname,clip=True):
     gen = dset.data_vars[vname]
+    try:
+         fillvalue = gen._FillValue
+    except:
+         fillvalue = -999
     if clip:
-        box = bbox(gen)
+        box = bbox(gen,fillvalue)
         gen = gen[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
         gen = gen.where(gen != gen._FillValue)
     return gen
@@ -408,12 +446,26 @@ def plot_gen(dset, ax,  val='mass', time=None, plotmap=True,
       plt.show()
 
 def matchvals(pclat, pclon, mass, height):
-    fill = mass.attrs['_FillValue']
+    # pclat : xarray DataArray
+    # pclon : xarray DataArray
+    # mass : xarray DataArray
+    # height : xarray DataArray
+    # used in correct_pc
+
+    # returns 1D list of tuples of values in the 4 DataArrays
+ 
+    if '_FillValue' in mass.attrs:
+        fill = mass.attrs['_FillValue']
+    else: 
+        print('WARNING: correct_pc : _FillValue attribute not found.')
+        print('WARNING: correct_pc : using default fill of -999')
+        fill = -999
     pclon = pclon.values.flatten()
     pclat = pclat.values.flatten()
     mass = mass.values.flatten()
     height = height.values.flatten()
     tlist = list(zip(pclat,pclon,mass,height))
+    # only return tuples in which mass has a valid value
     tlist = [x for x in tlist if x[2]!=fill]
     return tlist
 
@@ -436,7 +488,6 @@ def correct_pc(dset):
     tlist = matchvals(pclon,pclat,mass,height)
     indexlist = []
     for point in tlist:
-        print(point)
         iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
         newmass = xr.where((newmass.coords['x']==iii[0]) & (newmass.coords['y']==iii[1]), 
                             point[2], newmass)         
@@ -454,9 +505,10 @@ def correct_pc(dset):
 
     newmass = newmass.expand_dims("time")
     newhgt = newhgt.expand_dims("time")
- 
+
     # keep original names for mass and height.
     dnew = xr.Dataset({'ash_mass_loading':newmass,'ash_cloud_height':newhgt})
+    dnew.time.attrs.update({'standard_name':'time'}) 
     return dnew     
 
 
