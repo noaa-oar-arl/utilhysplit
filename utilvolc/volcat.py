@@ -112,8 +112,14 @@ class VolcatName:
     """
     12/18/2020 works with 'new' data format.
     parse the volcat name to get information.
+    attributes:
+    self.fname name of file
+    self.date date associated with file
     self.vhash is a dictionary which contains info
     gleaned from the naming convention.
+
+    methods:
+    compare: returns what is different between two file names.
     """
     def __init__(self,fname):
         self.fname=fname 
@@ -227,19 +233,20 @@ def _get_time(dset):
     return dset
 
 # Extracting variables
-def get_data(dset,vname):
+def get_data(dset,vname,clip=True):
     gen = dset.data_vars[vname]
-    box = bbox(gen)
-    gen = gen[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-    gen = gen.where(gen != gen._FillValue)
+    if clip:
+        box = bbox(gen)
+        gen = gen[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
+        gen = gen.where(gen != gen._FillValue)
     return gen
 
-def check_names(dset,vname,checklist):
+def check_names(dset,vname,checklist,clip=True):
     if vname:
-        return get_data(dset,vname)
+        return get_data(dset,vname,clip=clip)
     for val in checklist:
         if val in dset.data_vars:
-           return get_data(dset,val)
+           return get_data(dset,val,clip=clip)
     return xr.DataArray()
 
 
@@ -293,35 +300,35 @@ def compare_pc(dset):
     return latitude, longitude 
 
 
-def get_pc_latitude(dset,vname=None):
+def get_pc_latitude(dset,vname=None,clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
     """Default units are km above sea-level"""
     checklist = ['pc_latitude']
-    return check_names(dset,vname,checklist)
+    return check_names(dset,vname,checklist,clip=clip)
 
-def get_pc_longitude(dset,vname=None):
+def get_pc_longitude(dset,vname=None,clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
     """Default units are km above sea-level"""
     checklist = ['pc_longitude']
-    return check_names(dset,vname,checklist)
+    return check_names(dset,vname,checklist,clip=clip)
 
-def get_height(dset,vname=None):
+def get_height(dset,vname=None,clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
     """Default units are km above sea-level"""
     checklist = ['ash_cth','ash_cloud_height']
-    return check_names(dset,vname,checklist)
+    return check_names(dset,vname,checklist,clip=clip)
 
-def get_radius(dset,vname=None):
+def get_radius(dset,vname=None,clip=True):
     """Returns 2d array of ash effective radius"""
     """Default units are micrometer"""
     checklist = ['ash_r_eff','effective_radius_of_ash']
-    return check_names(dset,vname,checklist)
+    return check_names(dset,vname,checklist,clip=clip)
 
-def get_mass(dset,vname=None):
+def get_mass(dset,vname=None,clip=True):
     """Returns 2d array of ash mass loading"""
     """Default units are grams / meter^2"""
     checklist = ['ash_mass','ash_mass_loading']
-    return check_names(dset,vname,checklist)
+    return check_names(dset,vname,checklist,clip=clip)
 
 def mass_sum(dset):
     mass = get_mass(dset)
@@ -399,3 +406,64 @@ def plot_gen(dset, ax,  val='mass', time=None, plotmap=True,
       plt.colorbar()
       plt.title(title)
       plt.show()
+
+
+def correct_pc(dset):
+    mass = get_mass(dset,clip=False)
+    height = get_height(dset,clip=False)
+    newmass = xr.zeros_like(mass.isel(time=0))
+    newhgt = xr.zeros_like(height.isel(time=0))
+    time = mass.time 
+    pclat = get_pc_latitude(dset,clip=False)
+    pclon = get_pc_longitude(dset,clip=False)
+
+
+    fill = mass.attrs['_FillValue']
+    vpi = np.where(mass != fill)
+    print(fill)
+    print(mass.shape)
+    print(vpi)
+    pclat = pclat[vpi].values.flatten()
+    pclon = pclon[vpi].values.flatten()
+    mlist = mass[vpi].values.flatten()
+    hlist = height[vpi].values.flatten()       
+    pclat = [x for x in pclat if not np.isnan(x)]
+    pclon = [x for x in pclon if not np.isnan(x)]
+    mlist =  [x for x in mlist if not np.isnan(x)]
+    hlist =  [x for x in hlist if not np.isnan(x)]
+ 
+    #pclat = [x for x in pclat.values.flatten() if not np.isnan(x)]
+    #pclon = [x for x in pclon.values.flatten() if not np.isnan(x)]
+    #mlist =  [x for x in mass.values.flatten() if not np.isnan(x)]
+    #hlist =  [x for x in height.values.flatten() if not np.isnan(x)]
+
+    indexlist = []
+    for point in zip(pclon, pclat,mlist,hlist):
+        iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
+        print(iii, point[2])
+        newmass = xr.where((newmass.coords['x']==iii[0]) & (newmass.coords['y']==iii[1]), 
+                            point[2], newmass)         
+        newhgt = xr.where((newhgt.coords['x']==iii[0]) & (newhgt.coords['y']==iii[1]), 
+                            point[3], newhgt)         
+        # keeps track of new indices of lat lon points.
+        indexlist.append(iii) 
+    # check if any points are mapped to the same point.
+    if len(indexlist) != len(list(set(indexlist))):
+       print('WARNING: correct_pc function: some values mapped to same point')
+    
+    newmass = newmass.assign_attrs({'_FillValue':0})
+    newhgt = newhgt.assign_attrs({'_FillValue':0})
+
+    newmass = newmass.expand_dims("time")
+    newhgt = newhgt.expand_dims("time")
+    #newmass.assign_coords({"time":time})
+
+    dnew = xr.Dataset({'ash_mass_loading':newmass,'ash_cloud_height':newhgt})
+    #dnew['ash_mass_loading'].assign_attrs('_FillValue') = 0
+    #dnew['ash_cloud_height'].assign_attrs('_FillValue') = 0
+    return dnew     
+
+
+
+
+
