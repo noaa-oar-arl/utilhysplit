@@ -419,6 +419,12 @@ def matchvals(pclat, pclon, mass, height):
 
 
 def correct_pc(dset):
+    """
+    moves mass and height values into the coordinate values closest
+    to the parallax corrected values. Results in dataset with mass and height shifted
+    to parallax corrected positions.
+    """
+
     mass = get_mass(dset,clip=False)
     height = get_height(dset,clip=False)
     newmass = xr.zeros_like(mass.isel(time=0))
@@ -427,18 +433,8 @@ def correct_pc(dset):
     pclat = get_pc_latitude(dset,clip=False)
     pclon = get_pc_longitude(dset,clip=False)
 
-    ## Not working need to create lists of
-    ## pc_lat, pc_lon, mass, height 
-    # for the places above nan.
     tlist = matchvals(pclon,pclat,mass,height)
- 
-    #pclat = [x for x in pclat.values.flatten() if not np.isnan(x)]
-    #pclon = [x for x in pclon.values.flatten() if not np.isnan(x)]
-    #mlist =  [x for x in mass.values.flatten() if not np.isnan(x)]
-    #hlist =  [x for x in height.values.flatten() if not np.isnan(x)]
-
     indexlist = []
-    #for point in zip(pclon, pclat,mlist,hlist):
     for point in tlist:
         print(point)
         iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
@@ -451,17 +447,16 @@ def correct_pc(dset):
     # check if any points are mapped to the same point.
     if len(indexlist) != len(list(set(indexlist))):
        print('WARNING: correct_pc function: some values mapped to same point')
-    
+    # TODO currently the fill value is 0. 
+    # possibly change to nan or something else?    
     newmass = newmass.assign_attrs({'_FillValue':0})
     newhgt = newhgt.assign_attrs({'_FillValue':0})
 
     newmass = newmass.expand_dims("time")
     newhgt = newhgt.expand_dims("time")
-    #newmass.assign_coords({"time":time})
-
+ 
+    # keep original names for mass and height.
     dnew = xr.Dataset({'ash_mass_loading':newmass,'ash_cloud_height':newhgt})
-    #dnew['ash_mass_loading'].assign_attrs('_FillValue') = 0
-    #dnew['ash_cloud_height'].assign_attrs('_FillValue') = 0
     return dnew     
 
 
