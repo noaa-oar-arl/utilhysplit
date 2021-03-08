@@ -34,8 +34,9 @@ plot_mass: plots ash mass loading from VOLCAT
 ------------
 """
 
+
 def open_mfdataset(fname):
-    # 12/1/2020 Not modified for new files (Bezy) 
+    # 12/1/2020 Not modified for new files (Bezy)
     # TO DO - modify for new files.
     """Opens multiple VOLCAT files"""
     print(fname)
@@ -51,7 +52,8 @@ def open_mfdataset(fname):
     dset = dset.rename({"lines": 'y', "elements": 'x'})
     return dset
 
-def open_dataset(fname, 
+
+def open_dataset(fname,
                  correct_parallax=False,
                  mask_and_scale=True):
     """Opens single VOLCAT file"""
@@ -60,7 +62,7 @@ def open_dataset(fname,
     # The scale factor needs to be applied to get output in km.
 
     # ash_mass_loading has no scale_factor of offset and fill value is -999.
-    dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale, 
+    dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale,
                            decode_times=False)
     # not needed for new Bezy data.
     try:
@@ -68,31 +70,33 @@ def open_dataset(fname,
     except:
         pass
     # use parallax corrected if available and flag is set.
-    dset = _get_latlon(dset,'latitude','longitude')
+    dset = _get_latlon(dset, 'latitude', 'longitude')
     dset = _get_time(dset)
     if 'pc_latitude' in dset.data_vars and correct_parallax:
         dset = correct_pc(dset)
-        dset.attrs.update({'parallax corrected coordinates':'True'})  
+        dset.attrs.update({'parallax corrected coordinates': 'True'})
     elif 'pc_latitude' not in dset.data_vars and correct_parallax:
-        print('WARNING: cannot correct parallax. Data not found in file') 
-        dset.attrs.update({'parallax corrected coordinates':'False'})  
-    else:  
-        dset.attrs.update({'parallax corrected coordinates':'False'})  
+        print('WARNING: cannot correct parallax. Data not found in file')
+        dset.attrs.update({'parallax corrected coordinates': 'False'})
+    else:
+        dset.attrs.update({'parallax corrected coordinates': 'False'})
     return dset
 
-def average_volcat(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True):
+
+def average_volcat(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True):
     # find files.
-    tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=3)
+    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=3)
     das = []
     for iii in tlist:
         print(iii)
-        das.append(open_dataset(os.path.join(tdir,iii),
-                   correct_parallax=correct_parallax, 
-                   mask_and_scale=mask_and_scale))
+        das.append(open_dataset(os.path.join(tdir, iii),
+                                correct_parallax=correct_parallax,
+                                mask_and_scale=mask_and_scale))
     #dset = xr.concat(das, dim='time')
     return das
 
-def write_parallax_corrected_files(tdir,wdir,vid=None,daterange=None, verbose=False):
+
+def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
     """
     tdir : str : location of volcat files.
     wdir : str : location to write new files 
@@ -103,20 +107,17 @@ def write_parallax_corrected_files(tdir,wdir,vid=None,daterange=None, verbose=Fa
     files have same name with _pc.nc added to the end.
     These will be needed for input into MET.
     """
-    vlist = find_volcat(tdir,vid,daterange,verbose=verbose,return_val=2)
+    vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for val in vlist:
         fname = val.fname
-        dset = open_dataset(os.path.join(tdir,fname), correct_parallax=True)
-        new_fname = fname.replace('.nc','_pc.nc')
-        if verbose: print('writing {} to {}'.format(new_fname, wdir))
-        dset.to_netcdf(os.path.join(wdir,new_fname))   
+        dset = open_dataset(os.path.join(tdir, fname), correct_parallax=True)
+        new_fname = fname.replace('.nc', '_pc.nc')
+        if verbose:
+            print('writing {} to {}'.format(new_fname, wdir))
+        dset.to_netcdf(os.path.join(wdir, new_fname))
 
 
-
-    
-
-
-def find_volcat(tdir, vid=None, daterange=None, 
+def find_volcat(tdir, vid=None, daterange=None,
                 return_val=2, verbose=False):
     """
     tdir : str
@@ -141,27 +142,33 @@ def find_volcat(tdir, vid=None, daterange=None,
     nflist = []  # list of filenames
     vnlist = []  # list of filenames
     if not os.path.isdir(tdir):
-         print('directory not valid {}'.format(tdir))
+        print('directory not valid {}'.format(tdir))
     for fln in os.listdir(tdir):
-         try:
+        try:
             vn = VolcatName(fln)
-         except:
-            if verbose: print('Not VOLCAT filename {}'.format(fln))
+        except:
+            if verbose:
+                print('Not VOLCAT filename {}'.format(fln))
             continue
-         if daterange:
+        if daterange:
             if vn.date < daterange[0] or vn.date > daterange[1]:
-               continue
-         if vid and vn.vhash['volcano id'] != vid: continue
-         if vn.date not in vnhash.keys():
+                continue
+        if vid and vn.vhash['volcano id'] != vid:
+            continue
+        if vn.date not in vnhash.keys():
             vnhash[vn.date] = vn
             nflist.append(fln)
             vnlist.append(vn)
-         else: 
+        else:
             print('two files with same date')
             print(vnhash[vn.date].compare(vn))
-    if return_val == 1: return vnhash
-    elif return_val == 2: return vnlist
-    elif return_val == 3: return nflist
+    if return_val == 1:
+        return vnhash
+    elif return_val == 2:
+        return vnlist
+    elif return_val == 3:
+        return nflist
+
 
 def test_volcat(tdir, daterange=None, verbose=True):
     """
@@ -170,12 +177,12 @@ def test_volcat(tdir, daterange=None, verbose=True):
     vnlist = find_volcat(tdir, daterange, verbose)
     for key in vnlist.keys():
         vname = vnlist[key].fname
-        dset = open_dataset(os.path.join(tdir,vname),pc_correct=False)
-        if np.max(dset.pc_latitude) > 0: 
-           print('passed')
+        dset = open_dataset(os.path.join(tdir, vname), pc_correct=False)
+        if np.max(dset.pc_latitude) > 0:
+            print('passed')
         else:
-           print('failed')
-         
+            print('failed')
+
 
 class VolcatName:
     """
@@ -190,24 +197,25 @@ class VolcatName:
     methods:
     compare: returns what is different between two file names.
     """
-    def __init__(self,fname):
-        self.fname=fname 
-        self.vhash = {} 
+
+    def __init__(self, fname):
+        self.fname = fname
+        self.vhash = {}
         self.date = None
         self.dtfmt = "s%Y%j_%H%M%S"
 
         self.keylist = ['algorithm name']
         self.keylist.append('satellite platform')
-        self.keylist.append('event scanning strategy') 
-        self.keylist.append('event date') 
-        self.keylist.append('event time') 
-        self.keylist.append('volcano id') 
-        self.keylist.append('description') 
-        self.keylist.append('WMO satellite id') 
-        self.keylist.append('image scanning strategy') 
-        self.keylist.append('image date') 
-        self.keylist.append('image time') 
-        self.keylist.append('feature id') 
+        self.keylist.append('event scanning strategy')
+        self.keylist.append('event date')
+        self.keylist.append('event time')
+        self.keylist.append('volcano id')
+        self.keylist.append('description')
+        self.keylist.append('WMO satellite id')
+        self.keylist.append('image scanning strategy')
+        self.keylist.append('image date')
+        self.keylist.append('image time')
+        self.keylist.append('feature id')
 
         self.pc_corrected = False
         self.parse(fname)
@@ -218,7 +226,7 @@ class VolcatName:
         Returns
         dictionary of information which is different.
         values is a  tuple of (other value, self value).
-        """ 
+        """
         diffhash = {}
         for key in self.keylist:
             if other.vhash[key] != self.vhash[key]:
@@ -227,19 +235,20 @@ class VolcatName:
 
     def __str__(self):
         val = [self.vhash[x] for x in self.keylist]
-        return str.join('_',val)
+        return str.join('_', val)
 
-    def parse(self,fname):
+    def parse(self, fname):
         temp = fname.split('_')
-        if 'pc' in temp[-1]: self.pc_corrected=True
-        for val in zip(self.keylist,temp):
+        if 'pc' in temp[-1]:
+            self.pc_corrected = True
+        for val in zip(self.keylist, temp):
             self.vhash[val[0]] = val[1]
         # use event date?
         dstr = '{}_{}'.format(self.vhash[self.keylist[3]],
                               self.vhash[self.keylist[4]])
-        self.date = datetime.datetime.strptime(dstr,self.dtfmt)
+        self.date = datetime.datetime.strptime(dstr, self.dtfmt)
         self.vhash[self.keylist[11]] = \
-            self.vhash[self.keylist[11]].replace('.nc','')
+            self.vhash[self.keylist[11]].replace('.nc', '')
         return self.vhash
 
     def create_name(self):
@@ -257,7 +266,6 @@ def open_dataset2(fname):
     #dset = _get_latlon(dset)
     #dset = _get_time(dset)
     return dset
-
 
 
 def bbox(darray, fillvalue):
@@ -278,9 +286,11 @@ def bbox(darray, fillvalue):
         bbox = ([np.min(a[0]), np.min(a[1])], [np.max(a[0]), np.max(a[1])])
     return bbox
 
-def _get_latlon(dset,name1='latitude',name2='longitude'):
+
+def _get_latlon(dset, name1='latitude', name2='longitude'):
     dset = dset.set_coords([name1, name2])
     return dset
+
 
 def _get_time(dset):
     import pandas as pd
@@ -292,21 +302,23 @@ def _get_time(dset):
     return dset
 
 # Extracting variables
-def get_data(dset,vname,clip=True):
+
+
+def get_data(dset, vname, clip=True):
     gen = dset.data_vars[vname]
     atvals = gen.attrs
     fillvalue = None
     if '_FillValue' in gen.attrs:
         fillvalue = gen._FillValue
-        gen = gen.where(gen!=fillvalue)
+        gen = gen.where(gen != fillvalue)
         fillvalue = None
     if clip:
-        box = bbox(gen,fillvalue)
+        box = bbox(gen, fillvalue)
         gen = gen[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
         if '_FillValue' in gen.attrs:
             gen = gen.where(gen != fillvalue)
         else:
-            gen = gen.where(gen) 
+            gen = gen.where(gen)
     # applies scale_factor and offset if they are in the attributes.
     if 'scale_factor' in gen.attrs:
         gen = gen * gen.attrs['scale_factor']
@@ -317,43 +329,46 @@ def get_data(dset,vname,clip=True):
     # keep relevant attributes.
     new_attr = {}
     for key in atvals.keys():
-        if key not in ['_FillValue','add_offset','offset','scale_factor']:
-           new_attr[key] = atvals[key]
+        if key not in ['_FillValue', 'add_offset', 'offset', 'scale_factor']:
+            new_attr[key] = atvals[key]
     gen.attrs = new_attr
     return gen
 
-def check_names(dset,vname,checklist,clip=True):
+
+def check_names(dset, vname, checklist, clip=True):
     if vname:
-        return get_data(dset,vname,clip=clip)
+        return get_data(dset, vname, clip=clip)
     for val in checklist:
         if val in dset.data_vars:
-           return get_data(dset,val,clip=clip)
+            return get_data(dset, val, clip=clip)
     return xr.DataArray()
+
 
 def create_pc_plot(dset):
     """
     creates plots of parallax corrected vs. uncorrected values.
-    """   
-   
+    """
+
     def subfunc(ax, vals):
-        ax.plot(vals[0], vals[1], 'k.', MarkerSize=1) 
+        ax.plot(vals[0], vals[1], 'k.', MarkerSize=1)
         # plot 1:1 line
         minval = np.min(vals[0])
         maxval = np.max(vals[0])
-        ax.plot([minval,maxval],[minval,maxval],'--r')
+        ax.plot([minval, maxval], [minval, maxval], '--r')
 
     latitude, longitude = compare_pc(dset)
     fig = plt.figure(1)
-    ax1 = fig.add_subplot(2,1,1)
-    ax2 = fig.add_subplot(2,1,2)
+    ax1 = fig.add_subplot(2, 1, 1)
+    ax2 = fig.add_subplot(2, 1, 2)
 
     ax1.set_ylabel('uncorrected')
     ax2.set_ylabel('uncorrected')
     ax2.set_xlabel('corrected')
 
-    subfunc(ax1, latitude) 
-    subfunc(ax2, longitude) 
+    subfunc(ax1, latitude)
+    subfunc(ax2, longitude)
     return fig, ax1, ax2
+
 
 def compare_pc(dset):
     """
@@ -361,12 +376,12 @@ def compare_pc(dset):
     latitude : [list of parrallax corrected values, list of uncorrected values]
     longitude : [list of parrallax corrected values, list of uncorrected values]
     """
-    def process(pc,val):
+    def process(pc, val):
         # pair corrected and uncorrected values.
-        pzip = list(zip(pc,val))
+        pzip = list(zip(pc, val))
         # remove nans
         new = [x for x in pzip if not np.isnan(x[0])]
-        return list(zip(*new))  
+        return list(zip(*new))
 
     pc_lat = get_pc_latitude(dset)
     pc_lon = get_pc_longitude(dset)
@@ -376,39 +391,44 @@ def compare_pc(dset):
     pclon = pc_lon.values.flatten()
 
     latitude = process(pclat, latvals)
-    longitude = process(pclon,lonvals)
-    return latitude, longitude 
+    longitude = process(pclon, lonvals)
+    return latitude, longitude
 
 
-def get_pc_latitude(dset,vname=None,clip=True):
+def get_pc_latitude(dset, vname=None, clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
     """Default units are km above sea-level"""
     checklist = ['pc_latitude']
-    return check_names(dset,vname,checklist,clip=clip)
+    return check_names(dset, vname, checklist, clip=clip)
 
-def get_pc_longitude(dset,vname=None,clip=True):
+
+def get_pc_longitude(dset, vname=None, clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
     """Default units are km above sea-level"""
     checklist = ['pc_longitude']
-    return check_names(dset,vname,checklist,clip=clip)
+    return check_names(dset, vname, checklist, clip=clip)
 
-def get_height(dset,vname=None,clip=True):
+
+def get_height(dset, vname=None, clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
     """Default units are km above sea-level"""
-    checklist = ['ash_cth','ash_cloud_height']
-    return check_names(dset,vname,checklist,clip=clip)
+    checklist = ['ash_cth', 'ash_cloud_height']
+    return check_names(dset, vname, checklist, clip=clip)
 
-def get_radius(dset,vname=None,clip=True):
+
+def get_radius(dset, vname=None, clip=True):
     """Returns 2d array of ash effective radius"""
     """Default units are micrometer"""
-    checklist = ['ash_r_eff','effective_radius_of_ash']
-    return check_names(dset,vname,checklist,clip=clip)
+    checklist = ['ash_r_eff', 'effective_radius_of_ash']
+    return check_names(dset, vname, checklist, clip=clip)
 
-def get_mass(dset,vname=None,clip=True):
+
+def get_mass(dset, vname=None, clip=True):
     """Returns 2d array of ash mass loading"""
     """Default units are grams / meter^2"""
-    checklist = ['ash_mass','ash_mass_loading']
-    return check_names(dset,vname,checklist,clip=clip)
+    checklist = ['ash_mass', 'ash_mass_loading']
+    return check_names(dset, vname, checklist, clip=clip)
+
 
 def mass_sum(dset):
     mass = get_mass(dset)
@@ -416,9 +436,11 @@ def mass_sum(dset):
     mass_sum = np.sum(mass2)
     return mass_sum
 
+
 def get_time(dset):
     time = dset.time_coverage_start
     return time
+
 
 def get_atherr(dset):
     """Returns array with uncertainty in ash top height from VOLCAT."""
@@ -427,11 +449,14 @@ def get_atherr(dset):
     height_err = height_err.where(height_err != height_err._FillValue, drop=True)
     return height_err
 
+
 def trim_arrray(dset):
     """Trim the VOLCAT array around data
     Make smaller for comparison to HYSPLIT """
 
 # Plotting variables
+
+
 def plot_height(dset):
     """Plots ash top height from VOLCAT
     Does not save figure - quick image creation"""
@@ -440,6 +465,7 @@ def plot_height(dset):
     ax = fig.add_subplot(1, 1, 1)
     plot_gen(dset, ax, val='height', time=None, plotmap=True,
              title=title)
+
 
 def plot_radius(dset):
     """Plots ash effective radius from VOLCAT
@@ -450,6 +476,7 @@ def plot_radius(dset):
     plot_gen(dset, ax, val='radius', time=None, plotmap=True,
              title=title)
 
+
 def plot_mass(dset):
     fig = plt.figure('Ash_Mass_Loading')
     ax = fig.add_subplot(1, 1, 1)
@@ -458,34 +485,35 @@ def plot_mass(dset):
 
 
 def plot_gen(dset, ax,  val='mass', time=None, plotmap=True,
-              title=None):
-      """Plot ash mass loading from VOLCAT
-      Does not save figure - quick image creation"""
-      #lat=dset.latitude
-      #lon=dset.longitude
-      if val == 'mass':
-          mass=get_mass(dset)
-      elif val == 'radius':
-          mass=get_radius(dset)
-      elif val == 'height':
-          mass=get_height(dset)
-      if time and 'time' in mass.coords:
-         mass = mass.sel(time=time)
-      elif 'time' in mass.coords:
-         mass = mass.isel(time=0)
-      lat=mass.latitude
-      lon=mass.longitude
-      if plotmap:
-          m=plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
-          m.add_feature(cfeat.LAND)
-          m.add_feature(cfeat.COASTLINE)
-          m.add_feature(cfeat.BORDERS)
-          plt.pcolormesh( lon, lat, mass, transform=ccrs.PlateCarree())
-      else:
-          plt.pcolormesh( lon, lat, mass )
-      plt.colorbar()
-      plt.title(title)
-      plt.show()
+             title=None):
+    """Plot ash mass loading from VOLCAT
+    Does not save figure - quick image creation"""
+    # lat=dset.latitude
+    # lon=dset.longitude
+    if val == 'mass':
+        mass = get_mass(dset)
+    elif val == 'radius':
+        mass = get_radius(dset)
+    elif val == 'height':
+        mass = get_height(dset)
+    if time and 'time' in mass.coords:
+        mass = mass.sel(time=time)
+    elif 'time' in mass.coords:
+        mass = mass.isel(time=0)
+    lat = mass.latitude
+    lon = mass.longitude
+    if plotmap:
+        m = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
+        m.add_feature(cfeat.LAND)
+        m.add_feature(cfeat.COASTLINE)
+        m.add_feature(cfeat.BORDERS)
+        plt.pcolormesh(lon, lat, mass, transform=ccrs.PlateCarree())
+    else:
+        plt.pcolormesh(lon, lat, mass)
+    plt.colorbar()
+    plt.title(title)
+    plt.show()
+
 
 def matchvals(pclat, pclon, massra, height):
     # pclat : xarray DataArray
@@ -498,12 +526,12 @@ def matchvals(pclat, pclon, massra, height):
     pclat = pclat.values.flatten()
     mass = massra.values.flatten()
     height = height.values.flatten()
-    tlist = list(zip(pclat,pclon,mass,height))
+    tlist = list(zip(pclat, pclon, mass, height))
     # only return tuples in which mass has a valid value
     if '_FillValue' in massra.attrs:
         fill = massra.attrs['_FillValue']
-        tlist = [x for x in tlist if x[2]!=fill]
-    else: 
+        tlist = [x for x in tlist if x[2] != fill]
+    else:
         # get rid of Nans.
         tlist = [x for x in tlist if ~np.isnan(x[2])]
     return tlist
@@ -516,38 +544,38 @@ def correct_pc(dset):
     to parallax corrected positions.
     """
 
-    mass = get_mass(dset,clip=False)
-    height = get_height(dset,clip=False)
+    mass = get_mass(dset, clip=False)
+    height = get_height(dset, clip=False)
     newmass = xr.zeros_like(mass.isel(time=0))
     newhgt = xr.zeros_like(height.isel(time=0))
-    time = mass.time 
-    pclat = get_pc_latitude(dset,clip=False)
-    pclon = get_pc_longitude(dset,clip=False)
-    tlist = matchvals(pclon,pclat,mass,height)
+    time = mass.time
+    pclat = get_pc_latitude(dset, clip=False)
+    pclon = get_pc_longitude(dset, clip=False)
+    tlist = matchvals(pclon, pclat, mass, height)
     indexlist = []
     for point in tlist:
         iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
-        newmass = xr.where((newmass.coords['x']==iii[0]) & (newmass.coords['y']==iii[1]), 
-                            point[2], newmass)         
-        newhgt = xr.where((newhgt.coords['x']==iii[0]) & (newhgt.coords['y']==iii[1]), 
-                            point[3], newhgt)         
+        newmass = xr.where((newmass.coords['x'] == iii[0]) & (newmass.coords['y'] == iii[1]),
+                           point[2], newmass)
+        newhgt = xr.where((newhgt.coords['x'] == iii[0]) & (newhgt.coords['y'] == iii[1]),
+                          point[3], newhgt)
         # keeps track of new indices of lat lon points.
-        indexlist.append(iii) 
+        indexlist.append(iii)
     # check if any points are mapped to the same point.
     if len(indexlist) != len(list(set(indexlist))):
-       print('WARNING: correct_pc function: some values mapped to same point')
-    # TODO currently the fill value is 0. 
-    # possibly change to nan or something else?    
-    newmass = newmass.assign_attrs({'_FillValue':0})
-    newhgt = newhgt.assign_attrs({'_FillValue':0})
+        print('WARNING: correct_pc function: some values mapped to same point')
+    # TODO currently the fill value is 0.
+    # possibly change to nan or something else?
+    newmass = newmass.assign_attrs({'_FillValue': 0})
+    newhgt = newhgt.assign_attrs({'_FillValue': 0})
 
     newmass = newmass.expand_dims("time")
     newhgt = newhgt.expand_dims("time")
 
     # keep original names for mass and height.
-    dnew = xr.Dataset({'ash_mass_loading':newmass,'ash_cloud_height':newhgt})
-    dnew.time.attrs.update({'standard_name':'time'}) 
-    return dnew     
+    dnew = xr.Dataset({'ash_mass_loading': newmass, 'ash_cloud_height': newhgt})
+    dnew.time.attrs.update({'standard_name': 'time'})
+    return dnew
 
 
 def avg_volcat(vdir, datetime_start, datetime_end, interval=10, vid=None, correct_parallax=True):
@@ -582,7 +610,30 @@ def avg_volcat(vdir, datetime_start, datetime_end, interval=10, vid=None, correc
         heightlist.append(height)
         datetime_start += timedelta(minutes=interval)
 
-    return volcfiles
+    # NEEDS TO BE ADJUSTED
+    # Code chunk from the code I used to develop the regridded, average volcat netcdf files
+    vname = 'SCOPE_NWC_ASH-L2-ASH_PRODUCTS-HIMAWARI8_NOAA-RAIKOKE-' + \
+        datetime_start.strftime('%Y%m%d-%H')+'*00-fv2.nc'
+    vnames = glob(dir_vol+vname)
+    dsets = []
+    x = 0
+    while x < len(vnames):
+        dsets.append(volcat.open_dataset(vnames[x]))
+        x += 1
+    # Reading in VOLCAT at ensemble time
+    vdset = volcat.open_dataset(
+        dir_vol+'SCOPE_NWC_ASH-L2-ASH_PRODUCTS-HIMAWARI8_NOAA-RAIKOKE-'+datetime_end.strftime("%Y%m%d-%H")+'0000-fv2.nc')
+    dsets.append(vdset)
+    # Concatenate along time dimension
+    avgdset = xr.concat(dsets, dim='time')
+    # Pulling out Ash Mass Loading and Ash Top Height
+    mass = volcat.get_mass(avgdset)
+    height = volcat.get_height(avgdset)
 
+    # Regridding volcat to hysplit resolution
+    near_mass = hxr.monet.remap_nearest(mass)
+    near_height = hxr.monet.remap_nearest(height)
 
-
+    # 1hr avg variables
+    mass_avg = near_mass.mean(dim='time')
+    hgt_avg = near_height.mean(dim='time')
