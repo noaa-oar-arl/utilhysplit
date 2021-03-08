@@ -35,9 +35,17 @@ plot_mass: plots ash mass loading from VOLCAT
 """
 
 
-def open_dataset(fname, correct_parallax=False):
+def open_dataset(fname, 
+                 correct_parallax=False,
+                 mask_and_scale=True):
     """Opens single VOLCAT file"""
-    dset = xr.open_dataset(fname, mask_and_scale=False, decode_times=False)
+    # 03/07/2021 The Bezy height data has a fill value of -1,
+    # scale_factor of 0.01 and offset of 0.
+    # The scale factor needs to be applied to get output in km.
+
+    # ash_mass_loading has no scale_factor of offset and fill value is -999.
+    dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale, 
+                           decode_times=False)
     # not needed for new Bezy data.
     try:
         dset = dset.rename({"Dim1": 'y', "Dim0": 'x'})
@@ -238,14 +246,19 @@ def open_mfdataset(fname):
     return dset
 
 
+
 def bbox(darray, fillvalue):
     """Returns bounding box around data
     Input: Must be dataarray
     Outupt: Lower left corner, upper right corner of bounding box
-    around data"""
-    import numpy as np
+    around data.
+    if fillvalue is None then assume Nan's. 
+    """
     arr = darray[0, :, :].values
-    a = np.where(arr != fillvalue)
+    if fillvalue:
+        a = np.where(arr != fillvalue)
+    else:
+        a = np.where(~np.isnan(arr))
     if np.min(a[0]) != 0. and np.min(a[1]) != 0.:
         bbox = ([np.min(a[0]-3), np.min(a[1])-3], [np.max(a[0]+3), np.max(a[1])+3])
     else:
@@ -268,14 +281,32 @@ def _get_time(dset):
 # Extracting variables
 def get_data(dset,vname,clip=True):
     gen = dset.data_vars[vname]
-    try:
-         fillvalue = gen._FillValue
-    except:
-         fillvalue = -999
+    atvals = gen.attrs
+    if '_FillValue' in gen.attrs:
+        fillvalue = gen._FillValue
+        gen = gen.where(gen!=fillvalue)
+        fillvalue = None
     if clip:
         box = bbox(gen,fillvalue)
         gen = gen[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
-        gen = gen.where(gen != gen._FillValue)
+        if '_FillValue' in gen.attrs:
+            gen = gen.where(gen != fillvalue)
+        else:
+            gen = gen.where(gen) 
+    # applies scale_factor and offset if they are in the attributes.
+    if 'scale_factor' in gen.attrs:
+        gen = gen * gen.attrs['scale_factor']
+    if 'offset' in gen.attrs:
+        gen = gen + gen.attrs['offset']
+    if 'add_offset' in gen.attrs:
+        gen = gen + gen.attrs['add_offset']
+    # keep relevant attributes.
+    new_attr = {}
+    for key in atvals.keys():
+        print('KEY', key)
+        if key not in ['_FillValue','add_offset','offset','scale_factor']:
+           new_attr[key] = atvals[key]
+    gen.attrs = new_attr
     return gen
 
 def check_names(dset,vname,checklist,clip=True):
@@ -450,22 +481,19 @@ def matchvals(pclat, pclon, mass, height):
     # mass : xarray DataArray
     # height : xarray DataArray
     # used in correct_pc
-
     # returns 1D list of tuples of values in the 4 DataArrays
- 
-    if '_FillValue' in mass.attrs:
-        fill = mass.attrs['_FillValue']
-    else: 
-        print('WARNING: correct_pc : _FillValue attribute not found.')
-        print('WARNING: correct_pc : using default fill of -999')
-        fill = -999
     pclon = pclon.values.flatten()
     pclat = pclat.values.flatten()
     mass = mass.values.flatten()
     height = height.values.flatten()
     tlist = list(zip(pclat,pclon,mass,height))
     # only return tuples in which mass has a valid value
-    tlist = [x for x in tlist if x[2]!=fill]
+    if '_FillValue' in mass.attrs:
+        fill = mass.attrs['_FillValue']
+        tlist = [x for x in tlist if x[2]!=fill]
+    else: 
+        # get rid of Nans.
+        tlist = [x for x in tlist if x[2]]
     return tlist
 
 
