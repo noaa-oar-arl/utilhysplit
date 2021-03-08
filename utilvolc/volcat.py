@@ -108,10 +108,12 @@ def find_volcat(tdir, vid=None, daterange=None,
                3 - returns list of filenames
 
     """
+    import sys
     vnhash = {}  # dictionary
     nflist = []  # list of filenames
     vnlist = []  # list of filenames
     if not os.path.isdir(tdir):
+<<<<<<< HEAD
         print('directory not valid {}'.format(tdir))
     for (dirpath, dirnames, filenames) in walk(tdir):
         for fln in filenames:
@@ -141,6 +143,29 @@ def find_volcat(tdir, vid=None, daterange=None,
     elif return_val == 3:
         return nflist
 
+=======
+         print('directory not valid {}'.format(tdir))
+    for fln in os.listdir(tdir):
+         try:
+            vn = VolcatName(fln)
+         except:
+            if verbose: print('Not VOLCAT filename {}'.format(fln))
+            continue
+         if daterange:
+            if vn.date < daterange[0] or vn.date > daterange[1]:
+               continue
+         if vid and vn.vhash['volcano id'] != vid: continue
+         if vn.date not in vnhash.keys():
+            vnhash[vn.date] = vn
+            nflist.append(fln)
+            vnlist.append(vn)
+         else: 
+            print('two files with same date')
+            print(vnhash[vn.date].compare(vn))
+    if return_val == 1: return vnhash
+    elif return_val == 2: return vnlist
+    elif return_val == 3: return nflist
+>>>>>>> c5c9c46b99a618131322c6623dd8e70c21d9332a
 
 def test_volcat(tdir, daterange=None, verbose=True):
     """
@@ -317,9 +342,14 @@ def get_data(dset, vname, clip=True):
     # keep relevant attributes.
     new_attr = {}
     for key in atvals.keys():
+<<<<<<< HEAD
         print('KEY', key)
         if key not in ['_FillValue', 'add_offset', 'offset', 'scale_factor']:
             new_attr[key] = atvals[key]
+=======
+        if key not in ['_FillValue','add_offset','offset','scale_factor']:
+           new_attr[key] = atvals[key]
+>>>>>>> c5c9c46b99a618131322c6623dd8e70c21d9332a
     gen.attrs = new_attr
     return gen
 
@@ -331,7 +361,6 @@ def check_names(dset, vname, checklist, clip=True):
         if val in dset.data_vars:
             return get_data(dset, val, clip=clip)
     return xr.DataArray()
-
 
 def create_pc_plot(dset):
     """
@@ -504,7 +533,7 @@ def plot_gen(dset, ax,  val='mass', time=None, plotmap=True,
     plt.show()
 
 
-def matchvals(pclat, pclon, mass, height):
+def matchvals(pclat, pclon, massra, height):
     # pclat : xarray DataArray
     # pclon : xarray DataArray
     # mass : xarray DataArray
@@ -513,16 +542,23 @@ def matchvals(pclat, pclon, mass, height):
     # returns 1D list of tuples of values in the 4 DataArrays
     pclon = pclon.values.flatten()
     pclat = pclat.values.flatten()
-    mass = mass.values.flatten()
+    mass = massra.values.flatten()
     height = height.values.flatten()
     tlist = list(zip(pclat, pclon, mass, height))
     # only return tuples in which mass has a valid value
+<<<<<<< HEAD
     if '_FillValue' in mass.attrs:
         fill = mass.attrs['_FillValue']
         tlist = [x for x in tlist if x[2] != fill]
     else:
+=======
+    if '_FillValue' in massra.attrs:
+        fill = massra.attrs['_FillValue']
+        tlist = [x for x in tlist if x[2]!=fill]
+    else: 
+>>>>>>> c5c9c46b99a618131322c6623dd8e70c21d9332a
         # get rid of Nans.
-        tlist = [x for x in tlist if x[2]]
+        tlist = [x for x in tlist if ~np.isnan(x[2])]
     return tlist
 
 
@@ -537,11 +573,18 @@ def correct_pc(dset):
     height = get_height(dset, clip=False)
     newmass = xr.zeros_like(mass.isel(time=0))
     newhgt = xr.zeros_like(height.isel(time=0))
+<<<<<<< HEAD
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
 
     tlist = matchvals(pclon, pclat, mass, height)
+=======
+    time = mass.time 
+    pclat = get_pc_latitude(dset,clip=False)
+    pclon = get_pc_longitude(dset,clip=False)
+    tlist = matchvals(pclon,pclat,mass,height)
+>>>>>>> c5c9c46b99a618131322c6623dd8e70c21d9332a
     indexlist = []
     for point in tlist:
         iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
