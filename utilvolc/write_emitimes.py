@@ -20,7 +20,13 @@ Functions:
 --------------
 write_cyl_file: writes emitimes file to working directory
 Class: InsertVolcat
-
+     add_vname: adds volcano name to instance variables
+     find_match: finds the indentifying string of date, time, volcano ID
+     find_fname: finds volcat file based on directory and datetime object
+     (can also use volcano ID)
+     get_area: calculates area of lat/lon grid
+     make_1D: makes 1D arrays of lat, lon, ash height, ash mass, and area
+     write_emit: writes emitimes files
 --------------
 """
 
@@ -92,7 +98,8 @@ class InsertVolcat:
         find_match: finds string with date_time and vid to match
         find_fname: finds volcat filename
         get_area: calculates the domain area, gridded
-
+        make_1D: makes 1D array of lat, lon, ash height, ash mass, area
+        write_emit: writes emitimes files
         """
 
         if wdir[-1] != "/":
@@ -155,22 +162,20 @@ class InsertVolcat:
         lon = mass.longitude
         latrad = lat * d2r  # Creating latitude array in radians
         coslat = np.cos(latrad) * d2km * d2km
-        # Creates an array copy of mass filled with 0.
-        area = xr.full_like(mass, 0.)
-        shape = np.shape(area)
+        shape = np.shape(mass)
 
-        # Begins looping through each element of array
-        # REMOVE LOOP
-        # Make shifted lat and shifted longitude array and use that for calculations
-        # Also use clipped arrays
-        i = 0
-        while i < (shape[0] - 1):
-            j = 0
-            while j < (shape[1] - 1):
-                area[i, j] = abs(lat[i, j] - lat[i+1, j]) * \
-                    abs(abs(lon[i, j]) - abs(lon[i, j+1])) * coslat[i, j]
-                j += 1
-            i += 1
+        # Make shifted lat and shifted lon arrays to use for calculations
+        lat_shift = lat[1:, :].values
+        lon_shift = lon[:, 1:].values
+        # Adding row/column of nans to shifted lat/lon arrays
+        to_add_lon = np.empty([shape[0]]) * np.nan
+        to_add_lat = np.empty([shape[1]]) * np.nan
+        # Back to xarray for calculations
+        lat2 = xr.DataArray(np.vstack((lat_shift, to_add_lat)), dims=['y', 'x'])
+        lon2 = xr.DataArray(np.column_stack((lon_shift, to_add_lon)), dims=['y', 'x'])
+
+        # area calculation
+        area = abs(lat-lat2) * abs(abs(lon)-abs(lon2)) * coslat
         area.name = 'area'
         area.attrs['long_name'] = 'area of each lat/lon grid box'
         area.attrs['units'] = 'km^2'
