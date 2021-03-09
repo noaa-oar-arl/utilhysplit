@@ -137,12 +137,13 @@ class InsertVolcat:
         self.fname = fname[0]
         return self.fname
 
-    def get_area(self, write=False, correct_parallax=True):
+    def get_area(self, write=False, correct_parallax=True, clip=False):
         """Calculates the area (km^2) of each volcat grid cell
         Converts degress to meters using a radius of 6378.137km.
         Input:
         write: boolean (default: False) Write area to file
         correct_parallax: boolean (default: True) Use parallax correct lat/lon values
+        clip: boolean (default: False) Use clipped array around data, reduces domain
         output:
         area: xarray containing gridded area values
         """
@@ -156,8 +157,11 @@ class InsertVolcat:
 
         # Extracts ash mass array (two methods - one is smaller domain around feature)
         # Removes time dimension
-        mass = dset.ash_mass_loading[0, :, :]
-        # mass = volcat.get_mass(dset)[0, :, :]
+        if clip == True:
+            mass = volcat.get_mass(dset)[0, :, :]
+        else:
+            mass = dset.ash_mass_loading[0, :, :]
+
         lat = mass.latitude
         lon = mass.longitude
         latrad = lat * d2r  # Creating latitude array in radians
