@@ -98,7 +98,25 @@ def open_dataset(fname,
         dset.attrs.update({'parallax corrected coordinates': 'False'})
     return dset
 
-def average_volcat(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True):
+
+def average_volcat(das, cdump):
+    # In progress.
+    # das is list of volcat datasets.
+    # cdump is dataset with appropriate grid.
+    # first map to new grid. Then average.
+    rai = 1e5
+    mlist = []
+    hlist = []
+    for iii, dset in enumerate(das):
+        near_mass = cdump.monet.remap_nearest(dset.ash_mass_loading.isel(time=0),radius_of_influence=rai)
+        near_height = cdump.monet.remap_nearest(dset.ash_cloud_height.isel(time=0),radius_of_influence=rai)
+        mlist.append(near_mass)
+        hlist.append(near_height)
+    newmass = xr.concat(mlist,dim='time')
+    avemass = newmass.mean(dim='time')
+    return  avemass
+
+def get_volcat_list(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True):
     # find files.
     tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=3)
     das = []
@@ -110,17 +128,6 @@ def average_volcat(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True)
     #dset = xr.concat(das, dim='time')
     return das
 
-def average_volcat(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True):
-    # find files.
-    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=3)
-    das = []
-    for iii in tlist:
-        print(iii)
-        das.append(open_dataset(os.path.join(tdir, iii),
-                                correct_parallax=correct_parallax,
-                                mask_and_scale=mask_and_scale))
-    #dset = xr.concat(das, dim='time')
-    return das
 
 
 def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
@@ -380,7 +387,7 @@ def create_pc_plot(dset):
         # plot 1:1 line
         minval = np.min(vals[0])
         maxval = np.max(vals[0])
-        ax.plot([minval, maxval], [minval, maxval], '--r')
+        ax.plot([minval, maxval], [minval, maxval], '--r.',MarkerSize=1)
 
     latitude, longitude = compare_pc(dset)
     fig = plt.figure(1)
@@ -562,6 +569,10 @@ def matchvals(pclat, pclon, massra, height):
         tlist = [x for x in tlist if ~np.isnan(x[2])]
     return tlist
 
+def find_iii(tlist, match):
+    for iii, val in enumerate(tlist):
+        if val == match: return iii
+    return   -1
 
 def correct_pc(dset):
     """
@@ -577,19 +588,28 @@ def correct_pc(dset):
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
-    tlist = matchvals(pclon, pclat, mass, height)
+    tlist = np.array(matchvals(pclon, pclat, mass, height))
+  
     indexlist = []
+    prev_point = 0
     for point in tlist:
         iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
+        if iii in indexlist:
+           print('WARNING: correct_pc function: some values mapped to same point')
+           print(iii, point)
+           vpi = find_iii(indexlist, iii)
+           print(tlist[vpi])
         newmass = xr.where((newmass.coords['x'] == iii[0]) & (newmass.coords['y'] == iii[1]),
                            point[2], newmass)
         newhgt = xr.where((newhgt.coords['x'] == iii[0]) & (newhgt.coords['y'] == iii[1]),
                           point[3], newhgt)
         # keeps track of new indices of lat lon points.
         indexlist.append(iii)
+        prev_point = point    
     # check if any points are mapped to the same point.
     if len(indexlist) != len(list(set(indexlist))):
         print('WARNING: correct_pc function: some values mapped to same point')
+        print(len(indexlist), len(list(set(indexlist))))
     # TODO currently the fill value is 0.
     # possibly change to nan or something else?
     newmass = newmass.assign_attrs({'_FillValue': 0})
