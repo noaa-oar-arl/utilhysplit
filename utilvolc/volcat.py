@@ -34,6 +34,22 @@ plot_mass: plots ash mass loading from VOLCAT
 ------------
 """
 
+def open_mfdataset(fname):
+    # 12/1/2020 Not modified for new files (Bezy) 
+    # TO DO - modify for new files.
+    """Opens multiple VOLCAT files"""
+    print(fname)
+    #dset = xr.open_mfdataset(fname, concat_dim='time', decode_times=False, mask_and_scale=False)
+    from glob import glob
+    from numpy import sort
+    files = sort(glob(fname))
+    das = []
+    for i in files:
+        das.append(open_dataset(i))
+    dset = xr.concat(das, dim='time')
+    dset = _get_latlon(dset)
+    dset = dset.rename({"lines": 'y', "elements": 'x'})
+    return dset
 
 def open_dataset(fname, 
                  correct_parallax=False,
@@ -64,6 +80,17 @@ def open_dataset(fname,
         dset.attrs.update({'parallax corrected coordinates':'False'})  
     return dset
 
+def average_volcat(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True):
+    # find files.
+    tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=3)
+    das = []
+    for iii in tlist:
+        print(iii)
+        das.append(open_dataset(os.path.join(tdir,iii),
+                   correct_parallax=correct_parallax, 
+                   mask_and_scale=mask_and_scale))
+    #dset = xr.concat(das, dim='time')
+    return das
 
 def write_parallax_corrected_files(tdir,wdir,vid=None,daterange=None, verbose=False):
     """
@@ -83,6 +110,10 @@ def write_parallax_corrected_files(tdir,wdir,vid=None,daterange=None, verbose=Fa
         new_fname = fname.replace('.nc','_pc.nc')
         if verbose: print('writing {} to {}'.format(new_fname, wdir))
         dset.to_netcdf(os.path.join(wdir,new_fname))   
+
+
+
+    
 
 
 def find_volcat(tdir, vid=None, daterange=None, 
@@ -228,23 +259,6 @@ def open_dataset2(fname):
     return dset
 
 
-def open_mfdataset(fname):
-    # 12/1/2020 Not modified for new files (Bezy) 
-    """Opens multiple VOLCAT files"""
-    print(fname)
-    dset = xr.open_mfdataset(fname, concat_dim='time', decode_times=False, mask_and_scale=False)
-    from glob import glob
-    from numpy import sort
-    files = sort(glob(fname))
-    das = []
-    for i in files:
-        das.append(open_dataset(i))
-    dset = xr.concat(das, dim='time')
-    dset = _get_latlon(dset)
-    dset = dset.rename({"lines": 'y', "elements": 'x'})
-    return dset
-
-
 
 def bbox(darray, fillvalue):
     """Returns bounding box around data
@@ -281,6 +295,7 @@ def _get_time(dset):
 def get_data(dset,vname,clip=True):
     gen = dset.data_vars[vname]
     atvals = gen.attrs
+    fillvalue = None
     if '_FillValue' in gen.attrs:
         fillvalue = gen._FillValue
         gen = gen.where(gen!=fillvalue)
