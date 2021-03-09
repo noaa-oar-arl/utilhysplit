@@ -544,9 +544,12 @@ def correct_pc(dset):
     newmass = newmass.expand_dims("time")
     newhgt = newhgt.expand_dims("time")
 
+    newmass = newmass.transpose("time","y","x",transpose_coords=True)
+    newhgt = newhgt.transpose("time","y","x",transpose_coords=True)
     # keep original names for mass and height.
     dnew = xr.Dataset({'ash_mass_loading':newmass,'ash_cloud_height':newhgt})
     dnew.time.attrs.update({'standard_name':'time'}) 
+    #dnew = dnew.transpose("time","x","y", transpose_coords=False) 
     return dnew     
 
 
