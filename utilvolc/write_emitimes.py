@@ -68,8 +68,8 @@ class InsertVolcat:
 
     def __init__(self, wdir, vdir, date_time,
                  duration='0010',
-                 pollpercents=1,
-                 pollnum=[1],
+                 pollpercents=[1],
+                 pollnum=1,
                  vname=None,
                  vid=None):
         """
@@ -160,6 +160,9 @@ class InsertVolcat:
         shape = np.shape(area)
 
         # Begins looping through each element of array
+        # REMOVE LOOP
+        # Make shifted lat and shifted longitude array and use that for calculations
+        # Also use clipped arrays
         i = 0
         while i < (shape[0] - 1):
             j = 0
@@ -223,7 +226,7 @@ class InsertVolcat:
             areafile = areafile[0]
             areaf = xr.open_dataset(areafile).area
         else:
-            print('No area file detected!')
+            print('No area file detected! Please use self.get_area()')
 
         # Calculating mass - rate is (mass/hr) in HYSPLIT
         # area needs to be in m^2 not km^2!
@@ -239,5 +242,45 @@ class InsertVolcat:
         lon = ma.compressed(longitude)[~np.isnan(hgt_nan)]  # removing nan values
         area = ma.compressed(areaf)[~np.isnan(hgt_nan)]  # removing nan values
         area = area * 1000. * 1000  # Moving area from (km^2) to (m^2)
+        hgt = hgt * 1000.  # Moving hgt from (km) to (m)
 
         return lat, lon, hgt, mass, area
+
+    def write_emit(self, correct_parallax=True, heat='0.00e+00'):
+        """ Writes emitimes file from volcat data.
+        Inputs are created using self.make_1D()
+        Uses instance variables: date_time, duration, par,
+        Inputs:
+        lat: 1D array of latitude
+        lon: 1D array of longitude
+        hgt: 1D array of ash top height
+        mass: 1D array of ash mass
+        area: 1D array of area
+        correct_parallax: (boolean) use parallax corrected lat lon values
+        heat: (string) default=0.00e+00
+        Output:
+        emitimes file located in wdir
+        """
+        # Call make_1D() array to get lat, lon, height, mass, and area arrays
+        lat, lon, hgt, mass, area = self.make_1D(correct_parallax=correct_parallax)
+        # Need to write some code to handle different durations and
+        # resulting constants for mass rate (g/hr) determination
+        if self.duration == '0010':
+            const = 6
+        match = self.find_match()
+        filename = 'VOLCAT_'+match+'_par'+str(self.pollnum)
+        f = open(self.wdir + filename, 'w')
+        f.write('YYYY MM DD HH        DURATION(HHMM) #RECORDS \n')
+        f.write('YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE(g/hr) AREA(m2) HEAT(w) \n')
+        f.write('{:%Y %m %d %H  } {} {}\n'.format(self.date_time,
+                                                  self.duration, np.shape(hgt)[0] * self.pollnum))
+        h = 0
+        while h < len(hgt):
+            i = 0
+            while i < len(self.pollpercents):
+                f.write('{:%Y %m %d %H %M} {} {:9.6f} {:10.6f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
+                    self.date_time, self.duration, lat[h], lon[h], hgt[h], mass[h]*const*self.pollpercents[i], area[h], heat))
+                i += 1
+            h += 1
+        f.close()
+        return('Emitimes file written: '+self.wdir+filename)
