@@ -9,10 +9,16 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import numpy as np
 import pandas as pd
 import hysplit
-from cdump2xml import ColorMaker
+from utilhysplit.plotutils.color_util import ColorMaker
 from ensemble_tools import ATL
 
 logger = logging.getLogger(__name__)
+
+"""
+creates ensemble relative frequency of exceedance plots.
+creates ensemble mean plots.
+"""
+
 
 class LabelData:
     def __init__(self, time, descrip, units, source="", tag=""):
@@ -311,6 +317,7 @@ def plotATL(
     rtot, vlist, name="None", levels=[1, 5, 10, 20], thresh=0.2, title="HYSPLIT"
 ):
     """
+    plot ensemble relative frequency for concentration.
     creates plot for one time period.
     creates subplot for each vertical level.
     """

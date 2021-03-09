@@ -142,11 +142,14 @@ def kstest_answer(data1, data2):
 def cdf(data):
     """
     data should be a list of data.
+    sdata : sorted list of the data.
+    yval  : normalized index of data (from 0 to 1). 
+
     """
     sdata = np.sort(data)
     # y axis goes from 0 to 1
-    y = 1. * np.arange(sdata.size) / float(sdata.size-1)
-    return sdata, y
+    yval = 1. * np.arange(sdata.size) / float(sdata.size-1)
+    return sdata, yval
 
 def plot_cdf(sdata, y, ax):
     ax.step(sdata, y, '-r')

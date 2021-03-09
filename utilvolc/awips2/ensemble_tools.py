@@ -9,7 +9,7 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import numpy as np
 import pandas as pd
 import hysplit
-from cdump2xml import ColorMaker
+from colormaker import ColorMaker
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +282,6 @@ def ATLtimeloop(
         fignamelist.append(figname)
     reset_plots()
     return fignamelist
-
 
 
 
