@@ -665,4 +665,3 @@ def avg_volcat(vdir, datetime_start, datetime_end, interval=10, vid=None, correc
     # 1hr avg variables
     mass_avg = near_mass.mean(dim='time')
     hgt_avg = near_height.mean(dim='time')
->>>>>>> ebfab804f72892a035586812a8bdc1c5e924f267
