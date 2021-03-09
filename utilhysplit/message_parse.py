@@ -97,6 +97,23 @@ class HysplitMessageFile(object):
                     temp2 = temp.split()
                     self.emrise.append((hour, float(temp2[4]), float(temp2[5])))
                     print(temp2)
+        # loop to get heights.
+        hdistlist = []
+        hdist=[]
+        with open(self.fname, 'r', errors="ignore") as fid:
+            print('opening file', self.fname)
+            get=False
+            for temp in fid:
+                if 'NOTICE' in temp:
+                    get=False 
+                    if hdist: hdistlist.append(hdist)
+                    hdist=[]
+                if get:
+                   hdist.append(temp.split())
+                   print('GET', hdist)   
+                if 'Index' in temp:
+                    get=True
+        self.hdistlist = hdistlist                    
 
         self.timestep = []
         self.pnumber = []
@@ -104,8 +121,18 @@ class HysplitMessageFile(object):
         for key in thash:
             tstep = 60.0 / thash[key]
             self.timestep.append((key, tstep))
-            self.pnumber.append(np.log10(phash[key]))
+            try:
+                self.pnumber.append(np.log10(phash[key]))
+            except:
+                print('zero value', key, phash[key])
             # print key, phash[key] , np.log10(phash[key])
+
+
+    def process_hdist(self):
+        for hdist in self.hdistlist:
+            h = [float(x[2]) for x in hdist]
+            h = np.array(h)
+            print(h.sum())
 
     def print_warnings(self):
         """prints all lines with WARNING in them"""
@@ -122,15 +149,18 @@ class HysplitMessageFile(object):
         ax.set_ylabel('Average time step in hour (minutes)')
         plt.show()
 
-    def plot_emrise(self):
+    def plot_emrise(self, fname='None'):
         sep = list(zip(*self.emrise))
         print(sep)
         fig = plt.figure(1)
         ax = fig.add_subplot(1, 1, 1)
         ax.set_xlabel('Simulation Hour')
         ax.set_ylabel('Height')
-        ax.plot(sep[0], sep[2], '-b.')
-        ax.plot(sep[0], sep[1], '-g.')
+        ax.plot(sep[0], sep[2], '-b.', label='emrise')
+        # this is mixd
+        ax.plot(sep[0], sep[1], '-g.', label='mixd')
+        if fname != 'None':
+           plt.savefig(fname)
         plt.show()
 
 
