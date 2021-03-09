@@ -2,10 +2,80 @@ import datetime
 import os.path as path
 import numpy as np
 import numpy.ma as ma
+import pandas as pd
 from utilvolc import volcat
 import matplotlib.pyplot as plt
+from utilhysplit.evaluation.ensemble_tools import ashcmap
+import utilhysplit.evaluation.ensemble_tools as et
+from matplotlib.colors import BoundaryNorm
+
+def get_polygon(tdir):
+    """
+    tdir: str where file is located
+    Return DataFrame with VAAC polygons
+    """
+    fname = 'VAAC_polygon_coordinates.csv'
+    data = pd.read_csv(path.join(tdir,fname), index_col=None)
+    data['DateTime'] = pd.to_datetime(data['DateTime'])
+    data['DateTime_6hr'] = pd.to_datetime(data['DateTime_6hr'])
+    return data 
+
+def pick_polygon(polydf, date1, fhr, flight_level):
+    """
+    date1 : date of forecast
+    fhr : '', 6hr, 12hr, 18hr
+    """
+    tempdf = polydf[polydf['DateTime']==date1]
+    if fhr:
+        latname = '{}_Lat'.format(fhr)
+        lonname = '{}_Lon'.format(fhr)
+        htname = '{}_SFC_FL'.format(fhr)
+    else:
+        latname = 'Lat'
+        lonname = 'Lon'
+        htname = 'SFC_FL'
+    tempdf = tempdf[tempdf[htname] == flight_level]
+    lat = tempdf[latname]
+    lon = tempdf[lonname]
+    return list(zip(lon,lat))    
 
 
+def get_di_ens(date):
+    massname = 'mass{}.nc'.format(str1)
+    fdir = "/hysplit-users/allisonr/Raikoke/EMIT_TIMES/Data_Insertion/1hrAvg/par006/netcdf/"
+    str1 = date.strftime('%Y%m%d.%H0000')
+    str2 = (date + datetime.timedelta(hours=1)).strftime('%Y%m%d.%H0000')
+    fname = date.strftime('forecasts_{}-{}.nc'.format(str1,str2))
+    da1 = xr.open_dataset(fname)
+    da1 = da1.p006
+    da1mass = hysplit.hysp_massload(da1)
+    massname = 'mass{}.nc'.format(str1)
+    et.makenc(da1mass, 'mass{}.nc'.format(str1))
+    return da1mass
+
+def plotmass(date, coarsen=3):
+    da1mass = get_di_ens(date)
+    iii =0 
+    if coarsen> 1:
+       da1mass = da1mass.coarsen(x=3,boundary='trim').mean()
+       da1mass = da1mass.coarsen(y=3,boundary='trim').mean()
+    for source in da1.source.values:
+        print('working on {}'.format(iii))
+        rd.plotmass(da1.isel(source=iii,ens=0,time=0))
+        plt.title(str(da1.source.values[iii]))
+        plt.xlim(155,205)
+        plt.ylim(35,63)
+        plt.savefig('da1c{:03d}.png'.format(iii))
+        iii+=1
+
+
+def plotmass(dset):
+    levels=[0,0.1,1,5,10,15,20,25,30,35,40,50,100]
+    cmap = ashcmap(t=2)
+    norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
+    cb = plt.pcolormesh(dset.longitude, dset.latitude,
+                        dset.values,cmap=cmap,norm=norm)
+    plt.colorbar(cb) 
 
 class RaikokeVolcat:
     """
@@ -44,8 +114,9 @@ class RaikokeVolcat:
         latitude = ht.latitude.values
         values = mass.values
         vpi = np.where(values>thresh)
-        plt.scatter(longitude[vpi],ht[vpi],c=values[vpi],s=values[vpi],marker='.')   
-
+        #plt.scatter(longitude[vpi],ht.values[vpi],c=values[vpi],s=values[vpi],marker='.')   
+        cb = plt.scatter(longitude[vpi],ht.values[vpi],c=latitude[vpi],s=values[vpi],marker='.')   
+        plt.colorbar(cb)
 
 
     def create_name(self, date):
@@ -60,7 +131,7 @@ class RaikokeVolcat:
         """
         fname = self.create_name(date)
         print('trying to open ', fname)
-        dset = volcat.open_dataset(fname)
+        dset = volcat.open_dataset(fname,pc_correct=False)
         return dset
 
     def combine_dsets(self, daylist=None, hlist=None, mlist=None):

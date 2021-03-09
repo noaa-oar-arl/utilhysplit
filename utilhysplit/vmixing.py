@@ -23,15 +23,16 @@ CLASSES
 
 """
 
-
 class VmixingRun:
 
     def __init__(self, fname, cname='CONTROL', cdir='./', pid=None,
-                 kbls=1, kblt=2, cameo=2, tkemin=None, verbose=True):
+                 kbls=1, kblt=2, kmixd='', kmix0='', cameo=2, tkemin=None, verbose=True):
         self.control = HycsControl(fname=cname, rtype='vmixing')
         self.pid = self.control.replace('CONTROL.', '')
         self.kbls = kbls  # 1 fluxes  #2 wind/temp profile
         self.kblt = kblt  # 1 BJ #2 KC #3 TKE.
+        self.kmixd = kmixd  # 0 Input #1 temperature #2 TKE. #3 RI#
+        self.kmix0 = kmix0  # 150 is default. minimum mixing depth.
         self.cameo = cameo  # 0 no #1 yes #2 yes + wdir
         self.tkemin = tkemin
         self.woption = woption  # output extra file
@@ -62,11 +63,14 @@ class VmixingRun:
             rstr += '-s' + str(self.kbls)
             rstr += '-t' + str(self.kblt)
             rstr += '-a' + str(self.cameo)
+            if self.kmixd:  
+                rstr += '-d' + str(self.kmixd)
+            if self.kmix0:  
+                rstr += '-l' + str(self.kmix0)
             if tkemin:
                 rstr += '-m' + str(self.tkemin)
             rstr += '-w' + str(self.woption)
         return rstr
-
 
 
 def find_vmix_files(tdir, suffix=None,szmin=0):
@@ -437,7 +441,7 @@ def process_line(line, century):
             temp2.append(float(val))
         except:
             temp2.append(val)
-        vals.extend(temp2)
+    vals.extend(temp2)
     return vals
 
 def line2date(line, century):

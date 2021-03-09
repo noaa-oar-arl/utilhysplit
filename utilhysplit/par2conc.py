@@ -660,7 +660,7 @@ class MassFit:
         """
         resp = self.gfit.predict_proba(self.xra)
 
-    def scatter(self, ax=None, labels=True, dim="ht", cmap="bone"):
+    def scatter(self, ax=None, labels='labels', dim="ht", cmap="bone"):
         """
         create scatter plot
         """
@@ -672,6 +672,8 @@ class MassFit:
         xra = self.xra
         z = self.gfit.predict(xra)
         resp = self.gfit.predict_proba(self.xra)
+        # color by height.
+        nlabel = [x[2] for  x in xra]
         if dim == "ht":
             xxx = xra[:, 0]
             yyy = xra[:, 1]
@@ -689,11 +691,12 @@ class MassFit:
         if dim == "3d":
             ax.scatter(xxx, yyy, zzz, c=z, s=1, cmap=cmap)
         else:
-            if labels:
+            if labels=='labels':
                 ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
-            else:
+            elif labels=='z':
                 ax.scatter(xxx, yyy, c=resp, cmap=cmap)
-
+            elif labels=='ht':
+                ax.scatter(xxx, yyy, c=nlabel, s=1,cmap=cmap)
             ax.axis("equal")
         return z
 
@@ -1515,6 +1518,7 @@ def cluster_pars(xra, n_clusters=0):
     if use_kmeans:
         kpredict = KMeans(n_clusters=n_clusters, random_state=0).fit_predict(xra)
         plt.scatter(xra[:, 0], xra[:, 1], c=kpredict)
+        return kpredict
     if use_gmm:
         # possibilities
         # full, tied, diag, spherical

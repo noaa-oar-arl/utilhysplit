@@ -144,11 +144,14 @@ class cdump2awips:
         # mass loading should be in g/m2 to compare to satellite.
         # concentration should be in mg/m3 to compare to threshold levels.
         self.sample_time = np.timedelta64(int(dt), 'h')
+
         # stack the ensemble and source dimensions so it is one dimension
         self.xrash = xrash.stack(ensemble=('ens', 'source'))
+
         # put dimensionsin correct order.
         self.xrash = self.xrash.transpose('time', 'ensemble', 'x', 'y', 'z',
                                           transpose_coords=False)
+
         # array with mass loading rather than concentration.
         mass = mass_loading(xrash)
         self.mass = mass.stack(ensemble=('ens', 'source'))

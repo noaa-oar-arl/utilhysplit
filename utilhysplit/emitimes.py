@@ -134,7 +134,6 @@ class EmiTimes(object):
             spnum = ec.splist[-1]
             if spnum > maxsp:
                 maxsp = spnum
-            print('spnum', spnum, maxsp)
         return maxsp
 
     def findmaxrec(self):
@@ -161,7 +160,6 @@ class EmiTimes(object):
         """
         # make sure all cycles have same number of species.
         self.splist = list(range(1, self.findmaxsp() + 1))
-        print('NUM SPECIES', self.splist)
         # make sure that there is a name for each species.
         self.set_species(self.sphash)
         # print(splist)
@@ -352,7 +350,6 @@ class EmitCycle(object):
         that match spnum.
         """
         if isinstance(spnum, int): spnum = [spnum]
-        print(spnum)
         #newlist =  [x for x in self.recordra if x.spnum == spnum[0]]
         newlist =  [x for x in self.recordra if x.spnum in spnum]
         newcycle = EmitCycle()

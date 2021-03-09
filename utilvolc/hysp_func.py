@@ -1,15 +1,17 @@
 # hysp_func.py
-# Functions for manipulating HYSPLIT data
 # For use with MONET
 """Functions for manipulating HYSPLIT data.
 -------------
 Functions:
 -------------
-hysp_heights: determines ash top height from HYSPLIT
+get_latlongrid: determines thelatitude and longitude grid from the dataset
+getlatlon: returns 1d arrays of latitude and longitude
 hysp_massload: determines total mass loading from HYSPLIT
+hysp_heights: determines ash top height from HYSPLIT
 calc_MER: determines Mass Eruption Rate from HYSPLIT
 calc_aml: determines ash mass loading for each altitude layer  from HYSPLIT
 hysp_thresh: calculates mask array for ash mass loading threshold from HYSPLIT
+
 """
 from monetio.models import hysplit
 from utilvolc import volcMER
@@ -94,11 +96,12 @@ def hysp_heights(dset, threshold):
     return top_height
 
 
-def calc_MER(dset):
+def calc_MER(dset, attr='Starting Locations'):
     """ Calculate Mass Eruption Rate (kg/s) using Mastin's 2009 equation
-    Then converting to units of g/hr then g/m^2 """
+    Then converting to units of g/hr then g/m^2 
+    attr: name of attribute containing starting location altitude (string)"""
     # Extract starting locations and plume height - plume height needed for Mass calc.
-    stlocs = dset.attrs['Starting Locations']
+    stlocs = dset.attrs[attr]
     plume = (stlocs[-1][-1] - stlocs[0][-1])/1000  # Put height in km
     # Calculate mass erution rate (Mastin 2009)
     MER = volcMER.mastinMER(plume)
