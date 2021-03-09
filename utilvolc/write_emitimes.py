@@ -150,13 +150,9 @@ class InsertVolcat:
         # Extracts ash mass array (two methods - one is smaller domain around feature)
         # Removes time dimension
         mass = dset.ash_mass_loading[0, :, :]
-        #mass = volcat.get_mass(dset)[0, :, :]
-        if correct_parallax == True:
-            lat = mass.latitude.transpose('x', 'y')
-            lon = mass.longitude.transpose('x', 'y')
-        else:
-            lat = mass.latitude
-            lon = mass.longitude
+        # mass = volcat.get_mass(dset)[0, :, :]
+        lat = mass.latitude
+        lon = mass.longitude
         latrad = lat * d2r  # Creating latitude array in radians
         coslat = np.cos(latrad) * d2km * d2km
         # Creates an array copy of mass filled with 0.
@@ -186,3 +182,62 @@ class InsertVolcat:
             print(directory+areafname)
             area.to_netcdf(directory+areafname)
         return area
+
+    def make_1D(self, correct_parallax=True):
+        """ Makes compressed 1D arrays of latitude, longitude, ash height,
+        mass emission rate, and area
+        For use in writing emitimes files. See self.write_emit()
+        Input:
+        area: xarray dataset of area between lat/lon grid (from netcdf files)
+        correct_parallax: use parallax corrected lat/lon (default = True)
+        Output:
+        lat: 1D array of latitude
+        lon: 1D array of longitude
+        hgt: 1D array of ash top height
+        mass: 1D array of ash mass
+        area: 1D array of area
+        """
+        import numpy.ma as ma
+
+        if self.fname:
+            dset = volcat.open_dataset(self.fname, correct_parallax=correct_parallax)
+        else:
+            print('ERROR: Need volcat filename!')
+
+        # Extracts ash mass array - Removes time dimension
+        mass0 = dset.ash_mass_loading[0, :, :]
+        height0 = dset.ash_cloud_height[0, :, :]
+        # Making 0. in arrays nans
+        mass = mass0.where(mass0 > 0.)
+        height = height0.where(height0 > 0.)
+
+        # Finds and area files. If no file detected, produces warning
+        areadir = self.vdir+'Area/'
+        match = self.find_match()
+        if correct_parallax == True:
+            arealist = glob(areadir+'*_pc.nc')
+        else:
+            arealist = glob(areadir + '*0.nc')
+        areafile = [f for f in arealist if match in f]
+        if areafile:
+            areafile = areafile[0]
+            areaf = xr.open_dataset(areafile).area
+        else:
+            print('No area file detected!')
+
+        # Calculating mass - rate is (mass/hr) in HYSPLIT
+        # area needs to be in m^2 not km^2!
+        ashmass = mass * areaf * 1000. * 1000.
+        latitude = mass.latitude
+        longitude = mass.longitude
+
+        # Creating compressed 1-d arrays (removing nans) to prepare for file writing
+        hgt_nan = ma.compressed(height)  # arra with nan values to remove
+        hgt = hgt_nan[~np.isnan(hgt_nan)]  # removing nan values
+        mass = ma.compressed(ashmass)[~np.isnan(hgt_nan)]  # removing nan values
+        lat = ma.compressed(latitude)[~np.isnan(hgt_nan)]  # removing nan values
+        lon = ma.compressed(longitude)[~np.isnan(hgt_nan)]  # removing nan values
+        area = ma.compressed(areaf)[~np.isnan(hgt_nan)]  # removing nan values
+        area = area * 1000. * 1000  # Moving area from (km^2) to (m^2)
+
+        return lat, lon, hgt, mass, area
