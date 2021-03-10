@@ -9,8 +9,7 @@ import xarray as xr
 import numpy as np
 import numpy.ma as ma
 from utilvolc import volcat
-from os import path
-from math import pi, cos
+from math import pi
 
 """
 This script contains functions (class) that writes emitimes files
