@@ -122,17 +122,20 @@ def average_volcat(das, cdump):
     return  newmass
 
 def get_volcat_list(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True):
-    # find files.
-    tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=3)
+    """
+    returns list of data-arrays with volcat data.
+    """
+    tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=2)
     das = []
     for iii in tlist:
-        print(iii)
-        das.append(open_dataset(os.path.join(tdir,iii),
+        if not iii.pc_corrected: 
+            das.append(open_dataset(os.path.join(tdir,iii.fname),
                    correct_parallax=correct_parallax, 
                    mask_and_scale=mask_and_scale))
-    #dset = xr.concat(das, dim='time')
+        # if pc_corrected file then just use xr open_dataset.
+        else:
+            das.append(xr.open_dataset(os.path.join(tdir,iii.fname)))
     return das
-
 
 
 def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
