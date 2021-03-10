@@ -181,9 +181,11 @@ def get_forecast_info(metid):
 def get_archive_str(metid, ARCDIR='/pub/archive'):
     if (metid.lower() == 'gfs0p25'):
         metstr = 'gfs0p25/%Y%m%d_gfs0p25'
-        print('HERE',metstr)
     elif (metid.lower() == 'gfs'):
         metstr = 'gdas1/gdas1.%b%y.week'
+    else:
+        print('METID not found for archive ', metid)
+        sys.exit()
     return path.join(ARCDIR, metstr)
 
 def get_forecast_str(metid, FCTDIR='/pub/forecast'):

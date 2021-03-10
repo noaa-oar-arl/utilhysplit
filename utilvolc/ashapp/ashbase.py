@@ -29,7 +29,7 @@ from utilhysplit import hcontrol
 from monetio.models import hysplit
 from runhelper import Helper, ConcplotColors, JobFileNameComposer
 #from runhandler import ProcessList
-from volcMER import HT2unit
+from utilvolc.volcMER import HT2unit
 #from cdump2xml import HysplitKml
 
 # from ashbase import AshRun

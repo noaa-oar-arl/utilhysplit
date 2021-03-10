@@ -132,9 +132,10 @@ def make_inputs_from_file(wdir, config_file='ash_config.txt'):
            val = float(config.nlist[key])
         except:
            val = config.nlist[key]
+        # get rid of any white spaces in strings
         config.nlist[key] = val
     jobsetup.inp = config.nlist
-    print(config.nlist)
+    jobsetup.add_plotting_options(config.nlist)
     return jobsetup
 
 class JobSetUp:

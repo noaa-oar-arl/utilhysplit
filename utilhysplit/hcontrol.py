@@ -750,7 +750,7 @@ class NameList:
                 key = temp[0].strip()
                 if not case_sensitive:
                     key = key.lower()
-                self.nlist[key] = temp[1].strip(",")
+                self.nlist[key] = temp[1].strip(",").strip()
 
     def write(self, order=None, gem=False, verbose=False, overwrite=True,
               query=False):
