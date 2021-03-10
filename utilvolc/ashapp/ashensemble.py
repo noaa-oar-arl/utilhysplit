@@ -11,7 +11,7 @@ import time
 
 # import hysplit
 import metfiles as metfile
-import hysplit
+from monetio.models import hysplit
 from runhelper import Helper
 from runhandler import ProcessList
 from ashbase import AshRun

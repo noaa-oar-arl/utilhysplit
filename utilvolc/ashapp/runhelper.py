@@ -27,13 +27,6 @@ import sys
 
 from utilhysplit.hcontrol import NameList
 
-# import zipfile
-
-# from hysplitdata.traj import model
-
-# import hysplit
-# from get_NOAA_sunrise_sunset_002 import computeSunriseSunsetTimes
-
 
 logger = logging.getLogger(__name__)
 

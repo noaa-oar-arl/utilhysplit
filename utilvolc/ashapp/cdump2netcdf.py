@@ -6,7 +6,7 @@ import numpy as np
 import logging
 import pandas as pd
 from netCDF4 import Dataset
-import hysplit
+from monetio.models import hysplit
 
 # import matplotlib.pyplot as plt
 
