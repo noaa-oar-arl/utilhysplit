@@ -12,6 +12,8 @@ import cartopy.feature as cfeat
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
+#from pyresample.bucket import BucketResampler
+
 
 """
 This script contains routines that open/read VOLCAT data in xarray format, 
@@ -104,30 +106,36 @@ def average_volcat(das, cdump):
     # das is list of volcat datasets.
     # cdump is dataset with appropriate grid.
     # first map to new grid. Then average.
+
+    # remap_nearest may not be what we want to use. Seems that some small areas with low
+    # mass 'disappear' using this regridding scheme. May want to look into using pyresample.bucket or other.
     rai = 1e5
     mlist = []
     hlist = []
     for iii, dset in enumerate(das):
-        near_mass = cdump.monet.remap_nearest(dset.ash_mass_loading.isel(time=0),radius_of_influence=rai)
-        near_height = cdump.monet.remap_nearest(dset.ash_cloud_height.isel(time=0),radius_of_influence=rai)
+        near_mass = cdump.monet.remap_nearest(dset.ash_mass_loading.isel(time=0),radius_of_influence=rai).load()
+        near_height = cdump.monet.remap_nearest(dset.ash_cloud_height.isel(time=0),radius_of_influence=rai).load()
         mlist.append(near_mass)
         hlist.append(near_height)
     newmass = xr.concat(mlist,dim='time')
     avemass = newmass.mean(dim='time')
-    return  avemass
+    return  newmass
 
 def get_volcat_list(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True):
-    # find files.
-    tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=3)
+    """
+    returns list of data-arrays with volcat data.
+    """
+    tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=2)
     das = []
     for iii in tlist:
-        print(iii)
-        das.append(open_dataset(os.path.join(tdir,iii),
+        if not iii.pc_corrected: 
+            das.append(open_dataset(os.path.join(tdir,iii.fname),
                    correct_parallax=correct_parallax, 
                    mask_and_scale=mask_and_scale))
-    #dset = xr.concat(das, dim='time')
+        # if pc_corrected file then just use xr open_dataset.
+        else:
+            das.append(xr.open_dataset(os.path.join(tdir,iii.fname)))
     return das
-
 
 
 def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
