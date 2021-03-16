@@ -13,6 +13,42 @@ from colormaker import ColorMaker
 
 logger = logging.getLogger(__name__)
 
+def example_relative_frequency():
+    cname  = 'cxra.nc'
+    outfilename  = 'filename.zzz.png'
+
+    # latitude and longitude of volcano.
+    longitude = -175
+    latitude = 60
+    vlist = (longitude, latitude)
+
+    cxra = xr.open_dataset(cname)
+    zlevels = cxra.z.values
+    enslist = cxra.ens.values
+
+    # probability levels for plotting.
+    clevels = [5,20,40,60,80,95]
+
+    # threshold of exceedance in mg/m3.
+    thresh = 0.2
+
+    title = "HYSPLIT ensemble relative frequency exceeding (:0.2f)mg/m3".format(thresh) 
+    title += "\n GEFS {} members".format(len(enslist))
+
+    # adjust make sure that ATL plots are not all empty.
+    # if maximum value below threshold then adjust threshold so
+    # it is 1/10th the max value. some time periods may still be empty.
+    adjust = 10
+
+
+    fignamelist = ATLtimeloop(cxra, enslist, thresh, zlevels,vlist,
+                              name = outfilename,
+                              norm = True,
+                              clevels = clevels,
+                              title = title,
+                              adjust = adjust)
+
+
 class LabelData:
     def __init__(self, time, descrip, units, source="", tag=""):
         """
