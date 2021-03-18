@@ -5,6 +5,7 @@ from math import *
 #from scipy.io import netcdf
 #from pylab import *
 import numpy as np
+import pandas as pd
 #import numpy.ma as ma
 #import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -131,11 +132,8 @@ class MeteoProfile(object):
         #txtfile= open(self.fname, "r")
         #dvalid=0
         self.readnew(os.path.join(pdir,fname), datesvalid)
-
-
      
     def readnew(self, fname, datesvalid=[]):
-        print('reading')
         txtfile = open(fname, "r")
         cnt=0
         dvalid = True
@@ -183,6 +181,28 @@ class MeteoProfile(object):
     def columnnames(self, line):
         return(line.split())
 
+    def get_3dvar_df(self):
+        """
+        retunrs pandas dataframe with 3d variables in it.
+        """
+        varra = []
+        dates = self.date_ra
+        for tm in dates:
+           for line in self.valra[tm]:
+               temp2 = line.split()
+               temp = [tm] 
+               temp.extend(temp2)
+               #print(temp)
+               try:
+                   varra.append(temp)
+               except:
+                   pass
+        print(self.var3d)
+        cols = ['time','PRES1']
+        cols.extend(self.var3d)
+        df = pd.DataFrame(varra,columns=cols)
+        return df
+
     def get_var(self, var, dates=[], hts=[]):
         varra = []
         if dates ==[]:
@@ -192,6 +212,7 @@ class MeteoProfile(object):
            for tm in dates:
                for line in self.valra[tm]:
                    temp = line.split()
+                   print(tm)
                    try:
                        varra.append(float(temp[iii]))
                    except:
@@ -251,7 +272,7 @@ class MeteoProfile(object):
     def wind_direction(self, vwind, uwind):
             #vwind is magnitude of wind going from south to north
             #uwind is magnitude of wind going from West to East
-            print(len(vwind), len(uwind))
+            #print(len(vwind), len(uwind))
             uwind = np.array(uwind)
             vwind = np.array(vwind)
             wind_dir = np.arctan(vwind/uwind)*180/pi
@@ -259,9 +280,9 @@ class MeteoProfile(object):
             wind_dir[upos]= 270 - wind_dir[upos] 
             uneg = np.where(uwind < 0)
             wind_dir[uneg] = 90 - wind_dir[uneg] 
-            print(wind_dir.shape , wind_dir[2])
-            print('U' , uwind.shape, uwind[2])
-            print('V' , vwind.shape, vwind[2])
+            #print(wind_dir.shape , wind_dir[2])
+            #print('U' , uwind.shape, uwind[2])
+            #print('V' , vwind.shape, vwind[2])
             return wind_dir
 
 class Radiosonde(MeteoProfile):
@@ -322,7 +343,7 @@ class Radiosonde(MeteoProfile):
 
            if date <= datesvalid[1] and date >=datesvalid[0]:
                if lintype in ['4','5','6','7','8','9']:       #dataline
-                  print(wl)
+                  #print(wl)
                   pressure.append(float(wl[1]))
                   height.append(float(wl[2]))
                   temp.append(float(wl[3]))
