@@ -255,6 +255,27 @@ class CompareMetProfile:
         #plt.show()
         #return df
 
+
+    def check_3d(self,var,date):
+        fig = plt.figure(10)
+        ax = fig.add_subplot(1,1,1)
+        for prof, label, color in self.generate_prof():
+            if var not in prof.var3d: continue
+            df = prof.get_3dvar_df()
+            df = df[df['time'] == date]
+            df = df.set_index('PRES1')
+            df = df[var]
+            try:
+                ax.plot(df,df.index,color=color,label=label)
+            except:
+                print('failed {}'.format(label))
+        handles, labels = ax.get_legend_handles_labels()
+        plt.legend(handles,labels,loc='best',prop={'size':10})
+        ax.set_ylabel('Level'.format(var))
+        ax.set_xlabel('{}'.format(var))
+        ax.invert_yaxis()
+
+
 def heatmap(df):
     fs = 14
     plt.matshow(df.corr(),cmap='viridis')
