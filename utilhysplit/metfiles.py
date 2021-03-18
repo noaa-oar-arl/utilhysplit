@@ -1,13 +1,36 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import datetime
 from os import path
-import pytz
+#import pytz
+import logging
+import glob
 
 """
 PRGMMR: Alice Crawford  ORG: ARL
 This code written at the NOAA  Air Resources Laboratory
 ABSTRACT: choosing met files for HYSPLIT control file
+
+All dates assumed to be in UTC time.
+
+
 """
+logger = logging.getLogger(__name__)
+
+#TODO
+# if using archived gdas1, does not figure out
+# how many files to use correctly.
+    
+
+def gefs_suffix_list():
+    base0 = 'gec'
+    base = 'gep'
+    suffix = []
+    for num in range(0,31,1):
+        if num==0:
+           suffix.append(base0 + str(num).zfill(2))
+        else:
+           suffix.append(base + str(num).zfill(2))
+    return suffix
 
 class MetFileFinder:
    """
@@ -26,7 +49,12 @@ class MetFileFinder:
        self.forecast_directory = dpath 
        self.mstr = get_forecast_str(self.metid, self.forecast_directory)
 
+   def set_archives_directory(self, dpath):
+       self.archive_directory = dpath 
+       #self.mstr = get_archive_str(self.metid, self.forecast_directory)
+
    def set_ens_member(self, suffix):
+       self.mstr = get_forecast_str(self.metid, self.forecast_directory)
        self.mstr += suffix
 
    def find_forecast_cycle(self,dstart,duration,cycle):
@@ -58,8 +86,8 @@ class MetFileFinder:
        else:
           newdate = dstart
           runtime = duration
-       print(dstart, duration, dstart+datetime.timedelta(hours=duration))
-       print(newdate, runtime, newdate + datetime.timedelta(hours=runtime))
+       #print(dstart, duration, dstart+datetime.timedelta(hours=duration))
+       #print(newdate, runtime, newdate + datetime.timedelta(hours=runtime))
        mf = MetFiles(mstr,hours=24)
        files = []
        iii=0
@@ -69,6 +97,20 @@ class MetFileFinder:
           if cycle_time *iii > forecast_length: break
           iii += 1
        return files    
+
+   def find(self, dstart, duration):
+       self.mstr = get_forecast_str(self.metid, self.archive_directory)
+       metfiles = self.find_forecast(dstart,duration)
+       if not metfiles:
+           logger.info('Looking in archive for met files')
+           metfiles = self.find_archive(dstart,duration)
+       return metfiles
+
+   def find_archive(self, dstart, duration):
+       self.mstr = get_archive_str(self.metid, self.archive_directory)
+       mf = MetFiles(self.mstr,hours=-1)
+       mfiles = mf.get_files(dstart, duration)
+       return  mfiles
 
    def find_forecast(self, dstart, duration):
        """
@@ -92,32 +134,35 @@ class MetFileFinder:
           # the time period.
           newdate = dstart - datetime.timedelta(hours=cycle_time * iii)
           files = mf.make_file_list(newdate, duration)
+          # double check that start of first files is before start date.
+          if files:
+              metdate = datetime.datetime.strptime(files[0],mstr)
+              if metdate > newdate:
+                 files = []
           if cycle_time *iii > forecast_length: break
           iii += 1
-
+       if not files:
+          logger.warning('No meteorological files found')
+          return files
        files = weed_files(files,dstart,duration,self.metid,self.mstr)
        return process(files)   
 
 def weed_files(metfiles,dstart,duration,metid,metstr):
+    #TO DO. fix so files don't overlap in time if more than one.
     mhash = get_forecast_info(metid)
     metlist =[]
-    #metstr = get_forecast_str(metid)
-    done=False
-    iii=0
-    while not done:
-          metf = metfiles[iii].split('/')[-1]
-          metdir = metfiles[iii].replace(metf,'')
-          #metstr = get_forecast_str(metid,metdir)
-          mdate = datetime.datetime.strptime(metfiles[iii], metstr)       
-          edate = mdate + datetime.timedelta(hours=mhash['forecast_length']) 
-          metlist.append(metfiles[iii])
-          if edate > dstart + datetime.timedelta(hours=duration):
-             done = True  
-          iii+=1
+    for count, mfile in enumerate(metfiles): 
+      logger.debug('{}'.format(mfile))
+      metf = mfile.split('/')[-1]
+      metdir = mfile.replace(metf,'')
+      mdate = datetime.datetime.strptime(mfile, metstr)       
+      edate = mdate + datetime.timedelta(hours=mhash['forecast_length']) 
+      metlist.append(mfile)
+      # if the end date is past the end date of the simulation then don't
+      # need any more files. 
+      if edate > dstart + datetime.timedelta(hours=duration):
+         break 
     return metlist
-
-
-
 
 def get_forecast_info(metid):
     # TO DO. set forecast_length based on metid
@@ -127,10 +172,19 @@ def get_forecast_info(metid):
         mhash['forecast_length'] = 84
         mhash['time_res'] = 3  #3 hour time resolution
     if 'gefs' in metid.lower():
-        mhash['forecast_length'] = 84
+        mhash['forecast_length'] = 4*24
+        mhash['time_res'] = 3  #3 hour time resolution
     if 'nam' in metid.lower():
         mhash['forecast_length'] = 72
     return mhash
+
+def get_archive_str(metid, ARCDIR='/pub/archive'):
+    if (metid.lower() == 'gfs0p25'):
+        metstr = 'gfs0p25/%Y%m%d_gfs0p25'
+        print('HERE',metstr)
+    elif (metid.lower() == 'gfs'):
+        metstr = 'gdas1/gdas1.%b%y.week'
+    return path.join(ARCDIR, metstr)
 
 def get_forecast_str(metid, FCTDIR='/pub/forecast'):
     """Finds forecast meteorology data files
@@ -139,14 +193,18 @@ def get_forecast_str(metid, FCTDIR='/pub/forecast'):
     """
     if (metid.lower() == 'gfs') or (metid.lower() == 'gfs0p25'):
         met = metid.lower()
-    elif(metid.lower() == 'nam'):
-        met = 'namsf'
-    elif(metid.lower() == 'namak'):
+    elif('nam' in metid.lower() and 'ak' in metid.lower()):
         met = 'namsf.AK'
-    elif(metid.lower() == 'namhi'):
+    elif('nam' in metid.lower() and 'hi' in metid.lower()):
         met = 'namsf.HI'
-    elif(metid.lower() == 'gefs'):
+    elif('nam' in metid.lower()):
+        met = 'namsf'
+    elif('gefs' in metid.lower()):
         met = 'gefs'
+    else:
+        logger.warning('Did not recognize MET name {}.'.format(metid))
+        lgger.warning('Using GFS')
+        met = 'gfs' 
     #metnamefinal = 'No data found'
     #        metime = dtm
     metdir = FCTDIR + '/%Y%m%d/'
@@ -157,7 +215,7 @@ def get_forecast_str(metid, FCTDIR='/pub/forecast'):
     return metdir + metfilename
 
 def getmetfiles(strfmt, sdate, runtime,
-                altstrfmt=None):
+                altstrfmt):
     """
     INPUTS
     strfmt : string
@@ -299,7 +357,6 @@ class MetFiles:
         sdate : datetime.datetime ojbect
         runtime : int (hours of runtime)
         """
-        #self.verbose=True
         nlist = []
         sdate = sdate.replace(tzinfo=None)
         if not isinstance(self.mdt, datetime.timedelta):
@@ -316,22 +373,25 @@ class MetFiles:
         if "%H" in self.strfmt:
             sdate = self.handle_hour(sdate)
         edate = sdate
-        if self.verbose:
-            print("GETMET", sdate, edate, end_date, runtime, self.mdt)
+        #if self.verbose:
+            #print("GETMET", sdate, edate, end_date, runtime, self.mdt)
         zzz = 0
         while not done:
             if "week" in self.strfmt:
-                # need to check every day otherwise when starting
-                # midweek may skip some weeks at end of month.
-                self.mdt = datetime.timedelta(hours=1 * 24)
+                self.mdt = datetime.timedelta(hours=7 * 24)
                 temp = parse_week(self.strfmt, edate)
             else:
                 temp = edate.strftime(self.strfmt)
+            # temp = temp.lower()
             edate = edate + self.mdt
+            if '?' in temp:
+               temp = glob.glob(temp)[0]
             if not path.isfile(temp):
                 temp = temp.lower()
             if not path.isfile(temp):
-                print("WARNING", temp, " meteorological file does not exist")
+                #logger.info("WARNING " +  temp + " meteorological file does not exist")
+                pass
+                #logger.debug("WARNING " +  temp + " meteorological file does not exist")
                 #temp = self.altmet.makefilelist(edate, self.altmet.mdt)
                 #print("REPLACE with", temp)
             #if temp != "None":

@@ -83,7 +83,7 @@ def callprofile(hdir, mdir, meteo, lat, lon, dt, mfname='', nstop=24, offset=0):
     subprocess.call([callstr, p1, p2, p3, p4, p5, p6, p7])
     if mfname !='':
         subprocess.call(["mv", "profile.txt", mfname])
-
+  
 
 
 class MeteoProfile(object):
@@ -100,7 +100,7 @@ class MeteoProfile(object):
         #fname="/pub/Scratch/alicec/KASATOCHI/meteo/wrf.profile.txt"
         #fname="/pub/Scratch/alicec/KASATOCHI/meteo/narr.profile.txt"
         #fname="/pub/Scratch/alicec/KASATOCHI/meteo/gdas1.profile.txt"
-
+        self.pdir = pdir
         self.fname=pdir + fname
         self.valra = {}
         self.valra2d = {}
@@ -122,17 +122,21 @@ class MeteoProfile(object):
        
         height_rat=[] 
 
-        count=0
+        self.var3d = []
+        self.var2d = [] 
+
+        #count=0
         #time_index=0
-        firstday=[]
-        txtfile= open(self.fname, "r")
-        dvalid=0
-        self.readnew(datesvalid)
+        #firstday=[]
+        #txtfile= open(self.fname, "r")
+        #dvalid=0
+        self.readnew(os.path.join(pdir,fname), datesvalid)
 
 
-    def readnew(self, datesvalid=[]):
+     
+    def readnew(self, fname, datesvalid=[]):
         print('reading')
-        txtfile = open(self.fname, "r")
+        txtfile = open(fname, "r")
         cnt=0
         dvalid = True
         iii = 0
@@ -178,7 +182,6 @@ class MeteoProfile(object):
           
     def columnnames(self, line):
         return(line.split())
-     
 
     def get_var(self, var, dates=[], hts=[]):
         varra = []
@@ -186,7 +189,6 @@ class MeteoProfile(object):
            dates = self.date_ra
         if var in  self.var3d:
            iii = self.var3d.index(var) + 1
-           print(var, iii)
            for tm in dates:
                for line in self.valra[tm]:
                    temp = line.split()
@@ -197,17 +199,11 @@ class MeteoProfile(object):
         elif var in self.var2d:
            iii = self.var2d.index(var) + 1
            for tm in dates:
-               print(tm)
                temp = self.valra2d[tm][0].split()
                varra.append(float(temp[iii]))
         else:
-           print(var, ' not in 3d variables', self.var3d)
-           print(var, ' not in 2d variables', self.var2d)
            return -1
         return varra     
-
-    
-
 
     def testdate(self, time, datesvalid, verbose=False):
         if datesvalid == []:
