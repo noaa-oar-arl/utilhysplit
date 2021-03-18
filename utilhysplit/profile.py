@@ -190,6 +190,14 @@ class MeteoProfile(object):
         for tm in dates:
            for line in self.valra[tm]:
                temp2 = line.split()
+               temp2 = list(map(float,temp2))
+               # TO DO. 
+               # skip lines which contain missing values.
+               # need to implement fixed column width reader
+               # cannot assume spaces are delimiters.
+               if len(temp2) != len(self.var3d)+1: 
+                  #print('warning: line contains missing values ', line)
+                  continue
                temp = [tm] 
                temp.extend(temp2)
                #print(temp)
@@ -197,7 +205,6 @@ class MeteoProfile(object):
                    varra.append(temp)
                except:
                    pass
-        print(self.var3d)
         cols = ['time','PRES1']
         cols.extend(self.var3d)
         df = pd.DataFrame(varra,columns=cols)
