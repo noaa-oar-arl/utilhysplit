@@ -152,7 +152,7 @@ class MeteoProfile(object):
                self.dunits2 = line
                cnt = 3
             elif cnt == 1:
-               self.var2d = self.columnnames(line)
+               self.var2d = self.columnnames2d(line)
                cnt = 2
             elif cnt == 5:
                self.dunits3 = line
@@ -177,9 +177,18 @@ class MeteoProfile(object):
                break
         txtfile.close()
         #print self.date_ra
+
+    def columnnames2d(self, line):
+        temp = line.split()
+        return temp
+
           
     def columnnames(self, line):
-        return(line.split())
+        temp = line.split()
+        # profile always outputs two UWND and VWND.
+        temp[-1] = 'VWND_rot'
+        temp[-2] = 'UWND_rot'
+        return temp
 
     def get_3dvar_df(self):
         """

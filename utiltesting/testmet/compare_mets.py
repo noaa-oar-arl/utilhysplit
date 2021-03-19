@@ -192,13 +192,14 @@ class CompareMetProfile:
         fig = plt.figure(1)
         ax1 = fig.add_subplot(1,1,1)
         for prof,label,color in self.generate_prof():
-            print(label, '-----')
+            #print(label, '-----')
             xvar = prof.get_var(yvarname)
             if xvar!= -1: ax1.plot(prof.date_ra, xvar,marker='.', color=color, label=label)
         handles, labels = ax1.get_legend_handles_labels()
         plt.legend(handles,labels,loc='best',prop={'size':10})
         ax1.set_ylabel(yvarname)
         fig.autofmt_xdate()
+        return ax1
 
     def plot(self,xvarname,yvarname):
         fig = plt.figure(1)
@@ -210,10 +211,13 @@ class CompareMetProfile:
             
     def standard_surface_plots(self,plotall=True):
         varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M','V10M']
+        #varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M']
         if plotall: varlist = self.twodlist
         for var in varlist:
-            self.plot_ts(var)
+            print(var)
+            ax = self.plot_ts(var)
             plt.show()
+        return ax
 
     def create_frame(self,var):
         dflist = []
@@ -252,29 +256,34 @@ class CompareMetProfile:
         handles, labels = ax1.get_legend_handles_labels()
         plt.legend(handles,labels,loc='best',prop={'size':10})
         ax1.set_ylabel('difference for {}'.format(var))
-        #plt.show()
-        #return df
-
 
     def check_3d(self,var,date):
         fig = plt.figure(10)
         ax = fig.add_subplot(1,1,1)
+        #iii=0
         for prof, label, color in self.generate_prof():
             if var not in prof.var3d: continue
             df = prof.get_3dvar_df()
             df = df[df['time'] == date]
-            df = df.set_index('PRES1')
-            df = df[var]
+            df.set_index('PRES1',inplace=True)
+            if var == 'WWND' and 'DIFW' in df.columns.values:
+               print('adding difw to wwnd', label)
+               df['NEW'] = df['WWND'] + df['DIFW']
+               df = df['NEW']
+            else:
+               df = df[var]
             try:
-                ax.plot(df,df.index,color=color,label=label)
+               ax.plot(df,df.index,color=color,marker='.',label=label)
             except:
                 print('failed {}'.format(label))
+            #if iii> 1: break
+            #iii+=1
         handles, labels = ax.get_legend_handles_labels()
         plt.legend(handles,labels,loc='best',prop={'size':10})
         ax.set_ylabel('Level'.format(var))
         ax.set_xlabel('{}'.format(var))
         ax.invert_yaxis()
-
+        return ax
 
 def heatmap(df):
     fs = 14
