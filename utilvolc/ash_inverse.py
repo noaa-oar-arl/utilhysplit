@@ -22,6 +22,35 @@ def testcase(tdir,vdir):
 # pick time period.
 # cdump output for that time period. 
 
+
+class InverseOutDat:
+
+    def __init__(self,wdir,fname):
+        # out.dat has estimated release rates in same order as tcm columns.
+        # out2.dat has observed(2nd column) and modeled(3rd column) mass loadings.
+        self.wdir = wdir
+        
+    def read_out(self,name):
+        wdir = self.wdir
+        df = pd.read_csv(os.path.join(wdir,name),sep='\s+',header=None)
+        return df
+
+    def get_conc(self,, name='out2.dat'):
+        df = self.read_out(name)
+        df.columns = ['index', 'observed', 'model']
+        plt.plot(df['observed'],df['model'],'k.',MarkerSize=3)
+        ax = plt.gca()
+        ax.set_xlabel('observed')
+        ax.set_ylabel('model')
+        nval = np.max(df['observed'])
+        # plot 1:1 line
+        plt.plot([0,nval],[0,nval],'--b',LineWidth=1)
+        return ax 
+
+    
+
+
+
 class InverseAsh:
 
     def __init__(self, tdir, fname,vdir,vid):
@@ -38,9 +67,14 @@ class InverseAsh:
 
         # hysplit output. xarray. 
         cdump = xr.open_dataset(os.path.join(tdir,fname))
+
+        # turn dataset into dataarray
         temp = list(cdump.keys())
         cdump = cdump[temp[0]]
+
+        # get rid of source dimension (for now)
         cdump = cdump.isel(source=0)
+
         # get the mass loading.
         # TODO later may want to exclude certain levels.
         self.cdump = hysplit.hysp_massload(cdump)
@@ -73,6 +107,123 @@ class InverseAsh:
            iii = None
         return iii 
 
+    def make_tcm(self,tiilist, remove_cols=True):
+        # header line indicates release times for each column.
+        # one column for each release time/location.
+        # one row for each measurement location.
+
+        #         ens1  ens2 ens3 ens4 ens5 ens6 ens7 .... Obs
+        # (x1,y1)
+        # (x2,y1)
+        # (x3,y1)
+        # .
+        # .
+        # .
+        # (x1,y2)
+
+        # column will be from the ensemble dimension.
+        # measurement is from the lat/lon dimension.
+
+        # last column is the value of the observation.
+
+        # number of rows corresponds to number of points where there is an observation
+        # only include observations above 0.
+        # or include where either observation OR model above 0.
+        # or include only where model above 0.
+
+        # right now only one time period.
+        tii = tiilist[0]
+        cdump = self.cdump_hash[tii]
+        avg = self.volcat_avg_hash[tii] 
+
+
+        s1 = avg.shape[0]*avg.shape[1] 
+
+        model = cdump.stack(pos=['y','x'])
+        model = model.transpose('pos','ens')      
+
+        # remove columns which have no contribution at all. 
+        if remove_cols:
+            model = model.where(model>0)
+            model = model.dropna(dim = 'ens', how='all')
+ 
+        model_lat = model.latitude.values.reshape(s1,1)
+        model_lon = model.longitude.values.reshape(s1,1)
+        columns = model.ens.values
+
+        model = model.values
+       
+        volc = avg.values.reshape(s1,1)
+        volc_lat = avg.latitude.values.reshape(s1,1)
+        volc_lon = avg.longitude.values.reshape(s1,1)
+
+        tcm = np.concatenate([model,volc],axis=1)
+        if not np.all(volc_lon == model_lon):
+           print('WARNING, model and observed locations in tcm not matching')
+        if not np.all(volc_lat == model_lat):
+           print('WARNING, model and observed locations in tcm not matching')
+       
+        self.tcm = tcm
+        self.tcm_lat = model_lat
+        self.tcm_lon = model_lon
+        self.tcm_columns =  columns
+ 
+        return tcm, model_lat, model_lon, columns
+
+    def plot_tcm(self):
+        plt.pcolormesh(np.log10(self.tcm))
+
+
+    def make_fake(self):
+        tcm_real = self.tcm.copy()
+       
+        nra = []
+        nra.append([1,0,0,0,0,0,2])
+        nra.append([0,1,0,0,0,0,3])
+        nra.append([0,0,1,0,0,0,10])
+        nra.append([0,0,0,1,0,0,6])
+        nra.append([0,0,0,0,1,0,5])
+        nra.append([0,0,0,0,0,1,4])
+        self.tcm = np.array(nra)
+        self.write_tcm('test_tcm.txt')
+        self.tcm = tcm_real
+
+    def write_tcm(self, name):
+        astr = ''
+        sep = ' '
+        hstr = '' # header string
+        print(self.tcm.shape)\
+        # this is number of columns minus 1.
+        print('N_ctrl {}'.format(self.tcm.shape[1]-1)
+        print('N_ctrl {}'.format(self.tcm.shape[1]-1)
+            
+        for iii, line in enumerate(self.tcm):
+            for jjj, val in enumerate(line):
+                if iii==0:
+                   hstr += '43637.750' + sep
+                if not np.isnan(val): astr += '{:1.5e}'.format(val)
+                else: astr += '{:1.4e}'.format(0)
+                astr += sep
+            astr += '\n '
+            #print(astr)
+            #print(line[-1])
+            #sys.exit()
+            if iii==0: hstr += '\n'
+        with open(name, 'w') as fid:
+            fid.write(hstr + astr)
+        return hstr + astr 
+
+    def compare_plots(self, daterange):
+        tii = self.time_index(daterange[0])
+        cdump = self.cdump_hash[tii]
+        volcat = self.volcat_avg_hash[tii] 
+        csum = cdump.sum(dim='ens')
+        plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds')
+        cb = plt.pcolormesh(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues')
+        plt.colorbar(cb)
+        ax = plt.gca()
+        return ax
+
     def prepare_one_time(self, daterange):
         vdir = self.vdir
         vid = self.vid
@@ -85,17 +236,19 @@ class InverseAsh:
         a1,a2,b1,b2 = self.clip(dummy)
         dummy = dummy[a1:a2,b1:b2]
         #cdump_a = cdump_a[a1:a2,b1:b2]      
+    
         # get list of volcat data arrays. 
         das = self.get_volcat(daterange)
+
         # regrid volcat to dummy grid.
         regrid_volcat = volcat.average_volcat(das,dummy)
+
         # average volcat values.
         avg = regrid_volcat.mean(dim='time')
         cdump_a = cdump_a[:,a1:a2,b1:b2]
 
         self.cdump_hash[tii] = cdump_a
         self.volcat_avg_hash[tii] = avg
-
         return  cdump_a, avg
         
 
