@@ -20,8 +20,11 @@ def example():
     # name for awips2 files
     awipsname = 'out.nc'
  
-    inp['VolcanoName'] = 'Doublas' # name of volcano 
+    inp['VolcanoName'] = 'Douglas' # name of volcano 
     inp['meteorologicalData'] = 'GEFS' # met data set.
+    inp['emissionHours'] = 12 # met data set.
+    inp['start_date'] = datetime.datetime(2021,4,7,21,15)
+
     inp['latitude'] = 58.855   # latitude of vent.
     inp['longitude'] = -153.54 # longitude of vent
     inp['eflag'] = 0           # increase(negative) or decrease(positive) MER
@@ -41,7 +44,7 @@ def example():
     # load data from cdump files into xarray. 
     cxra = maketestra(tdir, cdumplist,enslist)
 
-    # convert unit mass to ug.
+    # convert unit mass/m3 to mg/m3.
     mult = get_conc_multiplier(inp)   
     cxra = mult * cxra
     inp['mult'] = mult
@@ -51,9 +54,18 @@ def example():
     plot_ash_rel_freq(cxra,inp,flin,meanflin)
 
     # create awips2 files
-    c2n = Cdump2Awips(cxra,awipsname)
+    # dictionary information in ghash will be written into global
+    # attributes in the netcdf file.
+    ghash["source_latitude"] = inp['latitude']
+    ghash["source_longitude"] = inp['longitude']
+    ghash['source_name'] = inp['VolcanoName']
+    ghash['emission_start'] = inp['start_date']
+    ghash['emission_duration_hours'] = inp['emissionHours']
+    ghash['MER'] = mult / 1e6 / 3600.0
+    ghash['MER_unit'] = 'kg/s'
+    c2n = Cdump2Awips(cxra,awipsname,munit='mg',globalhash=ghash)
     fnames = c2n.create_all_files()
-    return cxra
+
  
 def maketestblist(dname,cdumplist,enslist):
     # Need list of tuples. (filename, sourcetag, mettag)
