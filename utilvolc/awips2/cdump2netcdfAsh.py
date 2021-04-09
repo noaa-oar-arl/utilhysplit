@@ -70,6 +70,7 @@ class Cdump2Awips:
         self.fileformat = fileformat
         self.jobid = jobid
         # self.coordlist = ('time', 'ensid', 'longitude', 'latitude')
+
         self.coordlist = ("time", "ensid", "latitude", "longitude")
 
         self.globalhash = globalhash
@@ -125,9 +126,9 @@ class Cdump2Awips:
         if "MER_unit" in self.globalhash.keys():
             fid.MER_unit = self.globalhash["MER_unit"]
         if "source_latitude" in self.globalhash.keys():
-            fid.soure_latitude = self.globalhash["source_latitude"]
+            fid.source_latitude = self.globalhash["source_latitude"]
         if "source_longitude" in self.globalhash.keys():
-            fid.soure_longitude = self.globalhash["source_longitude"]
+            fid.source_longitude = self.globalhash["source_longitude"]
         if "source_name" in self.globalhash.keys():
             fid.source_name = self.globalhash["source_name"]
         if "emission_start" in self.globalhash.keys():

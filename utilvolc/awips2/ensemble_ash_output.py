@@ -1,4 +1,5 @@
 import os
+import datetime
 import logging
 import hysplit
 import ensemble_tools
@@ -19,7 +20,7 @@ def example():
     meanflin = 'douglas_ensmeanmass_zzz.png'
     # name for awips2 files
     awipsname = 'out.nc'
- 
+    jobid = 'test' 
     inp['VolcanoName'] = 'Douglas' # name of volcano 
     inp['meteorologicalData'] = 'GEFS' # met data set.
     inp['emissionHours'] = 12 # met data set.
@@ -56,6 +57,7 @@ def example():
     # create awips2 files
     # dictionary information in ghash will be written into global
     # attributes in the netcdf file.
+    ghash = {}
     ghash["source_latitude"] = inp['latitude']
     ghash["source_longitude"] = inp['longitude']
     ghash['source_name'] = inp['VolcanoName']
@@ -63,9 +65,9 @@ def example():
     ghash['emission_duration_hours'] = inp['emissionHours']
     ghash['MER'] = mult / 1e6 / 3600.0
     ghash['MER_unit'] = 'kg/s'
-    c2n = Cdump2Awips(cxra,awipsname,munit='mg',globalhash=ghash)
+    c2n = Cdump2Awips(cxra,awipsname,munit='mg',jobid=jobid,globalhash=ghash)
     fnames = c2n.create_all_files()
-
+    return cxra
  
 def maketestblist(dname,cdumplist,enslist):
     # Need list of tuples. (filename, sourcetag, mettag)
