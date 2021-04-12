@@ -12,63 +12,48 @@ import cartopy.feature as cfeat
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-#from pyresample.bucket import BucketResampler
+# from pyresample.bucket import BucketResampler
 
 
 """
-This script contains routines that open/read VOLCAT data in xarray format, 
+This script contains routines that open/read VOLCAT data in xarray format,
 manipulate arrays as necessary, and plots desirable variables.
 -------------
 Functions:
 -------------
 open_dataset: opens single VOLCAT file
 open_mfdataset: opens multiple VOLCAT files
+average_volcat: averages VOLCAT files over designated time period
+get_volcat_list: returns list of data-arrays with volcat data
+write_parallax_corrected_files: writes new files with parallax corrected lat/lon
+find_volcat: finds volcat files in designated directory
+test_volcat: tests to see if parallax corrected lat/lon values exist
+open_dataset2: opens single volcat file in Reventador format
 bbox: finds bounding box around data - used for trimming arrays
 _get_time: set time dimension for VOLCAT data
 _get_latlon: rename lat/lon, set coordinates of VOLCAT data
+get_data: extracts desired data from large volcat file
+check_names:
+create_pc_plot: plots parallax corrected vs uncorrected values
+compare_pc: compares corrected vs uncorrected values
+get_pc_latitude: uses parallax corrected latitude
+get_pc_longitude: uses parallax corrected longitude
 get_height: returns array of ash top height from VOLCAT
 get_radius: returns array of ash effective radius from VOLCAT
 get_mass:  returns array of ash mass loading from VOLCAT
+mass_sum:
 get_atherr: returns array of ash top height error from VOLCAT
 plot_height: plots ash top height from VOLCAT
 plot_radius: plots ash effective radius from VOLCAT
 plot_mass: plots ash mass loading from VOLCAT
+plot_gen: generates quick plot, not saved
+matchvals:
+Class: VolcatName
+     compare: compares volcat file names - shows difference
+     parse: parses name into components
+     create_name: in progress
 ------------
 """
-
-def open_mfdataset(fname):
-    # 12/1/2020 Not modified for new files (Bezy) 
-    # TO DO - modify for new files.
-    """Opens multiple VOLCAT files"""
-    print(fname)
-    #dset = xr.open_mfdataset(fname, concat_dim='time', decode_times=False, mask_and_scale=False)
-    from glob import glob
-    from numpy import sort
-    files = sort(glob(fname))
-    das = []
-    for i in files:
-        das.append(open_dataset(i))
-    dset = xr.concat(das, dim='time')
-    dset = _get_latlon(dset)
-    dset = dset.rename({"lines": 'y', "elements": 'x'})
-    return dset
-
-def open_mfdataset(fname):
-    # 12/1/2020 Not modified for new files (Bezy)
-    # TO DO - modify for new files.
-    """Opens multiple VOLCAT files"""
-    print(fname)
-    #dset = xr.open_mfdataset(fname, concat_dim='time', decode_times=False, mask_and_scale=False)
-    from glob import glob
-    from numpy import sort
-    files = sort(glob(fname))
-    das = []
-    for i in files:
-        das.append(open_dataset(i))
-    dset = xr.concat(das, dim='time')
-    dset = _get_latlon(dset)
-    dset = dset.rename({"lines": 'y', "elements": 'x'})
-    return dset
 
 
 def open_dataset(fname,
@@ -101,6 +86,41 @@ def open_dataset(fname,
     return dset
 
 
+def open_hdf(fname):
+    """ Opens single HDF NRT VOLCAT file"""
+    # 4/12/2021 Creating reader for HDF files - NRT, not processed
+    dset = xr.open_dataset(fname, mask_and_scale=False, decode_times=False)
+    dset = dset.rename({"lines": 'y', "elements": 'x'})
+    # create 2d lat lon arrays
+    lon2d, lat2d = _make2d_latlon(dset)
+    # Rename, add variable and assing to coordinates
+    lon = xr.DataArray(lon2d, name='Longitude', dims=['y', 'x'])
+    lat = xr.DataArray(lat2d, name='Latitude', dims=['y', 'x'])
+    attrs = dset.attrs
+    dset = xr.merge([dset, lat, lon])
+    dset = dset.set_coords(['Latitude', 'Longitude'])
+    dset.attrs = attrs
+    return dset
+
+
+def open_mfdataset(fname):
+    # 12/1/2020 Not modified for new files (Bezy)
+    # TO DO - modify for new files.
+    """Opens multiple VOLCAT files"""
+    print(fname)
+    # dset = xr.open_mfdataset(fname, concat_dim='time', decode_times=False, mask_and_scale=False)
+    from glob import glob
+    from numpy import sort
+    files = sort(glob(fname))
+    das = []
+    for i in files:
+        das.append(open_dataset(i))
+    dset = xr.concat(das, dim='time')
+    dset = _get_latlon(dset)
+    dset = dset.rename({"lines": 'y', "elements": 'x'})
+    return dset
+
+
 def average_volcat(das, cdump):
     # In progress.
     # das is list of volcat datasets.
@@ -113,35 +133,38 @@ def average_volcat(das, cdump):
     mlist = []
     hlist = []
     for iii, dset in enumerate(das):
-        near_mass = cdump.monet.remap_nearest(dset.ash_mass_loading.isel(time=0),radius_of_influence=rai).load()
-        near_height = cdump.monet.remap_nearest(dset.ash_cloud_height.isel(time=0),radius_of_influence=rai).load()
+        near_mass = cdump.monet.remap_nearest(
+            dset.ash_mass_loading.isel(time=0), radius_of_influence=rai).load()
+        near_height = cdump.monet.remap_nearest(
+            dset.ash_cloud_height.isel(time=0), radius_of_influence=rai).load()
         mlist.append(near_mass)
         hlist.append(near_height)
-    newmass = xr.concat(mlist,dim='time')
+    newmass = xr.concat(mlist, dim='time')
     avemass = newmass.mean(dim='time')
-    return  newmass
+    return newmass
 
-def get_volcat_list(tdir,daterange,vid,correct_parallax=True,mask_and_scale=True):
+
+def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True):
     """
     returns list of data-arrays with volcat data.
     """
-    tlist = find_volcat(tdir,vid=vid,daterange=daterange,return_val=2)
+    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2)
     das = []
     for iii in tlist:
-        if not iii.pc_corrected: 
-            das.append(open_dataset(os.path.join(tdir,iii.fname),
-                   correct_parallax=correct_parallax, 
-                   mask_and_scale=mask_and_scale))
+        if not iii.pc_corrected:
+            das.append(open_dataset(os.path.join(tdir, iii.fname),
+                                    correct_parallax=correct_parallax,
+                                    mask_and_scale=mask_and_scale))
         # if pc_corrected file then just use xr open_dataset.
         else:
-            das.append(xr.open_dataset(os.path.join(tdir,iii.fname)))
+            das.append(xr.open_dataset(os.path.join(tdir, iii.fname)))
     return das
 
 
 def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
     """
     tdir : str : location of volcat files.
-    wdir : str : location to write new files 
+    wdir : str : location to write new files
     vid : volcano id : if None will find all
     daterange : [datetime, datetime] : if None will find all.
     verbose: boolean
@@ -166,7 +189,7 @@ def find_volcat(tdir, vid=None, daterange=None,
     daterange : [datetime, datetime] or None
     Locates files in tdir which follow the volcat naming
     convention as defined in VolcatName class.
-    If a daterange is defined will return only files 
+    If a daterange is defined will return only files
 
     return_val : integer
                1 - returns dictionary
@@ -304,17 +327,18 @@ def open_dataset2(fname):
     """Opens single VOLCAT file in reventador format """
     print(fname)
     dset = xr.open_dataset(fname, mask_and_scale=False, decode_times=False)
-    #dset = dset.rename({"Dim1":'y',"Dim0":'x'})
-    #dset = _get_latlon(dset)
-    #dset = _get_time(dset)
+    # dset = dset.rename({"Dim1":'y',"Dim0":'x'})
+    # dset = _get_latlon(dset)
+    # dset = _get_time(dset)
     return dset
+
 
 def bbox(darray, fillvalue):
     """Returns bounding box around data
     Input: Must be dataarray
     Outupt: Lower left corner, upper right corner of bounding box
     around data.
-    if fillvalue is None then assume Nan's. 
+    if fillvalue is None then assume Nan's.
     """
     arr = darray[0, :, :].values
     if fillvalue:
@@ -331,6 +355,15 @@ def bbox(darray, fillvalue):
 def _get_latlon(dset, name1='latitude', name2='longitude'):
     dset = dset.set_coords([name1, name2])
     return dset
+
+
+def _make2d_latlon(dset):
+    lon = np.linspace(dset.attrs['Longitude_Range'][0], dset.attrs['Longitude_Range']
+                      [1], dset.attrs['Last_Element_Processed'])
+    lat = np.linspace(dset.attrs['Latitude_Range'][1], dset.attrs['Latitude_Range']
+                      [0], dset.attrs['Line_Segment_Size'])
+    lon2d, lat2d = np.meshgrid(lon, lat)
+    return lon2d, lat2d
 
 
 def _get_time(dset):
@@ -395,7 +428,7 @@ def create_pc_plot(dset):
         # plot 1:1 line
         minval = np.min(vals[0])
         maxval = np.max(vals[0])
-        ax.plot([minval, maxval], [minval, maxval], '--r.',MarkerSize=1)
+        ax.plot([minval, maxval], [minval, maxval], '--r.', MarkerSize=1)
 
     latitude, longitude = compare_pc(dset)
     fig = plt.figure(1)
@@ -491,13 +524,6 @@ def get_atherr(dset):
     return height_err
 
 
-def trim_arrray(dset):
-    """Trim the VOLCAT array around data
-    Make smaller for comparison to HYSPLIT """
-
-# Plotting variables
-
-
 def plot_height(dset):
     """Plots ash top height from VOLCAT
     Does not save figure - quick image creation"""
@@ -577,10 +603,13 @@ def matchvals(pclat, pclon, massra, height):
         tlist = [x for x in tlist if ~np.isnan(x[2])]
     return tlist
 
+
 def find_iii(tlist, match):
     for iii, val in enumerate(tlist):
-        if val == match: return iii
-    return   -1
+        if val == match:
+            return iii
+    return -1
+
 
 def correct_pc(dset):
     """
@@ -597,23 +626,23 @@ def correct_pc(dset):
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
     tlist = np.array(matchvals(pclon, pclat, mass, height))
-  
+
     indexlist = []
     prev_point = 0
     for point in tlist:
         iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
         if iii in indexlist:
-           print('WARNING: correct_pc function: some values mapped to same point')
-           print(iii, point)
-           vpi = find_iii(indexlist, iii)
-           print(tlist[vpi])
+            print('WARNING: correct_pc function: some values mapped to same point')
+            print(iii, point)
+            vpi = find_iii(indexlist, iii)
+            print(tlist[vpi])
         newmass = xr.where((newmass.coords['x'] == iii[0]) & (newmass.coords['y'] == iii[1]),
                            point[2], newmass)
         newhgt = xr.where((newhgt.coords['x'] == iii[0]) & (newhgt.coords['y'] == iii[1]),
                           point[3], newhgt)
         # keeps track of new indices of lat lon points.
         indexlist.append(iii)
-        prev_point = point    
+        prev_point = point
     # check if any points are mapped to the same point.
     if len(indexlist) != len(list(set(indexlist))):
         print('WARNING: correct_pc function: some values mapped to same point')
@@ -626,8 +655,8 @@ def correct_pc(dset):
     newmass = newmass.expand_dims("time")
     newhgt = newhgt.expand_dims("time")
 
-    newmass = newmass.transpose("time","y","x",transpose_coords=True)
-    newhgt = newhgt.transpose("time","y","x",transpose_coords=True)
+    newmass = newmass.transpose("time", "y", "x", transpose_coords=True)
+    newhgt = newhgt.transpose("time", "y", "x", transpose_coords=True)
     # keep original names for mass and height.
     dnew = xr.Dataset({'ash_mass_loading': newmass, 'ash_cloud_height': newhgt})
     dnew.time.attrs.update({'standard_name': 'time'})
