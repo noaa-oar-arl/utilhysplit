@@ -210,7 +210,6 @@ def set_levels(mass):
         levels.extend([50, 100, 500, 750, mlev])
     return levels
 
-
 def massload_plot(revash, enslist, name="None", vlist=None):
     setup_plot()
     mass = massload_ensemble_mean(revash, enslist)
@@ -222,7 +221,6 @@ def massload_plot(revash, enslist, name="None", vlist=None):
         label = LabelData(
             time, "Column mass loading (ensemble mean)", "g/m$^2$", source
         )
-
         mass2 = mass.sel(time=time).isel(source=0)
         x = mass2.longitude
         y = mass2.latitude
@@ -243,7 +241,6 @@ def massload_plot(revash, enslist, name="None", vlist=None):
         iii += 1
         fignamelist.append(figname)
     return fignamelist
-
 
 def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=None):
     nrow = 2
@@ -302,7 +299,10 @@ def ATLtimeloop(
     iii = 0
     if adjust > 0:
         thresh = check_thresh(np.max(revash), thresh, adjust)
-
+    if thresh > 0.01:
+        title = title.replace('thresh','{:0.2f}'.format(thresh))
+    else:
+        title = title.replace('thresh','{:0.2e}'.format(thresh))
     for time in revash.time.values:
         revash2 = revash.sel(time=time)
         source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[0], vlist[1])
@@ -319,8 +319,6 @@ def ATLtimeloop(
     reset_plots()
     return fignamelist
 
-
-
 def check_thresh(cmax, thresh, adjust):
     """
     set threshold at half the maximum value.
@@ -328,13 +326,15 @@ def check_thresh(cmax, thresh, adjust):
     thresh2 = thresh
     if cmax < thresh:
         thresh2 = float(cmax / float(adjust))
+    #print('ADJUST', thresh, cmax, thresh2)
     return thresh2
 
 
 def set_ATL_text(nrow):
     if nrow >= 6:
         yplace = 0.8
-        xplace = 0.15
+        #xplace = 0.15
+        xplace = 0.85
         size = 10
     else:
         yplace = 0.90
@@ -431,11 +431,14 @@ def format_plot(ax, transform):
     # This allows latitude and longitude axis
     # to have different scales.
     ax.set_aspect("auto", adjustable=None)
+
     # this will increase data limit to keep aspect ratio 1
     # ax.set_aspect(1, adjustable='datalim')
+
     # this will adjust axxes to  keep aspect ratio 1
     # when this is used, text is often mis-placed.
     # ax.set_aspect(1, adjustable='box')
+
     # don't use a different central_longitude when
     # making the tick labels.
     gl = ax.gridlines(
@@ -474,7 +477,7 @@ def ATLsubplot(
     y :
     z :
     transform :
-    label : str
+    label : str (usually used for indicating flight level)
     vlist : [longiude, latitude]
     levels : list of floats/ints, levels for contouring.
     name : str save figure to this name.
@@ -483,10 +486,9 @@ def ATLsubplot(
     cmap = plt.get_cmap("viridis")
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
     cb2 = ax.pcolormesh(x, y, z, cmap=cmap, transform=transform, norm=norm)
+    # plot location of volcano.
     try:
         ax.plot(vlist[0], vlist[1], "r^")
-    #except Exception as ex:
-    #    print('exception {} {}'.format(type(ex).__name__, ex.args)
     except:
         pass 
     format_plot(ax, transform)
@@ -502,11 +504,8 @@ def ATLsubplot(
         size=size,
         backgroundcolor="white",
     )
-    # ax.plot(vlist[0],vlist[1],'r^')
     if name != "None":
         plt.savefig(name)
-        #plt.close()
-    #plt.show()
     return cb2
 
 

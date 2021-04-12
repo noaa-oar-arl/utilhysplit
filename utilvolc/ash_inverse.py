@@ -8,11 +8,12 @@ import cartopy.feature as cfeat
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
+import seaborn as sns
 from utilvolc import volcat
 from monetio.models import hysplit
 
 def testcase(tdir,vdir):
-    fname = 'xrfile.445.nc'
+    fname = 'xrfile.444.nc'
     bezyloc = [160.587,55.978]
     vid = 'v300250'
     inverse = InverseAsh(tdir,fname,vdir,vid)
@@ -35,7 +36,7 @@ class InverseOutDat:
         df = pd.read_csv(os.path.join(wdir,name),sep='\s+',header=None)
         return df
 
-    def get_conc(self,, name='out2.dat'):
+    def get_conc(self, name='out2.dat'):
         df = self.read_out(name)
         df.columns = ['index', 'observed', 'model']
         plt.plot(df['observed'],df['model'],'k.',MarkerSize=3)
@@ -45,15 +46,26 @@ class InverseOutDat:
         nval = np.max(df['observed'])
         # plot 1:1 line
         plt.plot([0,nval],[0,nval],'--b',LineWidth=1)
-        return ax 
+        return df
 
-    
 
+def get_sourcehash(wdir,configfile):
+    from utilvolc.ashapp import ashinverse
+    #from utilvolc.ashapp.runhelper import JobSetUp
+    from utilvolc.ashapp.runhelper import make_inputs_from_file
+    setup = make_inputs_from_file(wdir,configfile)
+    setup.add_inverse_params()
+    sourcehash = ashinverse.inverse_get_suffix_list(setup.inp)
+    return sourcehash 
 
 
 class InverseAsh:
 
-    def __init__(self, tdir, fname,vdir,vid):
+    def __init__(self, tdir, fname,vdir,vid,configfile=None):
+        """
+        configfile : full path to configuration file.
+        """
+
         self.tdir = tdir   # directory for hysplit output
         self.fname = fname # name of hysplit output
 
@@ -67,13 +79,24 @@ class InverseAsh:
 
         # hysplit output. xarray. 
         cdump = xr.open_dataset(os.path.join(tdir,fname))
-
+        print('opened')
         # turn dataset into dataarray
         temp = list(cdump.keys())
         cdump = cdump[temp[0]]
 
         # get rid of source dimension (for now)
         cdump = cdump.isel(source=0)
+
+        # the ens dimension holds is key to what emission source was used.
+        # the sourcehash is a dictionary
+        # key is the ensemble number
+        # values is another dictionary with
+        # sdate: begin emission
+        # edate: end emission
+        # bottom : lower height of emission
+        # top : upper height of emission.
+        if configfile:
+            self.sourcehash = get_sourcehash(configfile)
 
         # get the mass loading.
         # TODO later may want to exclude certain levels.
@@ -109,6 +132,7 @@ class InverseAsh:
 
     def make_tcm(self,tiilist, remove_cols=True):
         # header line indicates release times for each column.
+        # I think header can just be a dummy.
         # one column for each release time/location.
         # one row for each measurement location.
 
@@ -166,8 +190,8 @@ class InverseAsh:
         self.tcm = tcm
         self.tcm_lat = model_lat
         self.tcm_lon = model_lon
+        # this contains the keys that can be matched in the sourcehash attribute.
         self.tcm_columns =  columns
- 
         return tcm, model_lat, model_lon, columns
 
     def plot_tcm(self):
@@ -194,8 +218,8 @@ class InverseAsh:
         hstr = '' # header string
         print(self.tcm.shape)\
         # this is number of columns minus 1.
-        print('N_ctrl {}'.format(self.tcm.shape[1]-1)
-        print('N_ctrl {}'.format(self.tcm.shape[1]-1)
+        print('N_ctrl {}'.format(self.tcm.shape[1]-1))
+        print('N_ctrl {}'.format(self.tcm.shape[1]-1))
             
         for iii, line in enumerate(self.tcm):
             for jjj, val in enumerate(line):
@@ -212,6 +236,44 @@ class InverseAsh:
         with open(name, 'w') as fid:
             fid.write(hstr + astr)
         return hstr + astr 
+
+    def make_outdat(self,df):
+        # matches emissions from the out.dat file with
+        # the date and time of emission.
+        # uses the tcm_columns array which has the key
+        # and the sourehash dictionary which contains the information.
+        datelist = []
+        htlist = []
+        valra = []
+        for val in zip(self.tcm_columns,df[1]):
+            shash = self.sourcehash[val[0]]
+            datelist.append(shash['sdate'])
+            htlist.append(shash['bottom'])
+            valra.append(val[1])
+        return list(zip(datelist,htlist,valra))
+
+    def plot_outdat(self,vals,log=False,fignum=1):
+        fig = plt.figure(fignum, figsize=(10,5))
+        vals = list(zip(*vals))
+        sns.set()
+        if log:
+            cb = plt.scatter(vals[0],vals[1],c=vals[2],s=50,cmap='Blues') 
+        else:
+            cb = plt.scatter(vals[0],vals[1],c=np.log10(vals[2]),s=50,cmap='Blues') 
+        plt.colorbar(cb)
+
+    def plot_out2dat(self,daterange,df2,cmap='viridis'):
+        sns.set()
+        tii = self.time_index(daterange[0])
+        volcat = self.volcat_avg_hash[tii] 
+        shape = volcat.shape
+        model = df2['model'].values
+        model = model.reshape(shape[0],shape[1])
+        cb = plt.pcolormesh(volcat.longitude, volcat.latitude,model,cmap=cmap)
+        plt.colorbar(cb)
+        cb2 = plt.scatter(volcat.longitude, volcat.latitude, c=volcat.values,s=10,cmap=cmap)
+        plt.colorbar(cb2)
+        return volcat 
 
     def compare_plots(self, daterange):
         tii = self.time_index(daterange[0])

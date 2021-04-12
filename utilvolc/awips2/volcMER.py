@@ -32,7 +32,7 @@ def MER2unit(MER, M63=0.1):
     mass63 = unit_mass * M63
     return unit_mass, mass63
 
-def HT2unit(HT, M63=0.1, verbose=True):
+def HT2unit(HT, M63=0.1, verbose=False):
     """Using Mastin equation to calculate Mass Eruption Rate from plume height (km)
     Inputs: Height (HT) float (in kilometers)
     Output: unit mass in grams. 
