@@ -74,7 +74,10 @@ def open_dataset(fname,
         pass
     # use parallax corrected if available and flag is set.
     dset = _get_latlon(dset, 'latitude', 'longitude')
-    dset = _get_time(dset)
+    try:
+        dset = _get_time(dset)
+    except:
+        pass
     if 'pc_latitude' in dset.data_vars and correct_parallax:
         dset = correct_pc(dset)
         dset.attrs.update({'parallax corrected coordinates': 'True'})
@@ -94,13 +97,36 @@ def open_hdf(fname):
     # create 2d lat lon arrays
     lon2d, lat2d = _make2d_latlon(dset)
     # Rename, add variable and assing to coordinates
-    lon = xr.DataArray(lon2d, name='Longitude', dims=['y', 'x'])
-    lat = xr.DataArray(lat2d, name='Latitude', dims=['y', 'x'])
+    lon = xr.DataArray(lon2d, name='longitude', dims=['y', 'x'])
+    lat = xr.DataArray(lat2d, name='latitude', dims=['y', 'x'])
     attrs = dset.attrs
     dset = xr.merge([dset, lat, lon])
-    dset = dset.set_coords(['Latitude', 'Longitude'])
+    dset = dset.set_coords(['latitude', 'longitude'])
     dset.attrs = attrs
     return dset
+
+
+def create_netcdf(vdir, fname1, fname2):
+    """ Creates netcdf of important variables from L1 and L2 VOLCAT hdf files """
+    dset1 = xr.open_dataset(vdir+fname1, mask_and_scale=False, decode_times=False)
+    lat = dset1.pixel_latitude.rename({'lines': 'y', 'elements': 'x'}).rename('latitude')
+    lon = dset1.pixel_longitude.rename({'lines': 'y', 'elements': 'x'}).rename('longitude')
+    # Ash Top Height, Ash Mass, Ash Effective Radius
+    dset2 = xr.open_dataset(vdir+fname2, mask_and_scale=False, decode_times=False)
+    attrs = dset2.attrs
+    namestr = dset2.attrs['Default_Name_ash_ret']
+    mass = dset2[namestr +
+                 '_ash_mass_loading'].rename({'lines': 'y', 'elements': 'x'}).rename('ash_mass_loading')
+    height = dset2[namestr +
+                   '_ash_top_height'].rename({'lines': 'y', 'elements': 'x'}).rename('ash_cloud_height')
+    radius = dset2[namestr +
+                   '_ash_effective_radius'].rename({'lines': 'y', 'elements': 'x'}).rename('ash_effective_radius')
+    # Creating netcdf of important variables
+    dset = xr.merge([mass, height, radius, lat, lon])
+    dset = dset.set_coords(['latitude', 'longitude'])
+    dset.attrs = attrs
+    dset.to_netcdf(vdir+fname2[:-3]+'some_vars.nc')
+    return(vdir+fname2[:-3]+'some_vars.nc created!')
 
 
 def open_mfdataset(fname):
