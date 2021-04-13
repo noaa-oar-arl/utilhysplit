@@ -58,7 +58,7 @@ Class: VolcatName
 
 def open_dataset(fname,
                  correct_parallax=False,
-                 mask_and_scale=True):
+                 mask_and_scale=True, decode_times=False):
     """Opens single VOLCAT file"""
     # 03/07/2021 The Bezy height data has a fill value of -1,
     # scale_factor of 0.01 and offset of 0.
@@ -66,15 +66,19 @@ def open_dataset(fname,
 
     # ash_mass_loading has no scale_factor of offset and fill value is -999.
     dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale,
-                           decode_times=False)
+                           decode_times=decode_times)
     # not needed for new Bezy data.
     try:
         dset = dset.rename({"Dim1": 'y', "Dim0": 'x'})
     except:
         pass
-    # use parallax corrected if available and flag is set.
-    dset = _get_latlon(dset, 'latitude', 'longitude')
-    dset = _get_time(dset)
+
+    if 'some_vars.nc' in fname:
+        pass
+    else:
+        # use parallax corrected if available and flag is set.
+        dset = _get_latlon(dset, 'latitude', 'longitude')
+        dset = _get_time(dset)
 
     if 'pc_latitude' in dset.data_vars and correct_parallax:
         dset = correct_pc(dset)
