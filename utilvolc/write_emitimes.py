@@ -136,13 +136,14 @@ class InsertVolcat:
         self.fname = fname[0]
         return self.fname
 
-    def get_area(self, write=False, correct_parallax=True, clip=False):
+    def get_area(self, write=False, correct_parallax=True, decode_times=False, clip=True):
         """Calculates the area (km^2) of each volcat grid cell
         Converts degress to meters using a radius of 6378.137km.
         Input:
         write: boolean (default: False) Write area to file
         correct_parallax: boolean (default: True) Use parallax correct lat/lon values
-        clip: boolean (default: False) Use clipped array around data, reduces domain
+        decode_times: boolean (default: False) Must be TRUE if using L1L2 netcdf files
+        clip: boolean (default: True) Use clipped array around data, reduces domain
         output:
         area: xarray containing gridded area values
         """
@@ -150,7 +151,8 @@ class InsertVolcat:
         d2km = 6378.137 * d2r  # convert degree latitude to kilometers
 
         if self.fname:
-            dset = volcat.open_dataset(self.fname, correct_parallax=correct_parallax)
+            dset = volcat.open_dataset(self.fname, correct_parallax=correct_parallax,
+                                       decode_times=decode_times)
         else:
             print('ERROR: Need volcat filename!')
 
@@ -194,13 +196,15 @@ class InsertVolcat:
             area.to_netcdf(directory+areafname)
         return area
 
-    def make_1D(self, correct_parallax=True):
+    def make_1D(self, correct_parallax=True, decode_times=False, clip=True):
         """ Makes compressed 1D arrays of latitude, longitude, ash height,
         mass emission rate, and area
         For use in writing emitimes files. See self.write_emit()
         Input:
         area: xarray dataset of area between lat/lon grid (from netcdf files)
         correct_parallax: use parallax corrected lat/lon (default = True)
+        decode_times: boolean (default=False) Must be TRUE if using L1L2 netcdf files
+        clip: boolean(default=True) Use data clipped around feature, reduces array size
         Output:
         lat: 1D array of latitude
         lon: 1D array of longitude
@@ -211,13 +215,17 @@ class InsertVolcat:
         import numpy.ma as ma
 
         if self.fname:
-            dset = volcat.open_dataset(self.fname, correct_parallax=correct_parallax)
+            dset = volcat.open_dataset(self.fname, correct_parallax=correct_parallax,
+                                       decode_times=decode_times)
         else:
             print('ERROR: Need volcat filename!')
-
         # Extracts ash mass array - Removes time dimension
-        mass0 = dset.ash_mass_loading[0, :, :]
-        height0 = dset.ash_cloud_height[0, :, :]
+        if clip == True:
+            mass0 = volcat.get_mass(dset)[0, :, :]
+            height0 = volcat.get_height(dset)[0, :, :]
+        else:
+            mass0 = dset.ash_mass_loading[0, :, :]
+            height0 = dset.ash_cloud_height[0, :, :]
         # Making 0. in arrays nans
         mass = mass0.where(mass0 > 0.)
         height = height0.where(height0 > 0.)
@@ -254,7 +262,7 @@ class InsertVolcat:
 
         return lat, lon, hgt, mass, area
 
-    def write_emit(self, correct_parallax=True, heat='0.00e+00'):
+    def write_emit(self, correct_parallax=True, decode_times=False, heat='0.00e+00'):
         """ Writes emitimes file from volcat data.
         Inputs are created using self.make_1D()
         Uses instance variables: date_time, duration, par,
@@ -270,7 +278,7 @@ class InsertVolcat:
         emitimes file located in wdir
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
-        lat, lon, hgt, mass, area = self.make_1D(correct_parallax=correct_parallax)
+        lat, lon, hgt, mass, area = self.make_1D(correct_parallax=correct_parallax, decode_times=decode_times)
         # Need to write some code to handle different durations and
         # resulting constants for mass rate (g/hr) determination
         if self.duration == '0010':
