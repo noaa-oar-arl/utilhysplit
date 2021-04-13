@@ -130,8 +130,8 @@ def create_netcdf(fname1, fname2):
     dset = dset.set_coords(['latitude', 'longitude'])
     dset.attrs = attrs
     dset = _get_time2(dset)
-    dset.to_netcdf(fname2[:-3]+'some_vars.nc')
-    return(print(fname2[:-3]+'some_vars.nc created!'))
+    dset.to_netcdf(fname2[:-11]+'_'+fname2[-10:-3]+'some_vars.nc')
+    return(print(fname2[:-11]+'_'+fname2[-10:-3]+'some_vars.nc created!'))
 
 
 def open_mfdataset(fname):
