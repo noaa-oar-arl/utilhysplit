@@ -109,7 +109,7 @@ def open_hdf(fname):
 
 
 def create_netcdf(fname1, fname2):
-    """ Creates netcdf of important variables from L1 and L2 VOLCAT hdf files 
+    """ Creates netcdf of important variables from L1 and L2 VOLCAT hdf files
     Writes to same directory as fname2 files"""
     dset1 = xr.open_dataset(fname1, mask_and_scale=False, decode_times=False)
     lat = dset1.pixel_latitude.rename({'lines': 'y', 'elements': 'x'}).rename('latitude')
@@ -411,6 +411,8 @@ def _get_time2(dset):
     import pandas as pd
     date = '20'+str(dset.attrs['Image_Date'])[1:]
     time1 = str(dset.attrs['Image_Time'])
+    if len(time1) == 5:
+        time1 = '0'+str(dset.attrs['Image_Time'])
     time = pd.to_datetime(date+time1, format='%Y%j%H%M%S', errors='ignore')
     dset['time'] = time
     dset = dset.expand_dims(dim='time')
@@ -430,7 +432,7 @@ def get_data(dset, vname, clip=True):
         fillvalue = None
     if clip:
         box = bbox(gen, fillvalue)
-        gen = gen[:, box[0][0]:box[1][0], box[0][1]:box[1][1]]
+        gen = gen[:, box[0][0]: box[1][0], box[0][1]: box[1][1]]
         if '_FillValue' in gen.attrs:
             gen = gen.where(gen != fillvalue)
         else:
