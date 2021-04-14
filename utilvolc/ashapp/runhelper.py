@@ -117,7 +117,6 @@ def make_inputs_from_file(wdir, config_file='ash_config.txt'):
     config = NameList(fname=config_file,working_directory=wdir)
     config.read()
     temp = list(map(int,config.nlist['start_date'].split(":")))
-    print(temp)
     config.nlist['start_date'] = datetime.datetime(temp[0],temp[1],temp[2], temp[3])
     # convert values to floats where possible.
     for key in config.nlist.keys():

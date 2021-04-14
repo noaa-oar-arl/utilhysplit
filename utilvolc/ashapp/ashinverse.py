@@ -14,6 +14,17 @@ from cdump2xml import HysplitKml
 
 logger = logging.getLogger(__name__)
 
+"""
+run:w
+
+
+
+
+
+"""
+
+
+
 def print_usage():
     print(
         """\
@@ -27,7 +38,7 @@ The following environment variables must be set prior to calling this script:
 # Base class is AshRun
 
 #TODO
-# output needs to be more frequent than every 3 hours.
+# DONE output needs to be more frequent than every 3 hours.
 # output levels should probably be in km rather than FL.
 # bottom elevation should be rounded to nearest km.
 
@@ -68,10 +79,10 @@ def inverse_get_suffix_list(inp):
               if bottom > inp['top']: vdone=True
               jjj+=1
               nnn+=1
-              print(nnn, jjj, 'bottom, top', bottom, bottom+vres)
+              #print(nnn, jjj, 'bottom, top', bottom, bottom+vres)
               if jjj>50: 
                 return suffixhash
-          print(iii, 'dates', ndate, edate)
+          #print(iii, 'dates', ndate, edate)
           iii+=1
           ndate = ndate + dt
           if ndate >= edate: done=True
@@ -109,6 +120,14 @@ class InverseAshRun(AshRun):
         plots probability of exceedances.
         """
         return -1
+
+    def get_conc_multiplier(self):
+        """
+        factor to convert concentration in unit mass /m3 to mg/m3.
+        Model must have been run with 1 unit mass/h released.
+        for inverse do not mutiply.
+        """
+        return 1
 
     def additional_control_setup(self, control, stage=0):
         super().additional_control_setup(control,stage=stage)
@@ -165,6 +184,9 @@ class InverseAshRun(AshRun):
         #    run_suffix = self.filelocator.get_control_suffix(stage)
 
     def run_model(self):
+        import sys
+        Helper.execute('pwd')
+        maxprocess=40
         stage = 1
         processhandler = ProcessList()
         # redirect stdout and stderr
@@ -188,11 +210,21 @@ class InverseAshRun(AshRun):
             run_suffix = self.filelocator.get_control_suffix(stage)
             cproc = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), run_suffix]
             logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
-            processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=suffix)
+            num_proces = processhandler.checkprocs()
+            print('----')
+            Helper.execute('pwd')
+            print('----')
+            print(self.inp["WORK_DIR"])
+            Helper.execute(['ls', 'CONTROL.{}'.format(cproc[1])])
+            while num_proces > maxprocess:
+               time.sleep(10)
+               num_proces = processhandler.checkprocs()
+               logger.info('Waiting for process to finish before starting new {}'.format(num_proces))  
+            processhandler.startnew(cproc, wdir=self.inp["WORK_DIR"], descrip=suffix)
             stage += 1
-            # wait 5 seconds between run starts to avoid
+            # wait 2 seconds between run starts to avoid
             # runs trying to access ASCDATA.CFG at the same time.
-            time.sleep(5)
+            time.sleep(2)
         # wait for runs to finish
         done = False
         seconds_to_wait = 30
@@ -262,55 +294,29 @@ class InverseAshRun(AshRun):
         # make the awips2 files.
         # this will also load the data from cdump files into an xarray.
         logger.debug("creating netcdf files")
-        awipsfiles = self.make_awips_netcdf()
+        self.make_netcdf()
 
-        # create probability of exceedence plot.
-        # self.create_prob_plot()
-        logger.debug("RUNNING plot_ATL")
-        ATL_fignamelist = self.plot_ATL()
-        # creates kml and kmz  using cdump2xml module.
-        self.make_kml()
-        # create massloading plots.
-        mass_fignamelist = self.plot_massload()
-
-        # create parxplot for one ensemble member
-        # stage would give ensemble member to use.
-        self.maptexthash[
-            "run_description"
-        ] = "Particle Positions for 1 ensemble\
-                                          member"
-        self.create_maptext()
-        # particle plots do not need to be re-drawn when unit mass changed.
-        if not redraw: self.create_parxplot(stage=1)
- 
-        flist = []
-        iii=0
-        if len(mass_fignamelist) == len(ATL_fignamelist):
-            for val in zip(mass_fignamelist, ATL_fignamelist): 
-                parfilename = self.filelocator.get_parxplot_filename(stage=0, frame=iii,ptype='gif')
-                for fn in [val[0], val[1], parfilename]:
-                    if os.path.exists(fn):
-                        flist.append(fn)
-                    else:
-                        logger.warn('file {} not found'.format(fn))
-                iii+=1
+    def make_netcdf(self):
+        import cdump2netcdf
+        # convert to mg /m3
+        fname = "xrfile.{}.nc".format(self.JOBID)
+        mult = 1
+        if os.path.isfile(fname):
+            logger.info("netcdf file exists.".format(fname))
+            #cxra = xr.open_dataset(fname)
+            #cxra = cxra.__xarray_dataarray_variable__
+            #pmult = cxra.attrs["mult"]
+            #cxra = mult * cxra / pmult
+            # remove netcdf file so new one can be written.
+            #Helper.remove(os.path.join(self.inp["WORK_DIR"], fname))
         else:
-            logger.warning('Mass loading figures and ATL figures have different lengths')
-            flist = mass_fignamelist 
-        self.create_montage_pdf(flist)
-
-        # NO longer create ensemble mean concentrations.
-        # instead give probability of exceedances.
-        # create montage of ensemble mean concentration.
-        # Helper.remove('MAPTEXT.CFG')
-        # self.create_concentration_plot(fn,stage='cmean')
-        # this has been taken over by the plot_ATL function.
-        # self.create_ensemble_montage()
-
-        self.maptexthash["run_description"] = "Ensemble Run"
-        self.create_maptext()
-        Helper.move("MAPTEXT.CFG", self.filelocator.get_maptext_filename_for_zip())
-        
+            logger.info("netcdf file does not exist. Creating {}".format(fname))
+            cxra = self.get_cdump_xra()
+            cxra = cxra.assign_attrs({"mult": mult})
+            logger.info("writing nc file {}".format(fname))
+            cxra = cxra.assign_attrs(self.inp2attr())
+            cxra.to_netcdf(fname)
+            self.cxra = cxra
 
     def create_montage_pdf(self,montage_list):
         c = [self.inp["CONVERT_EXE"]]

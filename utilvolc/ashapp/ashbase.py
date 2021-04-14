@@ -255,7 +255,7 @@ class AshRun:
         # Approx 1.5 km.
         # by Flight levels (approx 100 ft)
         # levlist_fl = np.arange(50,650,50)
-        levlist_fl = range(50, 650, 50)
+        levlist_fl = range(50, 750, 50)
         levlist = [FL2meters(x) for x in levlist_fl]
         rlist = []
         plev = "SFC"
