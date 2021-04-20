@@ -380,9 +380,13 @@ def plotATL(
     if nrow > 1:
         axlist = axarr.flatten()
     else:
+        axlist = axarr
+    if not isinstance(axarr,np.ndarray):
         axlist = [axarr]
     iii = 0
     for ax in axlist:
+        if not isinstance(ax, cartopy.mpl.geoaxes.GeoAxesSubplot):
+           print('Error expecting Geoaxes subplot got {}'.format(type(ax)))
         # if level doesn't exist then break.
         try:
             z = rtot.isel(z=iii)
