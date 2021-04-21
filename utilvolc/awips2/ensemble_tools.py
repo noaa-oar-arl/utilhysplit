@@ -75,6 +75,10 @@ class LabelData:
         self.tag = tag
 
 def label_ax(ax, label, transform):
+    """
+     formats the subplot on the mass loading plots which contains text
+     describing the plot.
+    """
     # add labels to plot meant for labels.
     gl = ax.gridlines(
         crs=transform, draw_labels=False, linewidth=0, color="gray", alpha=0
