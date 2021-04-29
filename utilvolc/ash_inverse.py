@@ -141,8 +141,9 @@ class InverseOutDat:
         self.df = df
         return df 
 
-    def emis_hist(self):
-        vals = np.log10(self.df[1].values)
+    def emis_hist(self, units='g/h'):
+        if units=='g/h':
+             vals = np.log10(self.df[1].values)
         nmin = int(np.floor(np.min(vals)))
         nmax = int(np.ceil(np.max(vals)))
         nbins = len(np.arange(nmin,nmax,1))
@@ -156,14 +157,17 @@ class InverseOutDat:
         self.df2 = df
         return df
 
-    def plot_conc(self):
+    def plot_conc(self,cmap='viridis'):
+        sns.set()
+        sns.set_style('whitegrid')
         df = self.df2
         #plt.plot(df['observed'],df['model'],'k.',MarkerSize=3)
-        cb = plt.hist2d(df['observed'],df['model'],norm=mpl.colors.LogNorm(),bins=[20,20])
-        plt.colorbar(cb[3])
+        cb = plt.hist2d(df['observed'],df['model'],cmap=cmap,norm=mpl.colors.LogNorm(),bins=[20,20])
+        cbar = plt.colorbar(cb[3])
+        cbar.ax.set_ylabel('Number of Points')
         ax = plt.gca()
         ax.set_xlabel('observed')
-        ax.set_ylabel('model')
+        ax.set_ylabel('modeled')
         nval = np.max(df['observed'])
         # plot 1:1 line
         plt.plot([0,nval],[0,nval],'--b',LineWidth=1)
@@ -210,6 +214,9 @@ class InverseAsh:
         # get rid of source dimension (for now)
         cdump = cdump.isel(source=0)
 
+        # multiplication factor if more than 1 unit mass released.
+        self.concmult = 1
+
         # the ens dimension holds is key to what emission source was used.
         # the sourcehash is a dictionary
         # key is the ensemble number
@@ -225,6 +232,9 @@ class InverseAsh:
         # TODO later may want to exclude certain levels.
         #self.cdump = hysplit.hysp_massload(cdump)
         self.cdump = cdump
+
+    def set_concmult(self,concmult):
+        self.concmult = concmult
 
     def get_volcat(self, daterange, verbose=False):
         vdir = self.vdir
@@ -265,6 +275,7 @@ class InverseAsh:
         latlist = []
         lonlist = []
         for tii in tiilist:
+            print(self.cdump.time.values[tii])
             tcm, model_lat, model_lon, columns = \
                  self.make_tcm(tii,remove_cols=False)
             tcmlist.append(tcm)
@@ -320,7 +331,7 @@ class InverseAsh:
         # right now only one time period.
         cdump = self.cdump_hash[tii]
         avg = self.volcat_avg_hash[tii] 
-
+        cdump = cdump * self.concmult 
 
         s1 = avg.shape[0]*avg.shape[1] 
 
@@ -412,40 +423,62 @@ class InverseAsh:
         vals =  list(zip(datelist,htlist,valra))
         return vals
 
-    def plot_outdat(self,vals,log=False,fignum=1,cmap='Blues',thresh=0):
+    def plot_outdat(self,vals,
+                    log=False,
+                    fignum=1,
+                    cmap='Blues',
+                    unit='kg/s',
+                    thresh=0):
         fig = plt.figure(fignum, figsize=(10,5))
         vals = list(zip(*vals))
         sns.set()
+        sns.set_style('whitegrid')
         # output in kg/s?/
-        emit = np.array(vals[2])/1.0e3/3600.0 
+        if unit == 'kg/s':
+            emit = np.array(vals[2])/1.0e3/3600.0 
+        elif unit == 'kg/h':
+            emit = np.array(vals[2])/1.0e3 
+        elif unit == 'g/h':
+            emit = np.array(vals[2])/1.0
         vpi = np.where(emit < thresh)
         emit[vpi]=0
         ht = np.array(vals[1])/1e3
-        if log:
-            cb = plt.scatter(vals[0],ht,c=emit,s=50,cmap=cmap) 
+        if not log:
+            cb = plt.scatter(vals[0],ht,c=emit,s=100,cmap=cmap,marker='s') 
         else:
-            cb = plt.scatter(vals[0],ht,c=np.log10(emit),s=50,cmap=cmap) 
-        plt.colorbar(cb)
+            cb = plt.scatter(vals[0],ht,c=np.log10(emit),s=100,cmap=cmap,marker='s') 
+            #cb = plt.pcolormesh(vals[0],ht,emit,cmap=cmap) 
+        cbar = plt.colorbar(cb)
+        cbar.ax.set_ylabel(unit)
         fig.autofmt_xdate()
 
-    def plot_outdat_ts(self,vals,log=False,fignum=1):
+    def plot_outdat_ts(self,vals,log=False,fignum=1,unit='kg/s'):
+        sns.set()
+        sns.set_style('whitegrid')
         fig = plt.figure(fignum, figsize=(10,5))
+        ax = fig.add_subplot(1,1,1)
         vals = list(zip(*vals))
         sns.set()
         ht = vals[1]
         time = vals[0]
-        emit = np.array(vals[2])/1.0e3/3600.0 
+        #emit = np.array(vals[2])/1.0e3/3600.0 
+        emit = np.array(vals[2])
         df = pd.DataFrame(zip(time,ht,emit))
         df = df.pivot(columns=0,index=1)
-        df.sum().plot()
+        ts = df.sum()
+        if unit == 'kg/s':
+           yval = ts.values/3.6e6
+        elif unit == 'g/h':
+           yval = ts.values
+        plt.plot([x[1] for x in ts.index.values], yval, '--ko')
         fig.autofmt_xdate()
-      
-        return df
+        ax.set_ylabel('MER {}'.format(unit))
+        return ax, df
 
     def plot_out2dat_times(self,df2,cmap='viridis'):
         return -1 
 
-    def plot_out2dat(self,tiilist,df2,cmap='viridis',vloc=None):
+    def plot_out2dat(self,tiilist,df2,cmap='viridis',vloc=None,ptype='pcolormesh'):
         # tiilist needs to be same order as for tcm.
         # df2 is from InverseOutDat get_conc method.
         if isinstance(tiilist,int): tiilist = [tiilist]
@@ -453,27 +486,40 @@ class InverseAsh:
         ppp=0
         #tii = self.time_index(daterange[0])
         for tii in tiilist:
-            fig = plt.figure()
-            ax1 = fig.add_subplot(1,1,1)
-            #ax2 = fig.add_subplot(1,2,2)
+            print(self.cdump.time.values[tii])
+            fig = plt.figure(figsize=[10,5])
+            ax1 = fig.add_subplot(1,2,1)
+            ax2 = fig.add_subplot(1,2,2)
             volcat = self.volcat_avg_hash[tii] 
             shape = volcat.shape
-            print(shape, ppp,ppp+shape[0]*shape[1])
             model = df2['model'].values
             temp = model[ppp:ppp+shape[0]*shape[1]]
             model = temp.reshape(shape[0],shape[1])
+            vpi = np.where(model < 0.01)
+            model[vpi] = np.nan
             ppp = ppp+ shape[0]*shape[1]
-            #m2 = model.where(model>0)
-        #cb = plt.pcolormesh(volcat.longitude, volcat.latitude,model,cmap=cmap,shading='nearest')
-            #cb = ax1.scatter(volcat.longitude, volcat.latitude,c=np.log10(model),cmap=cmap,s=50,marker='s')
-            cb = ax1.scatter(volcat.longitude, volcat.latitude,c=model,cmap=cmap,s=50,marker='s')
-            plt.colorbar(cb)
             r2 = volcat.where(volcat>0)
-            #r2 = r2.fillna(0)
-            cb2 = ax1.scatter(volcat.longitude, volcat.latitude, c=r2.values,s=2,cmap='Reds',marker='s')
-            plt.colorbar(cb2)
+            m_max = np.nanmax(model)
+            v_max = np.nanmax(r2.values)
+            m_min = np.nanmin(model)
+            v_min = np.nanmin(r2.values)
+            p_min = np.nanmin([m_min,v_min])
+            p_max = np.nanmax([m_max,v_max])
+            norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max) 
+            print(np.nanmax(model), np.nanmax(r2.values))
+            if ptype == 'pcolormesh':
+                cb = ax1.pcolormesh(volcat.longitude, volcat.latitude,model,norm=norm, cmap=cmap,shading='nearest')
+                cb2 = ax2.pcolormesh(volcat.longitude, volcat.latitude,r2.values,norm=norm, cmap=cmap,shading='nearest')
+            #cb = ax1.scatter(volcat.longitude, volcat.latitude,c=np.log10(model),cmap=cmap,s=50,marker='s')
+            else:
+                cb = ax1.scatter(volcat.longitude, volcat.latitude,c=model,cmap=cmap,s=10,marker='o')
+                cb2 = ax2.scatter(volcat.longitude, volcat.latitude, c=r2.values,s=10,cmap=cmap,marker='o')
+            plt.colorbar(cb, ax= ax1)
+            #cb2 = ax2.scatter(volcat.longitude, volcat.latitude, c=r2.values,s=10,cmap=cmap,marker='o')
+            plt.colorbar(cb2, ax=ax2)
             if vloc:
-               plt.plot(vloc[0],vloc[1],'y^')
+               ax1.plot(vloc[0],vloc[1],'y^')
+               ax2.plot(vloc[0],vloc[1],'y^')
             plt.show()
         return volcat 
 
@@ -498,6 +544,40 @@ class InverseAsh:
         #cb = plt.contour(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues')
         # plt.colorbar(cb)
         plt.tight_layout()
+
+
+    def get_norm(self,model,r2):
+        m_max = np.nanmax(model)
+        v_max = np.nanmax(r2.values)
+        m_min = np.nanmin(model)
+        v_min = np.nanmin(r2.values)
+        p_min = np.nanmin([m_min,v_min])
+        p_max = np.nanmax([m_max,v_max])
+        norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max) 
+        return norm
+
+    def compare_forecast(self, forecast,cmap='Blues',ptype='pcolormesh'):
+        # forecast should be an xarray in mass loading format with no time dimension.
+        sns.set_style('whitegrid')
+        fig = plt.figure(figsize=[10,5])
+        ax1 = fig.add_subplot(1,2,1)
+        ax2 = fig.add_subplot(1,2,2)
+
+        time = pd.to_datetime(forecast.time.values)
+        tii = self.time_index(time)
+        volcat = self.volcat_avg_hash[tii] 
+        fvals = forecast.values
+        norm = self.get_norm(volcat,forecast)
+
+        if ptype == 'pcolormesh':
+            cb = ax1.pcolormesh(volcat.longitude, volcat.latitude,volcat.values,norm=norm, cmap=cmap,shading='nearest')
+            cb2 = ax2.pcolormesh(forecast.longitude, forecast.latitude,fvals,norm=norm, cmap=cmap,shading='nearest')
+        plt.colorbar(cb, ax=ax1) 
+        plt.colorbar(cb2, ax=ax2) 
+        ylim = ax1.get_ylim()
+        ax2.set_ylim(ylim)
+        xlim = ax1.get_xlim()
+        ax2.set_xlim(xlim)
 
     def compare_plots(self, daterange,levels=None):
         fig = plt.figure(1,figsize=(10,5))
