@@ -10,7 +10,7 @@ correct_parallax = False
 decode_times = True
 
 # vfiles = '*'+vid+'*.nc'
-vfiles = '*some_vars.nc*'
+vfiles = '*2021104*some_vars.nc*'
 volclist1 = glob(vdir+vfiles)
 volclist = volclist1[:]        # Can choose subset of volcat file list if desired
 x = 0

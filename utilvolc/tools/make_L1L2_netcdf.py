@@ -5,8 +5,8 @@ from utilvolc import volcat
 from glob import glob
 
 vdir = '/pub/ECMWF/JPSS/VOLCAT/Vincent/Ash/'
-fname1 = glob(vdir+'*L1*')
-fname2 = glob(vdir+'*L2*')
+fname1 = glob(vdir+'*L1*2021104.02*')
+fname2 = glob(vdir+'*L2*2021104.02*')
 
 a = 0
 while a < len(fname1):

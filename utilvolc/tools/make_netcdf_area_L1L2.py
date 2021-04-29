@@ -10,7 +10,7 @@ correct_parallax = False
 decode_times = True
 write = True
 
-vfiles = '*.nc'
+vfiles = '*2021104_0250*.nc'
 volclist1 = glob(vdir+vfiles)
 volclist = volclist1[:]        # Can choose subset of volcat file list if desired
 dates = []
@@ -25,7 +25,7 @@ print('Starting: ')
 print(datetime.now())
 j = len(volclist)
 y = 0
-while y <= len(dates):
+while y < len(dates):
     print(dates[y])
     tmp = we.InsertVolcat('./', vdir, dates[y], vid=vid)
     area = tmp.get_area(correct_parallax=correct_parallax, decode_times=decode_times, write=write)
