@@ -73,7 +73,7 @@ def open_dataset(fname,
     except:
         pass
 
-    if 'some_vars.nc' in fname:
+    if 'some_vars.nc' or 'pc.nc' in fname:
         pass
     else:
         # use parallax corrected if available and flag is set.
@@ -171,8 +171,10 @@ def average_volcat(das, cdump):
         mlist.append(near_mass)
         hlist.append(near_height)
     newmass = xr.concat(mlist, dim='time')
-    avemass = newmass.mean(dim='time')
-    return newmass
+    newhgt = xr.concat(hlist, dim='time')
+    avgmass = newmass.mean(dim='time')
+    avghgt = newhgt.mean(dim='time')
+    return avgmass, avghgt
 
 
 def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True):
