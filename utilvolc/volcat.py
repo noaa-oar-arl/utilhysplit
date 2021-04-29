@@ -59,7 +59,12 @@ Class: VolcatName
 def open_dataset(fname,
                  correct_parallax=False,
                  mask_and_scale=True, decode_times=False):
-    """Opens single VOLCAT file"""
+    """
+    Opens single VOLCAT file
+    mask_and_scale : needs to be set to True for Bezymianny data.
+    decode_times   : needs to be True for some of the hdf data.
+
+    """
     # 03/07/2021 The Bezy height data has a fill value of -1,
     # scale_factor of 0.01 and offset of 0.
     # The scale factor needs to be applied to get output in km.
@@ -206,14 +211,13 @@ def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose
     These will be needed for input into MET.
     """
     vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
-    for val in vlist:
+    for iii, val in enumerate(vlist):
         fname = val.fname
         dset = open_dataset(os.path.join(tdir, fname), correct_parallax=True)
         new_fname = fname.replace('.nc', '_pc.nc')
         if verbose:
             print('writing {} to {}'.format(new_fname, wdir))
         dset.to_netcdf(os.path.join(wdir, new_fname))
-
 
 def find_volcat(tdir, vid=None, daterange=None,
                 return_val=2, verbose=False):
@@ -542,6 +546,10 @@ def get_radius(dset, vname=None, clip=True):
     checklist = ['ash_r_eff', 'effective_radius_of_ash']
     return check_names(dset, vname, checklist, clip=clip)
 
+def get_total_mass(dset):
+    # unit is in Tg.
+    return dset.ash_mass_loading_total_mass.values[0]
+
 
 def get_mass(dset, vname=None, clip=True):
     """Returns 2d array of ash mass loading"""
@@ -666,8 +674,10 @@ def correct_pc(dset):
 
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
+    effrad = get_radius(dset, clip=False)
     newmass = xr.zeros_like(mass.isel(time=0))
     newhgt = xr.zeros_like(height.isel(time=0))
+    newrad = xr.zeros_like(effrad.isel(time=0))
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
@@ -686,6 +696,8 @@ def correct_pc(dset):
                            point[2], newmass)
         newhgt = xr.where((newhgt.coords['x'] == iii[0]) & (newhgt.coords['y'] == iii[1]),
                           point[3], newhgt)
+        newrad = xr.where((newrad.coords['x'] == iii[0]) & (newrad.coords['y'] == iii[1]),
+                          point[3], newrad)
         # keeps track of new indices of lat lon points.
         indexlist.append(iii)
         prev_point = point
@@ -697,15 +709,25 @@ def correct_pc(dset):
     # possibly change to nan or something else?
     newmass = newmass.assign_attrs({'_FillValue': 0})
     newhgt = newhgt.assign_attrs({'_FillValue': 0})
+    newrad = newrad.assign_attrs({'_FillValue': 0})
 
     newmass = newmass.expand_dims("time")
     newhgt = newhgt.expand_dims("time")
+    newrad = newrad.expand_dims("time")
 
     newmass = newmass.transpose("time", "y", "x", transpose_coords=True)
     newhgt = newhgt.transpose("time", "y", "x", transpose_coords=True)
+    newrad = newrad.transpose("time", "y", "x", transpose_coords=True)
     # keep original names for mass and height.
-    dnew = xr.Dataset({'ash_mass_loading': newmass, 'ash_cloud_height': newhgt})
+    dnew = xr.Dataset({'ash_mass_loading': newmass, 
+                       'ash_cloud_height': newhgt,
+                       'effective_radius_of_ash': newrad,
+                       'ash_mass_loading_total_mass': dset.ash_mass_loading_total_mass,
+                       'feature_area': dset.feature_area,
+                       'feature_age': dset.feature_age,
+                       'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
+    # dnew only has ash_mass_loading and ash_cloud_height in the the 
     return dnew
 
 

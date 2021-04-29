@@ -75,6 +75,10 @@ class LabelData:
         self.tag = tag
 
 def label_ax(ax, label, transform):
+    """
+     formats the subplot on the mass loading plots which contains text
+     describing the plot.
+    """
     # add labels to plot meant for labels.
     gl = ax.gridlines(
         crs=transform, draw_labels=False, linewidth=0, color="gray", alpha=0
@@ -380,9 +384,13 @@ def plotATL(
     if nrow > 1:
         axlist = axarr.flatten()
     else:
+        axlist = axarr
+    if not isinstance(axarr,np.ndarray):
         axlist = [axarr]
     iii = 0
     for ax in axlist:
+        if not isinstance(ax, cartopy.mpl.geoaxes.GeoAxesSubplot):
+           print('Error expecting Geoaxes subplot got {}'.format(type(ax)))
         # if level doesn't exist then break.
         try:
             z = rtot.isel(z=iii)
