@@ -156,8 +156,58 @@ def open_mfdataset(fname):
     dset = dset.rename({"lines": 'y', "elements": 'x'})
     return dset
 
+def regrid_volcat(das, cdump):
+    """
+    das : list of volcat xarrays
+    returns xarray with volcat data with dimension of time and regridded to match cdump.
+    """
+    # In progress.
+    # das is list of volcat datasets.
+    # cdump is dataset with appropriate grid.
+    # This function maps to new grid.
 
-def average_volcat(das, cdump):
+    # remap_nearest may not be what we want to use. Seems that some small areas with low
+    # mass 'disappear' using this regridding scheme. May want to look into using pyresample.bucket or other.
+    rai = 1e5
+    mlist = []
+    hlist = []
+    total_mass = []
+    for iii, dset in enumerate(das):
+        near_mass = cdump.monet.remap_nearest(
+            dset.ash_mass_loading.isel(time=0), radius_of_influence=rai).load()
+        near_height = cdump.monet.remap_nearest(
+            dset.ash_cloud_height.isel(time=0), radius_of_influence=rai).load()
+        mlist.append(near_mass)
+        hlist.append(near_height)
+        total_mass.append(dset.ash_mass_loading_total_mass)
+    newmass = xr.concat(mlist, dim='time')
+    newhgt = xr.concat(hlist, dim='time')
+    totmass = xr.concat(total_mass, dim='time')
+    dnew = xr.Dataset({'ash_mass_loading': newmass, 
+                       'ash_cloud_height': newhgt,
+                       #'effective_radius_of_ash': newrad,
+                       'ash_mass_loading_total_mass': totmass})
+                       #'feature_area': dset.feature_area,
+                       #'feature_age': dset.feature_age,
+                       #'feature_id': dset.feature_id})
+    dnew.time.attrs.update({'standard_name': 'time'})
+    return dnew  
+
+def average_volcat_new(das,cdump):
+    #  
+    dnew = regrid_volcat(das,cdump)
+     
+    # when averaging the mass need to convert nan's to zero?
+    if not convert_nans: 
+       avgmass = newmass.mean(dim='time')
+
+    # note that averaging the height
+    avghgt = newhgt.mean(dim='time')
+    return avgmass, avghgt
+
+
+
+def average_volcat(das, cdump, convert_nans=True):
     # In progress.
     # das is list of volcat datasets.
     # cdump is dataset with appropriate grid.
@@ -177,7 +227,10 @@ def average_volcat(das, cdump):
         hlist.append(near_height)
     newmass = xr.concat(mlist, dim='time')
     newhgt = xr.concat(hlist, dim='time')
+    # when averaging the mass need to convert nan's to zero?
     avgmass = newmass.mean(dim='time')
+
+    # note that averaging the height
     avghgt = newhgt.mean(dim='time')
     return avgmass, avghgt
 
