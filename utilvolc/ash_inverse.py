@@ -556,8 +556,9 @@ class InverseAsh:
         norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max) 
         return norm
 
-    def compare_forecast(self, forecast,cmap='Blues',ptype='pcolormesh'):
+    def compare_forecast(self, forecast,cmap='Blues',ptype='pcolormesh',vloc=None):
         # forecast should be an xarray in mass loading format with no time dimension.
+        sns.set()
         sns.set_style('whitegrid')
         fig = plt.figure(figsize=[10,5])
         ax1 = fig.add_subplot(1,2,1)
@@ -565,19 +566,27 @@ class InverseAsh:
 
         time = pd.to_datetime(forecast.time.values)
         tii = self.time_index(time)
+        print('tii', tii)
         volcat = self.volcat_avg_hash[tii] 
-        fvals = forecast.values
+        evals = forecast.values
+        vpi = evals < 0.001
+        #fvals[vpi] = np.nan
         norm = self.get_norm(volcat,forecast)
 
         if ptype == 'pcolormesh':
             cb = ax1.pcolormesh(volcat.longitude, volcat.latitude,volcat.values,norm=norm, cmap=cmap,shading='nearest')
-            cb2 = ax2.pcolormesh(forecast.longitude, forecast.latitude,fvals,norm=norm, cmap=cmap,shading='nearest')
+            cb2 = ax2.pcolormesh(forecast.longitude, forecast.latitude,evals,norm=norm, cmap=cmap,shading='nearest')
+            ax2.contourf(volcat.longitude, volcat.latitude, volcat.values,levels=[0.001,0.01,10],cmap='tab20') 
         plt.colorbar(cb, ax=ax1) 
         plt.colorbar(cb2, ax=ax2) 
         ylim = ax1.get_ylim()
         ax2.set_ylim(ylim)
         xlim = ax1.get_xlim()
         ax2.set_xlim(xlim)
+        if vloc:
+           ax1.plot(vloc[0],vloc[1],'y^')
+           ax2.plot(vloc[0],vloc[1],'y^')
+
 
     def compare_plots(self, daterange,levels=None):
         fig = plt.figure(1,figsize=(10,5))
