@@ -77,9 +77,10 @@ def open_dataset(fname,
         dset = dset.rename({"Dim1": 'y', "Dim0": 'x'})
     except:
         pass
-
-    if 'some_vars.nc' or 'pc.nc' in fname:
+    if 'some_vars.nc' in fname:
         pass
+    elif 'pc.nc' in fname:
+        return dset
     else:
         # use parallax corrected if available and flag is set.
         dset = _get_latlon(dset, 'latitude', 'longitude')
@@ -174,9 +175,11 @@ def regrid_volcat(das, cdump):
     total_mass = []
     for iii, dset in enumerate(das):
         near_mass = cdump.monet.remap_nearest(
-            dset.ash_mass_loading.isel(time=0), radius_of_influence=rai).load()
+            dset.ash_mass_loading.isel(time=0), radius_of_influence=rai)
         near_height = cdump.monet.remap_nearest(
-            dset.ash_cloud_height.isel(time=0), radius_of_influence=rai).load()
+            dset.ash_cloud_height.isel(time=0), radius_of_influence=rai)
+        near_mass = near_mass.compute()
+        nearh_height = near_height.compute()
         mlist.append(near_mass)
         hlist.append(near_height)
         total_mass.append(dset.ash_mass_loading_total_mass)
@@ -251,6 +254,18 @@ def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=
             das.append(xr.open_dataset(os.path.join(tdir, iii.fname)))
     return das
 
+def write_regridded_files(cdump, tdir, wdir, tag='rg', vid=None, daterange=None, verbose=False):
+    vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
+    for iii, val in enumerate(vlist):
+        fname = val.fname
+        dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False)
+        dnew = regrid_volcat([dset],cdump)
+        new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
+        if verbose:
+            print('writing {} to {}'.format(new_fname, wdir))
+            print(val.date)
+        dnew.to_netcdf(os.path.join(wdir, new_fname))
+        del dnew
 
 def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
     """
