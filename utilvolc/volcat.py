@@ -157,8 +157,10 @@ def open_mfdataset(fname):
     dset = dset.rename({"lines": 'y', "elements": 'x'})
     return dset
 
+
 def regrid_volcat(das, cdump):
     """
+    Regridding with monet.remap_nearest
     das : list of volcat xarrays
     returns xarray with volcat data with dimension of time and regridded to match cdump.
     """
@@ -179,35 +181,74 @@ def regrid_volcat(das, cdump):
         near_height = cdump.monet.remap_nearest(
             dset.ash_cloud_height.isel(time=0), radius_of_influence=rai)
         near_mass = near_mass.compute()
-        nearh_height = near_height.compute()
+        near_height = near_height.compute()
         mlist.append(near_mass)
         hlist.append(near_height)
         total_mass.append(dset.ash_mass_loading_total_mass)
     newmass = xr.concat(mlist, dim='time')
     newhgt = xr.concat(hlist, dim='time')
     totmass = xr.concat(total_mass, dim='time')
-    dnew = xr.Dataset({'ash_mass_loading': newmass, 
+    dnew = xr.Dataset({'ash_mass_loading': newmass,
                        'ash_cloud_height': newhgt,
-                       #'effective_radius_of_ash': newrad,
+                       # 'effective_radius_of_ash': newrad,
                        'ash_mass_loading_total_mass': totmass})
-                       #'feature_area': dset.feature_area,
-                       #'feature_age': dset.feature_age,
-                       #'feature_id': dset.feature_id})
+    # 'feature_area': dset.feature_area,
+    # 'feature_age': dset.feature_age,
+    # 'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
-    return dnew  
+    return dnew
 
-def average_volcat_new(das,cdump):
-    #  
-    dnew = regrid_volcat(das,cdump)
-     
+
+def regrid_volcat2(das, cdump):
+    """
+    Regridding with monet.remap_xesmf
+    das : list of volcat xarrays
+    returns xarray with volcat data with dimension of time and regridded to match cdump.
+    """
+    # In progress.
+    # das is list of volcat datasets.
+    # cdump is dataset with appropriate grid.
+    # This function maps to new grid.
+
+    # mass 'disappear' using this regridding scheme. May want to look into using pyresample.bucket or other
+    mlist = []
+    hlist = []
+    total_mass = []
+    for iii, dset in enumerate(das):
+        near_mass = cdump.p006.squeeze().monet.remap_xesmf(
+            dset.ash_mass_loading.squeeze(), method='bilinear')
+        near_height = cdump.p006.monet.squeeze().remap_xesmf(
+            dset.ash_cloud_height.squeeze(), method='bilinear')
+        near_mass = near_mass.compute()
+        near_height = near_height.compute()
+        mlist.append(near_mass)
+        hlist.append(near_height)
+        total_mass.append(dset.ash_mass_loading_total_mass)
+    newmass = xr.concat(mlist, dim='time')
+    newhgt = xr.concat(hlist, dim='time')
+    totmass = xr.concat(total_mass, dim='time')
+    dnew = xr.Dataset({'ash_mass_loading': newmass,
+                       'ash_cloud_height': newhgt,
+                       # 'effective_radius_of_ash': newrad,
+                       'ash_mass_loading_total_mass': totmass})
+    # 'feature_area': dset.feature_area,
+    # 'feature_age': dset.feature_age,
+    # 'feature_id': dset.feature_id})
+    dnew.time.attrs.update({'standard_name': 'time'})
+    return dnew
+
+
+def average_volcat_new(das, cdump):
+    #
+    dnew = regrid_volcat(das, cdump)
+
     # when averaging the mass need to convert nan's to zero?
-    if not convert_nans: 
-       avgmass = newmass.mean(dim='time')
+    if not convert_nans:
+        avgmass = newmass.mean(dim='time')
 
     # note that averaging the height
     avghgt = newhgt.mean(dim='time')
     return avgmass, avghgt
-
 
 
 def average_volcat(das, cdump, convert_nans=True):
@@ -233,9 +274,9 @@ def average_volcat(das, cdump, convert_nans=True):
     # when averaging the mass need to convert nan's to zero?
     avgmass = newmass.mean(dim='time')
 
-    # note that averaging the height
-    avghgt = newhgt.mean(dim='time')
-    return avgmass, avghgt
+    # note that averaging the height is not correct, better to take maximum along time
+    maxhgt = newhgt.max(dim='time')
+    return avgmass, maxhgt
 
 
 def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True):
@@ -254,18 +295,20 @@ def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=
             das.append(xr.open_dataset(os.path.join(tdir, iii.fname)))
     return das
 
+
 def write_regridded_files(cdump, tdir, wdir, tag='rg', vid=None, daterange=None, verbose=False):
     vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for iii, val in enumerate(vlist):
         fname = val.fname
         dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False)
-        dnew = regrid_volcat([dset],cdump)
+        dnew = regrid_volcat([dset], cdump)
         new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
         if verbose:
             print('writing {} to {}'.format(new_fname, wdir))
             print(val.date)
         dnew.to_netcdf(os.path.join(wdir, new_fname))
         del dnew
+
 
 def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
     """
@@ -286,6 +329,7 @@ def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose
         if verbose:
             print('writing {} to {}'.format(new_fname, wdir))
         dset.to_netcdf(os.path.join(wdir, new_fname))
+
 
 def find_volcat(tdir, vid=None, daterange=None,
                 return_val=2, verbose=False):
@@ -614,6 +658,7 @@ def get_radius(dset, vname=None, clip=True):
     checklist = ['ash_r_eff', 'effective_radius_of_ash']
     return check_names(dset, vname, checklist, clip=clip)
 
+
 def get_total_mass(dset):
     # unit is in Tg.
     return dset.ash_mass_loading_total_mass.values[0]
@@ -787,7 +832,7 @@ def correct_pc(dset):
     newhgt = newhgt.transpose("time", "y", "x", transpose_coords=True)
     newrad = newrad.transpose("time", "y", "x", transpose_coords=True)
     # keep original names for mass and height.
-    dnew = xr.Dataset({'ash_mass_loading': newmass, 
+    dnew = xr.Dataset({'ash_mass_loading': newmass,
                        'ash_cloud_height': newhgt,
                        'effective_radius_of_ash': newrad,
                        'ash_mass_loading_total_mass': dset.ash_mass_loading_total_mass,
@@ -795,7 +840,7 @@ def correct_pc(dset):
                        'feature_age': dset.feature_age,
                        'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
-    # dnew only has ash_mass_loading and ash_cloud_height in the the 
+    # dnew only has ash_mass_loading and ash_cloud_height in the the
     return dnew
 
 
