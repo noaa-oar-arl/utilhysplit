@@ -162,6 +162,7 @@ def regrid_volcat(das, cdump):
     """
     Regridding with monet.remap_nearest
     das : list of volcat xarrays
+    cdump : xarray DataArray with latitude/longitude to regrid to.
     returns xarray with volcat data with dimension of time and regridded to match cdump.
     """
     # In progress.
@@ -197,6 +198,7 @@ def regrid_volcat(das, cdump):
     # 'feature_age': dset.feature_age,
     # 'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
+    dnew.attrs.update({'Regrid Method': 'remap_nearest'})
     return dnew
 
 
@@ -236,8 +238,8 @@ def regrid_volcat2(das, cdump):
     # 'feature_age': dset.feature_age,
     # 'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
+    dnew.attrs.update({'Regrid Method': 'remap_xesmf bilinear'})
     return dnew  
-
 
 def average_volcat_new(das, cdump):
     #
@@ -296,17 +298,39 @@ def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=
     return das
 
 
-def write_regridded_files(cdump, tdir, wdir, tag='rg', vid=None, daterange=None, verbose=False):
+def write_regridded_files(cdump, tdir, wdir, 
+                          tag='rg', vid=None, 
+                          daterange=None, verbose=False):
+    """
+    cdump : xarray DataArray with latitude and longitude grid for regridding.
+    tdir : str : location of volcat files.
+    wdir : str : location to write new files
+    vid : volcano id : if None will find all
+    daterange : [datetime, datetime] : if None will find all.
+    verbose: boolean
+    tag: used to create filename of new file. 
+
+    creates netcdf files regridded values.
+    files have same name with _{tag}.nc added to the end.
+    Current convention is to use tag=pc.
+    These will be needed for input into MET.
+
+    Currently no overwrite option exists in this function. If the file
+    already exists, then this function returns a message to that effect and 
+    does not overwrite the file.
+    """
     vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for iii, val in enumerate(vlist):
         fname = val.fname
-        dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False,decode_times=True)
-        dnew = regrid_volcat([dset],cdump)
         new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
-        if verbose:
-            print('writing {} to {}'.format(new_fname, wdir))
-            print(val.date)
-        dnew.to_netcdf(os.path.join(wdir, new_fname))
+        if os.path.isfile(os.path.join(wdir,new_fname)):
+            print('Netcdf file exists {} in directory {} cannot write '.format(new_fname,wdir)) 
+        else:
+            if verbose:
+                print('writing {} to {}'.format(new_fname, wdir))
+            dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False,decode_times=True)
+            dnew = regrid_volcat([dset],cdump)
+            dnew.to_netcdf(os.path.join(wdir, new_fname))
 
 def write_parallax_corrected_files(tdir, wdir, vid=None, 
                                    daterange=None, verbose=False,
