@@ -79,14 +79,14 @@ def open_dataset(fname,
         pass
     if 'some_vars.nc' in fname:
         pass
-    elif 'pc.nc' in fname:
+    elif 'pc.nc' in fname  or 'rg.nc' in fname:
         return dset
     else:
         # use parallax corrected if available and flag is set.
         dset = _get_latlon(dset, 'latitude', 'longitude')
         dset = _get_time(dset)
-
     if 'pc_latitude' in dset.data_vars and correct_parallax:
+        print('correcting pc')
         dset = correct_pc(dset)
         dset.attrs.update({'parallax corrected coordinates': 'True'})
     elif 'pc_latitude' not in dset.data_vars and correct_parallax:
@@ -174,6 +174,7 @@ def regrid_volcat(das, cdump):
     hlist = []
     total_mass = []
     for iii, dset in enumerate(das):
+        print('time in loop', dset.time.values)
         near_mass = cdump.monet.remap_nearest(
             dset.ash_mass_loading.isel(time=0), radius_of_influence=rai)
         near_height = cdump.monet.remap_nearest(
@@ -186,6 +187,7 @@ def regrid_volcat(das, cdump):
     newmass = xr.concat(mlist, dim='time')
     newhgt = xr.concat(hlist, dim='time')
     totmass = xr.concat(total_mass, dim='time')
+    
     dnew = xr.Dataset({'ash_mass_loading': newmass, 
                        'ash_cloud_height': newhgt,
                        #'effective_radius_of_ash': newrad,
@@ -194,11 +196,12 @@ def regrid_volcat(das, cdump):
                        #'feature_age': dset.feature_age,
                        #'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
+    print('TIME ', dnew.time.values)
     return dnew  
 
 def average_volcat_new(das,cdump):
-    #  
-    dnew = regrid_volcat(das,cdump)
+    #   
+    #dnew = regrid_volcat(das,cdump)
      
     # when averaging the mass need to convert nan's to zero?
     if not convert_nans: 
@@ -249,8 +252,8 @@ def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=
             das.append(open_dataset(os.path.join(tdir, iii.fname),
                                     correct_parallax=correct_parallax,
                                     mask_and_scale=mask_and_scale))
-        # if pc_corrected file then just use xr open_dataset.
         else:
+            print('use xr open dataset', tdir)
             das.append(xr.open_dataset(os.path.join(tdir, iii.fname)))
     return das
 
@@ -258,34 +261,45 @@ def write_regridded_files(cdump, tdir, wdir, tag='rg', vid=None, daterange=None,
     vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for iii, val in enumerate(vlist):
         fname = val.fname
-        dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False)
+        dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False,decode_times=True)
         dnew = regrid_volcat([dset],cdump)
         new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
         if verbose:
             print('writing {} to {}'.format(new_fname, wdir))
             print(val.date)
         dnew.to_netcdf(os.path.join(wdir, new_fname))
-        del dnew
 
-def write_parallax_corrected_files(tdir, wdir, vid=None, daterange=None, verbose=False):
+def write_parallax_corrected_files(tdir, wdir, vid=None, 
+                                   daterange=None, verbose=False,
+                                   tag = 'pc'):
     """
     tdir : str : location of volcat files.
     wdir : str : location to write new files
     vid : volcano id : if None will find all
     daterange : [datetime, datetime] : if None will find all.
     verbose: boolean
+    tag: used to create filename of new file. 
+
     creates netcdf files with parallax corrected values.
-    files have same name with _pc.nc added to the end.
+    files have same name with _{tag}.nc added to the end.
+    Current convention is to use tag=pc.
     These will be needed for input into MET.
+
+    Currently no overwrite option exists in this function. If the file
+    already exists, then this function returns a message to that effect and 
+    does not overwrite the file.
     """
     vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for iii, val in enumerate(vlist):
         fname = val.fname
-        dset = open_dataset(os.path.join(tdir, fname), correct_parallax=True)
-        new_fname = fname.replace('.nc', '_pc.nc')
-        if verbose:
-            print('writing {} to {}'.format(new_fname, wdir))
-        dset.to_netcdf(os.path.join(wdir, new_fname))
+        new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
+        if os.path.isfile(os.path.join(wdir,new_fname)):
+            print('Netcdf file exists {} in directory {} cannot write '.format(new_fname,wdir)) 
+        else:
+            if verbose:
+                print('writing {} to {}'.format(new_fname, wdir))
+            dset = open_dataset(os.path.join(tdir, fname), correct_parallax=True)
+            dset.to_netcdf(os.path.join(wdir, new_fname))
 
 def find_volcat(tdir, vid=None, daterange=None,
                 return_val=2, verbose=False):
@@ -795,6 +809,7 @@ def correct_pc(dset):
                        'feature_age': dset.feature_age,
                        'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
+    dnew = dnew.assign_attrs(dset.attrs)
     # dnew only has ash_mass_loading and ash_cloud_height in the the 
     return dnew
 
