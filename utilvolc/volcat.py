@@ -238,6 +238,78 @@ def regrid_volcat2(das, cdump):
     return dnew
 
 
+def regrid_volcat_xesmf(das, cdump):
+    """
+    Regridding with xesmf - first gridding irregular volcat grid to
+    regular grid (same resolution) using nearest neighbor
+    Then gridding to regular cdump grid using conservative method
+    das: list of volcat xarrays
+    cdump: hysplit cdump xarray
+    returns xarray with volcat data with dimension of time and regridded to match cdump.
+    """
+    import xesmf as xe
+    import numpy as np
+    # In progress.
+
+    def regrid(ds_source, ds_target, da_source, method):
+        # ds_source: dataset of data to be regridded
+        # ds_target: dataset of target array
+        # da_source: dataarray of data to be regridded
+        # NOTE: latitude and longitude must be named lat lon for this to work - use rename
+        regridder = xe.Regridder(ds_source, ds_target, method, periodic=True)
+        da_target = regridder(da_source)
+        regridder.clean_weight_file()
+        return da_target
+
+    def rename(xra):
+        # Xarray to rename latitude and longitude
+        newx = xra.rename({'latitude': 'lat', 'longitude': 'lon'})
+        return newx
+
+    def make_grid(xra, d_lon, d_lat):
+        #xra: xarray
+        # d_lon: delta lon
+        # d_lat: delta lat
+        xra = rename(xra)
+        grid = xe.util.grid_2d(np.min(xra.lon)-1., np.max(xra.lon)+1., d_lon,
+                               np.min(xra.lat)-1., np.max(xra.lat)+1., d_lat)
+        return grid
+
+    mlist = []
+    hlist = []
+    total_mass = []
+    #vgrid = make_grid(das[-1], 0.05, 0.05)
+    vgrid = make_grid(cdump, 0.1, 0.1)
+    for iii, dset in enumerate(das):
+        dset2 = rename(dset)
+        ashmass = regrid(dset2, vgrid, dset.ash_mass_loading, 'nearest_s2d')
+        height = regrid(dset2, vgrid, dset.ash_cloud_height, 'nearest_s2d')
+        mlist.append(ashmass)
+        hlist.append(height)
+        total_mass.append(dset.ash_mass_loading_total_mass)
+
+    mass = xr.concat(mlist, dim='time')
+    hgt = xr.concat(hlist, dim='time')
+    totmass = xr.concat(total_mass, dim='time')
+
+    # Regridding to cdump array - conservative method needs box bounds
+    #cgrid = make_grid(cdump, 0.1, 0.1)
+    #newmass = regrid(vgrid, cgrid, mass, 'conservative')
+    #newhgt = regrid(vgrid, cgrid, hgt, 'conservative')
+    newmass = mass
+    newhgt = hgt
+
+    dnew = xr.Dataset({'ash_mass_loading': newmass,
+                       'ash_cloud_height': newhgt,
+                       # 'effective_radius_of_ash': newrad,
+                       'ash_mass_loading_total_mass': totmass})
+    # 'feature_area': dset.feature_area,
+    # 'feature_age': dset.feature_age,
+    # 'feature_id': dset.feature_id})
+    dnew.time.attrs.update({'standard_name': 'time'})
+    return dnew, mass
+
+
 def average_volcat_new(das, cdump):
     #
     dnew = regrid_volcat(das, cdump)
@@ -461,8 +533,7 @@ class VolcatName:
         dstr = '{}_{}'.format(self.vhash[self.keylist[3]],
                               self.vhash[self.keylist[4]])
         self.date = datetime.datetime.strptime(dstr, self.dtfmt)
-        self.vhash[self.keylist[11]] = \
-            self.vhash[self.keylist[11]].replace('.nc', '')
+        self.vhash[self.keylist[11]] = self.vhash[self.keylist[11]].replace('.nc', '')
         return self.vhash
 
     def create_name(self):
