@@ -79,7 +79,7 @@ def open_dataset(fname,
         pass
     if 'some_vars.nc' in fname:
         pass
-    elif 'pc.nc' in fname  or 'rg.nc' in fname:
+    elif 'pc.nc' in fname or 'rg.nc' in fname:
         return dset
     else:
         # use parallax corrected if available and flag is set.
@@ -230,7 +230,7 @@ def regrid_volcat2(das, cdump):
     newmass = xr.concat(mlist, dim='time')
     newhgt = xr.concat(hlist, dim='time')
     totmass = xr.concat(total_mass, dim='time')
-    dnew = xr.Dataset({'ash_mass_loading': newmass, 
+    dnew = xr.Dataset({'ash_mass_loading': newmass,
                        'ash_cloud_height': newhgt,
                        # 'effective_radius_of_ash': newrad,
                        'ash_mass_loading_total_mass': totmass})
@@ -239,7 +239,81 @@ def regrid_volcat2(das, cdump):
     # 'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
     dnew.attrs.update({'Regrid Method': 'remap_xesmf bilinear'})
-    return dnew  
+    return dnew
+
+
+def regrid_volcat_xesmf(das, cdump, method):
+    """
+    Regridding with xesmf - first gridding irregular volcat grid to
+    regular grid (same resolution) using nearest neighbor
+    Then gridding to regular cdump grid using conservative method
+    das: list of volcat xarrays
+    cdump: hysplit cdump xarray
+    method: string of possible xesmf regridding techniques
+    returns xarray with volcat data with dimension of time and regridded to match cdump.
+    """
+    import xesmf as xe
+    import numpy as np
+    # In progress.
+
+    def regrid(ds_source, ds_target, da_source, method):
+        # ds_source: dataset of data to be regridded
+        # ds_target: dataset of target array
+        # da_source: dataarray of data to be regridded
+        # NOTE: latitude and longitude must be named lat lon for this to work - use rename
+        regridder = xe.Regridder(ds_source, ds_target, method, periodic=True)
+        da_target = regridder(da_source)
+        regridder.clean_weight_file()
+        return da_target
+
+    def rename(xra):
+        # Xarray to rename latitude and longitude
+        newx = xra.rename({'latitude': 'lat', 'longitude': 'lon'})
+        return newx
+
+    def make_grid(xra, d_lon, d_lat):
+        #xra: xarray
+        # d_lon: delta lon
+        # d_lat: delta lat
+        xra = rename(xra)
+        grid = xe.util.grid_2d(np.min(xra.lon)-1., np.max(xra.lon)+1., d_lon,
+                               np.min(xra.lat)-1., np.max(xra.lat)+1., d_lat)
+        return grid
+
+    mlist = []
+    hlist = []
+    total_mass = []
+    vgrid = make_grid(das[-1], 0.05, 0.05)
+    #vgrid = make_grid(cdump, 0.1, 0.1)
+    for iii, dset in enumerate(das):
+        dset2 = rename(dset)
+        ashmass = regrid(dset2, vgrid, dset.ash_mass_loading, 'nearest_s2d')
+        height = regrid(dset2, vgrid, dset.ash_cloud_height, 'nearest_s2d')
+        mlist.append(ashmass)
+        hlist.append(height)
+        total_mass.append(dset.ash_mass_loading_total_mass)
+
+    mass = xr.concat(mlist, dim='time')
+    hgt = xr.concat(hlist, dim='time')
+    totmass = xr.concat(total_mass, dim='time')
+
+    # Regridding to cdump array - conservative method needs box bounds
+    cgrid = make_grid(cdump, 0.1, 0.1)
+    newmass = regrid(vgrid, cgrid, mass, method)
+    newhgt = regrid(vgrid, cgrid, hgt, method)
+    newmass = mass
+    newhgt = hgt
+
+    dnew = xr.Dataset({'ash_mass_loading': newmass,
+                       'ash_cloud_height': newhgt,
+                       # 'effective_radius_of_ash': newrad,
+                       'ash_mass_loading_total_mass': totmass})
+    # 'feature_area': dset.feature_area,
+    # 'feature_age': dset.feature_age,
+    # 'feature_id': dset.feature_id})
+    dnew.time.attrs.update({'standard_name': 'time'})
+    return dnew
+
 
 def average_volcat_new(das, cdump):
     #
@@ -300,8 +374,8 @@ def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=
     return das
 
 
-def write_regridded_files(cdump, tdir, wdir, 
-                          tag='rg', vid=None, 
+def write_regridded_files(cdump, tdir, wdir,
+                          tag='rg', vid=None,
                           daterange=None, verbose=False):
     """
     cdump : xarray DataArray with latitude and longitude grid for regridding.
@@ -325,18 +399,19 @@ def write_regridded_files(cdump, tdir, wdir,
     for iii, val in enumerate(vlist):
         fname = val.fname
         new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
-        if os.path.isfile(os.path.join(wdir,new_fname)):
-            print('Netcdf file exists {} in directory {} cannot write '.format(new_fname,wdir)) 
+        if os.path.isfile(os.path.join(wdir, new_fname)):
+            print('Netcdf file exists {} in directory {} cannot write '.format(new_fname, wdir))
         else:
             if verbose:
                 print('writing {} to {}'.format(new_fname, wdir))
-            dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False,decode_times=True)
-            dnew = regrid_volcat([dset],cdump)
+            dset = open_dataset(os.path.join(tdir, fname), correct_parallax=False, decode_times=True)
+            dnew = regrid_volcat([dset], cdump)
             dnew.to_netcdf(os.path.join(wdir, new_fname))
 
-def write_parallax_corrected_files(tdir, wdir, vid=None, 
+
+def write_parallax_corrected_files(tdir, wdir, vid=None,
                                    daterange=None, verbose=False,
-                                   tag = 'pc'):
+                                   tag='pc'):
     """
     tdir : str : location of volcat files.
     wdir : str : location to write new files
@@ -358,8 +433,8 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
     for iii, val in enumerate(vlist):
         fname = val.fname
         new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
-        if os.path.isfile(os.path.join(wdir,new_fname)):
-            print('Netcdf file exists {} in directory {} cannot write '.format(new_fname,wdir)) 
+        if os.path.isfile(os.path.join(wdir, new_fname)):
+            print('Netcdf file exists {} in directory {} cannot write '.format(new_fname, wdir))
         else:
             if verbose:
                 print('writing {} to {}'.format(new_fname, wdir))
@@ -497,8 +572,7 @@ class VolcatName:
         dstr = '{}_{}'.format(self.vhash[self.keylist[3]],
                               self.vhash[self.keylist[4]])
         self.date = datetime.datetime.strptime(dstr, self.dtfmt)
-        self.vhash[self.keylist[11]] = \
-            self.vhash[self.keylist[11]].replace('.nc', '')
+        self.vhash[self.keylist[11]] = self.vhash[self.keylist[11]].replace('.nc', '')
         return self.vhash
 
     def create_name(self):

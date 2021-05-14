@@ -405,7 +405,7 @@ def ens_mean(draash, time, enslist, level=1):
     return m2
 
 
-def make_ATL_hysp(xra, variable='p006', threshold=0.):
+def make_ATL_hysp(xra, variable='p006', threshold=0., MER=None):
     """
     Uses threshold value to make binary field of ensemble members.
     For use in statistics calculations. Based on mass loading, no vertical component
@@ -413,16 +413,17 @@ def make_ATL_hysp(xra, variable='p006', threshold=0.):
     xra: xarray dataset - netcdf files from hysplit.combine_dataset
     variable: variable name (string) from xra
     threshold: ash threshold - default=0. (float/integer)
+    MER: mass eruption rate - default is Mastin equation MER from xra attributes, units are  (float/integer)
     Output:
     xrabin: binary xarray dataarray (source, x, y)
     """
 
-    xra2 = xra[variable] * 1000.  # Each vertical layer is 1000m
+    xra2 = xra[variable] * 1000.  # Each vertical layer is 1000m - MAY WANT TO ALLOW INPUT
     xra2 = xra2.sum(dim='z')  # Summing along z makes the units g/m^2
-    xra2 = xra2[:, 0, 0, :, :]  # Removing ensemble and time dimension, leaving source, x, y
     # May want to add loops for time and ensemble dimension in the future
     # MER must used for two ensemble members
-    MER = xra.attrs['Fine Ash MER']
+    if MER == None:
+        MER = xra.attrs['Fine Ash MER']  # Allowing for MER input - default is Mastin equation MER
 
     xra3 = xra2
     a = 0
