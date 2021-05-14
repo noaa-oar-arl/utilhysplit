@@ -281,17 +281,19 @@ def average_volcat(das, cdump, convert_nans=True):
     return avgmass, maxhgt
 
 
-def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True):
+def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True,
+                    decode_times=True,verbose=False):
     """
     returns list of data-arrays with volcat data.
     """
-    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2)
+    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2,verbose=verbose)
     das = []
     for iii in tlist:
         if not iii.pc_corrected:
             das.append(open_dataset(os.path.join(tdir, iii.fname),
                                     correct_parallax=correct_parallax,
-                                    mask_and_scale=mask_and_scale))
+                                    mask_and_scale=mask_and_scale,
+                                    decode_times=decode_times))
         else:
             print('use xr open dataset', tdir)
             das.append(xr.open_dataset(os.path.join(tdir, iii.fname)))
