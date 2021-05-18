@@ -14,6 +14,7 @@ from utilvolc import volcat
 from monetio.models import hysplit
 from utilhysplit import hcontrol
 from utilhysplit.evaluation import plume_stat
+from utilvolc.basic_checks import compare_grids
 
 def testcase(tdir,vdir):
     fname = 'xrfile.invbezy.nc'
@@ -807,30 +808,56 @@ class InverseAsh:
             print('preparing', dates)
             self.prepare_one_time(dates,das=subdas)
 
+    def add_volcat_hash(self, volcat_hash):
+        # allow to update from another instance of the class.
+        self.volcat_avg_hash.update(volcat_hash)
+
+    def add_cdump_hash(self, cdump_hash):
+        self.cdump_hash.update(cdump_hash)
+
     def prepare_one_time(self, daterange, das=None):
         vdir = self.vdir
         vid = self.vid
         tii = self.time_index(daterange[0])
         # assume cdump has times at beginning of averaging time.
         cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[0])) 
+        if not das:
+           vset = self.get_volcat(daterange)
+        vra = vset.ash_mass_loading
+
+        # need to align grids
+        if compare_grids(cdump_a, vra):
+            cdump_a, vra = xr.align(cdump_a, vra, join='outer')
+        else:
+            print('prepare_one_time: grids cannot be aligned')
+            return False
+
         # need to clip cdump and volcat.
         if 'ens' in cdump_a.coords:
             dummy = cdump_a.sum(dim='ens')
         else:
             dummy = cdump_a
+        
         a1,a2,b1,b2 = self.clip(dummy)
         dummy = dummy[a1:a2,b1:b2]
 
-        if not das:
-           vset = self.get_volcat(daterange)
-        vra = vset.ash_mass_loading
+
         aa1,aa2,bb1,bb2 = self.clip(vra.sum(dim='time').fillna(0))
-  
         # use bounds which encompass all obs and model data. 
         a1 = np.min([a1,aa1])
         a2 = np.max([a2,aa2])
         b1 = np.min([b1,bb1])
         b2 = np.max([b2,bb2])
+        buf = 5
+        if a2+buf < cdump_a.y.values[-1] and a2+buf < vra.y.values[-1]:
+           a2 = a2+buf
+        if b2+buf < cdump_a.x.values[-1] and b2+buf < vra.x.values[-1]:
+           b2 = b2+5
+
+        a1 = a1 -5
+        b1 = b1 -5
+        if a1<0: a1=0
+        if b1<0: b1=0
 
         avra = vra.fillna(0).mean(dim='time')
 
