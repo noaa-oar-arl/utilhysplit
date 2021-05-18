@@ -12,7 +12,9 @@ import pandas as pd
 import seaborn as sns
 from utilvolc import volcat
 from monetio.models import hysplit
-
+from utilhysplit import hcontrol
+from utilhysplit.evaluation import plume_stat
+from utilvolc.basic_checks import compare_grids
 
 def testcase(tdir,vdir):
     fname = 'xrfile.invbezy.nc'
@@ -107,7 +109,7 @@ def plot_L1L2(das,nnn=100):
     ax.set_xlabel('Time')
     #plt.savefig('bezyheight.png')
     plt.show()
-    fig = plt.figure()
+    fig = plt.figue()
     plt.plot(dlist,alist,'--bo')
     ax = plt.gca()
     fig.autofmt_xdate()
@@ -176,6 +178,14 @@ class InverseOutDat:
     def get_vals(self):
         return -1
 
+def get_inp_hash(wdir,configfile):
+    from utilvolc.ashapp import ashinverse
+    #from utilvolc.ashapp.runhelper import JobSetUp
+    from utilvolc.ashapp.runhelper import make_inputs_from_file
+    setup = make_inputs_from_file(wdir,configfile)
+    setup.add_inverse_params()
+    return setup.inp
+
 def get_sourcehash(wdir,configfile):
     from utilvolc.ashapp import ashinverse
     #from utilvolc.ashapp.runhelper import JobSetUp
@@ -185,10 +195,22 @@ def get_sourcehash(wdir,configfile):
     sourcehash = ashinverse.inverse_get_suffix_list(setup.inp)
     return sourcehash 
 
+# For the inverse modeling work flow goes
+# inverse = ai.InverseAsh(...)
+# loop through inverse.perpare_one_time(....)
+# use compare_plotsA to check coverage
+# inverse.make_tcm_mult() to create TCM
+# plot_tcm to check.
+# inverse.write_tcm
+# Run the TCM 
+
+# call to InverseOutDat class to read output from inversion algorithm.
+# input dataframe from InverseOutDat into
+# inverse.plot_outdat() 
 
 class InverseAsh:
 
-    def __init__(self, tdir, fname,vdir,vid,configfile=None):
+    def __init__(self, tdir, fname,vdir,vid,configdir='./',configfile=None):
         """
         configfile : full path to configuration file.
         """
@@ -203,20 +225,25 @@ class InverseAsh:
         self.volcat_hash = {}
         self.volcat_avg_hash = {}
         self.cdump_hash = {}
+        # multiplication factor if more than 1 unit mass released.
+        self.concmult = 1
+        #
+        self.get_cdump(tdir,fname)
+        self.add_config_info(configdir,configfile)
 
+    def get_cdump(self,tdir,fname):
         # hysplit output. xarray. 
+        print('opening', tdir, fname)
         cdump = xr.open_dataset(os.path.join(tdir,fname))
         print('opened')
         # turn dataset into dataarray
         temp = list(cdump.keys())
         cdump = cdump[temp[0]]
-
         # get rid of source dimension (for now)
         cdump = cdump.isel(source=0)
+        self.cdump = cdump
 
-        # multiplication factor if more than 1 unit mass released.
-        self.concmult = 1
-
+    def add_config_info(self,configdir, configfile):
         # the ens dimension holds is key to what emission source was used.
         # the sourcehash is a dictionary
         # key is the ensemble number
@@ -226,12 +253,14 @@ class InverseAsh:
         # bottom : lower height of emission
         # top : upper height of emission.
         if configfile:
-            self.sourcehash = get_sourcehash(configfile)
+            self.sourcehash = get_sourcehash(configdir, configfile)
+            self.inp = get_inp_hash(configdir, configfile)
+        else:
+            self.sourcehash = {}
+            self.inp = {}
 
-        # get the mass loading.
-        # TODO later may want to exclude certain levels.
-        #self.cdump = hysplit.hysp_massload(cdump)
-        self.cdump = cdump
+    def add_inp(self,configdir, configfile):
+        self.inp = get_inp_hash(configdir, configfile)
 
     def set_concmult(self,concmult):
         self.concmult = concmult
@@ -240,12 +269,25 @@ class InverseAsh:
         vdir = self.vdir
         vid = self.vid
         tii = self.time_index(daterange[0])
-        if tii not in self.volcat_hash.keys(): 
-            das = volcat.get_volcat_list(vdir,daterange=daterange,vid=vid) 
+        #if tii not in self.volcat_hash.keys(): 
+        done=True
+        if done: 
+            das = volcat.get_volcat_list(vdir,daterange=daterange,vid=vid,decode_times=True,
+                                         verbose=verbose) 
             self.volcat_hash[tii] = das
         else:
             das = self.volcat_hash[tii]
-        return das
+        # create one dataset with dimension of time.
+        if len(das) > 0:
+            vset = xr.concat(das,dim='time')
+        else:
+            print('No volcat files found ')
+            return das
+        #vra = vset.ash_mass_loading
+        #vra = vra.fillna(0)
+        #vmean = vra.mean(dim='time')
+
+        return vset
 
     def clip(self,dummy):
         # clip ra according to where dummy has 0's.
@@ -261,6 +303,10 @@ class InverseAsh:
         for time in timelist:
             print(time.strftime("%Y %m %d %H:%Mz"))
 
+    def get_time(self,tii):
+        timelist = [pd.to_datetime(x) for x in self.cdump.time.values]
+        return timelist[tii] 
+
     def time_index(self,time):
         timelist = [pd.to_datetime(x) for x in self.cdump.time.values]
         try:
@@ -269,7 +315,7 @@ class InverseAsh:
            iii = None
         return iii 
 
-    def make_tcm_mult(self,tiilist,remove_cols=True):
+    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True):
         # make the tcm for multiple time periods.
         tcmlist = []
         latlist = []
@@ -277,15 +323,18 @@ class InverseAsh:
         for tii in tiilist:
             print(self.cdump.time.values[tii])
             tcm, model_lat, model_lon, columns = \
-                 self.make_tcm(tii,remove_cols=False)
+                 self.make_tcm(tii,remove_cols=False,remove_rows=remove_rows)
             tcmlist.append(tcm)
             latlist.append(np.array(model_lat))
             lonlist.append(np.array(model_lon))
+            print(model_lat.shape, model_lon.shape)
         t3 = np.concatenate(tcmlist,axis=0)
         lat = np.concatenate(latlist,axis=0)
         lon = np.concatenate(lonlist,axis=0)
         self.latlist = np.array(latlist)
         self.lonlist = np.array(lonlist)
+        print('lat',self.latlist.shape)
+        print('lon',self.lonlist.shape)
         if remove_cols:
            nmax = t3.shape[1]
            iremove = []
@@ -303,7 +352,9 @@ class InverseAsh:
         self.lonlist = np.array(lonlist)
         return t3, lat, lon
 
-    def make_tcm(self,tii, remove_cols=True):
+    def make_tcm(self,tii, remove_cols=True, remove_rows=False):
+        # remove rows means remove rows with observations of 0 or nan.
+
         # header line indicates release times for each column.
         # I think header can just be a dummy and it is added when writing to file.
         # one column for each release time/location.
@@ -353,7 +404,21 @@ class InverseAsh:
         volc_lat = avg.latitude.values.reshape(s1,1)
         volc_lon = avg.longitude.values.reshape(s1,1)
 
+        volc = volc.flatten()
+        if remove_rows:
+           vpi = np.where(volc>0)
+           model = model[vpi]
+           volc = volc[vpi]
+           model_lat = model_lat[vpi]
+           model_lon = model_lon[vpi]
+           volc_lon = volc_lon[vpi]
+           volc_lat = volc_lat[vpi]
+        volc = volc.reshape(volc.shape[0],1)
+
         tcm = np.concatenate([model,volc],axis=1)
+
+
+
         if not np.all(volc_lon == model_lon):
            print('WARNING, model and observed locations in tcm not matching')
         if not np.all(volc_lat == model_lat):
@@ -364,6 +429,7 @@ class InverseAsh:
         self.tcm_lon = model_lon
         # this contains the keys that can be matched in the sourcehash attribute.
         self.tcm_columns =  columns
+      
         return tcm, model_lat, model_lon, columns
 
     def plot_tcm(self):
@@ -390,6 +456,7 @@ class InverseAsh:
         # this is number of columns minus 1.
         print('N_ctrl {}'.format(self.tcm.shape[1]-1))
         print('N_ctrl {}'.format(self.tcm.shape[1]-1))
+        print('output file {}'.format(name))
             
         for iii, line in enumerate(self.tcm):
             for jjj, val in enumerate(line):
@@ -407,7 +474,12 @@ class InverseAsh:
             fid.write(hstr + astr)
         return hstr + astr 
 
-    def make_outdat(self,df):
+    def make_outdat(self,dfdat):
+        """
+        dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+        Returns
+        vals : tuple (date, height, emission mass)
+        """
         # matches emissions from the out.dat file with
         # the date and time of emission.
         # uses the tcm_columns array which has the key
@@ -415,7 +487,7 @@ class InverseAsh:
         datelist = []
         htlist = []
         valra = []
-        for val in zip(self.tcm_columns,df[1]):
+        for val in zip(self.tcm_columns,dfdat[1]):
             shash = self.sourcehash[val[0]]
             datelist.append(shash['sdate'])
             htlist.append(shash['bottom'])
@@ -423,12 +495,27 @@ class InverseAsh:
         vals =  list(zip(datelist,htlist,valra))
         return vals
 
+    def make_outdat_df(self,dfdat):
+        #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+        vals = self.make_outdat(dfdat)
+        vals = list(zip(*vals))
+        ht = vals[1]
+        time = vals[0]
+        #emit = np.array(vals[2])/1.0e3/3600.0 
+        emit = np.array(vals[2])
+        dfout = pd.DataFrame(zip(time,ht,emit))
+        dfout = dfout.pivot(columns=0,index=1)
+        return dfout
+
     def plot_outdat(self,vals,
                     log=False,
                     fignum=1,
                     cmap='Blues',
                     unit='kg/s',
                     thresh=0):
+        """
+        vals is output by make_outdat.
+        """
         fig = plt.figure(fignum, figsize=(10,5))
         vals = list(zip(*vals))
         sns.set()
@@ -446,25 +533,22 @@ class InverseAsh:
         if not log:
             cb = plt.scatter(vals[0],ht,c=emit,s=100,cmap=cmap,marker='s') 
         else:
+            
             cb = plt.scatter(vals[0],ht,c=np.log10(emit),s=100,cmap=cmap,marker='s') 
             #cb = plt.pcolormesh(vals[0],ht,emit,cmap=cmap) 
         cbar = plt.colorbar(cb)
         cbar.ax.set_ylabel(unit)
         fig.autofmt_xdate()
 
-    def plot_outdat_ts(self,vals,log=False,fignum=1,unit='kg/s'):
+    def plot_outdat_ts(self,dfdat,log=False,fignum=1,unit='kg/s'):
+        # plots time series of MER. summed along column.
+        #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
         sns.set()
         sns.set_style('whitegrid')
         fig = plt.figure(fignum, figsize=(10,5))
         ax = fig.add_subplot(1,1,1)
-        vals = list(zip(*vals))
+        df = self.make_outdat_df(dfdat)     
         sns.set()
-        ht = vals[1]
-        time = vals[0]
-        #emit = np.array(vals[2])/1.0e3/3600.0 
-        emit = np.array(vals[2])
-        df = pd.DataFrame(zip(time,ht,emit))
-        df = df.pivot(columns=0,index=1)
         ts = df.sum()
         if unit == 'kg/s':
            yval = ts.values/3.6e6
@@ -478,9 +562,39 @@ class InverseAsh:
     def plot_out2dat_times(self,df2,cmap='viridis'):
         return -1 
 
+    def plot_out2dat_scatter(self,tiilist,df2,vloc,cmap='Blues'):
+        if isinstance(tiilist,int): tiilist = [tiilist]
+        sns.set()
+        ppp=0
+        #tii = self.time_index(daterange[0])
+        modelall = df2['model'].values
+        nnn=0
+        for tii in tiilist:
+            print(self.cdump.time.values[tii])
+            fig = plt.figure(figsize=[10,5])
+            ax1 = fig.add_subplot(1,2,1)
+            ax2 = fig.add_subplot(1,2,2)
+            volcat = self.volcat_avg_hash[tii] 
+            shape = volcat.shape
+            lon = self.lonlist[tii-1]
+            lat = self.latlist[tii-1]
+            model = modelall[nnn:nnn+len(lon)]
+            volcat = self.volcat_avg_hash[tii] 
+            r2 = volcat.where(volcat>0)
+            cb = ax1.scatter(lon, lat,c=model,cmap=cmap,s=10,marker='o')
+            cb2 = ax2.scatter(volcat.longitude, volcat.latitude, c=r2.values,s=10,cmap=cmap,marker='o')
+            nnn=len(lon) 
+            if vloc:
+               ax1.plot(vloc[0],vloc[1],'y^')
+               ax2.plot(vloc[0],vloc[1],'y^')
+            plt.colorbar(cb, ax= ax1)
+            plt.colorbar(cb2, ax=ax2)
+            
+
     def plot_out2dat(self,tiilist,df2,cmap='viridis',vloc=None,ptype='pcolormesh'):
         # tiilist needs to be same order as for tcm.
         # df2 is from InverseOutDat get_conc method.
+        # doesn't work when only later time periods are used!
         if isinstance(tiilist,int): tiilist = [tiilist]
         sns.set()
         ppp=0
@@ -512,7 +626,16 @@ class InverseAsh:
                 cb2 = ax2.pcolormesh(volcat.longitude, volcat.latitude,r2.values,norm=norm, cmap=cmap,shading='nearest')
             #cb = ax1.scatter(volcat.longitude, volcat.latitude,c=np.log10(model),cmap=cmap,s=50,marker='s')
             else:
-                cb = ax1.scatter(volcat.longitude, volcat.latitude,c=model,cmap=cmap,s=10,marker='o')
+                #lon = self.lonlist[tii-1][0:14]
+                #lat = self.latlist[tii-1][0:21]
+                #xv, yv = np.meshgrid(lon,lat)     
+                lon = self.lonlist[tii-1][0:14]
+                lat = self.latlist[tii-1][0:21]
+                xv, yv = np.meshgrid(lon,lat) 
+                print('vshape', volcat.longitude.shape)    
+                print(xv.shape, yv.shape)        
+                print('model shape', model.shape)
+                cb = ax1.scatter(xv, yv,c=model,cmap=cmap,s=10,marker='o')
                 cb2 = ax2.scatter(volcat.longitude, volcat.latitude, c=r2.values,s=10,cmap=cmap,marker='o')
             plt.colorbar(cb, ax= ax1)
             #cb2 = ax2.scatter(volcat.longitude, volcat.latitude, c=r2.values,s=10,cmap=cmap,marker='o')
@@ -535,10 +658,10 @@ class InverseAsh:
         print(cdump.time)
         #volcat.plot.pcolormesh(x='longitude',y='latitude',levels=levels,ax=ax1)
         #cdump.sum(dim='ens').plot.contour(x='longitude',y='latitude',ax=ax2)
-        plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds')
+        plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds',shading='nearest')
         #plt.pcolormesh(csum.longitude, csum.latitude, csum,cmap='Reds',shading='nearest')
         #cb= csum.plot.pcolormesh(x='longitude',y='latitude',cmap='viridis',ax=ax2)
-        cb = plt.pcolormesh(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues')
+        cb = plt.pcolormesh(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues',shading='nearest')
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=np.log10(volcat),s=2,cmap='Blues')
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=volcat.values,s=2,cmap='viridis',levels=levels)
         #cb = plt.contour(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues')
@@ -556,13 +679,66 @@ class InverseAsh:
         norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max) 
         return norm
 
+    
+    def match_volcat(self,forecast):
+        time = pd.to_datetime(forecast.time.values)
+        tii = self.time_index(time)
+        volcat = self.volcat_avg_hash[tii] 
+        return volcat
+
+    def calc_fss(self,forecast,thresh=None):
+        volcat = self.match_volcat(forecast)
+        evals = forecast.values
+        vvals = volcat.values
+        scores = plume_stat.CalcScores(volcat, forecast, threshold=0.2)
+        return scores
+
+    def compare_forecast_dist(self,forecast,thresh=None):
+        from utilhysplit.evaluation import statmain
+        volcat = self.match_volcat(forecast)
+        evals = forecast.values
+        vvals = volcat.values
+        exval,eyval =  statmain.nancdf(evals.flatten(),thresh)
+        vxval,vyval =  statmain.nancdf(vvals.flatten(),thresh)
+        fig = plt.figure(1)
+        ax = fig.add_subplot(1,1,1)
+        ax.step(exval, eyval, '-r',label='HYSPLIT')
+        ax.step(vxval, vyval, '-b',label='Volcat')
+        ks1,ks2 = statmain.kstestnan(evals.flatten(),vvals.flatten(),thresh)
+        try:
+            print('Kolmogorov-Smirnov Parameter {} {}'.format(np.max(np.abs(ks1)), np.max(np.abs(ks2))))
+        except:
+            return 1
+        return np.max(np.abs(ks1)) 
+
+    def remove_nans(self,data,thresh=None):
+        # remove nans
+        data2 = data[~np.isnan(data)]
+        if thresh:   
+           data2 = data2[data2>thresh]
+           # apply threshold.
+           #vpi = data2 < thresh
+           #data2[vpi] = np.nan
+           #data2 = data2[~np.isnan(data2)]
+        return data2
+           
+    def compare(self,forecast,thresh=None):
+        volcat = self.match_volcat(forecast)
+        evals = self.remove_nans(forecast.values.flatten(),thresh)
+        vvals = self.remove_nans(volcat.values.flatten(),thresh)
+        # number of pixles above threshold in each.
+        forecast_parea = len(evals) 
+        volcat_parea = len(vvals)
+        return forecast_parea, volcat_parea
+       
     def compare_forecast(self, forecast,cmap='Blues',ptype='pcolormesh',vloc=None):
         # forecast should be an xarray in mass loading format with no time dimension.
         sns.set()
         sns.set_style('whitegrid')
-        fig = plt.figure(figsize=[10,5])
-        ax1 = fig.add_subplot(1,2,1)
-        ax2 = fig.add_subplot(1,2,2)
+        fig = plt.figure(figsize=[15,5])
+        ax1 = fig.add_subplot(1,3,1)
+        ax2 = fig.add_subplot(1,3,2)
+        ax3 = fig.add_subplot(1,3,3)
 
         time = pd.to_datetime(forecast.time.values)
         tii = self.time_index(time)
@@ -570,23 +746,35 @@ class InverseAsh:
         volcat = self.volcat_avg_hash[tii] 
         evals = forecast.values
         vpi = evals < 0.001
-        #fvals[vpi] = np.nan
+        evals[vpi] = np.nan
         norm = self.get_norm(volcat,forecast)
-
+   
+        #evals = np.log10(evals)
+        #vvals = np.log10(volcat.values)
+        vvals = volcat.values
+        vpi = vvals < 0.001
+        vvals[vpi] =  np.nan
+        clevels = [0.2,2,5,10]
         if ptype == 'pcolormesh':
-            cb = ax1.pcolormesh(volcat.longitude, volcat.latitude,volcat.values,norm=norm, cmap=cmap,shading='nearest')
+            cb = ax1.pcolormesh(volcat.longitude, volcat.latitude,vvals,norm=norm, cmap=cmap,shading='nearest')
             cb2 = ax2.pcolormesh(forecast.longitude, forecast.latitude,evals,norm=norm, cmap=cmap,shading='nearest')
-            ax2.contourf(volcat.longitude, volcat.latitude, volcat.values,levels=[0.001,0.01,10],cmap='tab20') 
+            #cb2 = ax3.pcolormesh(forecast.longitude, forecast.latitude,evals,norm=norm, cmap=cmap,shading='nearest')
+            ax3.contourf(volcat.longitude, volcat.latitude, volcat.values,levels=clevels,cmap='Reds') 
+            ax3.contour(forecast.longitude, forecast.latitude, evals,levels=clevels,cmap='viridis') 
+        plt.title(time.strftime("%Y %m/%d %H:%M UTC"))
         plt.colorbar(cb, ax=ax1) 
         plt.colorbar(cb2, ax=ax2) 
         ylim = ax1.get_ylim()
         ax2.set_ylim(ylim)
+        ax3.set_ylim(ylim)
         xlim = ax1.get_xlim()
         ax2.set_xlim(xlim)
+        ax3.set_xlim(xlim)
         if vloc:
            ax1.plot(vloc[0],vloc[1],'y^')
            ax2.plot(vloc[0],vloc[1],'y^')
-
+           ax3.plot(vloc[0],vloc[1],'y^')
+        return fig
 
     def compare_plots(self, daterange,levels=None):
         fig = plt.figure(1,figsize=(10,5))
@@ -620,37 +808,141 @@ class InverseAsh:
             print('preparing', dates)
             self.prepare_one_time(dates,das=subdas)
 
+    def add_volcat_hash(self, volcat_hash):
+        # allow to update from another instance of the class.
+        self.volcat_avg_hash.update(volcat_hash)
+
+    def add_cdump_hash(self, cdump_hash):
+        self.cdump_hash.update(cdump_hash)
+
     def prepare_one_time(self, daterange, das=None):
         vdir = self.vdir
         vid = self.vid
         tii = self.time_index(daterange[0])
         # assume cdump has times at beginning of averaging time.
         cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[0])) 
-        #cdump_a = self.cdump.sel(time=daterange[0])
- 
+        if not das:
+           vset = self.get_volcat(daterange)
+        vra = vset.ash_mass_loading
+
+        # need to align grids
+        if compare_grids(cdump_a, vra):
+            cdump_a, vra = xr.align(cdump_a, vra, join='outer')
+        else:
+            print('prepare_one_time: grids cannot be aligned')
+            return False
+
         # need to clip cdump and volcat.
-        dummy = cdump_a.sum(dim='ens')
+        if 'ens' in cdump_a.coords:
+            dummy = cdump_a.sum(dim='ens')
+        else:
+            dummy = cdump_a
+        
         a1,a2,b1,b2 = self.clip(dummy)
         dummy = dummy[a1:a2,b1:b2]
-        #cdump_a = cdump_a[a1:a2,b1:b2]      
-    
-        # get list of volcat data arrays. 
-        if not das:
-           das = self.get_volcat(daterange)
-        # regrid volcat to dummy grid.
-        regrid_volcat = volcat.average_volcat(das,dummy)
 
-        # average volcat values.
-        avg = regrid_volcat.mean(dim='time')
-        cdump_a = cdump_a[:,a1:a2,b1:b2]
 
-        self.cdump_hash[tii] = cdump_a
-        self.volcat_avg_hash[tii] = avg
-        return  cdump_a, avg
+        aa1,aa2,bb1,bb2 = self.clip(vra.sum(dim='time').fillna(0))
+        # use bounds which encompass all obs and model data. 
+        a1 = np.min([a1,aa1])
+        a2 = np.max([a2,aa2])
+        b1 = np.min([b1,bb1])
+        b2 = np.max([b2,bb2])
+        buf = 5
+        if a2+buf < cdump_a.y.values[-1] and a2+buf < vra.y.values[-1]:
+           a2 = a2+buf
+        if b2+buf < cdump_a.x.values[-1] and b2+buf < vra.x.values[-1]:
+           b2 = b2+5
+
+        a1 = a1 -5
+        b1 = b1 -5
+        if a1<0: a1=0
+        if b1<0: b1=0
+
+        avra = vra.fillna(0).mean(dim='time')
+
+        if 'ens' in cdump_a.coords:
+            self.cdump_hash[tii] = cdump_a[:,a1:a2,b1:b2]
+        else:
+            self.cdump_hash[tii] = cdump_a[a1:a2,b1:b2]
+        self.volcat_avg_hash[tii] = avra[a1:a2,b1:b2]
+        #vra = vra[a1:a2,b1:b2]
+        #vra = vra.fillna(0)
+        #vmean = vra.mean(dim='time')
+        return cdump_a, avra
+
+    def compare_time_ave(self, daterange):
+        """
+        creates plots illustrating how time averaging affects 
+        volcat data.
+        """
+        sns.set()
+        vset = self.get_volcat(daterange)
+        vset = vset.ash_mass_loading
+        for time in vset.time.values:
+            temp = vset.sel(time=time)
+            a1,a2,b1,b2 = self.clip(temp.fillna(0))
+            temp = temp[a1:a2,b1:b2]
+            temp.plot.pcolormesh(x='longitude', y='latitude')
+            plt.show()
+        avra = vset.fillna(0).mean(dim='time')
+        avra2 = vset.mean(dim='time')
+        a1,a2,b1,b2 = self.clip(avra)
+        avra = avra[a1:a2,b1:b2] 
+        avra2 = avra2[a1:a2,b1:b2] 
+        print('Average with nans set to 0')
+        avra.plot.pcolormesh(x='longitude', y='latitude')
+        plt.show()
+        print('Average of values above 0')
+        avra2.plot.pcolormesh(x='longitude', y='latitude')
+        plt.show()
+        diff = avra2.fillna(0) - avra
+        diff.plot.pcolormesh(x='longitude', y='latitude')
+ 
         
+def make_control(efile,
+                 tdir='./',
+                 sname = 'CONTROL.default',
+                 wdir='./'
+                 ):
+    control = hcontrol.HycsControl(fname=sname,working_directory=tdir)
+    control.read()
+    # number of locations need to be written.
+    nlocs = efile.cycle_list[0].nrecs 
+    nspecies = len(efile.sphash.keys())
+    stime = efile.sdatelist[0]
+    done=False
+    while not done:
+        if nlocs == control.nlocs: 
+           done=True
+        else:
+           control.add_dummy_location()
+    # set to 0 to use emit times file.
+    for species in control.species:
+        species.rate = 0
+        species.duration = 0
+    for grid in control.concgrids:
+        grid.outfile = 'cdump.emit'
+        grid.outdir = wdir
+    # simulation start date same as emit-times 
+    control.rename('CONTROL.emit',wdir)
+    control.add_sdate(stime)
+    control.write()
+    return control
+    
 
-
-
+def make_setup( tdir = './',
+                sname='SETUP.default',
+                wdir = './',
+                efilename = 'emit.txt',
+               ):
+    setup = hcontrol.NameList(sname,tdir)
+    setup.read()
+    setup.add('efile',efilename)
+    setup.add('poutf','PARDUMP.emit')
+    setup.rename('SETUP.emit',wdir)
+    setup.write()
+    return setup
 
 def make_efile(vals,vlat,vlon,
                area=1,
@@ -664,7 +956,7 @@ def make_efile(vals,vlat,vlon,
     vlon : longitude of vent
     area : area to place ash over.
     emis_threshold : do not use emissions below this value.
-    vres : vertical resolution. Added to create line sources.
+    vres : vertical resolution. Needed to create last point in vertical line source.
     """
     from utilhysplit import emitimes
     efile = emitimes.EmiTimes()
@@ -713,3 +1005,18 @@ def make_efile(vals,vlat,vlon,
                          spnum=1,
                          nanvalue=0)
     efile.write_new(name) 
+    return efile
+
+
+
+
+class AshEval(InverseAsh):
+
+    def __init__(self, tdir, fname,vdir,vid,configdir=None,configfile=None):
+        super().__init__(tdir,fname,vdir,vid,configdir,configfile)
+        
+    def get_cdump(self,tdir,fname):
+        cdump = hysplit.open_dataset(os.path.join(tdir,fname))
+        self.cdump = cdump 
+
+
