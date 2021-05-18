@@ -52,15 +52,24 @@ def stepfunction(xstep, ystep, iii):
     f(xstep) = ystep
     where xtep, ystep define a step function 
     (for instance output of cdf)
-
     input iii  (float)
     returns f(iii) (float)
     """
-    zzz = zip(xstep, ystep)
-    jjj=0
-    for val in zzz:
-        if iii >= val[0]: jjj=val[1]
-        if iii < val[0]: break
+    # this way may be faster.
+    xxx = np.array(xstep)
+    yyy = np.array(ystep)
+    vpi = np.where(xxx <= iii)
+    iii = vpi[-1][-1]
+    jjj = yyy[iii]
+
+    # loop is slow
+    #zzz = zip(xstep, ystep)
+    #jjj=0
+    #for val in zzz:
+        # find value of x which is closest to input value iii.
+    #    if iii >= val[0]: jjj=val[1]
+    #    if iii < val[0]: break
+    # return value of 
     return  jjj 
 
 
@@ -79,6 +88,13 @@ def get_ds(n1, n2):
     ds = (-1 * ds) **0.5
     return alpha, ds
 
+def kstestnan(data1, data2,thresh=None):
+    print('start kstestnan')
+    cx1, cy1 = nancdf(data1,thresh)  
+    print('got one')
+    cx2, cy2 = nancdf(data2,thresh) 
+    print('got two')
+    return kstest_sub(cx1,cy1,cx2,cy2)
 
 def kstest(data1, data2):
     """
@@ -107,21 +123,26 @@ def kstest(data1, data2):
     cx1, cy1 = cdf(data1)  
     cx2, cy2 = cdf(data2) 
 
+    return kstest_sub(cx1,cy1,cx2,cy2)
+
+def kstest_sub(cx1,cy1,cx2,cy2):
+
     n1 = len(cx1) 
     n2 = len(cx2) 
-
     difflist = []
+    # this is a little slow for functions with
+    # a lot of x values. 
     for xxx in cx1:
         val1 = stepfunction(cx1, cy1, xxx)
         val2 = stepfunction(cx2, cy2, xxx)
         difflist.append(val2 - val1) 
-
-    difflist2 = []
-    for xxx in cx2:
-        val1 = stepfunction(cx1, cy1, xxx)
-        val2 = stepfunction(cx2, cy2, xxx)
-        difflist2.append(val2 - val1) 
-    return difflist, difflist2
+    #difflist2 = []
+    #for xxx in cx2:
+    #    val1 = stepfunction(cx1, cy1, xxx)
+    #    val2 = stepfunction(cx2, cy2, xxx)
+    #    difflist2.append(val2 - val1) 
+    #return difflist, difflist2
+    return difflist, difflist
 
 def probof(data1, probval):
     """
@@ -133,11 +154,23 @@ def probof(data1, probval):
     """
     cx1, cy1 = cdf(data1)  
     return stepfunction(cy1, cx1, probval)
-    
 
 def kstest_answer(data1, data2):
     d1, d2 = kstest(data1, data2)
     return np.max([np.max(d1), np.max(d2)])
+
+def nancdf(data,thresh=None):
+    """
+    remove nans from data before creating cdf.
+    """
+    data2 = data[~np.isnan(data)]
+    if thresh:
+       data2 = data2[data2>thresh]
+       #vpi = data2 < thresh
+       #data2[vpi] = np.nan
+       #data2 = data2[~np.isnan(data2)]
+    print('nancdf')
+    return cdf(data2)
 
 def cdf(data):
     """
@@ -315,14 +348,12 @@ class MatchedData(object):
            alist2.append(ts2.autocorr(lag=nnn))
         ax.plot(nlist, alist1, '-k.', label='obs')
         ax.plot(nlist, alist2, '-b.', label='fc')
-        
 
     def plotscatter(self, ax):
         """
         plot obsra on x and fc array on y
         """
         ax.plot(self.obsra['obs'], self.obsra['fc'],'.')      
-
 
     def apply_thresh(self, thresh1, thresh2):
         if not self.obsra.empty:
