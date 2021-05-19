@@ -126,11 +126,12 @@ class ParametersIn:
         with open(fname, 'r') as fid:
              self.lines = fid.readlines()
 
-    def change_and_write(self,nx_ctrl,fname):
+    def change_and_write(self,fname,nx_ctrl):
         self.change(nx_ctrl)
         self.write(fname)
 
     def change(self, nx_ctrl):
+        print(nx_ctrl, type(nx_ctrl))
         nx_ctrl = int(nx_ctrl)
         self.lines[1] = ' N_ctrl={}\n'.format(nx_ctrl)
         self.lines[2] = ' Nx_ctrl={}\n'.format(nx_ctrl)
@@ -244,7 +245,8 @@ class InverseAshEns:
         self.invlist = []  # list of  InverseAsh objects
         self.fnamelist = fnamelist
         self.tcm_names = [] # list of names of tcm files written.
-        
+        self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
+ 
         # assume strings of form NAME_gep04.nc
         try:
             self.taglist = [x[-8:-3] for x in fnamelist]
@@ -262,6 +264,10 @@ class InverseAshEns:
         for hrun in self.invlist:
             hrun.set_concmult(mult)   
 
+    def reset_tcm(self):
+        self.tcm_names = [] # list of names of tcm files written.
+        self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
+
     def write_tcm(self,tcm_name):
         for hrun in zip(self.invlist,self.taglist): 
             tname = tcm_name.replace('.txt','')
@@ -269,6 +275,7 @@ class InverseAshEns:
             hrun[0].write_tcm(tname)
             if tname not in self.tcm_names:
                 self.tcm_names.append(tname)
+                self.n_ctrl_list.append(hrun[0].n_ctrl)
 
     def plot_tcm(self,ensi=None):
         if ensi:
@@ -296,7 +303,10 @@ class InverseAshEns:
         cmd = os.path.join(self.execdir,'new_lbfgsb.x')
         new_name1, new_name2 = self.make_tcm_names()
         for iii, tcm in enumerate(self.tcm_names):
+            print(self.taglist[iii])
             os.chdir(self.wdir)
+            params = ParametersIn('Parameters_in.dat.original')
+            params.change_and_write('Parameters_in.dat',self.n_ctrl_list[iii])
             Helper.remove(inp_name)
             Helper.copy(tcm,inp_name)
             print(cmd)
@@ -376,6 +386,9 @@ class InverseAsh:
 
         self.vdir = vdir   # directory for volcat data
         self.vid = vid   # volcano id.
+
+        self.n_ctrl = 0  # determined in the write_tcm method.
+                         # needed for Parameters_in.dat input into inversion algorithm
 
         # keep volcat arrays for different averaging times. 
         self.volcat_hash = {}
@@ -618,7 +631,8 @@ class InverseAsh:
         hstr = '' # header string
         print(self.tcm.shape)\
         # this is number of columns minus 1.
-        print('N_ctrl {}'.format(self.tcm.shape[1]-1))
+        # and needs to be input into Parameters.in.dat
+        self.n_ctrl = self.tcm.shape[1]-1
         print('N_ctrl {}'.format(self.tcm.shape[1]-1))
         print('output file {}'.format(name))
             
