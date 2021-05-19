@@ -15,6 +15,7 @@ from monetio.models import hysplit
 from utilhysplit import hcontrol
 from utilhysplit.evaluation import plume_stat
 from utilvolc.basic_checks import compare_grids
+from utilvolc.runhelper import Helper
 
 def testcase(tdir,vdir):
     fname = 'xrfile.invbezy.nc'
@@ -118,6 +119,8 @@ def plot_L1L2(das,nnn=100):
     ax.set_xlabel('Time')
 
 
+
+
 class InverseOutDat:
 
     def __init__(self,wdir,fname='out.dat',fname2='out2.dat'):
@@ -207,6 +210,82 @@ def get_sourcehash(wdir,configfile):
 # call to InverseOutDat class to read output from inversion algorithm.
 # input dataframe from InverseOutDat into
 # inverse.plot_outdat() 
+
+class InverseAshEns:
+    """
+    Inverse runs from a meteorological ensemble.
+    """
+    def __init__(self, tdirlist, fnamelist,
+                 vdir,vid,
+                 configdir='./',configfile=None):
+        self.invlist = []  # list of  InverseAsh objects
+        self.fnamelist = fnamelist
+        self.tcm_names = [] # list of names of tcm files written.
+        
+        # assume strings of form NAME_gep04.nc
+        try:
+            self.taglist = [x[-8:-3] for x in fnamelist]
+        except:
+            print('InverseAshEns string not in expected form {}'.format(fnamelist[0]))
+            self.taglist = list(map(str,np.arange(0,len(fnamelist))))
+        for hruns in zip(tdirlist, fnamelist):
+            self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,configdir,configfile))
+
+    def set_directory(self,wdir,execdir):
+        self.wdir = wdir
+        self.execdir = execdir
+
+    def set_concmult(self,mult):
+        for hrun in self.invlist:
+            hrun.set_concmult(mult)   
+
+    def write_tcm(self,tcm_name):
+        for hrun in zip(self.invlist,self.taglist): 
+            tname = tcm_name.replace('.txt','')
+            tname = '{}_{}.txt'.format(tname,hrun[1])   
+            hrun[0].write_tcm(tname)
+            if tname not in self.tcm_names:
+                self.tcm_names.append(tname)
+
+    def plot_tcm(self,ensi=None):
+        if ensi:
+            self.invlist[ensi].plot_tcm()
+            return True
+        for hrun in self.invlist: 
+            hrun.plot_tcm()
+            plt.show()
+        return True
+
+    def run_tcm(self):
+        inp_name = 'TCM_sum.csv'
+        out_name1 = 'out.dat'
+        out_name2 = 'out2.dat'
+        cmd = os.path.join(self.execdir,'new_lbfgsb.x')
+        for iii, tcm in enumerate(self.tcm_names):
+            os.chdir(self.wdir)
+            Helper.remove(inp_name)
+            Helper.copy(tcm,inp_name)
+            print(cmd)
+            print(os.getcwd())
+            #Helper.execute_with_shell(cmd)
+            Helper.execute(cmd)
+            Helper.move(out_name1, '{}_{}'.format(self.taglist[iii],out_name1)) 
+            Helper.move(out_name2, '{}_{}'.format(self.taglist[iii],out_name2)) 
+                    
+
+    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True):
+        for hrun in self.invlist: 
+            a,b,c, = hrun.make_tcm_mult(tiilist,remove_cols,remove_rows)
+
+    def prepare_one_time(self,daterange):
+        for hrun in self.invlist:
+            hrun.prepare_one_time(daterange)    
+
+    def compare_plotsA(self,daterange=None,tii=None,ens=None):
+        for hrun in self.invlist:
+            hrun.compare_plotsA(daterange, tii)
+            plt.show()
+
 
 class InverseAsh:
 
@@ -327,14 +406,11 @@ class InverseAsh:
             tcmlist.append(tcm)
             latlist.append(np.array(model_lat))
             lonlist.append(np.array(model_lon))
-            print(model_lat.shape, model_lon.shape)
         t3 = np.concatenate(tcmlist,axis=0)
         lat = np.concatenate(latlist,axis=0)
         lon = np.concatenate(lonlist,axis=0)
         self.latlist = np.array(latlist)
         self.lonlist = np.array(lonlist)
-        print('lat',self.latlist.shape)
-        print('lon',self.lonlist.shape)
         if remove_cols:
            nmax = t3.shape[1]
            iremove = []
@@ -1010,13 +1086,5 @@ def make_efile(vals,vlat,vlon,
 
 
 
-class AshEval(InverseAsh):
-
-    def __init__(self, tdir, fname,vdir,vid,configdir=None,configfile=None):
-        super().__init__(tdir,fname,vdir,vid,configdir,configfile)
-        
-    def get_cdump(self,tdir,fname):
-        cdump = hysplit.open_dataset(os.path.join(tdir,fname))
-        self.cdump = cdump 
 
 
