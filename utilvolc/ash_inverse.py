@@ -15,6 +15,8 @@ from monetio.models import hysplit
 from utilhysplit import hcontrol
 from utilhysplit.evaluation import plume_stat
 from utilvolc.basic_checks import compare_grids
+from utilvolc.basic_checks import calc_grids
+from utilvolc.runhelper import Helper
 
 def testcase(tdir,vdir):
     fname = 'xrfile.invbezy.nc'
@@ -118,6 +120,29 @@ def plot_L1L2(das,nnn=100):
     ax.set_xlabel('Time')
 
 
+class ParametersIn:
+
+    def __init__(self,fname):
+        with open(fname, 'r') as fid:
+             self.lines = fid.readlines()
+
+    def change_and_write(self,fname,nx_ctrl):
+        self.change(nx_ctrl)
+        self.write(fname)
+
+    def change(self, nx_ctrl):
+        print(nx_ctrl, type(nx_ctrl))
+        nx_ctrl = int(nx_ctrl)
+        self.lines[1] = ' N_ctrl={}\n'.format(nx_ctrl)
+        self.lines[2] = ' Nx_ctrl={}\n'.format(nx_ctrl)
+        self.lines[40] = ' lbfgs_nbd={}*0'.format(nx_ctrl) 
+ 
+    def write(self,fname):
+        with open(fname,'w') as fid:
+            [fid.write(line) for line in self.lines]
+
+
+
 class InverseOutDat:
 
     def __init__(self,wdir,fname='out.dat',fname2='out2.dat'):
@@ -153,7 +178,8 @@ class InverseOutDat:
         ax = plt.gca()
         ax.set_xlabel('Log emission (g/h)')
 
-    def get_conc(self, name='out2.dat'):
+    def get_conc(self, name=None):
+        if not name: name = self.fname2
         df = self.read_out(name)
         df.columns = ['index', 'observed', 'model']
         self.df2 = df
@@ -208,9 +234,149 @@ def get_sourcehash(wdir,configfile):
 # input dataframe from InverseOutDat into
 # inverse.plot_outdat() 
 
+class InverseAshEns:
+    """
+    Inverse runs from a meteorological ensemble.
+    """
+    def __init__(self, tdirlist, fnamelist,
+                 vdir,vid,
+                 configdir='./',configfile=None,
+                 verbose=False):
+        self.invlist = []  # list of  InverseAsh objects
+        self.fnamelist = fnamelist
+        self.tcm_names = [] # list of names of tcm files written.
+        self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
+ 
+        # assume strings of form NAME_gep04.nc
+        try:
+            self.taglist = [x[-8:-3] for x in fnamelist]
+        except:
+            print('InverseAshEns string not in expected form {}'.format(fnamelist[0]))
+            self.taglist = list(map(str,np.arange(0,len(fnamelist))))
+        for hruns in zip(tdirlist, fnamelist):
+            self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,configdir,configfile,verbose=verbose))
+
+    def set_directory(self,wdir,execdir):
+        self.wdir = wdir
+        self.execdir = execdir
+
+    def set_concmult(self,mult):
+        for hrun in self.invlist:
+            hrun.set_concmult(mult)   
+
+    def reset_tcm(self):
+        self.tcm_names = [] # list of names of tcm files written.
+        self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
+
+    def write_tcm(self,tcm_name):
+        for hrun in zip(self.invlist,self.taglist): 
+            tname = tcm_name.replace('.txt','')
+            tname = '{}_{}.txt'.format(tname,hrun[1])   
+            hrun[0].write_tcm(tname)
+            if tname not in self.tcm_names:
+                self.tcm_names.append(tname)
+                self.n_ctrl_list.append(hrun[0].n_ctrl)
+
+    def plot_tcm(self,ensi=None):
+        if ensi:
+            self.invlist[ensi].plot_tcm()
+            return True
+        for hrun in self.invlist: 
+            hrun.plot_tcm()
+            plt.show()
+        return True
+
+    def make_tcm_names(self):
+        out_name1 = 'out.dat'
+        out_name2 = 'out2.dat'
+        name1 = []
+        name2 = []
+        for tag in self.taglist:
+            name1.append('{}_{}'.format(tag,out_name1))
+            name2.append('{}_{}'.format(tag,out_name2))
+        return name1, name2 
+
+    def run_tcm(self):
+        out_name1 = 'out.dat'
+        out_name2 = 'out2.dat'
+        inp_name = 'TCM_sum.csv'
+        cmd = os.path.join(self.execdir,'new_lbfgsb.x')
+        new_name1, new_name2 = self.make_tcm_names()
+        for iii, tcm in enumerate(self.tcm_names):
+            print(self.taglist[iii])
+            os.chdir(self.wdir)
+            params = ParametersIn('Parameters_in.dat.original')
+            params.change_and_write('Parameters_in.dat',self.n_ctrl_list[iii])
+            Helper.remove(inp_name)
+            Helper.copy(tcm,inp_name)
+            print(cmd)
+            print(os.getcwd())
+            #Helper.execute_with_shell(cmd)
+            Helper.execute(cmd)
+            Helper.move(out_name1, new_name1[iii]) 
+            Helper.move(out_name2, new_name2[iii]) 
+                   
+    def plot_outdat(self):
+        ilist = self.read_outdat()
+        for iii, io in enumerate(ilist):
+            print(self.taglist[iii])
+            df2 = io.get_conc()
+            #df = io.get_emis()
+            try: 
+                ax = io.plot_conc()
+            except:
+                pass
+            plt.show()
+            #io.emis_hist()
+            #ax = plt.gca()
+            #ax.set_xlim(-1,10)
+            #plt.show()  
+ 
+    def read_outdat(self):
+        name1,name2 = self.make_tcm_names()
+        ilist = []
+        for outdat in zip(name1,name2):
+            io = InverseOutDat(self.wdir,outdat[0],outdat[1])
+            ilist.append(io)
+        return ilist
+
+    def plot_outdat_ts(self):
+        sns.set_style('whitegrid')
+        fig = plt.figure(1)
+        ax = fig.add_subplot(1,1,1)
+        ilist = self.read_outdat()
+        clr = ['--k','--r','--b','--g','--c','--y','--m']
+        jjj=0
+        for iii, io in enumerate(ilist):
+            df = io.get_emis()
+            self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clr[jjj])
+            jjj+=1
+            if jjj >= len(clr): jjj=0
+        fig.autofmt_xdate()
+        plt.show()
+
+    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True):
+        for hrun in self.invlist: 
+            a,b,c, = hrun.make_tcm_mult(tiilist,remove_cols,remove_rows)
+
+    def prepare_one_time(self,daterange):
+        for iii, hrun in enumerate(self.invlist):
+            #print(self.taglist[iii])
+            hrun.prepare_one_time(daterange)    
+
+    def compare_plotsA(self,daterange=None,tii=None,ens=None):
+        for iii, hrun in enumerate(self.invlist):
+            print(self.taglist[iii])
+            
+            hrun.compare_plotsA(daterange, tii)
+            plt.show()
+
+
 class InverseAsh:
 
-    def __init__(self, tdir, fname,vdir,vid,configdir='./',configfile=None):
+    def __init__(self, tdir, fname,vdir,vid,
+                 configdir='./',configfile=None,
+                 verbose=False):
         """
         configfile : full path to configuration file.
         """
@@ -221,6 +387,9 @@ class InverseAsh:
         self.vdir = vdir   # directory for volcat data
         self.vid = vid   # volcano id.
 
+        self.n_ctrl = 0  # determined in the write_tcm method.
+                         # needed for Parameters_in.dat input into inversion algorithm
+
         # keep volcat arrays for different averaging times. 
         self.volcat_hash = {}
         self.volcat_avg_hash = {}
@@ -228,14 +397,13 @@ class InverseAsh:
         # multiplication factor if more than 1 unit mass released.
         self.concmult = 1
         #
-        self.get_cdump(tdir,fname)
+        self.get_cdump(tdir,fname,verbose)
         self.add_config_info(configdir,configfile)
 
-    def get_cdump(self,tdir,fname):
+    def get_cdump(self,tdir,fname,verbose=False):
         # hysplit output. xarray. 
-        print('opening', tdir, fname)
         cdump = xr.open_dataset(os.path.join(tdir,fname))
-        print('opened')
+        if verbose: print('opened',tdir,fname)
         # turn dataset into dataarray
         temp = list(cdump.keys())
         cdump = cdump[temp[0]]
@@ -289,13 +457,25 @@ class InverseAsh:
 
         return vset
 
-    def clip(self,dummy):
+    def clip(self,dummy, buf=0):
         # clip ra according to where dummy has 0's.
-        aaa = np.where(dummy != 0)
+        aaa = np.where(dummy > 0)
         a1 = np.min(aaa[0])
         a2 = np.max(aaa[0])
         b1 = np.min(aaa[1])
         b2 = np.max(aaa[1])
+
+        if a2+buf < dummy.y.values[-1]:
+           a2 = a2+buf
+
+        if b2+buf < dummy.x.values[-1]:
+           b2 = b2+buf
+
+        a1 = a1 - buf
+        b1 = b1 - buf
+        if a1<0: a1=0
+        if b1<0: b1=0
+
         return a1,a2,b1,b2
 
     def print_times(self):
@@ -327,14 +507,11 @@ class InverseAsh:
             tcmlist.append(tcm)
             latlist.append(np.array(model_lat))
             lonlist.append(np.array(model_lon))
-            print(model_lat.shape, model_lon.shape)
         t3 = np.concatenate(tcmlist,axis=0)
         lat = np.concatenate(latlist,axis=0)
         lon = np.concatenate(lonlist,axis=0)
         self.latlist = np.array(latlist)
         self.lonlist = np.array(lonlist)
-        print('lat',self.latlist.shape)
-        print('lon',self.lonlist.shape)
         if remove_cols:
            nmax = t3.shape[1]
            iremove = []
@@ -454,7 +631,8 @@ class InverseAsh:
         hstr = '' # header string
         print(self.tcm.shape)\
         # this is number of columns minus 1.
-        print('N_ctrl {}'.format(self.tcm.shape[1]-1))
+        # and needs to be input into Parameters.in.dat
+        self.n_ctrl = self.tcm.shape[1]-1
         print('N_ctrl {}'.format(self.tcm.shape[1]-1))
         print('output file {}'.format(name))
             
@@ -540,13 +718,15 @@ class InverseAsh:
         cbar.ax.set_ylabel(unit)
         fig.autofmt_xdate()
 
-    def plot_outdat_ts(self,dfdat,log=False,fignum=1,unit='kg/s'):
+    def plot_outdat_ts(self,dfdat,log=False,fignum=1,unit='kg/s',
+                       ax=None,clr='--ko'):
         # plots time series of MER. summed along column.
         #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
-        sns.set()
-        sns.set_style('whitegrid')
-        fig = plt.figure(fignum, figsize=(10,5))
-        ax = fig.add_subplot(1,1,1)
+        if not ax:
+            sns.set()
+            sns.set_style('whitegrid')
+            fig = plt.figure(fignum, figsize=(10,5))
+            ax = fig.add_subplot(1,1,1)
         df = self.make_outdat_df(dfdat)     
         sns.set()
         ts = df.sum()
@@ -554,10 +734,10 @@ class InverseAsh:
            yval = ts.values/3.6e6
         elif unit == 'g/h':
            yval = ts.values
-        plt.plot([x[1] for x in ts.index.values], yval, '--ko')
-        fig.autofmt_xdate()
+        plt.plot([x[1] for x in ts.index.values], yval, clr)
+        #fig.autofmt_xdate()
         ax.set_ylabel('MER {}'.format(unit))
-        return ax, df
+        #return ax, df
 
     def plot_out2dat_times(self,df2,cmap='viridis'):
         return -1 
@@ -658,10 +838,15 @@ class InverseAsh:
         print(cdump.time)
         #volcat.plot.pcolormesh(x='longitude',y='latitude',levels=levels,ax=ax1)
         #cdump.sum(dim='ens').plot.contour(x='longitude',y='latitude',ax=ax2)
-        plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds',shading='nearest')
+        try:
+            #plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds',shading='nearest')
+            plt.pcolormesh(csum.x, csum.y, np.log10(csum),cmap='Reds',shading='nearest')
+        except:
+            print('FAILED max value', np.max(csum))
+            print('------------------')
         #plt.pcolormesh(csum.longitude, csum.latitude, csum,cmap='Reds',shading='nearest')
         #cb= csum.plot.pcolormesh(x='longitude',y='latitude',cmap='viridis',ax=ax2)
-        cb = plt.pcolormesh(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues',shading='nearest')
+        cb = plt.pcolormesh(volcat.x, volcat.y, np.log10(volcat),cmap='Blues',shading='nearest')
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=np.log10(volcat),s=2,cmap='Blues')
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=volcat.values,s=2,cmap='viridis',levels=levels)
         #cb = plt.contour(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues')
@@ -815,6 +1000,24 @@ class InverseAsh:
     def add_cdump_hash(self, cdump_hash):
         self.cdump_hash.update(cdump_hash)
 
+    def align_grids(self,grid1,grid2):
+        # takes care of making sure grids are aligned.
+        checks, dlon,dlat,minlat,minlon, maxlat,maxlon = calc_grids(grid1, grid2, verbose=False)
+        latra = np.clip(np.arange(minlat,maxlat+dlat,dlat),None,maxlat)
+        lonra = np.clip(np.arange(minlon,maxlon+dlon,dlon),None,maxlon)
+        if latra[-1] - latra[-2] < 1e-3: latra = latra[0:-1]
+        if lonra[-1] - lonra[-2] < 1e-3 : lonra = lonra[0:-1]
+        grid1, grid2 = xr.align(grid1, grid2, join='outer')
+
+        # align function will put nans in lat,lon coordinates. need to redo these coords.
+        mgrid = np.meshgrid(lonra, latra)
+        grid1 = grid1.assign_coords(longitude=(("y","x"),mgrid[0]))
+        grid1 = grid1.assign_coords(latitude=(("y","x"),mgrid[1]))
+        grid2 = grid2.assign_coords(longitude=(("y","x"),mgrid[0]))
+        grid2 = grid2.assign_coords(latitude=(("y","x"),mgrid[1]))
+       
+        return grid1, grid2
+
     def prepare_one_time(self, daterange, das=None):
         vdir = self.vdir
         vid = self.vid
@@ -823,24 +1026,40 @@ class InverseAsh:
         cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[0])) 
         if not das:
            vset = self.get_volcat(daterange)
-        vra = vset.ash_mass_loading
 
-        # need to align grids
+        buf = 5
+        # clip the volcat array before aligning.
+        vra = vset.ash_mass_loading
+        a1,a2,b1,b2 = self.clip(vra.sum(dim='time'),buf=buf)
+        vra = vra[:,a1:a2,b1:b2]
+
+        # clip the cdump array before aligning.
+        if 'ens' in cdump_a.coords:
+            dummy = cdump_a.sum(dim='ens')
+        else:
+            dummy = cdump_a
+        a1,a2,b1,b2 = self.clip(dummy,buf=5)
+        if 'ens' in cdump_a.coords:
+            cdump_a = cdump_a[:,a1:a2,b1:b2]
+        else:
+            cdump_a = cdump_a[a1:a2,b1:b2]
+
         if compare_grids(cdump_a, vra):
-            cdump_a, vra = xr.align(cdump_a, vra, join='outer')
+            cdump_a, vra = self.align_grids(cdump_a, vra)
+        #if compare_grids(cdump_a, vra):
+        #    cdump_a, vra = xr.align(cdump_a, vra, join='outer')
         else:
             print('prepare_one_time: grids cannot be aligned')
             return False
 
+        # TO DO: may not need to clip again.
         # need to clip cdump and volcat.
         if 'ens' in cdump_a.coords:
             dummy = cdump_a.sum(dim='ens')
         else:
             dummy = cdump_a
-        
         a1,a2,b1,b2 = self.clip(dummy)
         dummy = dummy[a1:a2,b1:b2]
-
 
         aa1,aa2,bb1,bb2 = self.clip(vra.sum(dim='time').fillna(0))
         # use bounds which encompass all obs and model data. 
@@ -1010,13 +1229,5 @@ def make_efile(vals,vlat,vlon,
 
 
 
-class AshEval(InverseAsh):
-
-    def __init__(self, tdir, fname,vdir,vid,configdir=None,configfile=None):
-        super().__init__(tdir,fname,vdir,vid,configdir,configfile)
-        
-    def get_cdump(self,tdir,fname):
-        cdump = hysplit.open_dataset(os.path.join(tdir,fname))
-        self.cdump = cdump 
 
 
