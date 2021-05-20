@@ -1,4 +1,3 @@
-#!/opt/Tools/anaconda3/envs/hysplit/bin/python
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
@@ -7,6 +6,8 @@
 # Helper class contains functions for executing commands.
 # JobSetUp class setups the dictionary which contains information for ash runs.
 # Job and JobFileNameComposer class create filenames.
+
+#  make_inputs_from_file . returns an instance of JobSetUp class.
 #
 # 18 APR 2020 (SYZ) - Initial.
 # 15 Jun 2020 (AMC) - Adapted from locusts.py
@@ -61,14 +62,17 @@ class Helper:
         stdoutdata, stderrdata = p.communicate()
         if stdoutdata is not None:
             logger.info(stdoutdata)
+            print(stdoutdata)
         if stderrdata is not None:
             logger.error(stderrdata)
+            print(stderrdata)
 
     def execute(cmd, **kwargs):
         """
         cmd : string
         """
-        p = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
+        #p = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
+        p = subprocess.Popen(cmd)
         stdoutdata, stderrdata = p.communicate()
         if stdoutdata is not None:
             logger.info(stdoutdata)
@@ -114,10 +118,15 @@ class Helper:
 
 def make_inputs_from_file(wdir, config_file='ash_config.txt'):
     jobsetup = JobSetUp()
+    # NameList class reads files with configuration key=value
+    # into a dictionary.
     config = NameList(fname=config_file,working_directory=wdir)
     config.read()
+  
+    # convert dates to datetime objects.
     temp = list(map(int,config.nlist['start_date'].split(":")))
     config.nlist['start_date'] = datetime.datetime(temp[0],temp[1],temp[2], temp[3])
+
     # convert values to floats where possible.
     for key in config.nlist.keys():
         try:
@@ -126,8 +135,11 @@ def make_inputs_from_file(wdir, config_file='ash_config.txt'):
            val = config.nlist[key]
         # get rid of any white spaces in strings
         config.nlist[key] = val
+
     jobsetup.inp = config.nlist
     jobsetup.add_plotting_options(config.nlist)
+    # puts in defaults if not in the config.nlist
+    jobsetup.add_optional_params(config.nlist) 
     return jobsetup
 
 class JobSetUp:
@@ -141,8 +153,13 @@ class JobSetUp:
         return self.inp
 
     def add_input(self, inp, astr, default):
+        """
+        inp : dictionary with keys to add to self.inp
+        astr : key to look for in inp
+        default : value to use if key not found in inp.
+        """
         if astr in inp.keys():
-            self.inp[astr] = inp[astr]  # shapefiles
+            self.inp[astr] = inp[astr] 
         else:
             self.inp[astr] = default
 
@@ -160,16 +177,22 @@ class JobSetUp:
         # self.inp['eflag'] = inp['eruptionSize']
         self.inp["polygon"] = None  # input polygon points to start from.
 
-    def add_inverse_params(self):
-         # time resolution for each inverse modeling run.
-         # in hours. default 1 hour.
-         self.inp['timeres'] = 1
-         # vertical resolution for each inverse modeling run.
-         # in km. default 2 km.
-         self.inp['vertical_resolution'] = '1'
-         self.inp['inv_vertical_resolution'] = 1000
+    def add_optional_params(self,inp=None):
+        # area emission is used for inverse modeling.
+        self.add_input(inp,'area',default=1)
+        self.add_input(inp,'rate',default=1)
+
+    def add_inverse_params(self,inp=None):
+        # time resolution for each inverse modeling run.
+        # in hours. default 1 hour.
+        if not inp: inp={}
+        self.add_input(inp,'timeres',1)
+        # vertical resolution for each inverse modeling run.
+        # in m. default 1000m.
+        self.add_input(inp,'inv_vertical_resolution',1000)
 
     def add_run_params(self, inp):
+        # inputs from web form.
         self.inp["owner"] = inp["owner"]  # TODO fix value
         self.inp["VolcanoName"] = inp["volcano"]["name"]
         self.inp["VolcanoLocation"] = inp["volcano"]["location"]
@@ -241,7 +264,6 @@ class JobSetUp:
         self.inp["generatingPDF"] = True
         self.inp["graphicsResolution"] = 200
         self.inp["zip_compression_level"] = 3
-
 
     def make_test_inputs(self):
         #vname = "Kilauea"
@@ -362,7 +384,7 @@ class JobFileNameComposer:
     #    return '{}_{!s}.{}'.format(self.job, tag, ptype)
 
     def get_setup_filename(self, stage=0):
-        if stage > 0:
+        if stage != 0:
             # return '{}_SETUP.{}.txt'.format(self.job, stage)
             return "SETUP.{}_{}".format(self.job, stage)
         return "SETUP.{}".format(self.job.JOBID)
@@ -372,7 +394,7 @@ class JobFileNameComposer:
         return fname.split(".")[-1]
 
     def get_control_filename(self, stage=0):
-        if stage > 0:
+        if stage != 0:
             # return '{}_CONTROL.{}.txt'.format(self.job, stage)
             return "CONTROL.{}_{}".format(self.job, stage)
         return "CONTROL.{}".format(self.job.JOBID)
@@ -389,19 +411,25 @@ class JobFileNameComposer:
         return "tdump.{}".format(self.job)
 
     def get_cdump_base(self, stage=0):
-        if stage > 0:
+        if stage != 0:
             fname = "{0!s}_cdump.{1:03d}".format(self.job, stage)
         else:
             fname = self.get_cdump_filename().split(".")[0]
         return fname.split(".")[0]
 
     def get_cdump_filename(self, stage=0):
-        if stage > 0:
-            return "{0!s}_cdump.{1:03d}".format(self.job, stage)
-        return "cdump.{}".format(self.job)
+        if stage != 0:
+            if isinstance(stage,int):
+                return "{0!s}_cdump.{1:03d}".format(self.job, stage)
+            elif isinstance(stage,str):
+                print('HERE ', stage)
+                return "{}_cdump.{}".format(self.job, stage)
+            else:
+                return "{}_cdump.{}".format(self.job, stage)
+        #return "cdump.{}".format(self.job)
 
     def get_pardump_filename(self, stage=0):
-        if stage > 0:
+        if stage != 0:
             return "{}_pardump.{}".format(self.job, stage)
         return "pardump.{}".format(self.job)
 

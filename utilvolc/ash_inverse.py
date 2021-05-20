@@ -121,8 +121,13 @@ def plot_L1L2(das,nnn=100):
 
 
 class ParametersIn:
+    """
+    simple way of changing the n_ctrl, nx_ctrl and
+    lbfgs_nbd values in Parmeters_in.dat file.
+    """
 
     def __init__(self,fname):
+        # read existing file.
         with open(fname, 'r') as fid:
              self.lines = fid.readlines()
 
@@ -131,7 +136,7 @@ class ParametersIn:
         self.write(fname)
 
     def change(self, nx_ctrl):
-        print(nx_ctrl, type(nx_ctrl))
+        # change relevant lines.
         nx_ctrl = int(nx_ctrl)
         self.lines[1] = ' N_ctrl={}\n'.format(nx_ctrl)
         self.lines[2] = ' Nx_ctrl={}\n'.format(nx_ctrl)
@@ -256,9 +261,10 @@ class InverseAshEns:
         for hruns in zip(tdirlist, fnamelist):
             self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,configdir,configfile,verbose=verbose))
 
-    def set_directory(self,wdir,execdir):
+    def set_directory(self,wdir,execdir,hysplitdir):
         self.wdir = wdir
         self.execdir = execdir
+        self.hysplitdir = hysplitdiu
 
     def set_concmult(self,mult):
         for hrun in self.invlist:
@@ -296,6 +302,51 @@ class InverseAshEns:
             name2.append('{}_{}'.format(tag,out_name2))
         return name1, name2 
 
+    def create_emit_output(self, outname, source='M4'):
+        """
+        creates netcdf file with outputs from the runs with the emit-times files.
+        This can be fed into the AshEval class.
+        """
+        blist = []
+        for tag in self.taglist:
+            blist.append((os.path.join(self.wdir,'cdump.{}'.format(tag)),
+                         source, 
+                         tag))
+        dset = hysplit.combine_dataset(blist)
+        newattr = {'sources': self.tcm_columns}
+        dset.attrs.update(newattr)
+        dset.to_netcdf(outname) 
+                         
+
+    def run_hysplit(self):
+        import time
+        from utilvolc.ashapp.runhandler import ProcessList
+        processhandler = ProcessList()
+        processhandler.pipe_stdout()
+        processhandler.pipe_stderr()
+        os.chdir(self.wdir)
+        cmd = os.path.join(self.hysplitdir,'hycs_std')
+        for tag in self.taglist:
+            print('running ', cmd, tag)
+            processhandler.startnew([cmd,tag],self.wdir,descrip=tag)
+            time.sleep(5)
+        #    Helper.execute([cmd,tag])
+        done=False
+        seconds_to_wait = 30
+        total_time = 0
+        max_time = 60*60
+        while not done:
+           nump_procs = processhandler.checkprocs()
+           print('in loop {}s procs {}'.format(total_time,num_procs))
+           if nump_procs ==0: done=True
+           time.sleep(seconds_to_wait)
+           total_time += seconds_to_wait
+           if total_time > max_time:
+              processhandler.checkprocs()
+              processhandler.killall()
+              print('WARNING: HYSPLIT run timed out')
+              done=True 
+
     def run_tcm(self):
         out_name1 = 'out.dat'
         out_name2 = 'out2.dat'
@@ -305,21 +356,32 @@ class InverseAshEns:
         for iii, tcm in enumerate(self.tcm_names):
             print(self.taglist[iii])
             os.chdir(self.wdir)
+
             params = ParametersIn('Parameters_in.dat.original')
             params.change_and_write('Parameters_in.dat',self.n_ctrl_list[iii])
+
             Helper.remove(inp_name)
+
+            # remove any existing output files.
+            Helper.remove(out_name1)
+            Helper.remove(out_name2)
+
+            # run 
             Helper.copy(tcm,inp_name)
-            print(cmd)
-            print(os.getcwd())
-            #Helper.execute_with_shell(cmd)
             Helper.execute(cmd)
+            
+            # move output files to new names
             Helper.move(out_name1, new_name1[iii]) 
             Helper.move(out_name2, new_name2[iii]) 
                    
-    def plot_outdat(self):
-        ilist = self.read_outdat()
+    def plot_outdat(self, eii=None):
+        ilist = self.read_outdat(eii)
         for iii, io in enumerate(ilist):
-            print(self.taglist[iii])
+            if not eii: nnn=iii
+            else: 
+                if (isinstance(eii,int)): nnn=eii
+                else: nnn=eii[iii]
+            print(self.taglist[nnn])
             df2 = io.get_conc()
             #df = io.get_emis()
             try: 
@@ -332,43 +394,76 @@ class InverseAshEns:
             #ax.set_xlim(-1,10)
             #plt.show()  
  
-    def read_outdat(self):
+    def read_outdat(self, eii=None):
+        """
+        eii : int or list of ints.
+        """
         name1,name2 = self.make_tcm_names()
         ilist = []
-        for outdat in zip(name1,name2):
-            io = InverseOutDat(self.wdir,outdat[0],outdat[1])
-            ilist.append(io)
+        if isinstance(eii,int): eii  = [eii]
+        for iii, outdat in enumerate(zip(name1,name2)):
+            if not eii or (iii in eii):  
+                io = InverseOutDat(self.wdir,outdat[0],outdat[1])
+                ilist.append(io)
         return ilist
 
-    def plot_outdat_ts(self):
+    def make_emit_name(self,wdir,tag):
+        return os.path.join(self.wdir, '{}_{}'.format(tag,self.emitname))
+
+    def make_efile(self,vloc,emis_threshold=1e5,eii=None):
+        """
+        creates emit-times, CONTROL and SETUP files.
+        vloc : [longitude, latitude]
+        """
+        self.emitname = 'emit.txt'
+        ilist = self.read_outdat(eii)
+        for iii, io in enumerate(ilist):
+            tag = self.taglist[iii]
+            emit_name = self.make_emit_name(self.wdir,tag)
+            df = io.get_emis()
+            vals = self.invlist[iii].make_outdat(df)
+            area = self.invlist[iii].inp['area']
+            efile = make_efile(vals,vlat=vloc[1], vlon=vloc[0], 
+                       area=area, 
+                       emis_threshold = emis_threshold, 
+                       name = emit_name)
+            make_control(efile,self.wdir,'CONTROL.default',self.wdir,tag)
+            make_setup(self.wdir,'SETUP.default',self.wdir,suffix=tag)
+
+
+    def plot_outdat_ts(self, eii=None,unit='kg/s'):
+        # Ensemble.
         sns.set_style('whitegrid')
         fig = plt.figure(1)
         ax = fig.add_subplot(1,1,1)
-        ilist = self.read_outdat()
+        ilist = self.read_outdat(eii)
         clr = ['--k','--r','--b','--g','--c','--y','--m']
         jjj=0
         for iii, io in enumerate(ilist):
             df = io.get_emis()
-            self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clr[jjj])
+            self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clr[jjj],unit=unit)
             jjj+=1
             if jjj >= len(clr): jjj=0
         fig.autofmt_xdate()
-        plt.show()
+        #plt.show()
 
-    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True):
+    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
+                      remove_sources=None):
         for hrun in self.invlist: 
-            a,b,c, = hrun.make_tcm_mult(tiilist,remove_cols,remove_rows)
+            a,b,c, = hrun.make_tcm_mult(tiilist,remove_cols,remove_rows,remove_sources)
 
     def prepare_one_time(self,daterange):
         for iii, hrun in enumerate(self.invlist):
             #print(self.taglist[iii])
             hrun.prepare_one_time(daterange)    
 
-    def compare_plotsA(self,daterange=None,tii=None,ens=None):
+    def compare_plotsA(self,daterange=None,tii=None,eii=None,vloc=None):
         for iii, hrun in enumerate(self.invlist):
-            print(self.taglist[iii])
-            
-            hrun.compare_plotsA(daterange, tii)
+            print(tii, self.taglist[iii])
+            if not daterange: daterange = [datetime.datetime.now(), datetime.datetime.now()]
+            hrun.compare_plotsA(daterange=daterange, tii=tii,eii=eii)
+            if vloc:
+               plt.plot(vloc[0],vloc[1], 'y^', MarkerSize=20)
             plt.show()
 
 
@@ -495,7 +590,8 @@ class InverseAsh:
            iii = None
         return iii 
 
-    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True):
+    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
+                      remove_sources=None):
         # make the tcm for multiple time periods.
         tcmlist = []
         latlist = []
@@ -503,7 +599,8 @@ class InverseAsh:
         for tii in tiilist:
             print(self.cdump.time.values[tii])
             tcm, model_lat, model_lon, columns = \
-                 self.make_tcm(tii,remove_cols=False,remove_rows=remove_rows)
+                 self.make_tcm(tii,remove_cols=False,remove_rows=remove_rows,
+                               remove_sources=remove_sources)
             tcmlist.append(tcm)
             latlist.append(np.array(model_lat))
             lonlist.append(np.array(model_lon))
@@ -518,10 +615,10 @@ class InverseAsh:
            # very last column is obs. So start with second to last column.
            for nnn in np.arange(nmax-2,0,-1):
                test = t3[:,nnn]
-               # remove colum if it is all 0's.
                if np.all(test==0.0): iremove.append(nnn)
                else: break
            t3 = np.delete(t3,iremove,axis=1) 
+           self.tcm_columns = np.delete(self.tcm_columns,iremove,axis=0)
         self.tcm = t3
         self.tcm_lat = lat
         self.tcm_lon = lon
@@ -529,7 +626,15 @@ class InverseAsh:
         self.lonlist = np.array(lonlist)
         return t3, lat, lon
 
-    def make_tcm(self,tii, remove_cols=True, remove_rows=False):
+    def make_tcm(self,tii, remove_cols=True, remove_rows=False,
+                 remove_sources = None):
+        """
+        remove sources should be a list of  times / heights to remove
+        along the ensemble dimension.
+        Example.
+        ensemble dimension names are generally "102119_2880" (MonthDayHour_BottomHeight)
+        remove_sourecs = ['12880'] would remove all sources with _12880.
+        """
         # remove rows means remove rows with observations of 0 or nan.
 
         # header line indicates release times for each column.
@@ -558,6 +663,14 @@ class InverseAsh:
 
         # right now only one time period.
         cdump = self.cdump_hash[tii]
+
+        # remove some sources from consideration.
+        if remove_sources:
+           ekeep = cdump.ens.values
+           for yyy in remove_sources:
+               ekeep = [x for x in ekeep if yyy not in x]
+           cdump = cdump.sel(ens=ekeep)
+
         avg = self.volcat_avg_hash[tii] 
         cdump = cdump * self.concmult 
 
@@ -565,7 +678,8 @@ class InverseAsh:
 
         model = cdump.stack(pos=['y','x'])
         model = model.transpose('pos','ens')      
-
+        # some have nans? Find out why?
+        model = model.fillna(0)
         # remove columns which have no contribution at all. 
         if remove_cols:
             model = model.where(model>0)
@@ -610,7 +724,8 @@ class InverseAsh:
         return tcm, model_lat, model_lon, columns
 
     def plot_tcm(self):
-        plt.pcolormesh(np.log10(self.tcm),cmap='tab20')
+        cb = plt.pcolormesh(np.log10(self.tcm),cmap='tab20')
+        plt.colorbar(cb)
 
     def make_fake(self):
         tcm_real = self.tcm.copy()
@@ -672,6 +787,7 @@ class InverseAsh:
             valra.append(val[1])
         vals =  list(zip(datelist,htlist,valra))
         return vals
+
 
     def make_outdat_df(self,dfdat):
         #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
@@ -826,7 +942,14 @@ class InverseAsh:
             plt.show()
         return volcat 
 
-    def compare_plotsA(self, daterange,tii=None,levels=None):
+
+    def compare_plotsA(self, daterange,eii=None, tii=None,levels=None):
+        """
+        must input either daterange or tii.
+        if eii is None then sum along ensemble dimension showing coverage of all HYSPLIT runs.
+       
+        """
+
         fig = plt.figure(1,figsize=(10,5))
         ax1 = fig.add_subplot(1,1,1)
         if not tii:
@@ -834,8 +957,14 @@ class InverseAsh:
         print('tii',tii)
         cdump = self.cdump_hash[tii]
         volcat = self.volcat_avg_hash[tii] 
-        csum = cdump.sum(dim='ens')
+        if not eii:
+            csum = cdump.sum(dim='ens')
+        else:
+            csum = cdump.isel(ens=eii)
+            print(csum.ens.values)
+            print(self.sourcehash[str(csum.ens.values)]) 
         print(cdump.time)
+        #print(csum.coords)
         #volcat.plot.pcolormesh(x='longitude',y='latitude',levels=levels,ax=ax1)
         #cdump.sum(dim='ens').plot.contour(x='longitude',y='latitude',ax=ax2)
         try:
@@ -846,10 +975,11 @@ class InverseAsh:
             print('------------------')
         #plt.pcolormesh(csum.longitude, csum.latitude, csum,cmap='Reds',shading='nearest')
         #cb= csum.plot.pcolormesh(x='longitude',y='latitude',cmap='viridis',ax=ax2)
-        cb = plt.pcolormesh(volcat.x, volcat.y, np.log10(volcat),cmap='Blues',shading='nearest')
+        cb = plt.pcolormesh(volcat.x, volcat.y, np.log10(volcat),cmap='Blues',shading='nearest',alpha=0.5)
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=np.log10(volcat),s=2,cmap='Blues')
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=volcat.values,s=2,cmap='viridis',levels=levels)
-        #cb = plt.contour(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues')
+        #vals = np.log10(volcat)
+        #cb = plt.contour(volcat.x, volcat.y, vals.fillna(0),cmap='viridis',levels=[0,1,10,100])
         # plt.colorbar(cb)
         plt.tight_layout()
 
@@ -1122,7 +1252,8 @@ class InverseAsh:
 def make_control(efile,
                  tdir='./',
                  sname = 'CONTROL.default',
-                 wdir='./'
+                 wdir='./',
+                 suffix = 'emit'
                  ):
     control = hcontrol.HycsControl(fname=sname,working_directory=tdir)
     control.read()
@@ -1141,10 +1272,10 @@ def make_control(efile,
         species.rate = 0
         species.duration = 0
     for grid in control.concgrids:
-        grid.outfile = 'cdump.emit'
+        grid.outfile = 'cdump.{}'.format(suffix)
         grid.outdir = wdir
     # simulation start date same as emit-times 
-    control.rename('CONTROL.emit',wdir)
+    control.rename('CONTROL.{}'.format(suffix),wdir)
     control.add_sdate(stime)
     control.write()
     return control
@@ -1154,12 +1285,16 @@ def make_setup( tdir = './',
                 sname='SETUP.default',
                 wdir = './',
                 efilename = 'emit.txt',
+                suffix='emit'
                ):
     setup = hcontrol.NameList(sname,tdir)
     setup.read()
-    setup.add('efile',efilename)
-    setup.add('poutf','PARDUMP.emit')
-    setup.rename('SETUP.emit',wdir)
+    if suffix == 'emit':
+        setup.add('efile',efilename)
+    else:
+        setup.add('efile','{}_{}'.format(suffix,efilename))
+    setup.add('poutf','PARDUMP.{}'.format(suffix))
+    setup.rename('SETUP.{}'.format(suffix),wdir)
     setup.write()
     return setup
 
