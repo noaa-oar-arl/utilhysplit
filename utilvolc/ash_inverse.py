@@ -302,21 +302,33 @@ class InverseAshEns:
             name2.append('{}_{}'.format(tag,out_name2))
         return name1, name2 
 
-    def create_emit_output(self, outname, source='M4'):
+    def create_emit_output(self, outname, source='M4', overwrite=True, attrs=None):
         """
         creates netcdf file with outputs from the runs with the emit-times files.
         This can be fed into the AshEval class.
+        attrs : dictionary with any additional information to be added to global attributes.
         """
         blist = []
+        if os.path.isfile(outname):
+           if not overwrite: 
+              print('File already exists {}'.foramt(outname))
+              return -1
+           else: 
+              print('Overwriting file {}'.format(outname))
+              Helper.remove(outname)
+        newattr = {'sources': list(self.invlist[0].tcm_columns),
+                   'Method' : 'lbfgsb',
+                   'units' : 'g/m3'}
+        if attrs: newatrr.update(attr)
         for tag in self.taglist:
+            newattr['MetData'] = '{}'.format(tag)          
             blist.append((os.path.join(self.wdir,'cdump.{}'.format(tag)),
                          source, 
                          tag))
         dset = hysplit.combine_dataset(blist)
-        newattr = {'sources': self.tcm_columns}
         dset.attrs.update(newattr)
         dset.to_netcdf(outname) 
-                         
+        return dset         
 
     def run_hysplit(self):
         import time
@@ -495,7 +507,7 @@ class InverseAsh:
         self.get_cdump(tdir,fname,verbose)
         self.add_config_info(configdir,configfile)
 
-    def get_cdump(self,tdir,fname,verbose=False):
+    def get_cdump(self,tdir,fname,verbose=False,remove_source=True):
         # hysplit output. xarray. 
         cdump = xr.open_dataset(os.path.join(tdir,fname))
         if verbose: print('opened',tdir,fname)
@@ -503,7 +515,8 @@ class InverseAsh:
         temp = list(cdump.keys())
         cdump = cdump[temp[0]]
         # get rid of source dimension (for now)
-        cdump = cdump.isel(source=0)
+        if remove_source:
+            cdump = cdump.isel(source=0)
         self.cdump = cdump
 
     def add_config_info(self,configdir, configfile):
@@ -1148,12 +1161,24 @@ class InverseAsh:
        
         return grid1, grid2
 
+    def set_sampling_time(self,default='start'):
+        if 'time description' in self.cdump.attrs.keys():
+            if 'start' in self.cdump.attrs['time description']:
+               return 'start'
+            if 'end' in self.cdump.attrs['time description']:
+               return 'end'
+        else:
+            return default
+
     def prepare_one_time(self, daterange, das=None):
         vdir = self.vdir
         vid = self.vid
         tii = self.time_index(daterange[0])
-        # assume cdump has times at beginning of averaging time.
-        cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[0])) 
+        # check whether cdump time is start or end of sampling time.
+        if self.set_sampling_time() == 'start':
+           cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[0])) 
+        else:
+           cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[1])) 
         if not das:
            vset = self.get_volcat(daterange)
 
@@ -1215,9 +1240,6 @@ class InverseAsh:
         else:
             self.cdump_hash[tii] = cdump_a[a1:a2,b1:b2]
         self.volcat_avg_hash[tii] = avra[a1:a2,b1:b2]
-        #vra = vra[a1:a2,b1:b2]
-        #vra = vra.fillna(0)
-        #vmean = vra.mean(dim='time')
         return cdump_a, avra
 
     def compare_time_ave(self, daterange):
