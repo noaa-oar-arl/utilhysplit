@@ -1,5 +1,6 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import datetime
+import sys
 from os import path
 #import pytz
 import logging
@@ -55,6 +56,7 @@ class MetFileFinder:
    def set_ens_member(self, suffix):
        self.mstr = get_forecast_str(self.metid, self.forecast_directory)
        self.mstr += suffix
+       logger.info('Setting mstr for ensemble {}'.format(self.mstr)) 
 
    def find_forecast_cycle(self,dstart,duration,cycle):
        """
@@ -98,7 +100,7 @@ class MetFileFinder:
        return files    
 
    def find(self, dstart, duration):
-       self.mstr = get_forecast_str(self.metid, self.archive_directory)
+       #self.mstr = get_forecast_str(self.metid, self.archive_directory)
        metfiles = self.find_forecast(dstart,duration)
        if not metfiles:
            logger.info('Looking in archive for met files')
@@ -142,7 +144,7 @@ class MetFileFinder:
           if cycle_time *iii > forecast_length: break
           iii += 1
        if not files:
-          logger.warning('No meteorological files found')
+          logger.warning('No meteorological files found {}'.format(mstr))
           return files
        files = weed_files(files,dstart,duration,self.metid,self.mstr)
        return process(files)   
@@ -209,7 +211,7 @@ def get_forecast_str(metid, FCTDIR='/pub/forecast'):
         met = 'gfs' 
     #metnamefinal = 'No data found'
     #        metime = dtm
-    metdir = FCTDIR + '/%Y%m%d/'
+    metdir = path.join(FCTDIR , '%Y%m%d/')
     metfilename = 'hysplit.t%Hz.' + met 
     if 'gfs' in metid.lower():
         metfilename += 'f'
@@ -389,8 +391,8 @@ class MetFiles:
             #if not path.isfile(temp):
             #    temp = temp.lower()
             if not path.isfile(temp):
-                #logger.info("WARNING " +  temp + " meteorological file does not exist")
-                pass
+                logger.info("WARNING " +  temp + " meteorological file does not exist")
+                #pass
                 #logger.debug("WARNING " +  temp + " meteorological file does not exist")
                 #temp = self.altmet.makefilelist(edate, self.altmet.mdt)
                 #print("REPLACE with", temp)
