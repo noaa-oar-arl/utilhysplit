@@ -765,28 +765,38 @@ def get_pc_longitude(dset, vname=None, clip=True):
 
 
 def get_height(dset, vname=None, clip=True):
-    """Returns array with retrieved height of the highest layer of ash."""
-    """Default units are km above sea-level"""
+    """Returns array with retrieved height of the highest layer of ash.
+    Default units are km above sea-level"""
     checklist = ['ash_cth', 'ash_cloud_height']
     return check_names(dset, vname, checklist, clip=clip)
 
 
 def get_radius(dset, vname=None, clip=True):
-    """Returns 2d array of ash effective radius"""
-    """Default units are micrometer"""
+    """Returns 2d array of ash effective radius
+    Default units are micrometer"""
     checklist = ['ash_r_eff', 'effective_radius_of_ash']
     return check_names(dset, vname, checklist, clip=clip)
 
 
 def get_total_mass(dset):
     # unit is in Tg.
+    """Units are in Tg"""
     return dset.ash_mass_loading_total_mass.values[0]
 
 
 def get_mass(dset, vname=None, clip=True):
-    """Returns 2d array of ash mass loading"""
-    """Default units are grams / meter^2"""
+    """Returns 2d array of ash mass loading
+    Default units are grams / meter^2"""
     checklist = ['ash_mass', 'ash_mass_loading']
+    return check_names(dset, vname, checklist, clip=clip)
+
+
+def get_ashdet(dset, vname=None, clip=True):
+    """Returns 2d array of detected ash
+    Values > 0.0 = detected ash
+    Values < 0.0 = no detected ash
+    Can be used to determine if ash was detected, but ash mass or ash height was not"""
+    checklist = ['ash_spectral_signature_strength']
     return check_names(dset, vname, checklist, clip=clip)
 
 
@@ -890,6 +900,26 @@ def matchvals(pclat, pclon, massra, height):
     return tlist
 
 
+def matchvals2(pclat, pclon, ashdet):
+    # pclat : xarray DataArray
+    # pclon : xarray DataArray
+    # ashdet : xarray DataArray
+    # used in correct_pc
+    # returns 1D list of tuples of values in the 3 DataArrays
+    pclon = pclon.values.flatten()
+    pclat = pclat.values.flatten()
+    ash = ashdet.values.flatten()
+    tlist = list(zip(pclat, pclon, ash))
+    # only return tuples in which mass has a valid value
+    if '_FillValue' in ashdet.attrs:
+        fill = ashdet.attrs['_FillValue']
+        tlist = [x for x in tlist if x[2] != fill]
+    else:
+        # get rid of Nans.
+        tlist = [x for x in tlist if ~np.isnan(x[2])]
+    return tlist
+
+
 def find_iii(tlist, match):
     for iii, val in enumerate(tlist):
         if val == match:
@@ -907,13 +937,16 @@ def correct_pc(dset):
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
     effrad = get_radius(dset, clip=False)
+    ashdet = get_ashdet(dset, clip=False)
     newmass = xr.zeros_like(mass.isel(time=0))
     newhgt = xr.zeros_like(height.isel(time=0))
     newrad = xr.zeros_like(effrad.isel(time=0))
+    newashdet = xr.zeros_like(ashdet.isel(time=0))
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
-    tlist = np.array(matchvals(pclon, pclat, mass, height))
+    #tlist = np.array(matchvals(pclon, pclat, mass, height))
+    tlist = np.array(matchvals2(pclon, pclat, ashdet))
 
     indexlist = []
     prev_point = 0
