@@ -356,11 +356,12 @@ def average_volcat(das, cdump, convert_nans=True):
 
 
 def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True,
-                    decode_times=True,verbose=False):
+                    decode_times=True,verbose=False, include_last=True):
     """
     returns list of data-arrays with volcat data.
     """
-    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2,verbose=verbose)
+    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2,
+                        verbose=verbose,include_last=include_last)
     das = []
     for iii in tlist:
         if not iii.pc_corrected:
@@ -369,7 +370,6 @@ def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=
                                     mask_and_scale=mask_and_scale,
                                     decode_times=decode_times))
         else:
-            print('use xr open dataset', tdir)
             das.append(xr.open_dataset(os.path.join(tdir, iii.fname)))
     return das
 
@@ -443,13 +443,17 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
 
 
 def find_volcat(tdir, vid=None, daterange=None,
-                return_val=2, verbose=False):
+                return_val=2, verbose=False, include_last=False):
     """
     tdir : str
     daterange : [datetime, datetime] or None
     Locates files in tdir which follow the volcat naming
     convention as defined in VolcatName class.
     If a daterange is defined will return only files
+
+    include_last : boolean
+               True - includes volcat data with date = daterange[1]
+               False - only include data with date < daterange[1]
 
     return_val : integer
                1 - returns dictionary
@@ -475,8 +479,13 @@ def find_volcat(tdir, vid=None, daterange=None,
             if verbose:
                 print('Not VOLCAT filename {}'.format(fln))
             continue
-        if daterange:
+        if daterange and include_last:
             if vn.date < daterange[0] or vn.date > daterange[1]:
+                if verbose: print('date not in range', vn.date, daterange[0], daterange[1])
+                continue
+        elif daterange and not include_last:
+            if vn.date < daterange[0] or vn.date >= daterange[1]:
+                if verbose: print('date not in range', vn.date, daterange[0], daterange[1])
                 continue
         if vid and vn.vhash['volcano id'] != vid:
             continue
@@ -949,6 +958,9 @@ def correct_pc(dset):
                        'feature_area': dset.feature_area,
                        'feature_age': dset.feature_age,
                        'feature_id': dset.feature_id})
+    dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
+    dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
+    dnew.effective_radius_of_ash.attrs.update(dset.effective_radius_of_ash.attrs)
     dnew.time.attrs.update({'standard_name': 'time'})
     dnew = dnew.assign_attrs(dset.attrs)
     return dnew
