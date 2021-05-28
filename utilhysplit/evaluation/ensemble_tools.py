@@ -14,7 +14,9 @@ from utilhysplit.evaluation.statmain import cdf
 """
 FUNCTIONS
 The functions in this file are for
-manipulating concentration xarray objects which have dimesions of lat,lon,z,time,ens,source
+manipulating concentration xarray objects which have dimensions of lat,lon,z,time,ens,source
+manipulating massloading   xarray objects which have dimensions of lat,lon,time,ens,source
+
 
 maxconc   : returns maximum concentration along a dimension(x,y, or z)
 topheight : returns height of level
@@ -39,7 +41,6 @@ maketestra :
 exampleATL
 """
 
-
 def listvals(dra):
     """
     returns 1d list of values in the data-array
@@ -48,33 +49,51 @@ def listvals(dra):
     vshape = np.array(vals.shape)
     return vals.reshape(np.prod(vshape))
 
-
-def ens_cdf(indra, enslist=None, sourcelist=None, timelist=None, threshold=0, plot=True):
+def ens_cdf(indra, 
+            enslist=None, 
+            sourcelist=None, 
+            timelist=None, 
+            threshold=0, 
+            plot=True,
+            pixel_match=False):
     """
     produces plots of cumulative distribution functions.
-    dra : xarray DataArray produced by combine_dataset function or hysp_massload function..
+    indra : xarray DataArray produced by combine_dataset function or hysp_massload function..
     timelist : list of times in the time coordinate to produce plots for
     threshold : float : produce CDF for values > threshold.
+    pixel_match : not working yet.
+    Returns:
+    cdfhash : dictionary. key is the time. value is a tuple of the CDF (x,y)
     """
-    # select sources of interest and stack.
+    # select sources of interest and stack
+    
+    if 'source' in indra.dims:
+        sourcekey = True
+    else:
+        sourcekey = False     
     dra = choose_and_stack(indra, enslist, sourcelist)
     cdfhash = {}
-    for iii, ens in enumerate(dra.ensemble.values):
-        subdra = dra.sel(ensemble=ens)
+    for iii, ens in enumerate(dra.ens.values):
+        subdra = dra.sel(ens=ens)
         if not isinstance(timelist, list) and not isinstance(timelist, np.ndarray):
-            timelist = [subdra.time.values[0]]
+            timelist = subdra.time.values
         for tm in timelist:
-            print(tm, ens)
             tvals = subdra.sel(time=tm)
             # create cdf from values above threshold
             sdata, y = cdf([x for x in listvals(tvals) if x > threshold])
-            cdfhash[(tm, ens[0], ens[1])] = (sdata, y)
+            if sourcekey:
+               key = (tm, ens[0], ens[1])
+            else:
+               key = (tm, ens)
+            cdfhash[key] = (sdata, y)
     if plot:
         plot_cdf(cdfhash)
     return cdfhash
 
-
 def plot_cdf(cdfhash, fignum=1):
+    """
+    Plots output from ens_cdf
+    """
     fig = plt.figure(1)
     ax = fig.add_subplot(1, 1, 1)
     clrs = ['r', 'y', 'g', 'c', 'b', 'k']
@@ -257,7 +276,7 @@ def choose_and_stack(indra, enslist=None, sourcelist=None):
     """
     Inputs:
     indra : xarray Data Array such as produced by combine_dataset or hysp_massload
-
+    enslist: numpy ndarray, list, or str of values in the 'ens' dimension.
     Returns:
     dra : xarray Data Array.
           "ens" and "source" dimension have been combined into one dimension. "ensemble"
@@ -270,13 +289,12 @@ def choose_and_stack(indra, enslist=None, sourcelist=None):
     if 'z' not in dra.coords:
         dra = dra.expand_dims('z')
 
-    if enslist:
-        dra = dra.isel(ens=enslist)
+    if isinstance(enslist, np.ndarray) or isinstance(enslist, list) or isinstance(enslist, str):
+        dra = dra.sel(ens=enslist)
 
-    if sourcelist:
-        dra = dra.isel(source=sourcelist)
-
-    dra = dra.stack(ensemble=("ens", "source"))
+    if 'source' in dra.coords and sourcelist:
+        dra = dra.sel(source=sourcelist)
+        dra = dra.stack(ens=("ens", "source"))
     return dra
 
 
@@ -325,11 +343,9 @@ def APLra(indra, enslist=None, sourcelist=None, level=None):
     newra = newra.assign_coords(percent_level=('index', percents))
     return newra
 
-
 def volcATL(indra):
     newra = indra.MER * indra
     return ATL(indra)
-
 
 def ATL(indra, enslist=None, sourcelist=None,
         thresh=0.2, level=None, norm=False, weights=1):
@@ -369,11 +385,11 @@ def ATL(indra, enslist=None, sourcelist=None,
         dra2 = dra2.where(dra2 < thresh)
         dra2 = dra2.fillna(1)
         # modify for the weights
-        # each level in the 'ensemble' dimension would
+        # each level in the 'ens' dimension would
         # need to be multiplied by the individual weight.
         # dra2 = dra2 * weights.
         # ensemble members were above threshold at each location.
-        dra2 = dra2.sum(dim=["ensemble"])
+        dra2 = dra2.sum(dim=["ens"])
         if iii == 0:
             rtot = dra2
             rtot.expand_dims("z")
