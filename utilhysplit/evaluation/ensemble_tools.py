@@ -10,6 +10,7 @@ import seaborn as sns
 import os
 import matplotlib.pyplot as plt
 from utilhysplit.evaluation.statmain import cdf
+from utilhysplit.evaluation.statmain import pixel_matched_cdf
 
 """
 FUNCTIONS
@@ -55,13 +56,15 @@ def ens_cdf(indra,
             timelist=None, 
             threshold=0, 
             plot=True,
-            pixel_match=False):
+            pixel_match=None):
     """
     produces plots of cumulative distribution functions.
     indra : xarray DataArray produced by combine_dataset function or hysp_massload function..
     timelist : list of times in the time coordinate to produce plots for
     threshold : float : produce CDF for values > threshold.
-    pixel_match : not working yet.
+    pixel_match : Number of pixels in observation.
+                  if not None then will use this instead of threshold.
+                  Cut length of modeled data to same length as observed. 
     Returns:
     cdfhash : dictionary. key is the time. value is a tuple of the CDF (x,y)
     """
@@ -73,6 +76,9 @@ def ens_cdf(indra,
         sourcekey = False     
     dra = choose_and_stack(indra, enslist, sourcelist)
     cdfhash = {}
+    if plot:
+        fig = plt.figure(1)
+        ax = fig.add_subplot(1, 1, 1)
     for iii, ens in enumerate(dra.ens.values):
         subdra = dra.sel(ens=ens)
         if not isinstance(timelist, list) and not isinstance(timelist, np.ndarray):
@@ -80,22 +86,23 @@ def ens_cdf(indra,
         for tm in timelist:
             tvals = subdra.sel(time=tm)
             # create cdf from values above threshold
-            sdata, y = cdf([x for x in listvals(tvals) if x > threshold])
+            if not pixel_match:
+                sdata, y = cdf([x for x in listvals(tvals) if x > threshold])
+            else:
+                sdata, y = pixel_matched_cdf(listvals(tvals),pixel_match)
             if sourcekey:
                key = (tm, ens[0], ens[1])
             else:
                key = (tm, ens)
             cdfhash[key] = (sdata, y)
     if plot:
-        plot_cdf(cdfhash)
+        plot_cdf(ax, cdfhash)
     return cdfhash
 
-def plot_cdf(cdfhash, fignum=1):
+def plot_cdf(ax, cdfhash, fignum=1):
     """
     Plots output from ens_cdf
     """
-    fig = plt.figure(1)
-    ax = fig.add_subplot(1, 1, 1)
     clrs = ['r', 'y', 'g', 'c', 'b', 'k']
     for iii, key in enumerate(cdfhash.keys()):
         if iii > len(clrs)-1:
