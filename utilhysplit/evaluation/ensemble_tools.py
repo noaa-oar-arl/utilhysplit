@@ -373,30 +373,55 @@ def ATL(indra, enslist=None, sourcelist=None,
             if False return number of members.
      """
     dra = indra.copy()
-    dra = choose_and_stack(indra, enslist, sourcelist)
+
+    # handle whether using 'ens' dimension, 'source' dimension or both.
+    dim = 'ens'
+
+    if "source" in dra.dims and not sourcelist:
+        sourcelist = dra.source.values 
+
+    if "ens" in dra.dims and not sourcelist:
+        enslist = dra.ens.values 
+
+    if "source" in dra.dims and 'ens' in dra.dims:
+        dra = dra.sel(ens=enslist)
+        dra = dra.sel(source=sourcelist)
+        dra = dra.stack(ens=("ens", "source"))
+    elif "source" in dra.dims:
+        dra = dra.sel(source=sourcelist)
+        dim = 'source'
+    elif "ens" in dra.dims:
+        dra = dra.sel(ens=enslist)
+
+    # handle whether there are vertical levels or not.
     if isinstance(level, int):
         level = [level]
-    if not level:
+    if not level and 'z' in dra.dims:
         mlen = len(dra.z.values)
         level = np.arange(0, mlen)
+    if not 'z' in dra.dims:
+        level = [0]
+
     # not sure if this loop over the levels is needed.
     for iii, lev in enumerate(level):
-        # dra2 = dra.sel(ens=enslist)
-        dra2 = dra.isel(z=lev)
-        if "source" in dra2.coords:
-            dra2 = dra2.isel(source=source)
+        dra2 = dra.copy()
+        if 'z' in dra.dims:
+            dra2 = dra2.isel(z=lev)
+
         # place zeros where it is below threshold
         dra2 = dra2.where(dra2 >= thresh)
         dra2 = dra2.fillna(0)
+
         # place ones where it is above threshold
         dra2 = dra2.where(dra2 < thresh)
         dra2 = dra2.fillna(1)
-        # modify for the weights
+
+        # TO DO modify for the weights
         # each level in the 'ens' dimension would
         # need to be multiplied by the individual weight.
         # dra2 = dra2 * weights.
         # ensemble members were above threshold at each location.
-        dra2 = dra2.sum(dim=["ens"])
+        dra2 = dra2.sum(dim=[dim])
         if iii == 0:
             rtot = dra2
             rtot.expand_dims("z")
