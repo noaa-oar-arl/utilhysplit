@@ -318,31 +318,34 @@ def APL(indra, problev=50, enslist=None, sourcelist=None):
 
 def APLra(indra, enslist=None, sourcelist=None):
     """
-    indra: xarray data array. currently must not have dimensions of time.
+    Applied Percentile Level
 
+    indra: xr dataarray produced by combine_dataset or by hysp_massload
+            it must have 'ens' dimension, 'source' dimension or both.
+            time and z dimensions are optional.
+ 
+    enslist : list of values to use for 'ens' coordinate
+    sourcelist : list of values to use for 'source' coordinate
 
     Returns:
            xarray data array sorted along the 'ensemble' dimension.
-           "ensemble" dimension is replaced by "percent_level" dimension.
+          "ens" and/or 'source'  dimension is replaced by "percent_level" dimension
+           and 'index' coordinate.
     """
-    # Applied percentile level
-    dra, dim = preprocess(indra)
-    dra2 = dra.copy()
-    # change this when modifying for concentrations.
-    #dra2 = dra.isel(z=0)
-    # TODO not sure what correct value for transpose_coords should be?
-    #dra2 = dra.transpose(dim, 'y', 'x', transpose_coords=False)
+    # combine 'source' and 'ens' dimensions if applicable.
+    dra2, dim = preprocess(indra)
     coords = dra2.coords
-    coords2 = {'latitude': coords['latitude'],
-               'longitude': coords['longitude'],
-               'x': coords['x'],
-               'y': coords['y']}
+    coords2 = dict(coords)
+    # remove 'ens' from the coordinate dictionary.
+    coords2.pop('ens')
     dims = list(dra2.dims)
     # find which dimension is the 'ens' dimension
     dii = dims.index(dim)
-    dvalues = dra2.values.copy()
     # sort along the ensemble axis.
     # sort is an inplace operation. returns an empty array.
+    # this type of sort only available on numpy array.
+    # does not work in xarray dataarray.
+    dvalues = dra2.values.copy()
     dvalues.sort(axis=dii)
     # instead of an 'ensemble' dimension, now have an 'index' dimension.
     dims[dii] = 'index'
