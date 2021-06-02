@@ -305,18 +305,18 @@ def choose_and_stack(indra, enslist=None, sourcelist=None):
     return dra
 
 
-def APL(indra, problev=50, enslist=None, sourcelist=None, level=None):
-    newra = APLra(indra, enslist, sourcelist, level)
+def APL(indra, problev=50, enslist=None, sourcelist=None):
+    newra = APLra(indra, enslist, sourcelist)
     vpi = np.where(newra.percent_level.values <= problev)
     # if pick value lower than one available then just provide lowest level.
-    if not vpi[0]:
-        pindex = 0
-    else:
+    try:
         pindex = vpi[0][-1]
+    except:
+        pindex=0
     return newra.sel(index=pindex)
 
 
-def APLra(indra, enslist=None, sourcelist=None, level=None):
+def APLra(indra, enslist=None, sourcelist=None):
     """
     indra: xarray data array. currently must not have dimensions of time.
 
@@ -327,24 +327,26 @@ def APLra(indra, enslist=None, sourcelist=None, level=None):
     """
     # Applied percentile level
     dra, dim = preprocess(indra)
-
+    dra2 = dra.copy()
     # change this when modifying for concentrations.
-    dra2 = dra.isel(z=0)
+    #dra2 = dra.isel(z=0)
     # TODO not sure what correct value for transpose_coords should be?
-    dra2 = dra2.transpose('ensemble', 'y', 'x', transpose_coords=False)
+    #dra2 = dra.transpose(dim, 'y', 'x', transpose_coords=False)
     coords = dra2.coords
     coords2 = {'latitude': coords['latitude'],
                'longitude': coords['longitude'],
                'x': coords['x'],
                'y': coords['y']}
-    dims = dra2.dims
+    dims = list(dra2.dims)
+    # find which dimension is the 'ens' dimension
+    dii = dims.index(dim)
     dvalues = dra2.values.copy()
     # sort along the ensemble axis.
     # sort is an inplace operation. returns an empty array.
-    # TODO: check that the ensemble axis is the first one.
-    dvalues.sort(axis=0)
+    dvalues.sort(axis=dii)
     # instead of an 'ensemble' dimension, now have an 'index' dimension.
-    newra = xr.DataArray(dvalues, dims=['index', dims[1], dims[2]], coords=coords2)
+    dims[dii] = 'index'
+    newra = xr.DataArray(dvalues, dims=dims, coords=coords2)
     percents = 100*(newra.index.values+1) / len(newra.index.values)
     newra = newra.assign_coords(percent_level=('index', percents))
     return newra
@@ -396,14 +398,20 @@ def ATL(indra, enslist=None, sourcelist=None,
      Applied Threshold Level (also ensemble frequency of exceedance).
 
      indra: xr dataarray produced by combine_dataset or by hysp_massload
-     enslist : list of values to use fo 'ens' coordinate
+            it must have 'ens' dimension, 'source' dimension or both.
+            time and z dimensions are optional.
+ 
+     enslist : list of values to use for 'ens' coordinate
      sourcelist : list of values to use for 'source' coordinate
+
+     thresh : int or float. If 0 then use > for test. otherwise use >=.
 
      weights : numpy array of same length as enslist + sourcelist containing weight for
                each member.
 
      Returns array with number of ensemble members above
      given threshold at each location.
+     dimensions will be same as input except no 'ens' or 'source' dimension.
 
      norm : boolean
             if True return percentage of members.
