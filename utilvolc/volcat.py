@@ -176,6 +176,9 @@ def regrid_volcat(das, cdump):
     mlist = []
     hlist = []
     total_mass = []
+    feature_area  = []
+    feature_id = []
+
     for iii, dset in enumerate(das):
         print('time in loop', dset.time.values)
         near_mass = cdump.monet.remap_nearest(
@@ -187,17 +190,26 @@ def regrid_volcat(das, cdump):
         mlist.append(near_mass)
         hlist.append(near_height)
         total_mass.append(dset.ash_mass_loading_total_mass)
+        feature_area.append(dset.feature_area)
     newmass = xr.concat(mlist, dim='time')
     newhgt = xr.concat(hlist, dim='time')
     totmass = xr.concat(total_mass, dim='time')
+    farea = xr.concat(feature_area, dim='time')
     dnew = xr.Dataset({'ash_mass_loading': newmass,
                        'ash_cloud_height': newhgt,
                        # 'effective_radius_of_ash': newrad,
-                       'ash_mass_loading_total_mass': totmass})
+                       'ash_mass_loading_total_mass': totmass,
+                       'feature_area': farea})
     # 'feature_area': dset.feature_area,
     # 'feature_age': dset.feature_age,
     # 'feature_id': dset.feature_id})
+    # add global attributes.
+    dnew = dnew.assign_attrs(dset.attrs)
+    dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
+    dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.time.attrs.update({'standard_name': 'time'})
+    dnew.latitude.attrs.update({'standard_name': 'latitude'})
+    dnew.longitude.attrs.update({'standard_name': 'longitude'})
     dnew.attrs.update({'Regrid Method': 'remap_nearest'})
     return dnew
 
@@ -238,6 +250,8 @@ def regrid_volcat2(das, cdump):
     # 'feature_age': dset.feature_age,
     # 'feature_id': dset.feature_id})
     dnew.time.attrs.update({'standard_name': 'time'})
+    dnew.latitude.attrs.update({'standard_name': 'latitude'})
+    dnew.longitude.attrs.update({'standard_name': 'longitude'})
     dnew.attrs.update({'Regrid Method': 'remap_xesmf bilinear'})
     return dnew
 
@@ -995,6 +1009,8 @@ def correct_pc(dset):
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.effective_radius_of_ash.attrs.update(dset.effective_radius_of_ash.attrs)
     dnew.time.attrs.update({'standard_name': 'time'})
+    dnew.latitude.attrs.update({'standard_name': 'latitude'})
+    dnew.longitude.attrs.update({'standard_name': 'longitude'})
     dnew = dnew.assign_attrs(dset.attrs)
     return dnew
 
