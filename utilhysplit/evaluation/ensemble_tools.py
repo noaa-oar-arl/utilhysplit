@@ -222,20 +222,35 @@ def ens_cdf(
     if plot:
         fig = plt.figure(1)
         ax = fig.add_subplot(1, 1, 1)
+    
+    # loop through ens/source members
     for ens in dra[dim].values:
         if dim == "ens":
             subdra = dra.sel(ens=ens)
         elif dim == "source":
             subdra = dra.sel(source=ens)
-        if not isinstance(timelist, (list, np.ndarray)):
+
+        # check if time is a dimension.
+        if not isinstance(timelist, (list, np.ndarray)) and 'time' in subdra.dims:
             timelist = subdra.time.values
+        else:
+            timelist = [0]
+
+        # loop through times. If no time, then just go through once.
         for tm in timelist:
-            tvals = subdra.sel(time=tm)
+            # check if time is a dimension.
+            if 'time' in subdra.dims:
+                tvals = subdra.sel(time=tm)
+            else:
+                tvals = subdra 
             # create cdf from values above threshold
             if not pixel_match:
                 sdata, y = cdf([x for x in listvals(tvals) if x > threshold])
+            # create cdf from highest pixel_match values.
             else:
                 sdata, y = pixel_matched_cdf(listvals(tvals), pixel_match)
+
+            # create the key for the dictionary.
             if sourcekey:
                 key = (tm, ens[0], ens[1])
             else:
@@ -279,7 +294,7 @@ def make_ATL_hysp(xra, variable="p006", threshold=0.0, MER=None):
     xra2 = xra2.sum(dim="z")  # Summing along z makes the units g/m^2
     # May want to add loops for time and ensemble dimension in the future
     # MER must used for two ensemble members
-    if MER == None:
+    if not MER:
         MER = xra.attrs[
             "Fine Ash MER"
         ]  # Allowing for MER input - default is Mastin equation MER
