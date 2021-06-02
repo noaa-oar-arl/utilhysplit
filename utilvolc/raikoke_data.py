@@ -5,7 +5,7 @@ import numpy.ma as ma
 import pandas as pd
 from utilvolc import volcat
 import matplotlib.pyplot as plt
-from utilhysplit.evaluation.ensemble_tools import ashcmap
+from utilhysplit.evaluation.ensemble_plotting import ashcmap
 import utilhysplit.evaluation.ensemble_tools as et
 from matplotlib.colors import BoundaryNorm
 
