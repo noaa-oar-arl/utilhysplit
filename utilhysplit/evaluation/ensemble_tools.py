@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import xarray as xr
 import numpy as np
 from utilhysplit.evaluation.statmain import cdf
@@ -81,8 +82,9 @@ def APLra(indra, enslist=None, sourcelist=None):
 
 
 def volcATL(indra):
+    # 2021 Jun 2 amc was returning ATL(indra) instead of ATL(newra)
     newra = indra.MER * indra
-    return ATL(indra)
+    return ATL(newra)
 
 
 def preprocess(indra, enslist=None, sourcelist=None):
@@ -165,7 +167,7 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=False, weights=None
     else:
         dra2 = xr.where(dra >= thresh, 1, 0)
 
-    if isinstance(weights, np.ndarray) or isinstance(weights, list):
+    if isinstance(weights, (np.ndarray, list)):
         if len(weights) != len(dra2[dim].values):
             print("WARNING : weights do not coorespond to values")
             print("weights :", weights)
@@ -215,14 +217,17 @@ def ens_cdf(
         sourcekey = True
     else:
         sourcekey = False
-    dra = choose_and_stack(indra, enslist, sourcelist)
+    dra, dim = preprocess(indra, enslist, sourcelist)
     cdfhash = {}
     if plot:
         fig = plt.figure(1)
         ax = fig.add_subplot(1, 1, 1)
-    for iii, ens in enumerate(dra.ens.values):
-        subdra = dra.sel(ens=ens)
-        if not isinstance(timelist, list) and not isinstance(timelist, np.ndarray):
+    for ens in dra[dim].values:
+        if dim == "ens":
+            subdra = dra.sel(ens=ens)
+        elif dim == "source":
+            subdra = dra.sel(source=ens)
+        if not isinstance(timelist, (list, np.ndarray)):
             timelist = subdra.time.values
         for tm in timelist:
             tvals = subdra.sel(time=tm)
@@ -241,7 +246,7 @@ def ens_cdf(
     return cdfhash
 
 
-def plot_cdf(ax, cdfhash, fignum=1):
+def plot_cdf(ax1, cdfhash):
     """
     Plots output from ens_cdf
     """
@@ -249,9 +254,9 @@ def plot_cdf(ax, cdfhash, fignum=1):
     for iii, key in enumerate(cdfhash.keys()):
         if iii > len(clrs) - 1:
             clrs.extend(clrs)
-        ax.step(cdfhash[key][0], cdfhash[key][1], "-" + clrs[iii])
-    ax.set_xscale("log")
-    return ax
+        ax1.step(cdfhash[key][0], cdfhash[key][1], "-" + clrs[iii])
+    ax1.set_xscale("log")
+    return ax1
 
 
 def make_ATL_hysp(xra, variable="p006", threshold=0.0, MER=None):
