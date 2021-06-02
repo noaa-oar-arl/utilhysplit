@@ -947,20 +947,23 @@ def correct_pc(dset):
     to the parallax corrected values. Results in dataset with mass and height shifted
     to parallax corrected positions.
     """
+    # 06/02/2021 amc commented out use of the ashdet field. 
 
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
     effrad = get_radius(dset, clip=False)
-    ashdet = get_ashdet(dset, clip=False)
+    #ashdet = get_ashdet(dset, clip=False)
+
     newmass = xr.zeros_like(mass.isel(time=0))
     newhgt = xr.zeros_like(height.isel(time=0))
     newrad = xr.zeros_like(effrad.isel(time=0))
-    newashdet = xr.zeros_like(ashdet.isel(time=0))
+    #newashdet = xr.zeros_like(ashdet.isel(time=0))
+
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
-    #tlist = np.array(matchvals(pclon, pclat, mass, height))
-    tlist = np.array(matchvals2(pclon, pclat, ashdet))
+    tlist = np.array(matchvals(pclon, pclat, mass, height))
+    #tlist = np.array(matchvals2(pclon, pclat, ashdet))
 
     indexlist = []
     prev_point = 0
