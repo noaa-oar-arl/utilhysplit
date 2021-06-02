@@ -326,9 +326,8 @@ def APLra(indra, enslist=None, sourcelist=None, level=None):
            "ensemble" dimension is replaced by "percent_level" dimension.
     """
     # Applied percentile level
-    # currently only work for mass loading.
-    dra = indra.copy()
-    dra = choose_and_stack(indra, enslist, sourcelist)
+    dra, dim = preprocess(indra)
+
     # change this when modifying for concentrations.
     dra2 = dra.isel(z=0)
     # TODO not sure what correct value for transpose_coords should be?
@@ -354,89 +353,91 @@ def volcATL(indra):
     newra = indra.MER * indra
     return ATL(indra)
 
+
+def preprocess(indra,enslist=None,sourcelist=None):
+    dra = indra.copy()
+
+    # handle whether using 'ens' dimension, 'source' dimension or both.
+    dim = 'ens'
+
+    # if lists are an np.ndarray then testing them with not
+    # returns an error.
+    if isinstance(sourcelist, np.ndarray):
+        pass
+    elif "source" in dra.dims and not sourcelist:
+        sourcelist = dra.source.values 
+
+    if isinstance(enslist, np.ndarray):
+        pass
+    elif "ens" in dra.dims and not enslist:
+        enslist = dra.ens.values 
+
+
+    if "source" in dra.dims and 'ens' in dra.dims:
+        dra = dra.sel(ens=enslist)
+        dra = dra.sel(source=sourcelist)
+        dra = dra.stack(ens=("ens", "source"))
+
+    elif "source" in dra.dims:
+        dra = dra.sel(source=sourcelist)
+        dim = 'source'
+    elif "ens" in dra.dims:
+        dra = dra.sel(ens=enslist)
+    else:
+        print('Warning: could not find source or ens dimension')
+        dim = None
+    return dra, dim
+
+
+
 def ATL(indra, enslist=None, sourcelist=None,
-        thresh=0.2, level=None, norm=False, weights=1):
+        thresh=0,  norm=False, weights=None):
     """
      Applied Threshold Level (also ensemble frequency of exceedance).
 
      indra: xr dataarray produced by combine_dataset or by hysp_massload
      enslist : list of values to use fo 'ens' coordinate
      sourcelist : list of values to use for 'source' coordinate
-     level : integer or list of integers of vertical levels to use.
 
-     # weights need to add up to 1.
+     weights : numpy array of same length as enslist + sourcelist containing weight for
+               each member.
 
      Returns array with number of ensemble members above
      given threshold at each location.
+
      norm : boolean
             if True return percentage of members.
             if False return number of members.
+            using norm is same as applying uniform weighting.
+            should not be used with weights.
+
      """
-    dra = indra.copy()
-
     # handle whether using 'ens' dimension, 'source' dimension or both.
-    dim = 'ens'
+    dra, dim = preprocess(indra,enslist,sourcelist)
+    
+    if thresh == 0: 
+        dra2 = xr.where(dra>thresh,1,0)
+    else: 
+        dra2 = xr.where(dra>=thresh,1,0)
 
-    if "source" in dra.dims and not sourcelist:
-        sourcelist = dra.source.values 
-
-    if "ens" in dra.dims and not sourcelist:
-        enslist = dra.ens.values 
-
-    if "source" in dra.dims and 'ens' in dra.dims:
-        dra = dra.sel(ens=enslist)
-        dra = dra.sel(source=sourcelist)
-        dra = dra.stack(ens=("ens", "source"))
-    elif "source" in dra.dims:
-        dra = dra.sel(source=sourcelist)
-        dim = 'source'
-    elif "ens" in dra.dims:
-        dra = dra.sel(ens=enslist)
-
-    # handle whether there are vertical levels or not.
-    if isinstance(level, int):
-        level = [level]
-    if not level and 'z' in dra.dims:
-        mlen = len(dra.z.values)
-        level = np.arange(0, mlen)
-    if not 'z' in dra.dims:
-        level = [0]
-
-    # not sure if this loop over the levels is needed.
-    for iii, lev in enumerate(level):
-        dra2 = dra.copy()
-        if 'z' in dra.dims:
-            dra2 = dra2.isel(z=lev)
-
-        # place zeros where it is below threshold
-        dra2 = dra2.where(dra2 >= thresh)
-        dra2 = dra2.fillna(0)
-
-        # place ones where it is above threshold
-        dra2 = dra2.where(dra2 < thresh)
-        dra2 = dra2.fillna(1)
-
-        # TO DO modify for the weights
-        # each level in the 'ens' dimension would
-        # need to be multiplied by the individual weight.
-        # dra2 = dra2 * weights.
-        # ensemble members were above threshold at each location.
-        dra2 = dra2.sum(dim=[dim])
-        if iii == 0:
-            rtot = dra2
-            rtot.expand_dims("z")
-        else:
-            dra2.expand_dims("z")
-            rtot = xr.concat([rtot, dra2], "z")
-    # This gives you maximum value that were above concentration
-    # at each location.
+    if isinstance(weights,np.ndarray) or isinstance(weights,list):
+       if len(weights) != len(dra2[dim].values):
+          print('WARNING : weights do not coorespond to values')
+          print('weights :', weights)
+          print('values : ', dra2[dim].values)
+       else:
+          wra = xr.DataArray(weights,dims=dim)
+          dra2 = wra * dra2 
+    dra2 = dra2.sum(dim=[dim])
     if norm:
         nmembers = len(enslist)
-        rtot = rtot / nmembers
-    return rtot
+        dra2 = dra2/ nmembers
+    return dra2
+
 
 
 def ens_mean(draash, time, enslist, level=1):
+    # NOT needed. Very easy to take the mean using xarray.
     """
     draash : xarray
     time : datetime object : date in time coordinate
@@ -454,6 +455,7 @@ def ens_mean(draash, time, enslist, level=1):
 
 
 def make_ATL_hysp(xra, variable='p006', threshold=0., MER=None):
+    # amr version. maybe not needed now that ATL has been modified.
     """
     Uses threshold value to make binary field of ensemble members.
     For use in statistics calculations. Based on mass loading, no vertical component
