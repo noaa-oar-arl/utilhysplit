@@ -7,9 +7,10 @@ import cartopy
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import numpy as np
 import pandas as pd
-#import hysplit
-#from cdump2xml import ColorMaker
 
+# 2021 2 Jun amc replaced ATL function with one in utilhysplit.evaluation.ensemble_tool.py file.
+# 2021 2 Jun added preprocessing function also in the evaluation ensemble_tools file.
+ 
 
 class LabelData:
     def __init__(self, time, descrip, units, source="", tag=""):
@@ -406,44 +407,99 @@ def massload_ensemble_mean(revash, enslist):
     return massmean
 
 
-def ATL(revash, enslist, thresh=0.2, level=1, norm=False):
+
+def preprocess(indra, enslist=None, sourcelist=None):
     """
+    indra : xarray dataArray
+    enslist : list or np.ndarray
+    sourcelist : list or np.ndarray
+
+    Returns:
+    dra : xarray datatArray: same dimensions as indra except will stack 'source' and 'ens'
+          dimensions if both present.
+    dim : str : indicates whether 'ens' or 'source' dimension is to be used.
+    """
+
+    dra = indra.copy()
+
+    # handle whether using 'ens' dimension, 'source' dimension or both.
+    dim = "ens"
+
+    # if lists are an np.ndarray then testing them with not
+    # returns an error.
+    if isinstance(sourcelist, np.ndarray):
+        pass
+    elif "source" in dra.dims and not sourcelist:
+        sourcelist = dra.source.values
+
+    if isinstance(enslist, np.ndarray):
+        pass
+    elif "ens" in dra.dims and not enslist:
+        enslist = dra.ens.values
+
+    if "source" in dra.dims and "ens" in dra.dims:
+        dra = dra.sel(ens=enslist)
+        dra = dra.sel(source=sourcelist)
+        dra = dra.stack(ens=("ens", "source"))
+
+    elif "source" in dra.dims:
+        dra = dra.sel(source=sourcelist)
+        dim = "source"
+    elif "ens" in dra.dims:
+        dra = dra.sel(ens=enslist)
+    else:
+        print("Warning: could not find source or ens dimension")
+        dim = None
+    return dra, dim
+
+
+def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=False, weights=None):
+    """
+     Applied Threshold Level (also ensemble frequency of exceedance).
+
+     indra: xr dataarray produced by combine_dataset or by hysp_massload
+            it must have 'ens' dimension, 'source' dimension or both.
+            time and z dimensions are optional.
+
+     enslist : list of values to use for 'ens' coordinate
+     sourcelist : list of values to use for 'source' coordinate
+
+     thresh : int or float. If 0 then use > for test. otherwise use >=.
+
+     weights : numpy array of same length as enslist + sourcelist containing weight for
+               each member.
+
      Returns array with number of ensemble members above
      given threshold at each location.
+     dimensions will be same as input except no 'ens' or 'source' dimension.
+
      norm : boolean
             if True return percentage of members.
             if False return number of members.
+            using norm is same as applying uniform weighting.
+            should not be used with weights.
+
      """
-    # import matplotlib.pyplot as plt
-    # sns.set_style('whitegrid')
-    source = 0
-    if isinstance(level, int):
-        level = [level]
-    iii = 0
-    for lev in level:
-        # rev2 = revash.sel(time=time)
-        rev2 = revash.sel(ens=enslist)
-        rev2 = rev2.sel(z=lev)
-        if "source" in rev2.coords:
-            rev2 = rev2.isel(source=source)
-        # place zeros where it is below threshold
-        rev2 = rev2.where(rev2 >= thresh)
-        rev2 = rev2.fillna(0)
-        # place onces where it is above threshold
-        rev2 = rev2.where(rev2 < thresh)
-        rev2 = rev2.fillna(1)
-        # ensemble members were above threshold at each location.
-        rev2 = rev2.sum(dim=["ens"])
-        if iii == 0:
-            rtot = rev2
-            rtot.expand_dims("z")
+    # handle whether using 'ens' dimension, 'source' dimension or both.
+    dra, dim = preprocess(indra, enslist, sourcelist)
+
+    if thresh == 0:
+        dra2 = xr.where(dra > thresh, 1, 0)
+    else:
+        dra2 = xr.where(dra >= thresh, 1, 0)
+
+    if isinstance(weights, (np.ndarray, list)):
+        if len(weights) != len(dra2[dim].values):
+            print("WARNING : weights do not coorespond to values")
+            print("weights :", weights)
+            print("values : ", dra2[dim].values)
         else:
-            rev2.expand_dims("z")
-            rtot = xr.concat([rtot, rev2], "z")
-        iii += 1
-    # This gives you maximum value that were above concentration
-    # at each location.
+            wra = xr.DataArray(weights, dims=dim)
+            dra2 = wra * dra2
+    dra2 = dra2.sum(dim=[dim])
     if norm:
         nmembers = len(enslist)
-        rtot = rtot / nmembers
-    return rtot
+        dra2 = dra2 / nmembers
+    return dra2
+
+

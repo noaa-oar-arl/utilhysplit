@@ -212,7 +212,6 @@ def ens_cdf(
     cdfhash : dictionary. key is the time. value is a tuple of the CDF (x,y)
     """
     # select sources of interest and stack
-
     if "source" in indra.dims:
         sourcekey = True
     else:
@@ -233,13 +232,14 @@ def ens_cdf(
         # check if time is a dimension.
         if not isinstance(timelist, (list, np.ndarray)) and 'time' in subdra.dims:
             timelist = subdra.time.values
-        else:
+        elif 'time' not in subdra.dims:
             timelist = [0]
 
         # loop through times. If no time, then just go through once.
         for tm in timelist:
             # check if time is a dimension.
             if 'time' in subdra.dims:
+                print('CHECKING', tm)
                 tvals = subdra.sel(time=tm)
             else:
                 tvals = subdra 
