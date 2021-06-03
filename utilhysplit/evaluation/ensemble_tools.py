@@ -192,6 +192,28 @@ def listvals(dra):
     vshape = np.array(vals.shape)
     return vals.reshape(np.prod(vshape))
 
+def ens_time_fss(
+    indralist,
+    obsralist,
+    enslist=None,
+    sourcelist=None,
+    #timelist=None,
+    neighborhoods = [1,3,5,7],
+    threshold=0,
+    plot=True,
+    #pixel_match=None,
+):
+    """
+    RETURNS
+    pandas dataframe with columns
+    Nlen, FBS, FBS_ref, FSS, ens, time
+    """
+    dflist = []
+    for pairs in zip(indralist, obsralist):
+        df = ens_fss(pairs[0],pairs[1],enslist,sourcelist,neighborhoods,
+                     threshold,plot)
+        dflist.append(df)
+    return pd.concat(dflist)
 
 def ens_fss(
     indra,
@@ -209,7 +231,7 @@ def ens_fss(
 
     RETURNS
     pandas dataframe with columns
-    Nlen, FBS, FBS_ref, FSS, ens
+    Nlen, FBS, FBS_ref, FSS, ens, time
 
     """
     dra, dim = preprocess(indra, enslist, sourcelist)
@@ -223,22 +245,56 @@ def ens_fss(
         df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
         df1['ens'] = ens
         dflist.append(df1)
-    return pd.concat(dflist)
 
-def plot_ens_fss(ensdf, sizemult=1):
+    # calculate fss for ensemble mean
+    meanra = dra.mean(dim=dim)
+    mean_scores = plume_stat.CalcScores(obsra, meanra,threshold=threshold)
+    df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
+    df1['ens'] = 'mean'
+    # add time to dataframe.
+    dflist.append(df1)
+    dfall = pd.concat(dflist)
+    if 'time' in indra.coords:
+        dfall['time'] = pd.to_datetime(indra.coords['time'].values)
+    return dfall
+
+def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     """
+    Plot FSS on y and time on x.
+    ensdf : pandas DataFrame output from  ens_time_fss
+    nval : neighborhood size to plot.
+    """
+    if nval:
+       tempdf = ensdf[ensdf['Nlen']==nval]
+    fig, ax = plt.subplots(1,1)
+
+    ensfss = tempdf.pivot(columns='ens',values='FSS',index='time')
+    uniform = tempdf.pivot(columns='ens',values='uniform',index='time')
+    ensfss.plot(ax=ax, legend=None,colormap='tab20')
+    colA = uniform.columns[0] 
+    uniform.plot(ax=ax, y=colA, legend=None,colormap='winter')
+    if 'mean' in ensfss.columns:
+        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+
+def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
+    """
+    Plot FSS on y and Neighborhood length on x.
+
     ensdf : pandas DataFrame output from ens_fss function
     sizemult : set to value other than one to convert to degrees.
     """
+    fig, ax = plt.subplots(1,1)
     if sizemult != 1:
        ensdf['length (degrees)'] = ensdf['Nlen']*sizemult
        ensfss = ensdf.pivot(columns='ens',values='FSS',index='length (degrees)')
     else:
        ensfss = ensdf.pivot(columns='ens',values='FSS',index='Nlen')
-    ensfss.plot()
+    ensfss.plot(ax=ax, legend=None,colormap='spring')
     random = ensdf['random'].unique()
     nmin = float(np.min(ensdf['Nlen']))* sizemult
     nmax = float(np.max(ensdf['Nlen']))* sizemult
+    if 'mean' in ensfss.columns:
+        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
     # plot random forecast
     for randomval in random:
         plt.plot([nmin,nmax],[randomval, randomval], '--k')
