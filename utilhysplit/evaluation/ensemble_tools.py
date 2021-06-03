@@ -1,8 +1,10 @@
 import matplotlib.pyplot as plt
 import xarray as xr
 import numpy as np
+import pandas as pd
 from utilhysplit.evaluation.statmain import cdf
 from utilhysplit.evaluation.statmain import pixel_matched_cdf
+from utilhysplit.evaluation import plume_stat
 
 """
 FUNCTIONS
@@ -191,6 +193,62 @@ def listvals(dra):
     return vals.reshape(np.prod(vshape))
 
 
+def ens_fss(
+    indra,
+    obsra,
+    enslist=None,
+    sourcelist=None,
+    #timelist=None,
+    neighborhoods = [1,3,5,7],
+    threshold=0,
+    plot=True,
+    #pixel_match=None,
+):
+    """
+    indra and obsra need to be same time period and grid.
+
+    RETURNS
+    pandas dataframe with columns
+    Nlen, FBS, FBS_ref, FSS, ens
+
+    """
+    dra, dim = preprocess(indra, enslist, sourcelist)
+    dflist = []
+    for ens in dra[dim].values:
+        if dim == "ens":
+            subdra = dra.sel(ens=ens)
+        elif dim == "source":
+            subdra = dra.sel(source=ens)
+        scores = plume_stat.CalcScores(obsra, subdra,threshold=threshold)
+        df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
+        df1['ens'] = ens
+        dflist.append(df1)
+    return pd.concat(dflist)
+
+def plot_ens_fss(ensdf, sizemult=1):
+    """
+    ensdf : pandas DataFrame output from ens_fss function
+    sizemult : set to value other than one to convert to degrees.
+    """
+    if sizemult != 1:
+       ensdf['length (degrees)'] = ensdf['Nlen']*sizemult
+       ensfss = ensdf.pivot(columns='ens',values='FSS',index='length (degrees)')
+    else:
+       ensfss = ensdf.pivot(columns='ens',values='FSS',index='Nlen')
+    ensfss.plot()
+    random = ensdf['random'].unique()
+    nmin = float(np.min(ensdf['Nlen']))* sizemult
+    nmax = float(np.max(ensdf['Nlen']))* sizemult
+    # plot random forecast
+    for randomval in random:
+        plt.plot([nmin,nmax],[randomval, randomval], '--k')
+    uniform = ensdf['uniform'].unique()
+    # plot uniform forecast
+    for uniformval in uniform:
+        plt.plot([nmin,nmax],[uniformval, uniformval], '--r')
+     
+
+
 def ens_cdf(
     indra,
     enslist=None,
@@ -239,7 +297,6 @@ def ens_cdf(
         for tm in timelist:
             # check if time is a dimension.
             if 'time' in subdra.dims:
-                print('CHECKING', tm)
                 tvals = subdra.sel(time=tm)
             else:
                 tvals = subdra 

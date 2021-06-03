@@ -119,7 +119,7 @@ class CalcScores:
 
         return csihash
 
-    def calc_fss(self, makeplots=False):
+    def calc_fss(self, szra=None, makeplots=False):
         from scipy.signal import convolve2d
         """Calculates the fraction skill score (fss)
         See Robers and Lean (2008) Monthly Weather Review
@@ -133,10 +133,28 @@ class CalcScores:
          
         Return
         df : pandas dataframe """
+        # 2021 Jun 3 amc added random, uniform and afss to dataframe.
 
         # Creating FSS dictionary
         fss_dict = {}
         bigN = self.binxra1.size
+
+        if not szra:
+           szra = self.szra
+        else:
+           self.szra = szra
+
+        # calculate frequency of observations and forecast. 
+        fobs = float(self.binxra1.sum()) / bigN
+        fmod = float(self.binxra2.sum()  / bigN)
+        # random forecast has fss equal to frequency of observations
+        random_fss = fobs 
+        # uniform forecast has fss equal to 0.5 + random
+        uniform_fss = 0.5 + random_fss
+        # measure of frequency bias
+        # fss will asymptote at this value as neighborhood size
+        # approaches domain size.
+        afss = 2*fobs*fmod/(fobs**2+fmod**2)
 
         # loop for the convolutions
         for sz in self.szra:
@@ -174,16 +192,21 @@ class CalcScores:
                 print(' ')
             fss_tmp = dict({'Nlen': conv_array[0], 'FBS': fbs, 'FBS_ref': fbs_ref, 'FSS': fss})
             if makeplots == True:
-                fig = plt.figure(1)
-                ax1 = fig.add_subplot(2, 1, 1)
-                ax2 = fig.add_subplot(2, 1, 2)
-                ax1.imshow(frac_arr1)
-                ax2.imshow(frac_arr2)
+                fig = plt.figure(1,figsize=(10,15))
+                ax1 = fig.add_subplot(1, 2, 1)
+                ax2 = fig.add_subplot(1, 2, 2)
+                cb = ax1.imshow(frac_arr1)
+                cb2 = ax2.imshow(frac_arr2)
+                #plt.colorbar(cb)
+                #plt.colorbar(cb2)
                 plt.show()
 
             fss_dict[sz] = fss_tmp
 
         df = pd.DataFrame.from_dict(fss_dict, orient='index')
+        df['random'] = random_fss
+        df['uniform'] = uniform_fss
+        df['afss'] = afss
         return df
 
     def calc_pcorr(self):
