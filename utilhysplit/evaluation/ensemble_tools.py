@@ -236,6 +236,8 @@ def ens_fss(
     """
     dra, dim = preprocess(indra, enslist, sourcelist)
     dflist = []
+
+    # calculate fss for each ensemble member.
     for ens in dra[dim].values:
         if dim == "ens":
             subdra = dra.sel(ens=ens)
@@ -249,10 +251,23 @@ def ens_fss(
     # calculate fss for ensemble mean
     meanra = dra.mean(dim=dim)
     mean_scores = plume_stat.CalcScores(obsra, meanra,threshold=threshold)
-    df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
+    #mean_scores.binxra2.plot.pcolormesh()
+    #print('Mean sum', mean_scores.binxra2.sum())
+    #plt.show()
+    df1 = mean_scores.calc_fss(makeplots=False,szra=neighborhoods)
     df1['ens'] = 'mean'
-    # add time to dataframe.
     dflist.append(df1)
+
+    # calculate fss for probabilistic output
+    prob_scores = plume_stat.CalcScores(obsra, dra,threshold=threshold,probabilistic=True)
+    #prob_scores.binxra2.plot.pcolormesh()
+    #plt.show()
+    #print('Prob sum', prob_scores.binxra2.sum())
+    df1 = prob_scores.calc_fss(makeplots=False,szra=neighborhoods)
+    df1['ens'] = 'prob'
+    dflist.append(df1)
+
+    # add time to dataframe.
     dfall = pd.concat(dflist)
     if 'time' in indra.coords:
         dfall['time'] = pd.to_datetime(indra.coords['time'].values)
@@ -275,6 +290,8 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     uniform.plot(ax=ax, y=colA, legend=None,colormap='winter')
     if 'mean' in ensfss.columns:
         ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+    #if 'prob' in ensfss.columns:
+    #    ensfss.plot(ax=ax, y='prob',LineWidth=1,colormap="gist_gray")
 
 def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
     """
@@ -295,6 +312,8 @@ def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
     nmax = float(np.max(ensdf['Nlen']))* sizemult
     if 'mean' in ensfss.columns:
         ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+    if 'prob' in ensfss.columns:
+        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
     # plot random forecast
     for randomval in random:
         plt.plot([nmin,nmax],[randomval, randomval], '--k')
@@ -303,7 +322,6 @@ def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
     for uniformval in uniform:
         plt.plot([nmin,nmax],[uniformval, uniformval], '--r')
      
-
 
 def ens_cdf(
     indra,
