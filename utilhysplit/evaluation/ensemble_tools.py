@@ -134,7 +134,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
     return dra, dim
 
 
-def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=False, weights=None):
+def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None):
     """
      Applied Threshold Level (also ensemble frequency of exceedance).
 
@@ -179,7 +179,7 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=False, weights=None
             dra2 = wra * dra2
     dra2 = dra2.sum(dim=[dim])
     if norm:
-        nmembers = len(enslist)
+        nmembers = len(dra[dim].values)
         dra2 = dra2 / nmembers
     return dra2
 

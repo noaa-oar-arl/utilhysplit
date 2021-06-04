@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
-from utilhysplit.evaluation import ensemble_tools as tools
 import time
+#from utilhysplit.evaluation import ensemble_tools as tools
+#from utilhysplit.evaluation.ensemble_tools import ATL
+from utilhysplit.evaluation import ensemble_tools
 
 #from math import *
 #import sys
@@ -28,11 +30,13 @@ Functions:
     calc_weightsBS (BS weights for ensemble members)
     calc_weightsPC (PC weights for ensemble members)
 """
-
+# AMC - note that we are using ATL from ensemble_tools and ensemble_tools also imports
+# from plume_stat.py. Some of the functions need to be rearranged to avoid this situation.
 
 class CalcScores:
 
-    def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False):
+    def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False,
+                 probabilistic=False):
         """ Class of tools for calculating various Scores and Skill Scores, 
         relying on binary arrays and the 2x2 contingency table
         xra1 and xra2 need to be on the same grid.
@@ -45,12 +49,14 @@ class CalcScores:
         szra: sizes for fractions skill score calculation, default = [1, 3, 5, 7] (list)
         area: optional array of grid areas, must be the same size as xra1 and xra2
         verbose: boolean
+        probabilistic : boolean. if True checks for 'ens' dimension and creates probabilstic field instead of binary.
         ----------------------------
         Functions:
         calc_csi: calculates the critical success index (gilbert score), probability of detection, false alarm rate, etc.
         calc_fss: calculates the fractions skill score
         calc_pcorr: calculates pattern correlation coefficient (Pearson correlation coefficient) 
         """
+        # 2021 Jun 3 amc if ens dimension present convert to probabilistic (0-1) field.    
 
         self.xra1 = xra1
         self.xra2 = xra2
@@ -58,13 +64,21 @@ class CalcScores:
         self.szra = szra
         self.area = area
         self.verbose = verbose
+ 
+        if 'ens' in xra1.dims and probabilistic:
+           self.binxra1 = ensemble_tools.ATL(xra1,thresh=threshold,norm=True)
+        else:
+           self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
+        if 'ens' in xra2.dims and probabilistic:
+           self.binxra2 = ensemble_tools.ATL(xra2,thresh=threshold,norm=True)
+        else:
+           self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
 
-        self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
-        self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
         self.match = self.binxra1 * self.binxra2
         self.arr1 = self.binxra1 - self.match
         self.arr2 = self.binxra2 - self.match
         self.totalpts = self.binxra1.shape[0] * self.binxra1.shape[1]
+
 
     def calc_csi(self):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
