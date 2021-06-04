@@ -64,12 +64,17 @@ class CalcScores:
         self.szra = szra
         self.area = area
         self.verbose = verbose
- 
+        
         if 'ens' in xra1.dims and probabilistic:
+           self.binxra1 = ensemble_tools.ATL(xra1,thresh=threshold,norm=True)
+        elif 'source' in xra1.dims and probabilistic:
            self.binxra1 = ensemble_tools.ATL(xra1,thresh=threshold,norm=True)
         else:
            self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
+
         if 'ens' in xra2.dims and probabilistic:
+           self.binxra2 = ensemble_tools.ATL(xra2,thresh=threshold,norm=True)
+        elif 'source' in xra2.dims and probabilistic:
            self.binxra2 = ensemble_tools.ATL(xra2,thresh=threshold,norm=True)
         else:
            self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
