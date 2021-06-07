@@ -211,8 +211,8 @@ class MakeNetcdf:
             hxrnew = xr.merge([mass_avg, hgt_max2], combine_attrs='drop_conflicts')
         attrs = dset[-1].attrs
         hxrnew.attrs = attrs
-        hxrnew.attrs['starting time for avg'] = dset[0].time
-        hxrnew.attrs['ending time for avg'] = dset[-1].time
+        hxrnew.attrs['starting time for avg'] = str(dset[0].time.values[0])
+        hxrnew.attrs['ending time for avg'] = str(dset[-1].time.values[0])
         hxrnew.attrs['volcano ID'] = self.volcid
 
         if write:
@@ -258,10 +258,10 @@ class MakeNetcdf:
         from utilhysplit.evaluation import plume_stat as ps
         import numpy as np
 
-        # ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        ensfile = 'ensemble_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        # volcfile = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        volcfile = 'regridded_volcat_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        #ensfile = 'ensemble_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        volcfile = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        #volcfile = 'regridded_volcat_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
 
         hxr = xr.open_dataset(ensdir+ensfile).squeeze()
         vxr = xr.open_dataset(volcdir+volcfile).squeeze()
