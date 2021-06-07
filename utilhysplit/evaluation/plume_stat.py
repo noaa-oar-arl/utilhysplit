@@ -4,17 +4,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
-from utilhysplit.evaluation import ensemble_tools as tools
 import time
+from utilhysplit.evaluation import ensemble_tools
 
-# from math import *
-# import sys
-# import string
-# import datetime
-# from itertools import permutations
-# from math import pi, cos
 """
-Routines to calculate various statistics like Critical Success Index, Fractions Skill Score,
+Routines to calculate various statistics like Critical Success Index, Gilbert Skill Score, Fractions Skill Score,
 Pattern Correlation, Brier Scores, and ensemble weighting schemes.
 ---------
 Class:
@@ -28,11 +22,14 @@ Functions:
     calc_weightsBS (BS weights for ensemble members)
     calc_weightsPC (PC weights for ensemble members)
 """
+# AMC - note that we are using ATL from ensemble_tools and ensemble_tools also imports
+# from plume_stat.py. Some of the functions need to be rearranged to avoid this situation.
 
 
 class CalcScores:
 
-    def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False):
+    def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False,
+                 probabilistic=False):
         """ Class of tools for calculating various Scores and Skill Scores,
         relying on binary arrays and the 2x2 contingency table
         xra1 and xra2 need to be on the same grid.
@@ -45,12 +42,14 @@ class CalcScores:
         szra: sizes for fractions skill score calculation, default = [1, 3, 5, 7] (list)
         area: optional array of grid areas, must be the same size as xra1 and xra2
         verbose: boolean
+        probabilistic : boolean. if True checks for 'ens' dimension and creates probabilstic field instead of binary.
         ----------------------------
         Functions:
         calc_csi: calculates the critical success index (gilbert score), probability of detection, false alarm rate, etc.
         calc_fss: calculates the fractions skill score
         calc_pcorr: calculates pattern correlation coefficient (Pearson correlation coefficient)
         """
+        # 2021 Jun 3 amc if ens dimension present convert to probabilistic (0-1) field.
 
         self.xra1 = xra1
         self.xra2 = xra2
@@ -60,17 +59,27 @@ class CalcScores:
         self.verbose = verbose
         self.allpts = (self.xra1.shape[0] * self.xra1.shape[1])
 
-        self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
-        self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
+        if 'ens' in xra1.dims and probabilistic:
+            self.binxra1 = ensemble_tools.ATL(xra1, thresh=threshold, norm=True)
+        elif 'source' in xra1.dims and probabilistic:
+            self.binxra1 = ensemble_tools.ATL(xra1, thresh=threshold, norm=True)
+        else:
+            self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
+
+        if 'ens' in xra2.dims and probabilistic:
+            self.binxra2 = ensemble_tools.ATL(xra2, thresh=threshold, norm=True)
+        elif 'source' in xra2.dims and probabilistic:
+            self.binxra2 = ensemble_tools.ATL(xra2, thresh=threshold, norm=True)
+        else:
+            self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
+
         self.match = self.binxra1 * self.binxra2
         self.arr1 = self.binxra1 - self.match
         self.arr2 = self.binxra2 - self.match
-        self.totalpts = (self.binxra1.shape[0] * self.binxra1.shape[1])
+        self.totalpts = self.binxra1.shape[0] * self.binxra1.shape[1]
 
     def calc_csi(self):
-        """ CSI equation: hits / (hits + misses + false alarms) - aka Threat Score
-        GSS equation: (hits - chance) / ((hits + misses + false alarms) - chance)
-
+        """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
         Inputs:
         match: hits
         arr1: misses
@@ -78,17 +87,15 @@ class CalcScores:
         area: optional array of grid areas, must be same size as xra1 and xra2 (default = None)
         nodata: flag for expanded array grid cells created if ash near boundary (string)
         verbose: boolean
-
         Output:
         csihash: Dictionary of values pertaining to Critical Success Index calculation
-        contains: hits, misses, false_alarms, CSI, POD, FAR, events, total, freq
+        contains: hits, misses, false_alarms, CSI, POD, FAR
         """
         area = np.array(self.area)
         # Creating a csihash disctionary
         csihash = {}
 
         # Assigning a, b, and c arrays to csihash dictionary
-        # Made these single values, rather than arrays - AMR 6/4/2021
         csihash['hits'] = self.match.sum().values
         csihash['misses'] = self.arr1.sum().values
         csihash['false_alarms'] = self.arr2.sum().values
@@ -98,8 +105,8 @@ class CalcScores:
                                                               (self.arr1*self.area).sum() + (self.arr2*self.area).sum())).values
             csihash['POD'] = ((self.match*self.area).sum() /
                               ((self.match*self.area).sum() + (self.arr1*area).sum())).values
-            csihash['FAR'] = (self.arr2*self.area).sum() / \
-                ((self.match*self.area).sum() + (self.arr2*area).sum())
+            csihash['FAR'] = ((self.arr2*self.area).sum() /
+                              ((self.match*self.area).sum() + (self.arr2*area).sum())).values
             # Added 6/3/21 - AMR
             csihash['Events'] = (self.match*self.area).sum() + (self.arr1*self.area).sum()
             csihash['Total'] = self.allpts
@@ -108,35 +115,33 @@ class CalcScores:
             csihash['Chance'] = csihash['Posit'].values*csihash['Freq'].values
             csihash['GSS'] = ((self.match*self.area).sum()-csihash['Chance'].values) / (csihash['Posit'].values +
                                                                                         csihash['Events'].values - (self.match*self.area).sum()) - csihash['Chance'].values
-##
 
             if self.verbose == True:
                 print('used area')
                 print((self.match*self.area).sum().values, (self.arr1 *
-                                                            self.area).sum().values, (self.arr2*self.area).sum().values, (self.totalpts*self.area).sum().values)
+                                                            self.area).sum().values, (self.arr2*self.area).sum().values)
                 print('CSI: ', csihash['CSI'].values, 'POD: ',
-                      csihash['POD'].values, 'FAR: ', csihash['FAR'].values, 'Frequency: ', csihash['Freq'].values, 'Gilbert Skill Score: ', csihash['GSS'].values)
+                      csihash['POD'].values, 'FAR: ', csihash['FAR'].values, 'Frequency: ', csihash['Freq'].values, 'Gilbert Skill Score: ', csihash['GSS'].values))
         else:
-            csihash['CSI'] = (self.match.sum() / (self.match.sum() +
-                                                  self.arr1.sum() + self.arr2.sum())).values
+            csihash['CSI']=self.match.sum() / (self.match.sum() + self.arr1.sum() + self.arr2.sum())
             # hit rate or probability of detection (p 310 Wilks)
-            csihash['POD'] = (self.match.sum() / (self.match.sum() + self.arr1.sum())).values
+            csihash['POD']=self.match.sum() / (self.match.sum() + self.arr1.sum())
             # false alarm ratio (p 310 Wilks)
-            csihash['FAR'] = (self.arr2.sum() / (self.match.sum() + self.arr2.sum())).values
+            csihash['FAR']=self.arr2.sum() / (self.match.sum() + self.arr2.sum())
             # Added 6/3/21 - AMR
-            csihash['Events'] = (self.match.sum() + self.arr1.sum()).values
-            csihash['Total'] = self.allpts
-            csihash['Freq'] = csihash['Events'] / csihash['Total']
-            csihash['Posit'] = (self.match.sum() + self.arr2.sum()).values
-            csihash['Chance'] = csihash['Posit']*csihash['Freq']
-            csihash['GSS'] = ((self.match.sum()-csihash['Chance']) / (self.arr1.sum() +
+            csihash['Events']=(self.match.sum() + self.arr1.sum()).values
+            csihash['Total']=self.allpts
+            csihash['Freq']=csihash['Events'] / csihash['Total']
+            csihash['Posit']=(self.match.sum() + self.arr2.sum()).values
+            csihash['Chance']=csihash['Posit']*csihash['Freq']
+            csihash['GSS']=((self.match.sum()-csihash['Chance']) / (self.arr1.sum() +
                                                                       self.arr2.sum() + self.match.sum() - csihash['Chance'])).values
 
             if self.verbose == True:
                 print('Match: ', self.match.sum().values, 'Misses: ',
                       self.arr1.sum().values, 'FalseAlarms: ', self.arr2.sum().values)
-                print('CSI: ', csihash['CSI'].values, 'POD: ',
-                      csihash['POD'].values, 'FAR: ', csihash['FAR'].values, 'Freq: ', csihash['Freq'].values, 'Gilbert Skill Score: ', csihash['GSS'].values)
+            print('CSI: ', csihash['CSI'].values, 'POD: ',
+                  csihash['POD'].values, 'FAR: ', csihash['FAR'].values,'Freq: ', csihash['Freq'].values, 'Gilbert Skill Score: ', csihash['GSS'].values)
 
         return csihash
 
@@ -146,12 +151,12 @@ class CalcScores:
         See Robers and Lean (2008) Monthly Weather Review
         and Schwartz et al (2010) Weather and Forecasting
         for more information.
-
+         
         Can plot fractions if desired (double check calculations)
-        szra: a list of the number of pixels (neightborhood length) to use
+        szra: a list of the number of pixels (neightborhood length) to use 
         in fractions calculation default is to use 1, 3, 5, 7 pixels size squares
         makeplots: boolean
-
+         
         Return
         df : pandas dataframe """
         # 2021 Jun 3 amc added random, uniform and afss to dataframe.
@@ -232,12 +237,10 @@ class CalcScores:
 
     def calc_pcorr(self):
         """ Calculates Pattern Correlation between two arrays
-        binxra1 and binxra2 need to be on the same grid.
+        binxra1 and binxra2 need to be on the same grid. 
         See monetio.remap_nearest or monetio.remap_xesmf to remap arrays.
-
         Pattern Correlation (uncentered) = (binxra1 * binxra2) / sqrt((binxra1^2)*(binxra2^2))
         Pattern Correlation (centered) = ((binxra1 - arr1)(binxra2 - arr2)) / sqrt(((binxra1-arr1)^2) * ((binxra2 - arr2)^2))
-
         Outputs:
         pcorr, pcorruncent: pattern correlation (centered), pattern correlation (uncentered) """
 
@@ -266,13 +269,11 @@ class CalcScores:
 
 def calc_bs(xra1, xra2):
     """
-    Calculating the Brier Score
+    Calculating the Brier Score 
     BS = 1/N (sum of (probability - reference)^2)
-
     Inputs:
     xra1: binary reference or observation array (xarray.DataArray)
     xra2: probability (or binary) forecast array (values from 0 to 1) (xarray.DataArray)
-
     Outputs:
     BS: Brier score (float)
     """
@@ -302,7 +303,7 @@ def calc_bss(BS, BSref):
 
 def calc_weightsBS(xra, scores):
     """
-    Calculating the weighting scheme based on brier score values.
+    Calculating the weighting scheme based on brier score values. 
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
     Inputs:
@@ -326,8 +327,7 @@ def calc_weightsBS(xra, scores):
 
 def calc_weightsPC(xra, scores):
     """Kat62020
-
-    Calculating the weighting scheme based on pattern correlation values.
+    Calculating the weighting scheme based on pattern correlation values. 
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
     Inputs:
