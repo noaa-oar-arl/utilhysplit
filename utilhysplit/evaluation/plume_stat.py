@@ -96,6 +96,7 @@ class CalcScores:
         csihash = {}
 
         # Assigning a, b, and c arrays to csihash dictionary
+        # Made these single values, rather than arrays - AMR 6/4/2021
         csihash['hits'] = self.match.sum().values
         csihash['misses'] = self.arr1.sum().values
         csihash['false_alarms'] = self.arr2.sum().values
