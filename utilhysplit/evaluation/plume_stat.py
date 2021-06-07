@@ -122,27 +122,27 @@ class CalcScores:
                 print((self.match*self.area).sum().values, (self.arr1 *
                                                             self.area).sum().values, (self.arr2*self.area).sum().values)
                 print('CSI: ', csihash['CSI'].values, 'POD: ',
-                      csihash['POD'].values, 'FAR: ', csihash['FAR'].values, 'Frequency: ', csihash['Freq'].values, 'Gilbert Skill Score: ', csihash['GSS'].values))
+                      csihash['POD'].values, 'FAR: ', csihash['FAR'].values, 'Frequency: ', csihash['Freq'].values, 'Gilbert Skill Score: ', csihash['GSS'].values)
         else:
-            csihash['CSI']=self.match.sum() / (self.match.sum() + self.arr1.sum() + self.arr2.sum())
+            csihash['CSI'] = self.match.sum() / (self.match.sum() + self.arr1.sum() + self.arr2.sum())
             # hit rate or probability of detection (p 310 Wilks)
-            csihash['POD']=self.match.sum() / (self.match.sum() + self.arr1.sum())
+            csihash['POD'] = self.match.sum() / (self.match.sum() + self.arr1.sum())
             # false alarm ratio (p 310 Wilks)
-            csihash['FAR']=self.arr2.sum() / (self.match.sum() + self.arr2.sum())
+            csihash['FAR'] = self.arr2.sum() / (self.match.sum() + self.arr2.sum())
             # Added 6/3/21 - AMR
-            csihash['Events']=(self.match.sum() + self.arr1.sum()).values
-            csihash['Total']=self.allpts
-            csihash['Freq']=csihash['Events'] / csihash['Total']
-            csihash['Posit']=(self.match.sum() + self.arr2.sum()).values
-            csihash['Chance']=csihash['Posit']*csihash['Freq']
-            csihash['GSS']=((self.match.sum()-csihash['Chance']) / (self.arr1.sum() +
+            csihash['Events'] = (self.match.sum() + self.arr1.sum()).values
+            csihash['Total'] = self.allpts
+            csihash['Freq'] = csihash['Events'] / csihash['Total']
+            csihash['Posit'] = (self.match.sum() + self.arr2.sum()).values
+            csihash['Chance'] = csihash['Posit']*csihash['Freq']
+            csihash['GSS'] = ((self.match.sum()-csihash['Chance']) / (self.arr1.sum() +
                                                                       self.arr2.sum() + self.match.sum() - csihash['Chance'])).values
 
             if self.verbose == True:
                 print('Match: ', self.match.sum().values, 'Misses: ',
                       self.arr1.sum().values, 'FalseAlarms: ', self.arr2.sum().values)
             print('CSI: ', csihash['CSI'].values, 'POD: ',
-                  csihash['POD'].values, 'FAR: ', csihash['FAR'].values,'Freq: ', csihash['Freq'].values, 'Gilbert Skill Score: ', csihash['GSS'].values)
+                  csihash['POD'].values, 'FAR: ', csihash['FAR'].values, 'Freq: ', csihash['Freq'], 'Gilbert Skill Score: ', csihash['GSS'])
 
         return csihash
 
