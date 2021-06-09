@@ -127,8 +127,8 @@ class MakeNetcdf:
             newfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
             if os.path.exists(netdir+newfile):
                 os.remove(netdir+newfile)
-                hxr.to_netcdf(netdir+newfile)
-            return print(newfile+' created!')
+            hxr.to_netcdf(netdir+newfile)
+            return print(netdir+newfile+' created!')
         return hxr
 
     def create_volcat(self, volcatdir, netdir, volcdir, write=False):
