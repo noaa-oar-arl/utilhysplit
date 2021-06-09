@@ -8,6 +8,7 @@ import time
 #from utilhysplit.evaluation import ensemble_tools as tools
 #from utilhysplit.evaluation.ensemble_tools import ATL
 from utilhysplit.evaluation import ensemble_tools
+from utilhysplit.evaluation import statmain
 
 #from math import *
 #import sys
@@ -30,13 +31,16 @@ Functions:
     calc_weightsBS (BS weights for ensemble members)
     calc_weightsPC (PC weights for ensemble members)
 """
+# 2021 Jun 9 amc added plot_roc function to plot output from the calc_roc method in CalcScores.
+
+
 # AMC - note that we are using ATL from ensemble_tools and ensemble_tools also imports
 # from plume_stat.py. Some of the functions need to be rearranged to avoid this situation.
 
 class CalcScores:
 
     def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False,
-                 probabilistic=False):
+                 probabilistic=False, pixel_match=False):
         """ Class of tools for calculating various Scores and Skill Scores, 
         relying on binary arrays and the 2x2 contingency table
         xra1 and xra2 need to be on the same grid.
@@ -50,6 +54,8 @@ class CalcScores:
         area: optional array of grid areas, must be the same size as xra1 and xra2
         verbose: boolean
         probabilistic : boolean. if True checks for 'ens' dimension and creates probabilstic field instead of binary.
+        pixel_match : boolean. if True calculate threshold for xra2 by matching number of pixels that are above
+                      input threshold in xra1.
         ----------------------------
         Functions:
         calc_csi: calculates the critical success index (gilbert score), probability of detection, false alarm rate, etc.
@@ -57,6 +63,14 @@ class CalcScores:
         calc_pcorr: calculates pattern correlation coefficient (Pearson correlation coefficient) 
         """
         # 2021 Jun 3 amc if ens dimension present convert to probabilistic (0-1) field.    
+        # 2021 Jun 9 amc add pixel matching option for threshold.   
+        # 2021 Jun 9 amc add new function calc_basics
+        # 2021 Jun 9 amc add new function calc_roc
+        # 2021 Jun 9 amc add new function get_contingency_table. similar to calc_csi.
+        # 2021 Jun 9 amc add self.arr3 which shows correctly forecast 0 values.
+        # 2021 Jun 9 amc add 'd' to the csihash
+
+  
 
         self.xra1 = xra1
         self.xra2 = xra2
@@ -64,7 +78,10 @@ class CalcScores:
         self.szra = szra
         self.area = area
         self.verbose = verbose
-        
+
+        self.pm_threshold=None # threshold from pixel matching, if any.       
+
+        # process the  observational data 
         if 'ens' in xra1.dims and probabilistic:
            self.binxra1 = ensemble_tools.ATL(xra1,thresh=threshold,norm=True)
         elif 'source' in xra1.dims and probabilistic:
@@ -72,18 +89,112 @@ class CalcScores:
         else:
            self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
 
-        if 'ens' in xra2.dims and probabilistic:
-           self.binxra2 = ensemble_tools.ATL(xra2,thresh=threshold,norm=True)
-        elif 'source' in xra2.dims and probabilistic:
-           self.binxra2 = ensemble_tools.ATL(xra2,thresh=threshold,norm=True)
+        # process the model data if pixel matching is desired
+        if pixel_match:
+           # if input is ensemble. Here assume probablistic output is wanted.
+           if 'ens' in xra2.dims or 'source' in xra2.dims:
+               self.pm_threshold, matchra = ensemble_tools.get_pixel_match(xra2,xra1,threshold,return_binary=True)  
+               self.binxra2 = ensemble_tools.ATL(matchra,thresh=0.1,norm=True)
+           # if input is deterministic
+           else:
+               self.pm_threshold = statmain.get_pixel_matching_threshold(xra1,xra2,threshold)
+               self.binxra2 = xr.where(self.xra2 >= self.pm_threshold, 1., 0.)
+             
+        # process the model data with same threshold as observed.
         else:
-           self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
+           # if input is ensemble
+            if 'ens' in xra2.dims and probabilistic:
+               self.binxra2 = ensemble_tools.ATL(xra2,thresh=threshold,norm=True)
+            elif 'source' in xra2.dims and probabilistic:
+               self.binxra2 = ensemble_tools.ATL(xra2,thresh=threshold,norm=True)
+           # if input is deterministic
+            else:
+               self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
 
-        self.match = self.binxra1 * self.binxra2
-        self.arr1 = self.binxra1 - self.match
-        self.arr2 = self.binxra2 - self.match
-        self.totalpts = self.binxra1.shape[0] * self.binxra1.shape[1]
+        self.calc_basics()
 
+
+    def calc_basics(self, probthresh=None,clip=False):
+        """
+        probthresh : int or float
+        The probthresh can be used to convert probabilistic forecasts back to
+        deterministic forecasts. 
+        This can be used for creating things like ROC diagrams.
+        """
+
+        if clip:
+           # remove all x or y rows that are all 0's.
+           temp = xr.concat([self.binxra1,self.binxra2],dim='temp')
+           temp = xr.where(temp==0,np.nan,temp)
+           temp = temp.dropna(dim='x',how='all')
+           temp = temp.dropna(dim='y',how='all')
+           binxra2 = temp.isel(temp=1).fillna(0)
+           binxra1 = temp.isel(temp=0).fillna(0)
+        else:
+           binxra1 = self.binxra1
+
+        if isinstance(probthresh,(int,float)):
+            # convert probabilistic forecast to deterministic using threshold.
+            binxra2 = xr.where(self.binxra2 >= probthresh, 1.0, 0) 
+        else:
+            binxra2 = self.binxra2
+        self.match = binxra1 * binxra2
+        self.arr1 = binxra1 - self.match
+        self.arr2 = binxra2 - self.match
+        self.arr3 = xr.where(self.match>0,0,1)
+        self.totalpts = binxra1.shape[0] * binxra1.shape[1]
+
+    def calc_roc(self,clip=True):
+        """
+        For probabilistic forecasts.
+        calculate the ROC (relative operating characteristic)
+
+        Convert probabilistic forecast to binary using a probability threshold.
+        Then compute False Alarm Rate and Hit Rate for various probability thresholds.
+        ROC curve is the Hit Rate (y-axis) vs. False Alarm Rate (x-axis).
+        See Wilks Chapter 8.
+
+        One issue with plume forecasts is the number of correclty forecast 0 values
+        can be quite large and can be increased simply by increasing domain. This leads
+        to a very small value of F (values on x axis). 
+
+        Should this be ameliorated by clipping the domain tightly around the plume area?
+        clip=True will do this.
+
+        """
+        # probability thresholds
+        problist = np.arange(0.05,1,0.05)
+        problist = np.append(problist,0.99)
+        xlist = []
+        ylist = []
+        # calculate False Alarm Rate (x axis) and
+        # Hit Rate (y axis) for each probability threshold.
+        for prob in problist:
+            self.calc_basics(prob,clip=clip)
+            csihash = self.calc_csi()
+            xlist.append(csihash['F']) 
+            ylist.append(csihash['POD']) 
+        return xlist, ylist
+
+    def get_contingency_table(self,probthresh=None,clip=False,verbose=False):
+        self.calc_basics(probthresh,clip)
+        aval  = self.match.sum().values
+        cval  = self.arr1.sum().values
+        bval  = self.arr2.sum().values
+        dval  = self.arr3.sum().values
+        if verbose:
+            print('a forecast yes, obs yes : {}'.format(aval))
+            print('b forecast yes, obs no  : {}'.format(bval))
+            print('a forecast no,  obs yes : {}'.format(cval))
+            print('b forecast no,  obs no : {}'.format(dval))
+        thash = {'a':[aval],'b':[bval],'c':[cval],'d':[dval]}
+        tframe = pd.DataFrame.from_dict(thash)
+        if isinstance(probthresh,(int,float)):
+            tframe['probthresh'] = probthresh
+        tframe['threshold'] = self.threshold
+        if isinstance(self.pm_threshold,(int,float)):
+            tframe['pm_threshold'] = self.pm_threshold
+        return tframe
 
     def calc_csi(self):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
@@ -105,9 +216,10 @@ class CalcScores:
         csihash = {}
 
         # Assigning a, b, and c arrays to csihash dictionary
-        csihash['hits'] = self.match
-        csihash['misses'] = self.arr1
-        csihash['false_alarms'] = self.arr2
+        csihash['hits'] = self.match        # a
+        csihash['misses'] = self.arr1       # c
+        csihash['false_alarms'] = self.arr2 # b
+        csihash['d'] = self.arr3            # d correctly forecast no ash.
 
         if area.shape == self.match.shape:
             csihash['CSI'] = (self.match*self.area).sum() / ((self.match*self.area).sum() +
@@ -122,20 +234,25 @@ class CalcScores:
                 print((self.match*self.area).sum().values, (self.arr1 *
                                                             self.area).sum().values, (self.arr2*self.area).sum().values)
                 print('CSI: ', csihash['CSI'].values, 'POD: ',
-                      csihash['POD'].values, 'FAR: ', csihash['FAR'].values)
+                      csihash['POD'].values, 'FAR: ', csihash['FAR'].values, 'F: ', csihash['F'].values)
         else:
             csihash['CSI'] = self.match.sum() / (self.match.sum() + self.arr1.sum() + self.arr2.sum())
-            # hit rate or probability of detection (p 310 Wilks)
+            # hit rate or probability of detection (p 310 Wilks) a/(a+c)
             csihash['POD'] = self.match.sum() / (self.match.sum() + self.arr1.sum())
-            # false alarm ratio (p 310 Wilks)
+            # false alarm ratio (p 310 Wilks) b/(a+b)
+            # proportion of positive forecasts which were wrong.
             csihash['FAR'] = self.arr2.sum() / (self.match.sum() + self.arr2.sum())
+            # false alarm rate (p 311 Wilks) b/(d+b)
+            # ratio of false alarms to total number of non-occurences.
+            csihash['F'] = self.arr2.sum() / (self.arr2.sum() + self.arr3.sum())
 
             if self.verbose == True:
                 print('Match: ', self.match.sum().values, 'Misses: ',
                       self.arr1.sum().values, 'FalseAlarms: ', self.arr2.sum().values)
-            print('CSI: ', csihash['CSI'].values, 'POD: ',
-                  csihash['POD'].values, 'FAR: ', csihash['FAR'].values)
-
+            #print('CSI: {:.3f}'.format(csihash['CSI'].values), 
+            #      'POD: {:.3f}'.format(csihash['POD'].values), 
+            #      'FAR: {:.3f}'.format( csihash['FAR'].values),
+            #      'F  : {:.3f}'.format( csihash['F'].values))
         return csihash
 
     def calc_fss(self, szra=None, makeplots=False):
@@ -158,9 +275,9 @@ class CalcScores:
         fss_dict = {}
         bigN = self.binxra1.size
 
-        if not szra:
-           szra = self.szra
-        else:
+        if isinstance(szra,(int,float)):
+           self.szra = [szra]
+        elif isinstance(szra,(list,np.ndarray)):
            self.szra = szra
 
         # calculate frequency of observations and forecast. 
@@ -345,3 +462,14 @@ def calc_weightsPC(xra, scores):
 
     xraprob = xra2.sum(dim='source') / sum(W)
     return xraprob
+
+
+def plot_roc(xlist,ylist):
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.plot(xlist,ylist,'--ko')
+    ax.plot([0,1],[0,1],'--b')
+    ax.set_xlabel('False Alarm Rate') 
+    ax.set_ylabel('Hit Rate') 
+
+
