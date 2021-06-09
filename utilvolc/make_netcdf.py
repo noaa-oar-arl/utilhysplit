@@ -156,8 +156,8 @@ class MakeNetcdf:
             vdset = volcat.open_dataset(vname2[0], decode_times=True)
             dset.append(vdset)
         print(vname2[0])
-        ensfile = 'ensemble_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        # ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+
+        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
         hxr = xr.open_dataset(netdir+ensfile)
 
         avgmass, maxhgt = volcat.average_volcat(dset, hxr)
