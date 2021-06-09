@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from utilhysplit.evaluation.statmain import cdf
 from utilhysplit.evaluation.statmain import pixel_matched_cdf
+from utilhysplit.evaluation.statmain import get_pixel_matching_threshold
 from utilhysplit.evaluation import plume_stat
 
 """
@@ -183,14 +184,48 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None)
         dra2 = dra2 / nmembers
     return dra2
 
-
 def listvals(dra):
     """
     returns 1d list of values in the data-array
+    used in ens_cdf function.
     """
     vals = dra.values
     vshape = np.array(vals.shape)
     return vals.reshape(np.prod(vshape))
+
+def get_pixel_match(indra, obsra, thresh, return_binary=False):
+    """
+    Counts how many above threshold values in obsra.
+    Sorts indra values form least to greatest.
+    Finds threshold for indra ense members  which would result in same number of
+    above threshold values as in obsra.
+    
+    Stores this threshold value in matchra and returns.
+    applies thresholds to indra to return matchra which have same number of
+    above threshold pixels as obsra.
+
+    Inputs:
+
+    Outputs:
+    threshra : xarray dataArray with threshold for each ensemble value.
+    matchra  : indra with 
+
+    """
+    dra, dim = preprocess(indra)
+    threshlist = []
+    for ens in dra[dim].values: 
+        if dim == "ens":
+            subdra = dra.sel(ens=ens)
+        elif dim == "source":
+            subdra = dra.sel(source=ens)
+        pm_thresh = get_pixel_matching_threshold(obsra,subdra,thresh)
+        threshlist.append(pm_thresh)
+    threshra = xr.DataArray(threshlist, dims=dim)
+    if return_binary:
+        matchra = xr.where(indra > threshra,1,0)
+    else:
+        matchra = xr.where(indra > threshra,forecast,0)
+    return threshra, matchra
 
 def ens_time_fss(
     indralist,
@@ -224,6 +259,8 @@ def ens_fss(
     neighborhoods = [1,3,5,7],
     threshold=0,
     plot=True,
+    return_objects=False,
+    pixel_match=False    
     #pixel_match=None,
 ):
     """
@@ -243,25 +280,25 @@ def ens_fss(
             subdra = dra.sel(ens=ens)
         elif dim == "source":
             subdra = dra.sel(source=ens)
-        scores = plume_stat.CalcScores(obsra, subdra,threshold=threshold)
+        scores = plume_stat.CalcScores(obsra, subdra,threshold=threshold,pixel_match=pixel_match)
         df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
         df1['ens'] = ens
         dflist.append(df1)
 
     # calculate fss for ensemble mean
     meanra = dra.mean(dim=dim)
-    mean_scores = plume_stat.CalcScores(obsra, meanra,threshold=threshold)
-    #mean_scores.binxra2.plot.pcolormesh()
+    mean_scores = plume_stat.CalcScores(obsra, meanra,threshold=threshold,pixel_match=pixel_match)
+    if plot: mean_scores.binxra2.plot.pcolormesh()
     #print('Mean sum', mean_scores.binxra2.sum())
-    #plt.show()
+    plt.show()
     df1 = mean_scores.calc_fss(makeplots=False,szra=neighborhoods)
     df1['ens'] = 'mean'
     dflist.append(df1)
 
     # calculate fss for probabilistic output
-    prob_scores = plume_stat.CalcScores(obsra, dra,threshold=threshold,probabilistic=True)
-    #prob_scores.binxra2.plot.pcolormesh()
-    #plt.show()
+    prob_scores = plume_stat.CalcScores(obsra, dra,threshold=threshold,probabilistic=True,pixel_match=pixel_match)
+    if plot: prob_scores.binxra2.plot.pcolormesh()
+    plt.show()
     #print('Prob sum', prob_scores.binxra2.sum())
     df1 = prob_scores.calc_fss(makeplots=False,szra=neighborhoods)
     df1['ens'] = 'prob'
@@ -271,6 +308,8 @@ def ens_fss(
     dfall = pd.concat(dflist)
     if 'time' in indra.coords:
         dfall['time'] = pd.to_datetime(indra.coords['time'].values)
+    if return_objects:
+       return mean_scores, prob_scores, dfall
     return dfall
 
 def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
@@ -287,11 +326,32 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     uniform = tempdf.pivot(columns='ens',values='uniform',index='time')
     ensfss.plot(ax=ax, legend=None,colormap='tab20')
     colA = uniform.columns[0] 
-    uniform.plot(ax=ax, y=colA, legend=None,colormap='winter')
+    uniform.plot(ax=ax, y=colA, LineStyle='--',legend=None,colormap='winter')
     if 'mean' in ensfss.columns:
         ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
-    #if 'prob' in ensfss.columns:
-    #    ensfss.plot(ax=ax, y='prob',LineWidth=1,colormap="gist_gray")
+    if 'prob' in ensfss.columns:
+        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+
+def plot_afss_ts(ensdf):
+    fig, ax = plt.subplots(1,1)
+    afss = ensdf[['ens','afss','time']]
+    afss = afss.drop_duplicates()
+    afss = afss.pivot(index='time',columns='ens',values='afss')
+    afss.plot(ax=ax, legend=None)
+    if 'mean' in afss.columns:
+        afss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+    if 'prob' in afss.columns:
+        afss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+    ax.set_ylabel('AFSS')
+    return afss
+
+def plot_afss(ensdf):
+    fig, ax = plt.subplots(1,1)
+    afss = ensdf[['ens','afss']]
+    afss = afss.drop_duplicates()
+    afss = afss.set_index('ens')
+    afss.plot(ax=ax, LineStyle='',Marker='o',legend=None)
+    ax.set_ylabel('AFSS')
 
 def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
     """
@@ -321,6 +381,10 @@ def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
     # plot uniform forecast
     for uniformval in uniform:
         plt.plot([nmin,nmax],[uniformval, uniformval], '--r')
+    afss  = ensdf['afss'].unique()
+    for afssval in afss:
+        plt.plot([nmin,nmax],[afssval, afssval], '--k', alpha=0.5)
+       
      
 
 def ens_cdf(

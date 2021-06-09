@@ -41,12 +41,12 @@ def autocorr(ts1, nlist=None):
 def get_pixel_matching_threshold(obsra, modelra, threshold=0):
     obsx = np.sort([x for x in obsra.values.flatten() if x > threshold])
     modelx = np.sort(modelra.values.flatten())
-    num_obs = len(obsx)
-    if len(obsx) > len(modelx):
-       modelx = modelx[0:num_obs]
+    numobs = len(obsx)
+    if numobs < len(modelx):
+       modelx = modelx[len(modelx)-numobs:]
     else:
        print('Warning Pixel Matching: More observed than modeled values above threshold')
-    return modelx[-1] 
+    return modelx[0] 
 
 
 def degdiff(cc, mm):
