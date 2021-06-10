@@ -152,10 +152,10 @@ class MakeNetcdf:
         while x < len(vnames):
             dset.append(volcat.open_dataset(vnames[x], decode_times=True))
             x += 1
-        if os.path.exists(vname2[0]):
+        if len(vname2) != 0:
             vdset = volcat.open_dataset(vname2[0], decode_times=True)
             dset.append(vdset)
-        print(vname2[0])
+            print(vname2[0])
 
         ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
         hxr = xr.open_dataset(netdir+ensfile)
@@ -171,7 +171,7 @@ class MakeNetcdf:
             mass_avg['longitude'] = longit
 
         # Assigning attributes
-        mass_avg.attrs['units'] = vdset.ash_mass_loading.attrs['units']
+        mass_avg.attrs['units'] = dset[0].ash_mass_loading.attrs['units']
         mass_avg.attrs['long_name'] = 'Average total column loading of ash in the highest continuous ash layer for the previous hour'
         mass_avg.attrs['FillValue'] = 'nan'
         hgt_max2 = hgt_max * 1000.  # Converting from km to m
@@ -180,7 +180,7 @@ class MakeNetcdf:
         hgt_max2.attrs['FillValue'] = 'nan'
 
         # Regridding volcat to hysplit resolution
-        if os.path.exists(vname2[0]):
+        if len(vname2) != 0:
             mass_now = hxr.monet.remap_nearest(volcat.get_mass(vdset))
             hgt_now = hxr.monet.remap_nearest(volcat.get_height(vdset))
             # Renaming data variables and merging into dataset
@@ -259,9 +259,9 @@ class MakeNetcdf:
         import numpy as np
 
         ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        #ensfile = 'ensemble_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        # ensfile = 'ensemble_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
         volcfile = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        #volcfile = 'regridded_volcat_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        # volcfile = 'regridded_volcat_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
 
         hxr = xr.open_dataset(ensdir+ensfile).squeeze()
         vxr = xr.open_dataset(volcdir+volcfile).squeeze()
@@ -312,11 +312,7 @@ class MakeNetcdf:
                 BSlistavg.append(BSavg.values)
                 a += 1
             # Adding Brier Scores to the netcdf, with dimension source
-            if threshold[t] == 0.1:
-                thresh = '0p1'
-            else:
-                thresh = str(threshold[t])
-
+            thresh = str(threshold[t])
             threshstr = str(threshold[t])+' g/m^2'
             BSxr = xr.DataArray(BSlist, dims='source').load().rename('BS'+thresh)
             BSxr.attrs['long name'] = 'Brier Score compared to volcat'
