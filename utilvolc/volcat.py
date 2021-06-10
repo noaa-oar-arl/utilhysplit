@@ -208,8 +208,12 @@ def regrid_volcat(das, cdump):
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.time.attrs.update({'standard_name': 'time'})
-    dnew.latitude.attrs.update({'standard_name': 'latitude'})
-    dnew.longitude.attrs.update({'standard_name': 'longitude'})
+
+    # propogate attributes on latitude and longitude
+    dnew.latitude.attrs.update(dset.latitude.attrs)
+    dnew.longitude.attrs.update(dset.longitude.attrs)
+
+
     dnew.attrs.update({'Regrid Method': 'remap_nearest'})
     return dnew
 
@@ -939,7 +943,6 @@ def find_iii(tlist, match):
         if val == match:
             return iii
     return -1
-
 
 def correct_pc(dset):
     """
