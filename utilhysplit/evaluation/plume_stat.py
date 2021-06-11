@@ -30,6 +30,13 @@ Functions:
 # from plume_stat.py. Some of the functions need to be rearranged to avoid this situation.
 
 
+# To go to multicategory forecasts need to add a threshold dimension onto binxra1 and binxra2
+# 
+
+
+
+
+
 class CalcScores:
 
     def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False,
@@ -107,6 +114,47 @@ class CalcScores:
                 self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
 
         self.calc_basics()
+
+    def calc_accuracy_measures(self,threshold=0,exclude_zeros=True):
+        """
+        scalar accuracy measures for continuous predictands.
+
+        
+
+        """
+        # set below threshold values to zero.
+        if threshold == 0:
+            xra1 = xr.where(self.xra1 > threshold, self.xra1,0)
+            xra2 = xr.where(self.xra2 > threshold, self.xra2,0)
+        else:
+            xra1 = xr.where(self.xra1 >= threshold, self.xra1,0)
+            xra2 = xr.where(self.xra2 >= threshold, self.xra2,0)
+
+        if exclude_zeros: 
+            # don't use 0,0 pairs.
+            xra1 = xr.where((xra1==0) & (xra2==0),np.nan,xra1)
+            xra2 = xr.where((xra1==0) & (xra2==0),np.nan,xra2)
+
+        # array with all not nan values as 1.
+        num = xr.where(~np.isnan(xra1),1,0)
+        num = num.sum().values
+
+        # Mean Absolute Error
+        # perfect forecast 0.
+        # typical magnitude for forecast error in a given verification data set
+        maera = np.abs(xra1 - xra2)
+        mae = maera.sum()/num
+
+        # Mean Squared Error
+        # more sensitive to outliers than MAE.
+        msera = (xra1-xra2)**2
+        mse = msera.sum() /num
+        thash = {'MSE':[mse.values], 'MAE':[mae.values]}
+        thash['threshold'] = threshold
+        thash['exclude zeros'] = exclude_zeros
+        thash['N'] = num
+        tframe = pd.DataFrame.from_dict(thash)
+        return tframe
 
     def calc_basics(self, probthresh=None, clip=False):
         """
@@ -254,7 +302,6 @@ class CalcScores:
             csihash['Chance'] = csihash['Posit']*csihash['Freq']
             csihash['GSS'] = ((self.match.sum()-csihash['Chance']) / (self.arr1.sum() +
                                                                       self.arr2.sum() + self.match.sum() - csihash['Chance'])).values
-
             if self.verbose == True:
                 print('Match: ', self.match.sum().values, 'Misses: ',
                       self.arr1.sum().values, 'FalseAlarms: ', self.arr2.sum().values)

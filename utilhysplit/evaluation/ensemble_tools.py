@@ -236,7 +236,7 @@ def ens_time_fss(
     neighborhoods = [1,3,5,7],
     threshold=0,
     plot=True,
-    #pixel_match=None,
+    pixel_match=False,
 ):
     """
     RETURNS
@@ -246,7 +246,7 @@ def ens_time_fss(
     dflist = []
     for pairs in zip(indralist, obsralist):
         df = ens_fss(pairs[0],pairs[1],enslist,sourcelist,neighborhoods,
-                     threshold,plot)
+                     threshold,plot,return_objects=False, pixel_match=pixel_match)
         dflist.append(df)
     return pd.concat(dflist)
 
@@ -261,7 +261,6 @@ def ens_fss(
     plot=True,
     return_objects=False,
     pixel_match=False    
-    #pixel_match=None,
 ):
     """
     indra and obsra need to be same time period and grid.
@@ -319,9 +318,14 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     nval : neighborhood size to plot.
     """
     if nval:
+       if nval not in ensdf['Nlen'].unique():
+          pvals = np.array(ensdf['Nlen'].unique())
+          idx = (np.abs(pvals-nval).argmin())
+          nval = pvals[idx]
+          print('nval not in possible values. changing to {}'.format(nval))
        tempdf = ensdf[ensdf['Nlen']==nval]
+            
     fig, ax = plt.subplots(1,1)
-
     ensfss = tempdf.pivot(columns='ens',values='FSS',index='time')
     uniform = tempdf.pivot(columns='ens',values='uniform',index='time')
     ensfss.plot(ax=ax, legend=None,colormap='tab20')
@@ -331,6 +335,8 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
         ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
     if 'prob' in ensfss.columns:
         ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+    ax.set_ylabel('FSS')
+
 
 def plot_afss_ts(ensdf):
     fig, ax = plt.subplots(1,1)
