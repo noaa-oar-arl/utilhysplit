@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import seaborn as sns
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -244,11 +245,15 @@ def ens_time_fss(
     Nlen, FBS, FBS_ref, FSS, ens, time
     """
     dflist = []
+    df2list = []
     for pairs in zip(indralist, obsralist):
-        df = ens_fss(pairs[0],pairs[1],enslist,sourcelist,neighborhoods,
+        df, df2 = ens_fss(pairs[0],pairs[1],enslist,sourcelist,neighborhoods,
                      threshold,plot,return_objects=False, pixel_match=pixel_match)
         dflist.append(df)
-    return pd.concat(dflist)
+        df2list.append(df2)
+    return pd.concat(dflist), pd.concat(df2list)
+
+
 
 def ens_fss(
     indra,
@@ -269,10 +274,13 @@ def ens_fss(
     pandas dataframe with columns
     Nlen, FBS, FBS_ref, FSS, ens, time
 
+    pandas dataframe with columns
+    MSE, MAE, threshold, exclude_zeros, N, ens
+
     """
     dra, dim = preprocess(indra, enslist, sourcelist)
     dflist = []
-
+    df2list = []
     # calculate fss for each ensemble member.
     for ens in dra[dim].values:
         if dim == "ens":
@@ -281,8 +289,11 @@ def ens_fss(
             subdra = dra.sel(source=ens)
         scores = plume_stat.CalcScores(obsra, subdra,threshold=threshold,pixel_match=pixel_match)
         df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
+        df2 = scores.calc_accuracy_measures(threshold=0)
         df1['ens'] = ens
+        df2['ens'] = ens
         dflist.append(df1)
+        df2list.append(df2)
 
     # calculate fss for ensemble mean
     meanra = dra.mean(dim=dim)
@@ -291,8 +302,11 @@ def ens_fss(
     #print('Mean sum', mean_scores.binxra2.sum())
     plt.show()
     df1 = mean_scores.calc_fss(makeplots=False,szra=neighborhoods)
+    df2 = scores.calc_accuracy_measures(threshold=0)
     df1['ens'] = 'mean'
+    df2['ens'] = 'mean'
     dflist.append(df1)
+    df2list.append(df2)
 
     # calculate fss for probabilistic output
     prob_scores = plume_stat.CalcScores(obsra, dra,threshold=threshold,probabilistic=True,pixel_match=pixel_match)
@@ -305,11 +319,38 @@ def ens_fss(
 
     # add time to dataframe.
     dfall = pd.concat(dflist)
+    dfall2 = pd.concat(df2list)
     if 'time' in indra.coords:
         dfall['time'] = pd.to_datetime(indra.coords['time'].values)
+        dfall2['time'] = pd.to_datetime(indra.coords['time'].values)
     if return_objects:
-       return mean_scores, prob_scores, dfall
-    return dfall
+       return mean_scores, prob_scores, dfall, dfall2
+    return dfall, dfall2
+
+
+
+def plot_ens_accuracy(ensdf,cname='MAE'):
+    if cname == 'RMSE':
+       rvalue = 'RMSE'
+       cname = 'MSE'
+    else:
+       rvalue = cname
+    sns.set()
+    fig, ax = plt.subplots(1,1)
+    sns.set_style('whitegrid')
+    if 'time' in ensdf.columns:
+        print('plotting') 
+        val = ensdf.pivot(columns='ens',values=cname,index='time')
+        if rvalue == 'RMSE':
+           val = val**0.5
+
+        val.plot(ax=ax,legend=None,colormap='tab20') 
+        if 'mean' in val.columns: 
+            val.plot(ax=ax, y='mean', LineWidth=5,colormap='winter')
+    else:
+        val = ensdf.pivot(columns='ens',values=cname,index='time')
+        val = ensdf.pivot(columns='ens',values=cname,index='time')
+    ax.set_ylabel(rvalue)
 
 def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     """

@@ -118,9 +118,6 @@ class CalcScores:
     def calc_accuracy_measures(self,threshold=0,exclude_zeros=True):
         """
         scalar accuracy measures for continuous predictands.
-
-        
-
         """
         # set below threshold values to zero.
         if threshold == 0:
@@ -149,7 +146,7 @@ class CalcScores:
         # more sensitive to outliers than MAE.
         msera = (xra1-xra2)**2
         mse = msera.sum() /num
-        thash = {'MSE':[mse.values], 'MAE':[mae.values]}
+        thash = {'MSE':[float(mse.values)], 'MAE':[float(mae.values)]}
         thash['threshold'] = threshold
         thash['exclude zeros'] = exclude_zeros
         thash['N'] = num
