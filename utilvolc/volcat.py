@@ -561,6 +561,7 @@ class VolcatName:
         self.keylist.append('event scanning strategy')
         self.keylist.append('event date')
         self.keylist.append('event time')
+        self.keylist.append('fid')
         self.keylist.append('volcano id')
         self.keylist.append('description')
         self.keylist.append('WMO satellite id')
@@ -593,8 +594,17 @@ class VolcatName:
         temp = fname.split('_')
         if 'pc' in temp[-1]:
             self.pc_corrected = True
-        for val in zip(self.keylist, temp):
-            self.vhash[val[0]] = val[1]
+        jjj = 0
+        for iii, key in enumerate(self.keylist):
+            val = temp[jjj] 
+            # nishinoshima files have a g00? code before the volcano id.
+            if key == 'fid':
+               if val[0] == 'g':
+                  self.vhash[key] = val
+               else:
+                  continue  
+            self.vhash[key] = val
+            jjj+=1
         # use event date?
         dstr = '{}_{}'.format(self.vhash[self.keylist[3]],
                               self.vhash[self.keylist[4]])
