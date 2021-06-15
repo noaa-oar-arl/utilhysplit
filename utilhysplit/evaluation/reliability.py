@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns        
+from utilhysplit.evaluation import ensemble_tools
  
 def plot_freq(obs,prob,name='freq', thresh=2.5):
     #plt.figure(figsize=(5,20))
@@ -58,6 +59,9 @@ def make_reliability(dflist,thresh,bnum,
                      resample_time=None,
                      resample_type='max',
                      rname='reliability'):
+    """
+    dflist : list of pandas DataFrames
+    """
     # seperate the observation column out.
     # bnum is number of bins in the reliability curve.
     
@@ -207,7 +211,6 @@ class Talagrand:
         #
         if (row[-1] - row[0]) > (360-row[-1] + row[0]):
             return -1 
-
  
     def add_data(self,df, wind_direction=False):
         # Assumes no duplicate values in forecast.
@@ -325,7 +328,8 @@ class ReliabilityCurve:
             self.nohash[binval] = 0
   
         self.thresh = thresh
- 
+
+
     def reliability_add(self, obs, prob):
         """
         obs : pandas time series
@@ -336,9 +340,37 @@ class ReliabilityCurve:
         df.dropna(axis=0, inplace=True)
         cols = ['obs','prob']
         df.columns = cols
+        self.reliability_add_sub(df)
         #print(type(df))
         #print(df[0:10])
-        for index, row in df.iterrows():
+
+
+    def reliability_add_xra(self,obs,forecast,fill=True):
+        """
+        obs      : xarray with observations. Needs to be same size in x,y as forecast.
+        forecast : xarray with dimensions of x,y  and 'ens' and/or 'source'
+        """
+        prob = ensemble_tools.ATL(forecast, thresh= self.thresh, norm=True) 
+        modelra = prob.values.flatten()
+        obsra = obs.values.flatten()
+        if modelra.size != obsra.size:
+           print('Cannot add data, inputs not the same size {} {}', modelra.size, obsra.size)
+           return -1
+        else:
+           dfin = pd.DataFrame(zip(obsra,modelra))
+           dfin.columns = ['obs','prob']
+        if fill:
+            self.reliability_add_sub(dfin.fillna(0))
+        else:
+            self.reliability_add_sub(dfin.dropna())
+        return dfin 
+          
+
+    def reliability_add_sub(self, dfin):
+        """
+        dfin : pandas dataframe with 'prob' and 'obs' columns.
+        """
+        for index, row in dfin.iterrows():
             prob = row['prob'] 
             for pbin in self.binlist:
                 if prob <= pbin: 
