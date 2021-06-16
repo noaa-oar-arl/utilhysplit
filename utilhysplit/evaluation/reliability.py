@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns        
+import seaborn as sns     
+import xarray as xr   
 from utilhysplit.evaluation import ensemble_tools
  
 def plot_freq(obs,prob,name='freq', thresh=2.5):
@@ -211,6 +212,33 @@ class Talagrand:
         #
         if (row[-1] - row[0]) > (360-row[-1] + row[0]):
             return -1 
+
+    def add_data_xra(self,obs,forecast):
+        """
+        obs : xra
+        forecast : xra
+        must be on same grid with dimensions of x,y,ens
+        """
+
+        obs = obs.expand_dims({'ens':['obs']})
+        dra = xr.concat([obs,forecast],dim='ens')
+        dra =  dra.fillna(0)
+
+        dra = dra.drop('latitude')
+        dra = dra.drop('longitude')
+
+        df = dra.to_dataframe()
+        df = df.reset_index()
+        # create unique index for each measurement point.
+        df['iii'] = df.apply(lambda row: '{}_{}'.format(row['x'],row['y']),axis=1) 
+
+        # creates a dataframe that can be input into 'add_data' function.
+        # each row represents a point with the ensemble data and observation
+        # in a column labeled 'obs'
+        df = df.pivot(columns='ens',values='ash_mass_loading',index='iii')
+        self.add_data(df)
+        return df
+
  
     def add_data(self,df, wind_direction=False):
         # Assumes no duplicate values in forecast.
@@ -220,9 +248,6 @@ class Talagrand:
         obs_col = obs_col[0]
         # this keeps rows which have at least one value above threshold.
         df2 = df[(df>self.thresh).any(1)]
-        # this keeps rows which have at least one value below max threshold.
-        if self.threshmax:
-            df2 = df2[(df2<=self.threshmax).any(1)]
 
         for iii in np.arange(0,len(df2)):
             # selects row
