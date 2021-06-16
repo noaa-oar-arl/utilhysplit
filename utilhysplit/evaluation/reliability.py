@@ -119,7 +119,7 @@ class Talagrand:
 
     def __init__(self, thresh,nbins,background=0,verbose=False):
         self.verbose = verbose
-        self.thresh = thresh
+        self.thresh = float(thresh)
         self.background = background
         self.ranklist = [] 
         self.obsvals = []
@@ -220,6 +220,10 @@ class Talagrand:
         obs_col = obs_col[0]
         # this keeps rows which have at least one value above threshold.
         df2 = df[(df>self.thresh).any(1)]
+        # this keeps rows which have at least one value below max threshold.
+        if self.threshmax:
+            df2 = df2[(df2<=self.threshmax).any(1)]
+
         for iii in np.arange(0,len(df2)):
             # selects row
             row = df2.iloc[iii]
@@ -320,14 +324,19 @@ class ReliabilityCurve:
             self.binlist = num
         else: 
             self.binlist = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-     
+
         self.yeshash = {}
         self.nohash = {}
         for binval in self.binlist:
             self.yeshash[binval] = 0
             self.nohash[binval] = 0
   
-        self.thresh = thresh
+        if isinstance(thresh,list) or isinstance(thresh,np.ndarray):
+            self.thresh = float(thresh[0])
+            self.threshmax = float(thresh[1])
+        else:
+            self.thresh = float(thresh)
+            self.threshmax = None
 
 
     def reliability_add(self, obs, prob):
@@ -350,7 +359,9 @@ class ReliabilityCurve:
         obs      : xarray with observations. Needs to be same size in x,y as forecast.
         forecast : xarray with dimensions of x,y  and 'ens' and/or 'source'
         """
-        prob = ensemble_tools.ATL(forecast, thresh= self.thresh, norm=True) 
+        if self.threshmax: thresh= [self.thresh,self.threshmax]
+        else: thresh = self.thresh
+        prob = ensemble_tools.ATL(forecast, thresh=thresh, norm=True) 
         modelra = prob.values.flatten()
         obsra = obs.values.flatten()
         if modelra.size != obsra.size:
@@ -370,6 +381,9 @@ class ReliabilityCurve:
         """
         dfin : pandas dataframe with 'prob' and 'obs' columns.
         """
+        # if no max threshold then set to 10x largest value in set.
+        if not self.threshmax: threshmax = float(10*np.max(dfin['obs'].values))
+        else: threshmax = self.threshmax 
         for index, row in dfin.iterrows():
             prob = row['prob'] 
             for pbin in self.binlist:
@@ -377,7 +391,7 @@ class ReliabilityCurve:
                    binval = pbin
                    #print('break', binval)
                    break 
-            if row['obs'] >= self.thresh:
+            if row['obs'] >= self.thresh and row['obs'] <= threshmax:
                self.yeshash[binval] += 1
             else:
                self.nohash[binval] += 1
@@ -433,8 +447,15 @@ class ReliabilityCurve:
         plt.plot(xxx, noval, '-r.',label='Obs below')
         plt.show()
 
-
 def sub_reliability_number_plot(rc,ax, clr='-g.',fs=10,label=''):
+    """
+    rc : ReliabilityCurve object
+    ax : 
+    clr :  string
+    fs : integer (fontsize on plot)
+    label : str (label)
+    """
+
     xxx,yyy,nnn,yesval,noval = rc.get_binvals()
     xx2 = []
     nn2 = []
@@ -453,6 +474,17 @@ def sub_reliability_number_plot(rc,ax, clr='-g.',fs=10,label=''):
     return ax
 
 def sub_reliability_plot(rc,ax, clr='-g.',fs=10,label=''):
+    """
+    Plot reliability curve defined in ReliabilityCurve object.
+
+    rc : ReliabilityCurve object
+    ax : 
+    clr :  string
+    fs : integer (fontsize on plot)
+    label : str (label)
+    returns :
+    ax
+    """
     xxx,yyy,nnn,yesval,noval = rc.get_binvals()
     xx2 = []
     yy2 = []
@@ -465,10 +497,8 @@ def sub_reliability_plot(rc,ax, clr='-g.',fs=10,label=''):
     yes_sum = np.array(yesval).sum()
     no_sum = np.array(noval).sum()
     climate = yes_sum / (yes_sum + no_sum)
-    print(climate)
     ax.set_ylabel('Fraction observations',fontsize=fs)
     clr2 = clr.replace('-','--')[0:-1]
-    print(clr2)
     ax.plot([0,1],[climate,climate], clr2 )
     ax.tick_params(labelsize=fs)
     return ax

@@ -33,8 +33,71 @@ Functions:
 # To go to multicategory forecasts need to add a threshold dimension onto binxra1 and binxra2
 # 
 
+def test_fssA():
+    """
+    create test inputs for CalcScores.
+    specifically for testing calc_fss.
+    """
+    # just a 3x3 array
+    sz = (3,3)
+    a = np.zeros(sz)
+    b = np.zeros(sz)
+    # only 2 observed values
+    yval = [2,0]
+    xval = [2,0]
+    for val in zip(xval,yval):
+        try:
+            a[int(val[0]),int(val[1])] = 1
+        except:
+            pass
+    # could use 2 modeled values.
+    #yval2 = [1,0]
+    #xval2 = [1,1]
+    # only 1 modeled values
+    yval2 = [1]
+    xval2 = [1]
+    for val in zip(xval2,yval2):
+        try:
+            b[int(val[0]),int(val[1])] = 1
+        except:
+            pass
+    axra = xr.DataArray(a,dims={'x':xval,'y':yval})
+    bxra = xr.DataArray(b,dims={'x':xval2,'y':yval2})
+    cs = CalcScores(axra, bxra,threshold=0.1,pixel_match=False)
+    df = cs.calc_fss(szra=[1,3,5,9]) 
+    return df, axra, bxra
 
-
+def test_fssB():
+    """
+    create test inputs for CalcScores.
+    by drawing from a gaussian distribution.
+    """
+    sz = (51,51)
+    mean = sz[0]/2.0
+    f0 = 0.5  # frequency of obs
+    fm = 0.1  # frequency of model
+    a = np.zeros(sz)
+    b = np.zeros(sz)
+    n0 = int(f0 * sz[0]*sz[1])
+    nm = int(fm * sz[0]*sz[1])
+    yval = np.random.normal(mean,mean/4.0,n0)
+    xval = np.random.normal(mean,mean/4.0,n0)
+    for val in zip(xval,yval):
+        try:
+            a[int(val[0]),int(val[1])] = 1
+        except:
+            pass
+    yval2 = np.random.normal(mean,mean/4.0,nm)
+    xval2 = np.random.normal(mean,mean/4.0,nm)
+    for val in zip(xval2,yval2):
+        try:
+            b[int(val[0]),int(val[1])] = 1
+        except:
+            pass
+    axra = xr.DataArray(a,dims={'x':xval,'y':yval})
+    bxra = xr.DataArray(b,dims={'x':xval2,'y':yval2})
+    print(axra.sum(), bxra.sum())
+    return axra, bxra
 
 
 class CalcScores:
@@ -321,7 +384,11 @@ class CalcScores:
         szra: a list of the number of pixels (neightborhood length) to use 
         in fractions calculation default is to use 1, 3, 5, 7 pixels size squares
         makeplots: boolean
-         
+        
+        Note: according to Roberts 2008, the FSS should appproach AFSS as n-> 2N-1 where N is 
+        the domain size. It does. However the FSS at n=N can be larger than this value
+        because of the inclusion of the zero padding at the edges. See the test_fssA function for an example.
+
         Return
         df : pandas dataframe """
         # 2021 Jun 3 amc added random, uniform and afss to dataframe.
@@ -337,7 +404,7 @@ class CalcScores:
 
         # calculate frequency of observations and forecast.
         fobs = float(self.binxra1.sum()) / bigN
-        fmod = float(self.binxra2.sum() / bigN)
+        fmod = float(self.binxra2.sum()) / bigN
         # random forecast has fss equal to frequency of observations
         random_fss = fobs
         # uniform forecast has fss equal to 0.5 + random
@@ -363,10 +430,9 @@ class CalcScores:
                 print('Convolution array: ', filter_array)
 
             start = time.time()
-            frac_arr1 = convolve2d(self.binxra1, filter_array, mode='same')
-            frac_arr2 = convolve2d(self.binxra2, filter_array, mode='same')
+            frac_arr1 = convolve2d(self.binxra1, filter_array, mode='same',fillvalue=0,boundary='fill')
+            frac_arr2 = convolve2d(self.binxra2, filter_array, mode='same',fillvalue=0,boundary='fill')
             end = time.time()
-
             # Calculate the Fractions Brier Score (FBS)
             fbs = np.power(frac_arr1 - frac_arr2, 2).sum() / float(bigN)
 
@@ -380,7 +446,11 @@ class CalcScores:
                 print('FBS ', fbs)
                 print('FBS reference', fbs_ref)
                 print('FSS ', fss)
-                print(' ')
+                print('AFSS ', afss)
+                print('N ', bigN, frac_arr1.size, frac_arr2.size)
+                print('fobs ', fobs)
+                print('fmod ', fmod)
+                print('size ', sz)
             fss_tmp = dict({'Nlen': conv_array[0], 'FBS': fbs, 'FBS_ref': fbs_ref, 'FSS': fss})
             if makeplots == True:
                 fig = plt.figure(1, figsize=(10, 15))
@@ -388,8 +458,8 @@ class CalcScores:
                 ax2 = fig.add_subplot(1, 2, 2)
                 cb = ax1.imshow(frac_arr1)
                 cb2 = ax2.imshow(frac_arr2)
-                # plt.colorbar(cb)
-                # plt.colorbar(cb2)
+                plt.colorbar(cb,ax=ax1)
+                plt.colorbar(cb2)
                 plt.show()
 
             fss_dict[sz] = fss_tmp

@@ -148,6 +148,7 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None)
      sourcelist : list of values to use for 'source' coordinate
 
      thresh : int or float. If 0 then use > for test. otherwise use >=.
+     thresh : list or npndarray of 2 floats. Number of ensemble members between the two values.
 
      weights : numpy array of same length as enslist + sourcelist containing weight for
                each member.
@@ -166,10 +167,27 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None)
     # handle whether using 'ens' dimension, 'source' dimension or both.
     dra, dim = preprocess(indra, enslist, sourcelist)
 
+    # allow for multiple category forecasts.
+    # probability that value is between two values.
+    if isinstance(thresh,list) or isinstance(thresh,np.ndarray):
+        threshmax = float(thresh[1])
+        thresh = float(thresh[0])
+    else:
+        thresh = float(thresh)
+        threshmax = None
+
+    # place ones where above threshold. zeros elsewhere.
     if thresh == 0:
         dra2 = xr.where(dra > thresh, 1, 0)
     else:
         dra2 = xr.where(dra >= thresh, 1, 0)
+    
+    # if this threshold is not None.
+    if threshmax:
+        # place ones where below max threshold.
+        dra3 = xr.where(dra <= threshmax, 1, 0)
+        # multiply with dra2 to get where above and below threshold.
+        dra2 = dra3 * dra2
 
     if isinstance(weights, (np.ndarray, list)):
         if len(weights) != len(dra2[dim].values):
@@ -243,6 +261,9 @@ def ens_time_fss(
     RETURNS
     pandas dataframe with columns
     Nlen, FBS, FBS_ref, FSS, ens, time
+
+    pandas dataframe with columns
+    MSE, MAE, threshold, exclude_zeros, N, ens
     """
     dflist = []
     df2list = []
@@ -400,7 +421,9 @@ def plot_afss(ensdf):
     afss.plot(ax=ax, LineStyle='',Marker='o',legend=None)
     ax.set_ylabel('AFSS')
 
-def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
+def plot_ens_fss(ensdf, sizemult=1, 
+                 timelist=None, enslist=None, nlist=None,
+                 plot_afss=False):
     """
     Plot FSS on y and Neighborhood length on x.
 
@@ -428,9 +451,10 @@ def plot_ens_fss(ensdf, sizemult=1, timelist=None, enslist=None, nlist=None):
     # plot uniform forecast
     for uniformval in uniform:
         plt.plot([nmin,nmax],[uniformval, uniformval], '--r')
-    afss  = ensdf['afss'].unique()
-    for afssval in afss:
-        plt.plot([nmin,nmax],[afssval, afssval], '--k', alpha=0.5)
+    if plot_afss:
+        afss  = ensdf['afss'].unique()
+        for afssval in afss:
+            plt.plot([nmin,nmax],[afssval, afssval], '--k', alpha=0.5)
        
      
 
