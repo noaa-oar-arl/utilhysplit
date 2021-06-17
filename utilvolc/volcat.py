@@ -439,6 +439,7 @@ def write_regridded_files(cdump, tdir, wdir,
 
 def write_parallax_corrected_files(tdir, wdir, vid=None,
                                    daterange=None, verbose=False,
+                                   flist=None,
                                    tag='pc'):
     """
     tdir : str : location of volcat files.
@@ -457,9 +458,15 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
     already exists, then this function returns a message to that effect and 
     does not overwrite the file.
     """
-    vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
+    if not flist:
+        vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
+    else: 
+        vlist = flist
     for iii, val in enumerate(vlist):
-        fname = val.fname
+        if isinstance(val,str):
+            fname = val
+        else:
+            fname = val.fname
         new_fname = fname.replace('.nc', '_{}.nc'.format(tag))
         if os.path.isfile(os.path.join(wdir, new_fname)):
             print('Netcdf file exists {} in directory {} cannot write '.format(new_fname, wdir))
