@@ -373,6 +373,16 @@ def average_volcat(das, cdump, convert_nans=True):
     return avgmass, maxhgt
 
 
+def get_volcat_name_df(tdir, daterange=None, vid=None):
+    """
+    Returns dataframe with columns being the information in the vhash
+    dictionary of the VolcatName class. This is all the information collected from the filename.
+    """
+    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2)
+    vlist = [x.vhash for x in tlist]
+    return pd.DataFrame(vlist)
+
+
 def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True,
                     decode_times=True,verbose=False, include_last=True):
     """
@@ -485,7 +495,7 @@ def find_volcat(tdir, vid=None, daterange=None,
 
     """
     import sys
-    vnhash = {}  # dictionary
+    vhash = {}  # dictionary
     nflist = []  # list of filenames
     vnlist = []  # list of filenames
     if not os.path.isdir(tdir):
@@ -507,15 +517,18 @@ def find_volcat(tdir, vid=None, daterange=None,
                 continue
         if vid and vn.vhash['volcano id'] != vid:
             continue
-        if vn.date not in vnhash.keys():
-            vnhash[vn.date] = vn
-            nflist.append(fln)
+        if return_val == 1:
+            if vn.date not in vhash.keys():
+                vhash[vn.date] = vn
+            else:
+                print('two files with same date')
+                print(vhash[vn.date].compare(vn))
+        elif return_val == 2:
             vnlist.append(vn)
-        else:
-            print('two files with same date')
-            print(vnhash[vn.date].compare(vn))
+        elif return_val == 3:
+            nflist.append(fln)
     if return_val == 1:
-        return vnhash
+        return vhash
     elif return_val == 2:
         return vnlist
     elif return_val == 3:
@@ -555,6 +568,7 @@ class VolcatName:
         self.vhash = {}
         self.date = None
         self.dtfmt = "s%Y%j_%H%M%S"
+        self.image_dtfmt = "b%Y%j_%H%M%S"
 
         self.keylist = ['algorithm name']
         self.keylist.append('satellite platform')
@@ -572,6 +586,32 @@ class VolcatName:
 
         self.pc_corrected = False
         self.parse(fname)
+        self.vhash['filename'] = fname
+
+    def __lt__(self,other):
+        """
+        sort by 
+        volcano id first.
+        date
+        feature id if it exists. 
+        """
+        if self.vhash['volcano id'] < other.vhash['volcano id']:
+           return True
+        if 'fid' in self.vhash.keys() and 'fid' in other.vhash.keys():
+           if self.vhash['fid'] < other.vhash['fid']:
+              return True
+        if self.date < other.date:
+           return True
+        if self.image_date < other.image_date:
+           return True
+        sortlist = ['feature id', 'image scanning strategy',
+                    'WMO satellite id', 'description','event scanning strategy',
+                    'satellite platform','algorithm name']
+        for key in sortlist:
+            if key in other.vhash.keys() and key in self.vhash.keys():
+               if self.vhash[key] < other.vhash[key]: return True 
+               
+
 
     def compare(self, other):
         """
@@ -582,8 +622,9 @@ class VolcatName:
         """
         diffhash = {}
         for key in self.keylist:
-            if other.vhash[key] != self.vhash[key]:
-                diffhash[key] = (other.vhash[key], self.vhash[key])
+            if key in other.vhash.keys() and key in self.vhash.keys():
+                if other.vhash[key] != self.vhash[key]:
+                    diffhash[key] = (other.vhash[key], self.vhash[key])
         return diffhash
 
     def __str__(self):
@@ -605,11 +646,19 @@ class VolcatName:
                   continue  
             self.vhash[key] = val
             jjj+=1
-        # use event date?
+        # Event date marks date of the data collection
         dstr = '{}_{}'.format(self.vhash[self.keylist[3]],
                               self.vhash[self.keylist[4]])
         self.date = datetime.datetime.strptime(dstr, self.dtfmt)
+        # Image date is ?
+        dstr = '{}_{}'.format(self.vhash[self.keylist[10]],
+                              self.vhash[self.keylist[11]])
+        self.image_date = datetime.datetime.strptime(dstr, self.image_dtfmt)
         self.vhash[self.keylist[11]] = self.vhash[self.keylist[11]].replace('.nc', '')
+
+        self.vhash['idate'] = self.image_date
+        self.vhash['edate'] = self.date
+
         return self.vhash
 
     def create_name(self):
