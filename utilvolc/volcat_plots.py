@@ -155,10 +155,13 @@ class VolcatPlots:
         ax.set_yscale('log')
         ax.set_ylim([0.001,50])
         
-    def sub_plot_area(self,ax):
+    def sub_plot_area(self,ax,clr=-1):
         yval = self.arealist
         xval = self.dlist
-        ax.plot(xval,yval,self.main_clr)
+        if clr < 0:
+            ax.plot(xval,yval,self.main_clr)
+        else:
+            ax.plot(xval,yval,self.sub_clrs[clr])
         ax.set_ylabel('Total Area (km$^2$)')
         ax.set_xlabel('Time')
 
