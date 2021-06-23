@@ -303,7 +303,8 @@ class CalcScores:
             print('b(false alarm) forecast yes, obs no  : {}'.format(bval))
             print('c(misses) forecast no, obs yes : {}'.format(cval))
             print('d(correct no) forecast no, obs no : {}'.format(dval))
-        thash = [{'a': [aval], 'b': [bval], 'c': [cval], 'd': [dval]}]
+        thash = [{'a (hits)': [aval], 'b (false alarms)': [bval],
+                  'c (misses)': [cval], 'd (correct no)': [dval]}]
         if multi:
             dimens = ['source', 'ens']
             for x in dimens:
