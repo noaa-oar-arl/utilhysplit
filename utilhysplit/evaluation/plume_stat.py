@@ -375,8 +375,8 @@ class CalcScores:
             csihash['Freq'] = csihash['Events'].values / csihash['Total'].values
             csihash['Posit'] = (self.match*self.area).sum() + (self.arr2*self.area).sum()
             csihash['Chance'] = csihash['Posit'].values*csihash['Freq'].values
-            csihash['GSS'] = ((self.match*self.area).sum()-csihash['Chance'].values) / (csihash['Posit'].values +
-                                                                                        csihash['Events'].values - (self.match*self.area).sum()) - csihash['Chance'].values
+            csihash['GSS'] = ((self.match*self.area).sum()-csihash['Chance'].values) / ((csihash['Posit'].values +
+                                                                                         csihash['Events'].values - (self.match*self.area).sum()) - csihash['Chance'].values)
 
             if self.verbose == True:
                 print('used area')
