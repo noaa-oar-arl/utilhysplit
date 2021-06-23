@@ -336,7 +336,7 @@ class CalcScores:
             tframe['pm_threshold'] = self.pm_threshold
         return tframe
 
-    def calc_csi(self, multi=False, dframe=False, verbose=False):
+    def calc_csi(self, verbose=False):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
         Inputs:
         match: hits
@@ -353,8 +353,8 @@ class CalcScores:
         """
         area = np.array(self.area)
         # Getting contingency table from get_contingency_table()
-        tframe = self.get_contingency_table(multi=multi)
-
+        #tframe = self.get_contingency_table(multi=multi)
+        csihash = []
         # Assigning a, b, and c arrays to csihash dictionary
         # Made these single values, rather than arrays - AMR 6/4/2021
         csihash['hits'] = self.match.sum().values
