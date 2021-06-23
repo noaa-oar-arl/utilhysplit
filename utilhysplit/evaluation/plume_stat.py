@@ -31,7 +31,7 @@ Functions:
 
 
 # To go to multicategory forecasts need to add a threshold dimension onto binxra1 and binxra2
-# 
+#
 
 def test_fssA():
     """
@@ -39,40 +39,41 @@ def test_fssA():
     specifically for testing calc_fss.
     """
     # just a 3x3 array
-    sz = (3,3)
+    sz = (3, 3)
     a = np.zeros(sz)
     b = np.zeros(sz)
     # only 2 observed values
-    yval = [2,0]
-    xval = [2,0]
-    for val in zip(xval,yval):
+    yval = [2, 0]
+    xval = [2, 0]
+    for val in zip(xval, yval):
         try:
-            a[int(val[0]),int(val[1])] = 1
+            a[int(val[0]), int(val[1])] = 1
         except:
             pass
     # could use 2 modeled values.
-    #yval2 = [1,0]
-    #xval2 = [1,1]
+    # yval2 = [1,0]
+    # xval2 = [1,1]
     # only 1 modeled values
     yval2 = [1]
     xval2 = [1]
-    for val in zip(xval2,yval2):
+    for val in zip(xval2, yval2):
         try:
-            b[int(val[0]),int(val[1])] = 1
+            b[int(val[0]), int(val[1])] = 1
         except:
             pass
-    axra = xr.DataArray(a,dims={'x':xval,'y':yval})
-    bxra = xr.DataArray(b,dims={'x':xval2,'y':yval2})
-    cs = CalcScores(axra, bxra,threshold=0.1,pixel_match=False)
-    df = cs.calc_fss(szra=[1,3,5,9]) 
+    axra = xr.DataArray(a, dims={'x': xval, 'y': yval})
+    bxra = xr.DataArray(b, dims={'x': xval2, 'y': yval2})
+    cs = CalcScores(axra, bxra, threshold=0.1, pixel_match=False)
+    df = cs.calc_fss(szra=[1, 3, 5, 9])
     return df, axra, bxra
+
 
 def test_fssB():
     """
     create test inputs for CalcScores.
     by drawing from a gaussian distribution.
     """
-    sz = (51,51)
+    sz = (51, 51)
     mean = sz[0]/2.0
     f0 = 0.5  # frequency of obs
     fm = 0.1  # frequency of model
@@ -80,22 +81,22 @@ def test_fssB():
     b = np.zeros(sz)
     n0 = int(f0 * sz[0]*sz[1])
     nm = int(fm * sz[0]*sz[1])
-    yval = np.random.normal(mean,mean/4.0,n0)
-    xval = np.random.normal(mean,mean/4.0,n0)
-    for val in zip(xval,yval):
+    yval = np.random.normal(mean, mean/4.0, n0)
+    xval = np.random.normal(mean, mean/4.0, n0)
+    for val in zip(xval, yval):
         try:
-            a[int(val[0]),int(val[1])] = 1
+            a[int(val[0]), int(val[1])] = 1
         except:
             pass
-    yval2 = np.random.normal(mean,mean/4.0,nm)
-    xval2 = np.random.normal(mean,mean/4.0,nm)
-    for val in zip(xval2,yval2):
+    yval2 = np.random.normal(mean, mean/4.0, nm)
+    xval2 = np.random.normal(mean, mean/4.0, nm)
+    for val in zip(xval2, yval2):
         try:
-            b[int(val[0]),int(val[1])] = 1
+            b[int(val[0]), int(val[1])] = 1
         except:
             pass
-    axra = xr.DataArray(a,dims={'x':xval,'y':yval})
-    bxra = xr.DataArray(b,dims={'x':xval2,'y':yval2})
+    axra = xr.DataArray(a, dims={'x': xval, 'y': yval})
+    bxra = xr.DataArray(b, dims={'x': xval2, 'y': yval2})
     print(axra.sum(), bxra.sum())
     return axra, bxra
 
@@ -103,8 +104,8 @@ def test_fssB():
 class CalcScores:
 
     def __init__(self, xra1, xra2, threshold=0., szra=[1, 3, 5, 7], area=None, verbose=False,
-                 probabilistic=False, pixel_match=False):
-        """ Class of tools for calculating various Scores and Skill Scores, 
+                 probabilistic=False, pixel_match=False, multi=False, clip=False):
+        """ Class of tools for calculating various Scores and Skill Scores,
         relying on binary arrays and the 2x2 contingency table
         xra1 and xra2 need to be on the same grid.
         See monetio.remap_nearest to remap arrays.
@@ -119,6 +120,8 @@ class CalcScores:
         probabilistic : boolean. if True checks for 'ens' or 'source' dimension and creates probabilstic field instead of binary.
         pixel_match : boolean. if True calculate threshold for xra2 by matching number of pixels that are above
                       input threshold in xra1.
+        multi: boolean. If True, calculates contingency table for all ensemble members as well as total ensemble.
+        clip: boolean. If True, clips around forecast array, reducing number of correct no-forecasts
         ----------------------------
         Functions:
         calc_csi: calculates the critical success index (gilbert score), probability of detection, false alarm rate, etc.
@@ -132,9 +135,13 @@ class CalcScores:
         # 2021 Jun 9 amc add new function get_contingency_table. similar to calc_csi.
         # 2021 Jun 9 amc add self.arr3 which shows correctly forecast 0 values.
         # 2021 Jun 9 amc add 'd' to the csihash
+        # 2021 Jun 17 amr added squeeze() to xra1 and xra2
+        # 2021 Jun 17 amr added if statement to calculate binxra1/binxra2 if threshold == 0.
+        # 2021 Jun 21 amr made get_contingency_table produce values for each ensemble member and total ensemble.
+        # 2021 Jun 21 amr Added capability of calc_csi to use get_contingency_table pandas dataframe rather than dictionary.
 
-        self.xra1 = xra1
-        self.xra2 = xra2
+        self.xra1 = xra1.squeeze()
+        self.xra2 = xra2.squeeze()
         self.threshold = threshold
         self.szra = szra
         self.area = area
@@ -142,7 +149,8 @@ class CalcScores:
 
         self.pm_threshold = None  # threshold from pixel matching, if any.
 
-        # CHECK THIS.
+        # TO DO: Depends on input array
+        # might need to specify which dimensions to use. Not a problem if using regridded volcat netcdf
         self.allpts = (self.xra1.shape[0] * self.xra1.shape[1])
 
         # process the  observational data
@@ -151,7 +159,10 @@ class CalcScores:
         elif 'source' in xra1.dims and probabilistic:
             self.binxra1 = ensemble_tools.ATL(xra1, thresh=threshold, norm=True)
         else:
-            self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
+            if threshold == 0.:
+                self.binxra1 = xr.where(self.xra1 > self.threshold, 1., 0.)
+            else:
+                self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
 
         # process the model data if pixel matching is desired
         if pixel_match:
@@ -174,29 +185,32 @@ class CalcScores:
                 self.binxra2 = ensemble_tools.ATL(xra2, thresh=threshold, norm=True)
             # if input is deterministic
             else:
-                self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
+                if threshold == 0.:
+                    self.binxra2 = xr.where(self.xra2 > self.threshold, 1., 0.)
+                else:
+                    self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
 
         self.calc_basics()
 
-    def calc_accuracy_measures(self,threshold=0,exclude_zeros=True):
+    def calc_accuracy_measures(self, threshold=0, exclude_zeros=True):
         """
         scalar accuracy measures for continuous predictands.
         """
         # set below threshold values to zero.
         if threshold == 0:
-            xra1 = xr.where(self.xra1 > threshold, self.xra1,0)
-            xra2 = xr.where(self.xra2 > threshold, self.xra2,0)
+            xra1 = xr.where(self.xra1 > threshold, self.xra1, 0)
+            xra2 = xr.where(self.xra2 > threshold, self.xra2, 0)
         else:
-            xra1 = xr.where(self.xra1 >= threshold, self.xra1,0)
-            xra2 = xr.where(self.xra2 >= threshold, self.xra2,0)
+            xra1 = xr.where(self.xra1 >= threshold, self.xra1, 0)
+            xra2 = xr.where(self.xra2 >= threshold, self.xra2, 0)
 
-        if exclude_zeros: 
+        if exclude_zeros:
             # don't use 0,0 pairs.
-            xra1 = xr.where((xra1==0) & (xra2==0),np.nan,xra1)
-            xra2 = xr.where((xra1==0) & (xra2==0),np.nan,xra2)
+            xra1 = xr.where((xra1 == 0) & (xra2 == 0), np.nan, xra1)
+            xra2 = xr.where((xra1 == 0) & (xra2 == 0), np.nan, xra2)
 
         # array with all not nan values as 1.
-        num = xr.where(~np.isnan(xra1),1,0)
+        num = xr.where(~np.isnan(xra1), 1, 0)
         num = num.sum().values
 
         # Mean Absolute Error
@@ -208,8 +222,8 @@ class CalcScores:
         # Mean Squared Error
         # more sensitive to outliers than MAE.
         msera = (xra1-xra2)**2
-        mse = msera.sum() /num
-        thash = {'MSE':[float(mse.values)], 'MAE':[float(mae.values)]}
+        mse = msera.sum() / num
+        thash = {'MSE': [float(mse.values)], 'MAE': [float(mae.values)]}
         thash['threshold'] = threshold
         thash['exclude zeros'] = exclude_zeros
         thash['N'] = num
@@ -220,7 +234,7 @@ class CalcScores:
         """
         probthresh : int or float
         The probthresh can be used to convert probabilistic forecasts back to
-        deterministic forecasts. 
+        deterministic forecasts.
         This can be used for creating things like ROC diagrams.
         """
 
@@ -246,7 +260,7 @@ class CalcScores:
         self.arr3 = xr.where(self.match > 0, 0, 1)
         self.totalpts = binxra1.shape[0] * binxra1.shape[1]
 
-    def calc_roc(self, clip=True):
+    def calc_roc(self, clip=True, multi=False):
         """
         For probabilistic forecasts.
         calculate the ROC (relative operating characteristic)
@@ -254,11 +268,11 @@ class CalcScores:
         Convert probabilistic forecast to binary using a probability threshold.
         Then compute False Alarm Rate and Hit Rate for various probability thresholds.
         ROC curve is the Hit Rate (y-axis) vs. False Alarm Rate (x-axis).
-        See Wilks Chapter 8.
+        See Wilks Chapter 8 (7 in 2nd edition).
 
         One issue with plume forecasts is the number of correclty forecast 0 values
         can be quite large and can be increased simply by increasing domain. This leads
-        to a very small value of F (values on x axis). 
+        to a very small value of F (values on x axis).
 
         Should this be ameliorated by clipping the domain tightly around the plume area?
         clip=True will do this.
@@ -273,24 +287,48 @@ class CalcScores:
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
             self.calc_basics(prob, clip=clip)
-            csihash = self.calc_csi()
+            csihash = self.calc_csi(multi=multi)
             xlist.append(csihash['F'])
             ylist.append(csihash['POD'])
         return xlist, ylist
 
-    def get_contingency_table(self, probthresh=None, clip=False, verbose=False):
+    def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False):
         self.calc_basics(probthresh, clip)
+
         aval = self.match.sum().values
         cval = self.arr1.sum().values
         bval = self.arr2.sum().values
         dval = self.arr3.sum().values
         if verbose:
-            print('a forecast yes, obs yes : {}'.format(aval))
-            print('b forecast yes, obs no  : {}'.format(bval))
-            print('a forecast no,  obs yes : {}'.format(cval))
-            print('b forecast no,  obs no : {}'.format(dval))
-        thash = {'a': [aval], 'b': [bval], 'c': [cval], 'd': [dval]}
+            print('a(hits) forecast yes, obs yes : {}'.format(aval))
+            print('b(false alarm) forecast yes, obs no  : {}'.format(bval))
+            print('c(misses) forecast no, obs yes : {}'.format(cval))
+            print('d(correct no) forecast no, obs no : {}'.format(dval))
+        thash = [{'a': [aval], 'b': [bval], 'c': [cval], 'd': [dval]}]
+        if multi:
+            dimens = ['source', 'ens']
+            for x in dimens:
+                if x in self.binxra2.dims:
+                    tval = str(x)
+                    num = len(self.binxra2[tval])
+                    # Making sure dimensions are ordered the same for all arrays
+                    self.match.transpose(tval, 'y', 'x')
+                    self.arr1.transpose(tval, 'y', 'x')
+                    self.arr2.transpose(tval, 'y', 'x')
+                    self.arr3.transpose(tval, 'y', 'x')
+                    for i in range(num):
+                        element = str(self.binxra2[tval][i].values)
+                        aval = self.match[i, :, :].sum().values
+                        cval = self.arr1[i, :, :].sum().values
+                        bval = self.arr2[i, :, :].sum().values
+                        dval = self.arr3[i, :, :].sum().values
+                        tmphash = {tval: element, 'a (hits)': [aval], 'b (false alarms)': [
+                            bval], 'c (misses)': [cval], 'd (correct no)': [dval]}
+                        thash.append(tmphash)
+
         tframe = pd.DataFrame.from_dict(thash)
+        if multi:
+            tframe[tval] = tframe[tval].fillna('All')
         if isinstance(probthresh, (int, float)):
             tframe['probthresh'] = probthresh
         tframe['threshold'] = self.threshold
@@ -298,7 +336,7 @@ class CalcScores:
             tframe['pm_threshold'] = self.pm_threshold
         return tframe
 
-    def calc_csi(self, verbose=False):
+    def calc_csi(self, multi=False, dframe=False, verbose=False):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
         Inputs:
         match: hits
@@ -306,14 +344,16 @@ class CalcScores:
         arr2: false alarms
         area: optional array of grid areas, must be same size as xra1 and xra2 (default = None)
         nodata: flag for expanded array grid cells created if ash near boundary (string)
+        multi: Boolean - calculations for each ensemble member and total ensemble
+        dframe: Boolean - output as pandas dataframe if desired
         verbose: boolean
         Output:
-        csihash: Dictionary of values pertaining to Critical Success Index calculation
+        csihash: Dictionary of values pertaining to Critical Success Index calculation - can output dataframe if desired
         contains: hits, misses, false_alarms, CSI, POD, FAR
         """
         area = np.array(self.area)
-        # Creating a csihash disctionary
-        csihash = {}
+        # Getting contingency table from get_contingency_table()
+        tframe = self.get_contingency_table(multi=multi)
 
         # Assigning a, b, and c arrays to csihash dictionary
         # Made these single values, rather than arrays - AMR 6/4/2021
@@ -379,13 +419,13 @@ class CalcScores:
         See Robers and Lean (2008) Monthly Weather Review
         and Schwartz et al (2010) Weather and Forecasting
         for more information.
-         
+
         Can plot fractions if desired (double check calculations)
-        szra: a list of the number of pixels (neightborhood length) to use 
+        szra: a list of the number of pixels (neightborhood length) to use
         in fractions calculation default is to use 1, 3, 5, 7 pixels size squares
         makeplots: boolean
-        
-        Note: according to Roberts 2008, the FSS should appproach AFSS as n-> 2N-1 where N is 
+
+        Note: according to Roberts 2008, the FSS should appproach AFSS as n-> 2N-1 where N is
         the domain size. It does. However the FSS at n=N can be larger than this value
         because of the inclusion of the zero padding at the edges. See the test_fssA function for an example.
 
@@ -430,8 +470,8 @@ class CalcScores:
                 print('Convolution array: ', filter_array)
 
             start = time.time()
-            frac_arr1 = convolve2d(self.binxra1, filter_array, mode='same',fillvalue=0,boundary='fill')
-            frac_arr2 = convolve2d(self.binxra2, filter_array, mode='same',fillvalue=0,boundary='fill')
+            frac_arr1 = convolve2d(self.binxra1, filter_array, mode='same', fillvalue=0, boundary='fill')
+            frac_arr2 = convolve2d(self.binxra2, filter_array, mode='same', fillvalue=0, boundary='fill')
             end = time.time()
             # Calculate the Fractions Brier Score (FBS)
             fbs = np.power(frac_arr1 - frac_arr2, 2).sum() / float(bigN)
@@ -458,7 +498,7 @@ class CalcScores:
                 ax2 = fig.add_subplot(1, 2, 2)
                 cb = ax1.imshow(frac_arr1)
                 cb2 = ax2.imshow(frac_arr2)
-                plt.colorbar(cb,ax=ax1)
+                plt.colorbar(cb, ax=ax1)
                 plt.colorbar(cb2)
                 plt.show()
 
@@ -472,7 +512,7 @@ class CalcScores:
 
     def calc_pcorr(self):
         """ Calculates Pattern Correlation between two arrays
-        binxra1 and binxra2 need to be on the same grid. 
+        binxra1 and binxra2 need to be on the same grid.
         See monetio.remap_nearest or monetio.remap_xesmf to remap arrays.
         Pattern Correlation (uncentered) = (binxra1 * binxra2) / sqrt((binxra1^2)*(binxra2^2))
         Pattern Correlation (centered) = ((binxra1 - arr1)(binxra2 - arr2)) / sqrt(((binxra1-arr1)^2) * ((binxra2 - arr2)^2))
@@ -504,7 +544,7 @@ class CalcScores:
 
 def calc_bs(xra1, xra2):
     """
-    Calculating the Brier Score 
+    Calculating the Brier Score
     BS = 1/N (sum of (probability - reference)^2)
     Inputs:
     xra1: binary reference or observation array (xarray.DataArray)
@@ -538,7 +578,7 @@ def calc_bss(BS, BSref):
 
 def calc_weightsBS(xra, scores):
     """
-    Calculating the weighting scheme based on brier score values. 
+    Calculating the weighting scheme based on brier score values.
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
     Inputs:
@@ -562,7 +602,7 @@ def calc_weightsBS(xra, scores):
 
 def calc_weightsPC(xra, scores):
     """Kat62020
-    Calculating the weighting scheme based on pattern correlation values. 
+    Calculating the weighting scheme based on pattern correlation values.
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
     Inputs:
