@@ -135,13 +135,12 @@ class CalcScores:
         # 2021 Jun 9 amc add new function get_contingency_table. similar to calc_csi.
         # 2021 Jun 9 amc add self.arr3 which shows correctly forecast 0 values.
         # 2021 Jun 9 amc add 'd' to the csihash
-        # 2021 Jun 17 amr added squeeze() to xra1 and xra2
         # 2021 Jun 17 amr added if statement to calculate binxra1/binxra2 if threshold == 0.
         # 2021 Jun 21 amr made get_contingency_table produce values for each ensemble member and total ensemble.
         # 2021 Jun 21 amr Added capability of calc_csi to use get_contingency_table pandas dataframe rather than dictionary.
 
-        self.xra1 = xra1.squeeze()
-        self.xra2 = xra2.squeeze()
+        self.xra1 = xra1
+        self.xra2 = xra2
         self.threshold = threshold
         self.szra = szra
         self.area = area
