@@ -1,7 +1,7 @@
 # write_emitimes.py
 # Writes a HYSPLIT EMITIMES.txt file for a cylindrical volcanic source
 # and for inserting volcat data into hysplit
-from utilhysplit import cylsource
+#from utilhysplit import cylsource
 from utilhysplit import emitimes
 from datetime import datetime
 from glob import glob
@@ -71,7 +71,7 @@ def write_cyl_file(wdir, date_time, lat, lon, volcname, radius, dr, duration, po
 
 class InsertVolcat:
 
-    def __init__(self, wdir, vdir, date_time,
+    def __init__(self, wdir, vdir, date_time, stradd='',
                  duration='0010',
                  pollpercents=[1],
                  pollnum=1,
@@ -84,6 +84,7 @@ class InsertVolcat:
         wdir: working directory - where emitimes file will be located (string)
         vdir: volcat directory - where volcat data files are located (string)
         date_time: date and time of volcat file to use (datetime object)
+        stradd: QUICK FIX - file formatting has changed for Nishi Data (string)
         duration: hour and minute (HHMM) of emission - default is '0010' (string)
         pollnum: number of particle size bins - default is 1 (integer)
         pollpercents: percentage of particles for each size bin,
@@ -108,6 +109,7 @@ class InsertVolcat:
             vdir += "/"
         self.vdir = vdir
         self.date_time = date_time
+        self.stradd = stradd
         self.pollnum = pollnum
         self.pollpercents = pollpercents
         self.duration = duration
@@ -120,9 +122,10 @@ class InsertVolcat:
         self.vname = vname
 
     def find_match(self):
-        """Determines matching string to identify file"""
+        """Determines matching string to identify file
+        FORMATTING HAS CHANGED!"""
         if self.vid != None:
-            match = self.date_time.strftime('%Y%j_%H%M%S_v')+self.vid
+            match = self.date_time.strftime('%Y%j_%H%M%S')+self.stradd+'_v'+self.vid
         else:
             match = self.date_time.strftime('%Y%j_%H%M%S')
         return match
@@ -186,7 +189,8 @@ class InsertVolcat:
         area.attrs['units'] = 'km^2'
         # Reformatting array attributes
         if write == True:
-            directory = self.vdir+'Area/'
+            #directory = self.vdir+'Area/'
+            directory = self.wdir
             match = self.find_match()
             if correct_parallax == True:
                 areafname = 'area_'+match+'_pc.nc'
@@ -231,7 +235,8 @@ class InsertVolcat:
         height = height0.where(height0 > 0.)
 
         # Finds and area files. If no file detected, produces warning
-        areadir = self.vdir+'Area/'
+        #areadir = self.vdir+'Area/'
+        areadir = self.wdir+'area/'
         match = self.find_match()
         if correct_parallax == True:
             arealist = glob(areadir+'*_pc.nc')
