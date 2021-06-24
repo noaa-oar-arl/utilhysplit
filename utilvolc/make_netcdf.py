@@ -25,9 +25,9 @@ class MakeNetcdf:
         DI_combine: creates xarray dataset of ensemble Data Insertion hysplit simulations
         Cyl_combine: creates xarray dataset of cylinder source hysplit simulations
         Line_combine: creates xarray dataset of line source hysplit simulations
-        Regrid_volcat:
-        StatsBS: creates xarray dataarray of Brier Scores for each ensemble member
-        StatsPC: creates xarray dataarray of Pearson Correlations for each ensemble member
+        create_ens: creates ensemble netcdf file of DI, Cyl, Line datasets
+        create_volcat: creates regridded volcat netcdf - same as hysplit grid
+        calc_stats: creates statistics netcdf containint Brier Score, Pearson Correlations for each ensemble member
         """
         self.d1 = d1
         self.d0 = d0
@@ -70,30 +70,57 @@ class MakeNetcdf:
         hxrd.attrs['Volcano ID'] = self.volcid
         return hxrd
 
-    def Cyl_combine(self, directory, filename):
+    def Cyl_combine(self, allfiles, match=''):
         """ Creates xarray dataset of Cylinder source hysplit simulation
-        directory: directory of cylinder cdump file
-        filename: cdump file name
+        allfiles: cdump file name(s) - use glob to create array
+        match: string for matching in filename
         """
-        hxrcyl = hysplit.combine_dataset([(directory+filename, 'CylinderSource', self.mettag)], drange=[
-                                         self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
-
-        hxrc = hysplit.open_dataset(
-            directory+filename, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
-
-        hxrcyl.attrs['Cylinder Num Start Locations'] = hxrc.attrs['Number Start Locations']
+        if len(allfiles) > 1:
+            files = []
+            sourcetag = []
+            metdatatag = []
+            for f in allfiles:
+                if match in f:
+                    files.append(f)
+                    s = f.find('cdump.')+len('cdump.')
+                    e = f.find('hrs_')
+                    typec = f[s:e]
+                    sourcetag.append('Cyl_'+typec+'hrs_emis')
+                    metdatatag.append(self.mettag)
+            blist = list(zip(files, sourcetag, metdatatag))
+            hxrcyl = hysplit.combine_dataset(
+                blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+        else:
+            hxrcyl = hysplit.combine_dataset([(allfiles[0], 'CylinderSource', self.mettag)], drange=[
+                self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
         return hxrcyl
 
-    def Line_combine(self, directory, filename):
+    def Line_combine(self, allfiles, match=''):
         """Creates xarray dataset of Line source hysplit simulation
-        directory: directory of line cdump file
-        filename: line file name
+        filename: line file name(s) - use glob to make array
+        match: string for matching in filename
         """
-        hxrline = hysplit.combine_dataset([(directory+filename, 'LineSource', self.mettag)], drange=[
-                                          self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+        if len(allfiles) > 1:
+            files = []
+            sourcetag = []
+            metdatatag = []
+            for f in allfiles:
+                if match in f:
+                    files.append(f)
+                    s = f.find('cdump.')+len('cdump.')
+                    e = f.find('hrs_')
+                    typel = f[s:e]
+                    sourcetag.append('Line_'+typel+'hrs_emis')
+                    metdatatag.append(self.mettag)
+            blist = list(zip(files, sourcetag, metdatatag))
+            hxrline = hysplit.combine_dataset(
+                blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+        else:
+            hxrline = hysplit.combine_dataset([(allfiles[0], 'LineSource', self.mettag)], drange=[
+                self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
 
-        hxrl = hysplit.open_dataset(
-            directory+filename, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+        hxrl = hysplit.open_dataset(allfiles[0], drange=[self.d0, self.d1],
+                                    century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
 
         unitmass, mass63 = hysp_func.calc_MER(hxrl)
 
