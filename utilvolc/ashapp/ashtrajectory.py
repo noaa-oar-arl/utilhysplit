@@ -75,6 +75,14 @@ class TrajectoryAshRun(AshRun):
         """
         return None
 
+    def add_inputs(self, inp):
+        super().__add_inputs__(inp)
+        # if GEFS picked and trajectory then just use one member.
+        # TO DO - add ensemble runs for trajectories.
+        # need to figure out how to display output.
+        if inp["meteorologicalData"].lower() == "gefs":
+            self.metfilefinder.set_ens_member(".gep05")
+            logger.debug("Picking one GEFS ensemble member for trajectory run")
 
     def after_run_check(self, update=False):
         # Check for the tdump/cdump file

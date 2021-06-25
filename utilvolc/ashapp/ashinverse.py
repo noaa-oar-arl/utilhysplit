@@ -3,25 +3,18 @@ import datetime
 import logging
 import os
 import time
+import sys
 
-import metfiles as metfile
+import utilvolc.ashapp.metfiles as metfile
 from monetio.models import hysplit
-from runhelper import Helper
-from runhandler import ProcessList
-from ashbase import AshRun
-import ensemble_tools
-from cdump2xml import HysplitKml
+from utilvolc.ashapp.runhelper import Helper
+from utilvolc.ashapp.runhandler import ProcessList
+from utilvolc.ashapp.ashbase import AshRun
+from utilvolc.ashapp import ensemble_tools
+from utilvolc.ashapp.cdump2xml import HysplitKml
 
 logger = logging.getLogger(__name__)
 
-"""
-run:w
-
-
-
-
-
-"""
 
 
 
@@ -37,14 +30,43 @@ The following environment variables must be set prior to calling this script:
 
 # Base class is AshRun
 
-#TODO
-# DONE output needs to be more frequent than every 3 hours.
+# -------LEVELS
 # output levels should probably be in km rather than FL.
-# bottom elevation should be rounded to nearest km.
+# If these are ONLY used for inverse modeling with the mass loading.
+# we may not need so many levels.
+# If height information is used or these are also used for forecasting then
+# height levels are needed.
+# TO DO bottom elevation should be rounded to nearest km.
 
-def inverse_get_suffix_list(inp):
+# Should suffix be 
+# vid_monthday_ht
+
+# For an active volcano, unit mass runs can be done in an advance and then used
+# when there is a satellite retrieval.
+# This can end up being quite a bit of data though, esp. if use GEFS.
+# If GMM then could only store Gaussians or only pardump output.
+
+
+def get_suffix(suffix_type,dtfmt,nnn,ndate,bottom):
+    if suffix_type=='int':
+          suffix = '{:03d}'.format(nnn)
+    elif suffix_type=='date':
+          str1 = ndate.strftime(dtfmt)
+          str2 = str(int(bottom))
+          suffix = '{}_{}'.format(str1,str2)
+    else:
+          suffix = '{:03d}'.format(nnn)
+    return suffix
+
+
+def inverse_get_suffix_list(inp, suffix_type='date',dtfmt="%m%d%H"):
     """
     inp: dictionay generated in
+    suffix_type : str
+          'int' suffix will be an integer 001, 002, 003....
+          'date' suffix will be of form date_height. with date
+                 determined by dtfmt.
+    dtfmt : str. determines format of date when suffix_type is 'date'
 
     outputs
     ---------
@@ -74,21 +96,26 @@ def inverse_get_suffix_list(inp):
               inhash['edate'] = ndate+dt
               inhash['bottom'] = bottom
               inhash['top'] = bottom + vres
-              suffixhash['{:03d}'.format(nnn)] = inhash.copy()
+              suffix = get_suffix(suffix_type,dtfmt,nnn,ndate,bottom)
+              suffixhash[suffix] = inhash.copy()
               bottom += vres
               if bottom > inp['top']: vdone=True
               jjj+=1
               nnn+=1
-              #print(nnn, jjj, 'bottom, top', bottom, bottom+vres)
+              # limit of no more than 50 heights.
               if jjj>50: 
                 return suffixhash
-          #print(iii, 'dates', ndate, edate)
           iii+=1
           ndate = ndate + dt
           if ndate >= edate: done=True
     return suffixhash 
 
 class InverseAshRun(AshRun):
+    """
+    EmissionHours for the inverse run is set equal to timeres.
+    """
+
+
     def __init__(self, JOBID):
         super().__init__(JOBID)
         self.invs_suffix_hash = {}
@@ -142,9 +169,14 @@ class InverseAshRun(AshRun):
             source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
             suffix = inval[1]
             iii = inval[0] + 1
-            cdumpname = "{}.{:03d}".format(
-                self.filelocator.get_cdump_base(stage=iii), iii
-            )
+            #iii = inval[0] 
+            print('zz', suffix)
+            cdumpname = self.filelocator.get_cdump_filename(stage=suffix)
+            print('zzzz', cdumpname)
+            #cdumpname = "{}.{:03d}".format(
+                #self.filelocator.get_cdump_base(stage=sxuffix), iii
+            #    self.filelocator.get_cdump_base(stage=suffix), iii
+            #)
             met_tag = suffix
             logger.info("adding to netcdf file :{} {}".format(met_tag, cdumpname))
             return (cdumpname, source_tag, met_tag)
@@ -165,7 +197,9 @@ class InverseAshRun(AshRun):
         #for shash in self.invs_suffix_hash.keys():
         #    print(shash, self.invs_suffix_hash[shash])
         super().add_inputs(inp)
-        #if inp["meteorologicalData"].lower() == "gefs":
+        if inp["meteorologicalData"].lower() == "gefs":
+           logger.info("ens member {}".format(inp['gefsmember']))
+           self.metfilefinder.set_ens_member('.' + inp['gefsmember'])
         # need to get list of suffix for the inverse modeling.
         self.number_of_members = len(self.invs_suffix_hash)
         self.maptexthash = self.get_maptext_info()
@@ -187,7 +221,7 @@ class InverseAshRun(AshRun):
         import sys
         Helper.execute('pwd')
         maxprocess=40
-        stage = 1
+        #stage = 1
         processhandler = ProcessList()
         # redirect stdout and stderr
         processhandler.pipe_stdout()
@@ -201,13 +235,14 @@ class InverseAshRun(AshRun):
             # Changes for each inverse modeling run.
             self.inp['bottom'] = shash['bottom']
             self.inp['top'] = shash['top']
+            # EmissionHours is set to timeres of the inverse modeling system.
             self.inp['emissionHours'] = self.inp['timeres']
             self.inp['start_date'] = shash['sdate']
 
-            self.compose_control(stage, rtype="dispersion")
-            self.compose_setup(stage)
+            self.compose_control(suffix, rtype="dispersion")
+            self.compose_setup(suffix)
             # start run and wait for it to finish..
-            run_suffix = self.filelocator.get_control_suffix(stage)
+            run_suffix = self.filelocator.get_control_suffix(suffix)
             cproc = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), run_suffix]
             logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
             num_proces = processhandler.checkprocs()
@@ -221,7 +256,7 @@ class InverseAshRun(AshRun):
                num_proces = processhandler.checkprocs()
                logger.info('Waiting for process to finish before starting new {}'.format(num_proces))  
             processhandler.startnew(cproc, wdir=self.inp["WORK_DIR"], descrip=suffix)
-            stage += 1
+            #stage += 1
             # wait 2 seconds between run starts to avoid
             # runs trying to access ASCDATA.CFG at the same time.
             time.sleep(2)
@@ -278,8 +313,10 @@ class InverseAshRun(AshRun):
         #for stage in range(1,len(self.invs_suffix_list)+1):
         #    fnlist.append(self.filelocator.get_cdump_filename(stage=stage))
         suffix_list = list(self.invs_suffix_hash.keys())
+        #fnlist = [self.filelocator.get_cdump_filename(stage=x) for  x in\
+        #                                 range(1,len(suffix_list)+1)]
         fnlist = [self.filelocator.get_cdump_filename(stage=x) for  x in\
-                                         range(1,len(suffix_list)+1)]
+                                         suffix_list]
         rlist = [self.file_not_found_error(fn, update) for fn in fnlist]
         if not all(rlist):
             rval = False
