@@ -22,9 +22,16 @@ manipulate arrays as necessary, and plots desirable variables.
 Functions:
 -------------
 open_dataset: opens single VOLCAT file
+open_hdf: opens single NRT HDF VOLCAT file
+create_netcdf: creates netcdf of import variables from NRT HDF
 open_mfdataset: opens multiple VOLCAT files
+regrid_volcat: regrids with monet.remap_nearest
+regrid_volcat2: regrids with monet.remap_xesmf
+average_volcat_new: in progress
 average_volcat: averages VOLCAT files over designated time period
+get_volcat_name_df: puts parts of volcat file name in pandas dataframe
 get_volcat_list: returns list of data-arrays with volcat data
+write_regridded_files: writes regridded files
 write_parallax_corrected_files: writes new files with parallax corrected lat/lon
 find_volcat: finds volcat files in designated directory
 test_volcat: tests to see if parallax corrected lat/lon values exist
@@ -40,14 +47,20 @@ get_pc_latitude: uses parallax corrected latitude
 get_pc_longitude: uses parallax corrected longitude
 get_height: returns array of ash top height from VOLCAT
 get_radius: returns array of ash effective radius from VOLCAT
+get_total_mass: returns total mass in volcat file
 get_mass:  returns array of ash mass loading from VOLCAT
+get_ashdet:
 mass_sum:
+get_time:
 get_atherr: returns array of ash top height error from VOLCAT
 plot_height: plots ash top height from VOLCAT
 plot_radius: plots ash effective radius from VOLCAT
 plot_mass: plots ash mass loading from VOLCAT
 plot_gen: generates quick plot, not saved
 matchvals:
+matchvals2:
+find_iii:
+correct_pc: corrects parallax
 Class: VolcatName
      compare: compares volcat file names - shows difference
      parse: parses name into components
@@ -176,7 +189,7 @@ def regrid_volcat(das, cdump):
     mlist = []
     hlist = []
     total_mass = []
-    feature_area  = []
+    feature_area = []
     feature_id = []
 
     for iii, dset in enumerate(das):
@@ -212,7 +225,6 @@ def regrid_volcat(das, cdump):
     # propogate attributes on latitude and longitude
     dnew.latitude.attrs.update(dset.latitude.attrs)
     dnew.longitude.attrs.update(dset.longitude.attrs)
-
 
     dnew.attrs.update({'Regrid Method': 'remap_nearest'})
     return dnew
@@ -333,15 +345,16 @@ def regrid_volcat_xesmf(das, cdump, method):
     return dnew
 
 
-def average_volcat_new(das, cdump):
-    #
+def average_volcat_new(das, cdump, convert_nans=True):
+    # STILL IN PROGRESS
     dnew = regrid_volcat(das, cdump)
     # when averaging the mass need to convert nan's to zero?
     if not convert_nans:
         avgmass = newmass.mean(dim='time')
 
-    # note that averaging the height
+    # note that averaging the height - should be max height, right?
     avghgt = newhgt.mean(dim='time')
+    maxhgt = newhgt.max(dim='time')
     return avgmass, avghgt
 
 
@@ -350,7 +363,7 @@ def average_volcat(das, cdump, convert_nans=True):
     # das is list of volcat datasets.
     # cdump is dataset with appropriate grid.
     # first map to new grid. Then average.
-
+    # CONVERT NANs flag is not used in this function
     # remap_nearest may not be what we want to use. Seems that some small areas with low
     # mass 'disappear' using this regridding scheme. May want to look into using pyresample.bucket or other.
     rai = 1e5
@@ -384,12 +397,12 @@ def get_volcat_name_df(tdir, daterange=None, vid=None):
 
 
 def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True,
-                    decode_times=True,verbose=False, include_last=True):
+                    decode_times=True, verbose=False, include_last=True):
     """
     returns list of data-arrays with volcat data.
     """
     tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2,
-                        verbose=verbose,include_last=include_last)
+                        verbose=verbose, include_last=include_last)
     das = []
     for iii in tlist:
         if not iii.pc_corrected:
@@ -460,10 +473,10 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
     """
     if not flist:
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
-    else: 
+    else:
         vlist = flist
     for iii, val in enumerate(vlist):
-        if isinstance(val,str):
+        if isinstance(val, str):
             fname = val
         else:
             fname = val.fname
@@ -516,11 +529,13 @@ def find_volcat(tdir, vid=None, daterange=None,
             continue
         if daterange and include_last:
             if vn.date < daterange[0] or vn.date > daterange[1]:
-                if verbose: print('date not in range', vn.date, daterange[0], daterange[1])
+                if verbose:
+                    print('date not in range', vn.date, daterange[0], daterange[1])
                 continue
         elif daterange and not include_last:
             if vn.date < daterange[0] or vn.date >= daterange[1]:
-                if verbose: print('date not in range', vn.date, daterange[0], daterange[1])
+                if verbose:
+                    print('date not in range', vn.date, daterange[0], daterange[1])
                 continue
         if vid and vn.vhash['volcano id'] != vid:
             continue
@@ -595,7 +610,7 @@ class VolcatName:
         self.parse(fname)
         self.vhash['filename'] = fname
 
-    def __lt__(self,other):
+    def __lt__(self, other):
         """
         sort by 
         volcano id first.
@@ -603,22 +618,21 @@ class VolcatName:
         feature id if it exists. 
         """
         if self.vhash['volcano id'] < other.vhash['volcano id']:
-           return True
+            return True
         if 'fid' in self.vhash.keys() and 'fid' in other.vhash.keys():
-           if self.vhash['fid'] < other.vhash['fid']:
-              return True
+            if self.vhash['fid'] < other.vhash['fid']:
+                return True
         if self.date < other.date:
-           return True
+            return True
         if self.image_date < other.image_date:
-           return True
+            return True
         sortlist = ['feature id', 'image scanning strategy',
-                    'WMO satellite id', 'description','event scanning strategy',
-                    'satellite platform','algorithm name']
+                    'WMO satellite id', 'description', 'event scanning strategy',
+                    'satellite platform', 'algorithm name']
         for key in sortlist:
             if key in other.vhash.keys() and key in self.vhash.keys():
-               if self.vhash[key] < other.vhash[key]: return True 
-               
-
+                if self.vhash[key] < other.vhash[key]:
+                    return True
 
     def compare(self, other):
         """
@@ -644,15 +658,15 @@ class VolcatName:
             self.pc_corrected = True
         jjj = 0
         for iii, key in enumerate(self.keylist):
-            val = temp[jjj] 
+            val = temp[jjj]
             # nishinoshima files have a g00? code before the volcano id.
             if key == 'fid':
-               if val[0] == 'g':
-                  self.vhash[key] = val
-               else:
-                  continue  
+                if val[0] == 'g':
+                    self.vhash[key] = val
+                else:
+                    continue
             self.vhash[key] = val
-            jjj+=1
+            jjj += 1
         # Event date marks date of the data collection
         dstr = '{}_{}'.format(self.vhash[self.keylist[3]],
                               self.vhash[self.keylist[4]])
@@ -1010,13 +1024,14 @@ def find_iii(tlist, match):
             return iii
     return -1
 
+
 def correct_pc(dset):
     """
     moves mass and height values into the coordinate values closest
     to the parallax corrected values. Results in dataset with mass and height shifted
     to parallax corrected positions.
     """
-    # 06/02/2021 amc commented out use of the ashdet field. 
+    # 06/02/2021 amc commented out use of the ashdet field.
 
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
@@ -1085,64 +1100,3 @@ def correct_pc(dset):
     dnew.longitude.attrs.update({'standard_name': 'longitude'})
     dnew = dnew.assign_attrs(dset.attrs)
     return dnew
-
-
-def avg_volcat(vdir, datetime_start, datetime_end, interval=10, vid=None, correct_parallax=True):
-    """Calculates average volcat values between datetime_start and datetime_end
-    Inputs:
-    vdir: location of volcat files(string)
-    datetime_start: start time of average(datetime object)
-    datetime_end: end of average(datetime object)
-    interval: interval of file times in minutes - default is 10 minutes(integer)
-    vid: volcano ID(string)
-    correct_parallax: use parallax corrected values - default is True (boolean)
-    Output:
-    vxravg: average volcat - ash mass and ash top height
-    """
-    vfiles = '*.nc'
-    volclist = glob(vdir+vfiles)
-    masslist = []
-    heightlist = []
-    # Getting list of files between start and end times - based on time interval
-    while datetime_start <= datetime_end:
-        yrdate = datetime_start.timetuple().tm_yday
-        if vid:
-            match = datetime_start.strftime('%Y')+str(yrdate)+datetime_start.strftime('_%H%M%S_v')+vid
-        else:
-            match = datetime_start.strftime('%Y')+str(yrdate)+datetime_start.strftime('_%H%M%S')
-        # Determining match
-        fname = [f for f in volclist if match in f]
-        dset = open_dataset(fname[0], correct_parallax=correct_parallax)
-        mass = get_mass(dset)
-        height = get_height(dset)
-        masslist.append(mass)
-        heightlist.append(height)
-        datetime_start += timedelta(minutes=interval)
-
-    # NEEDS TO BE ADJUSTED
-    # Code chunk from the code I used to develop the regridded, average volcat netcdf files
-    vname = 'SCOPE_NWC_ASH-L2-ASH_PRODUCTS-HIMAWARI8_NOAA-RAIKOKE-' + \
-        datetime_start.strftime('%Y%m%d-%H')+'*00-fv2.nc'
-    vnames = glob(dir_vol+vname)
-    dsets = []
-    x = 0
-    while x < len(vnames):
-        dsets.append(volcat.open_dataset(vnames[x]))
-        x += 1
-    # Reading in VOLCAT at ensemble time
-    vdset = volcat.open_dataset(
-        dir_vol+'SCOPE_NWC_ASH-L2-ASH_PRODUCTS-HIMAWARI8_NOAA-RAIKOKE-'+datetime_end.strftime("%Y%m%d-%H")+'0000-fv2.nc')
-    dsets.append(vdset)
-    # Concatenate along time dimension
-    avgdset = xr.concat(dsets, dim='time')
-    # Pulling out Ash Mass Loading and Ash Top Height
-    mass = volcat.get_mass(avgdset)
-    height = volcat.get_height(avgdset)
-
-    # Regridding volcat to hysplit resolution
-    near_mass = hxr.monet.remap_nearest(mass)
-    near_height = hxr.monet.remap_nearest(height)
-
-    # 1hr avg variables
-    mass_avg = near_mass.mean(dim='time')
-    hgt_avg = near_height.mean(dim='time')
