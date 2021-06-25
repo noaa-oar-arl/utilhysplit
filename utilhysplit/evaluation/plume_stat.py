@@ -311,17 +311,18 @@ class CalcScores:
                 if x in self.binxra2.dims:
                     tval = str(x)
                     num = len(self.binxra2[tval])
+                    # AMC - may want to change to using isel/sel for slicing.
                     # Making sure dimensions are ordered the same for all arrays
-                    self.match.transpose(tval, 'y', 'x')
-                    self.arr1.transpose(tval, 'y', 'x')
-                    self.arr2.transpose(tval, 'y', 'x')
-                    self.arr3.transpose(tval, 'y', 'x')
+                    match = self.match.transpose(tval, 'y', 'x')
+                    arr1 = self.arr1.transpose(tval, 'y', 'x')
+                    arr2 = self.arr2.transpose(tval, 'y', 'x')
+                    arr3 = self.arr3.transpose(tval, 'y', 'x')
                     for i in range(num):
                         element = str(self.binxra2[tval][i].values)
-                        aval = self.match[i, :, :].sum().values
-                        cval = self.arr1[i, :, :].sum().values
-                        bval = self.arr2[i, :, :].sum().values
-                        dval = self.arr3[i, :, :].sum().values
+                        aval = match[i, :, :].sum().values
+                        cval = arr1[i, :, :].sum().values
+                        bval = arr2[i, :, :].sum().values
+                        dval = arr3[i, :, :].sum().values
                         tmphash = {tval: element, 'a (hits)': [aval], 'b (false alarms)': [
                             bval], 'c (misses)': [cval], 'd (correct no)': [dval]}
                         thash.append(tmphash)
