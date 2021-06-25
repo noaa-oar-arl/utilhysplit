@@ -24,10 +24,10 @@ import zipfile
 import requests
 import xarray as xr
 
-import metfiles as metfile
+import utilvolc.ashapp.metfiles as metfile
 from utilhysplit import hcontrol
 from monetio.models import hysplit
-from runhelper import Helper, ConcplotColors, JobFileNameComposer
+from utilvolc.ashapp.runhelper import Helper, ConcplotColors, JobFileNameComposer
 #from runhandler import ProcessList
 from utilvolc.volcMER import HT2unit
 #from cdump2xml import HysplitKml
@@ -112,15 +112,15 @@ class AshRun:
                 atthash[key] = val
         return atthash
 
-    def make_awips_netcdf(self):
-        import cdump2netcdf
+    def write_cxra(self):
         # convert to mg /m3
         fname = "xrfile.{}.nc".format(self.JOBID)
         mult = self.get_conc_multiplier()
         if os.path.isfile(fname):
             logger.info("netcdf file exists. Opening {}".format(fname))
             cxra = xr.open_dataset(fname)
-            cxra = cxra.__xarray_dataarray_variable__
+            # get first data variable
+            cxra = cxra[list(cxra.data_vars.keys())[0]]
 
             pmult = cxra.attrs["mult"]
             cxra = mult * cxra / pmult
@@ -131,7 +131,7 @@ class AshRun:
             cxra = mult * self.get_cdump_xra()
         cxra = cxra.assign_attrs({"mult": mult})
         logger.info("writing nc file {}".format(fname))
-        cxra = cxra.assign_attrs(self.inp2attr())
+        cxra.attrs.update(self.inp2attr())
         cxra.to_netcdf(fname)
         self.cxra = cxra
         # if empty then return an emtpy list.
@@ -139,6 +139,9 @@ class AshRun:
             logger.info("make_awips_netcdf: cxra empty. cannot create awips\
                          files")
             return []
+
+    def make_awips_netcdf(self):
+        import cdump2netcdf
         ghash = {}
         ghash["source_latitude"] = self.inp["latitude"]
         ghash["source_longitude"] = self.inp["longitude"]
@@ -152,7 +155,7 @@ class AshRun:
         logger.debug("MULT value for awips {:3e}".format(mult))
         awipsname = self.filelocator.get_awips_filename(stage=0)
         c2n = cdump2netcdf.Cdump2Awips(
-            cxra, awipsname, munit="mg", jobid=self.JOBID, globalhash=ghash
+            self.cxra, awipsname, munit="mg", jobid=self.JOBID, globalhash=ghash
         )
         awips_files = c2n.create_all_files()
         # returns list of awips files that were created.
@@ -180,17 +183,6 @@ class AshRun:
         self.metfilefinder = metfile.MetFileFinder(inp["meteorologicalData"])
         self.metfilefinder.set_forecast_directory(self.inp["forecastDirectory"])
         self.metfilefinder.set_archives_directory(self.inp["archivesDirectory"])
-
-        # if GEFS picked and trajectory then just use one member.
-        # TO DO - add ensemble runs for trajectories.
-        # need to figure out how to display output.
-        if (
-            inp["runflag"] != "dispersion"
-            and inp["meteorologicalData"].lower() == "gefs"
-        ):
-            self.metfilefinder.set_ens_member(".gep05")
-            logger.debug("Picking one GEFS ensemble member for trajectory run")
-
         self.maptexthash = self.get_maptext_info()
 
     def update_run_status(self, jobId, status):
@@ -281,11 +273,14 @@ class AshRun:
         height = self.inp["top"]
         emission = self.inp["emissionHours"]
 
+        rate = self.inp['rate']
+        area = self.inp['area']
+
         # add location of eruption
         # with uniform vertical line source
         control.remove_locations()
-        control.add_location((lat, lon), vent)
-        control.add_location((lat, lon), height)
+        control.add_location((lat, lon), vent, rate=rate,area=area )
+        control.add_location((lat, lon), height,rate=rate,area=area)
         # rename cdump file
         control.concgrids[0].outdir = self.inp["WORK_DIR"]
         control.concgrids[0].outfile = self.filelocator.get_cdump_filename(stage)
@@ -307,6 +302,10 @@ class AshRun:
         sample_start = stime.strftime("%y %m %d %H 00")
         #logger.debug("Setting sample start {}".format(sample_start))
         control.concgrids[0].sample_start = sample_start
+
+        control.concgrids[0].interval = (self.inp['samplingIntervalHours'],0)
+        control.concgrids[0].type = -1
+
 
     def compose_control(self, stage, rtype):
         control = self.setup_basic_control(stage, rtype=rtype)
@@ -388,19 +387,20 @@ class AshRun:
         else:
             logger.info("REDRAW for run {}".format(self.JOBID))
             redraw = True
-        if self.after_run_check(update=True):
-            self.create_plots(redraw)
-            # create zip with cdump and pardump files etc.
-            status = self.create_zipped_up_file(
-                self.filelocator.get_zipped_filename(tag=""),
-                self.filelocator.get_all_ashbase_filenames(),
-            )
+        self.write_cxra()
+      #  if self.after_run_check(update=True):
+      #      self.create_plots(redraw)
+       #     # create zip with cdump and pardump files etc.
+       #     status = self.create_zipped_up_file(
+       #         self.filelocator.get_zipped_filename(tag=""),
+       #         self.filelocator.get_all_ashbase_filenames(),
+       #     )
             # create zip with netcdf files for awips.
-            logger.debug('CREATE AWIPS zipped files')
-            status = self.create_zipped_up_file(
-                self.filelocator.get_zipped_filename(tag="awips2_"),
-                self.filelocator.get_awips_filenames(),
-            )
+       #     logger.debug('CREATE AWIPS zipped files')
+       #     status = self.create_zipped_up_file(
+       #         self.filelocator.get_zipped_filename(tag="awips2_"),
+       #         self.filelocator.get_awips_filenames(),
+       #     )
         self.update_run_status(self.JOBID, "COMPLETED")
         self.cleanup()
 

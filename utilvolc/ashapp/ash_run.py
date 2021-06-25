@@ -25,6 +25,7 @@ import traceback
 from runhelper import JobSetUp
 from runhelper import make_inputs_from_file
 from utils import setup_logger
+from metfiles import gefs_suffix_list
 
 logger = logging.getLogger(__name__)
 def print_usage():
@@ -71,7 +72,26 @@ if __name__ == "__main__":
     JOBID = sys.argv[2]  # This is a REDRAWID for redraw.
     setup = JobSetUp()
     # create a test to run without inputs from web page.
-    if 'inv' in JOBID:
+
+    if 'ens' in JOBID:
+        logging.getLogger().setLevel(20)
+        logging.basicConfig(
+                            stream = sys.stdout)
+        #inp = setup.make_test_inputs()
+        configname = 'config.{}.txt'.format(JOBID)
+        logger.info('CONFIG FILE {}'.format(configname))
+        setup =  make_inputs_from_file('./',configname)
+        inp = setup.inp
+        # run inverse dispersion run.
+        # currently 
+        #setup.add_inverse_params()
+        inp = setup.inp
+        inp['runflag'] = 'dispersion'
+        arun = create_run_instance(JOBID, inp)
+        arun.doit()
+        sys.exit(1)
+
+    elif 'inv' in JOBID:
         logging.getLogger().setLevel(20)
         logging.basicConfig(
                             stream = sys.stdout)
@@ -87,9 +107,22 @@ if __name__ == "__main__":
         inp = setup.inp
         inp['runflag'] = 'inverse'
         #inp['meteorologicalData'] = 'GFS'
-        arun = create_run_instance(JOBID, inp)
-        arun.doit()
+        if inp['meteorologicalData'].lower() == 'gefs':
+            for suffix in gefs_suffix_list():
+                tdir = '/hysplit-users/alicec/utilhysplit/utilvolc/ashapp/'
+                setup =  make_inputs_from_file(tdir,configname)
+                setup.add_inverse_params()
+                inp = setup.inp
+                logger.info('GEFS WORKING on {}'.format(suffix))
+                JOBIDens = '{}_{}'.format(JOBID,suffix)
+                inp['gefsmember'] = suffix
+                arun = create_run_instance(JOBIDens, inp)
+                arun.doit()
+        else:
+            arun = create_run_instance(JOBID, inp)
+            arun.doit()
         sys.exit(1)
+
     if JOBID in ['-999','-888','-777','-555','-446']:
         # config file should be called config.jobid.txt
         logging.getLogger().setLevel(20)

@@ -64,8 +64,8 @@ class ProcessList(object):
         """"starts a new process"""
         logger.info('CALLSTRING{}'.format(callstr))
         xproc = subprocess.Popen(callstr, shell=False, cwd=wdir,
-                                 stdout=sys.stdout, stderr=sys.stderr)
-                                 #stdout=self.stdout, stderr=self.stderr)
+        #                         stdout=sys.stdout, stderr=sys.stderr)
+                                 stdout=self.stdout, stderr=self.stderr)
         pid = xproc.pid 
         self.pidhash[pid] = descrip     
         self.dirhash[pid] = wdir
