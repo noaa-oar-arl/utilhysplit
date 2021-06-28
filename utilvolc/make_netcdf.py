@@ -158,7 +158,50 @@ class MakeNetcdf:
             return print(netdir+newfile+' created!')
         return hxr
 
-    def create_volcat(self, volcatdir, netdir, volcdir, write=False):
+    def create_volcat(self, volcatdir, netdir, volcdir, skipna=False, convert_nans=False, write=False):
+        """ Creates netcdf of VOLCAT, gridded to HYSPLIT grid
+        Inputs:
+        volcatdir: directory of VOLCAT data
+        netdir: directory of ensemble netcdf
+        volcdir: directory of regridded VOLCAT data
+        skipna: (boolean) skips nan values when calculating average (default=False)
+        convert_nans: (bolean) converts nan values to 0. when calculating average (default=False)
+        write: (boolean) if True, netcdf file is written (default = False)
+        Outputs:
+        dnew: volcat xarray 
+        if write: returns location of netcdf file"""
+
+        from glob import glob
+        from utilvolc import volcat
+
+        # Will adjust this to use the VolcatName class in volcat.py
+        vnames = glob(volcatdir+'*'+self.d0.strftime('%Y%j_%H')+'*'+self.volcid+'*')
+        vname2 = glob(volcatdir+'*'+self.d1.strftime('%Y%j_%H%M%S')+'*'+self.volcid+'*')
+        if len(vname2) != 0:
+            vnames.append(vname2[0])
+        dset = []
+        x = 0
+        while x < len(vnames):
+            dset.append(volcat.open_dataset(vnames[x], decode_times=True))
+            x += 1
+
+        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        hxr = xr.open_dataset(netdir+ensfile)
+        # Regridding volcat files to hysplit lat/lon
+        # dnew is xarray (time, x, y) with a regridded file for each time period
+        dnew = volcat.average_volcat_new(dset, hxr, skipna=skipna, convert_nans=convert_nans)
+        if write:
+            # Removing old netcdf file if it exists
+            volcnc = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+            if os.path.exists(volcdir+volcnc):
+                os.remove(volcdir+volcnc)
+            # Creating netcdf file
+            dnew.to_netcdf(volcdir+volcnc)
+            return print(volcdir+volcnc+' created!')
+        else:
+            return dnew
+
+    def create_volcat_old(self, volcatdir, netdir, volcdir, write=False):
         """ Creates netcdf of VOLCAT, gridded to HYSPLIT grid
         Inputs:
         volcatdir: directory of VOLCAT data
