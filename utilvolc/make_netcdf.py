@@ -182,7 +182,7 @@ class MakeNetcdf:
         dset = []
         x = 0
         while x < len(vnames):
-            dset.append(volcat.open_dataset(vnames[x], decode_times=True))
+            dset.append(volcat.open_dataset(vnames[x], decode_times=True, mask_and_scale=True))
             x += 1
 
         ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
