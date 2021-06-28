@@ -27,7 +27,7 @@ create_netcdf: creates netcdf of import variables from NRT HDF
 open_mfdataset: opens multiple VOLCAT files
 regrid_volcat: regrids with monet.remap_nearest
 regrid_volcat2: regrids with monet.remap_xesmf
-average_volcat_new: in progress
+average_volcat_new: regrids using regrid_volcat() and adds avg mass load, max ash height variables to dataset
 average_volcat: averages VOLCAT files over designated time period
 get_volcat_name_df: puts parts of volcat file name in pandas dataframe
 get_volcat_list: returns list of data-arrays with volcat data
@@ -302,7 +302,7 @@ def regrid_volcat_xesmf(das, cdump, method):
         return newx
 
     def make_grid(xra, d_lon, d_lat):
-        #xra: xarray
+        # xra: xarray
         # d_lon: delta lon
         # d_lat: delta lat
         xra = rename(xra)
@@ -314,7 +314,7 @@ def regrid_volcat_xesmf(das, cdump, method):
     hlist = []
     total_mass = []
     vgrid = make_grid(das[-1], 0.05, 0.05)
-    #vgrid = make_grid(cdump, 0.1, 0.1)
+    # vgrid = make_grid(cdump, 0.1, 0.1)
     for iii, dset in enumerate(das):
         dset2 = rename(dset)
         ashmass = regrid(dset2, vgrid, dset.ash_mass_loading, 'nearest_s2d')
@@ -345,27 +345,75 @@ def regrid_volcat_xesmf(das, cdump, method):
     return dnew
 
 
-def average_volcat_new(das, cdump, convert_nans=True):
+def average_volcat_new(das, cdump, skipna=False, convert_nans=False):
     # STILL IN PROGRESS
-    dnew = regrid_volcat(das, cdump)
-    # when averaging the mass need to convert nan's to zero?
-    if not convert_nans:
-        avgmass = newmass.mean(dim='time')
+    """
+    Very similar to average_volcat() except it regrids using regrid_volcat()
+    Output contains full array from regrid_volcat() with average/maximum
+    arrays added
 
-    # note that averaging the height - should be max height, right?
-    avghgt = newhgt.mean(dim='time')
-    maxhgt = newhgt.max(dim='time')
-    return avgmass, avghgt
+    Inputs:
+    das: list of volcat datasets
+    cdump: xarray of target grid (hysplit cdump usually)
+    skipna: boolean - skip nans when taking mean/max
+    convert_nans: boolean - convert nans to 0. in all xarrays BEFORE regridding
+    outputs:
+    dsetnew: dataset with added ash mass mean/ash height max
+    """
+    fill = 'nan'
+    if convert_nans:
+        fill = 'No fill value'
+        dset = []
+        i = 0
+        while i < len(das):
+            dset.append(das[i].fillna(0.))
+            i += 1
+        hxr = cdump.fillna(0)
+    else:
+        dset = das
+        hxr = cdump
+    dnew = regrid_volcat(dset, hxr)
+
+    avgmass = dnew.ash_mass_loading.mean(dim='time', skipna=skipna, keep_attrs=True)
+    maxhgt = dnew.ash_cloud_height.max(dim='time', skipna=skipna, keep_attrs=True)
+    # renaming variable
+    avgmass = avgmass.load().rename('ash_mass_avg')
+    maxhgt = maxhgt.load().rename('ash_height_max')
+    # Adding time dimension, changing long_name
+    avgmass = avgmass.assign_coords(time=dnew.time[-1]).expand_dims('time')
+    maxhgt = maxhgt.assign_coords(time=dnew.time[-1]).expand_dims('time')
+    avgmass.attrs['long_name'] = 'Average total column loading of ash in the highest continuous ash layer for the previous hour'
+    avgmass.attrs['fill_value'] = fill
+    maxhgt.attrs['long_name'] = 'Maximum cloud top height of the highest continuous ash layer for the previous hour'
+    maxhgt.attrs['fill_value'] = fill
+
+    # Merging datasets
+    dsetnew = xr.merge([dnew, avgmass, maxhgt], combine_attrs='drop_conflicts')
+    # return dnew, avgmass, maxhgt
+    return dsetnew
 
 
-def average_volcat(das, cdump, convert_nans=True):
+def average_volcat(das, cdump, skipna=False, convert_nans=False):
     # In progress.
-    # das is list of volcat datasets.
-    # cdump is dataset with appropriate grid.
-    # first map to new grid. Then average.
-    # CONVERT NANs flag is not used in this function
-    # remap_nearest may not be what we want to use. Seems that some small areas with low
-    # mass 'disappear' using this regridding scheme. May want to look into using pyresample.bucket or other.
+    """
+    Function first regrids to new grid, then calculates then average
+    mass loading and maximum ash height.
+
+    Inputs:
+    das: list of volcat datasets
+    cdump: is dataset with appropriate grid
+    skipna: boolean - flag to skip nan values in grid when calculating mean or max
+    convert_nans: noolean - flag to convert nans in datasets to 0
+    Output:
+    avgmass: mean of volcat ash mass loading, from das
+    maxhgt: maximum of volcat ash cloud height
+
+    Notes:
+    remap_nearest may not be what we want to use.
+    Seems that some small areas with low
+    mass 'disappear' using this regridding scheme.
+    May want to look into using pyresample.bucket or other.
+    """
     rai = 1e5
     mlist = []
     hlist = []
@@ -379,10 +427,13 @@ def average_volcat(das, cdump, convert_nans=True):
     newmass = xr.concat(mlist, dim='time')
     newhgt = xr.concat(hlist, dim='time')
     # when averaging the mass need to convert nan's to zero?
-    avgmass = newmass.mean(dim='time')
-
+    if convert_nan:
+        newmass = newmass.fillna(0.)
+        newhgt = newhgt.fillna(0.)
+    # option to skip nans
+    avgmass = newmass.mean(dim='time', skipna=skipna)
     # note that averaging the height is not correct, better to take maximum along time
-    maxhgt = newhgt.max(dim='time')
+    maxhgt = newhgt.max(dim='time', skipna=skipna)
     return avgmass, maxhgt
 
 
@@ -396,15 +447,27 @@ def get_volcat_name_df(tdir, daterange=None, vid=None):
     return pd.DataFrame(vlist)
 
 
-def get_volcat_list(tdir, daterange, vid, correct_parallax=True, mask_and_scale=True,
-                    decode_times=True, verbose=False, include_last=True):
+def get_volcat_list(tdir, daterange, vid, return_val=2, correct_parallax=True, mask_and_scale=True, decode_times=True, verbose=False, include_last=True):
     """
     returns list of data-arrays with volcat data.
+    Inputs:
+    tdir: string - directory of volcat files
+    daterange: datetime object -  [datetime0, datetime1] or none
+    vid: string - volcano ID
+    return_val: integer (1,2,3) - see find_volcat() for explanation
+    correct_parallax: boolean
+    mask_and_scale: boolean
+    decode_times: boolean
+    verbose: boolean
+    include_last: boolean
+    Outputs:
+    das: list of datasets
     """
-    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2,
+    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=return_val,
                         verbose=verbose, include_last=include_last)
     das = []
     for iii in tlist:
+        # opens volcat files using volcat.open_dataset
         if not iii.pc_corrected:
             das.append(open_dataset(os.path.join(tdir, iii.fname),
                                     correct_parallax=correct_parallax,
@@ -425,7 +488,7 @@ def write_regridded_files(cdump, tdir, wdir,
     vid : volcano id : if None will find all
     daterange : [datetime, datetime] : if None will find all.
     verbose: boolean
-    tag: used to create filename of new file. 
+    tag: used to create filename of new file.
 
     creates netcdf files regridded values.
     files have same name with _{tag}.nc added to the end.
@@ -433,7 +496,7 @@ def write_regridded_files(cdump, tdir, wdir,
     These will be needed for input into MET.
 
     Currently no overwrite option exists in this function. If the file
-    already exists, then this function returns a message to that effect and 
+    already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
     vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
@@ -460,7 +523,7 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
     vid : volcano id : if None will find all
     daterange : [datetime, datetime] : if None will find all.
     verbose: boolean
-    tag: used to create filename of new file. 
+    tag: used to create filename of new file.
 
     creates netcdf files with parallax corrected values.
     files have same name with _{tag}.nc added to the end.
@@ -468,7 +531,7 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
     These will be needed for input into MET.
 
     Currently no overwrite option exists in this function. If the file
-    already exists, then this function returns a message to that effect and 
+    already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
     if not flist:
@@ -492,27 +555,27 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
 
 def find_volcat(tdir, vid=None, daterange=None,
                 return_val=2, verbose=False, include_last=False):
+    ##NOT WORKING FOR NISHINOSHIMA DATA##
     """
-    tdir : str
-    daterange : [datetime, datetime] or None
     Locates files in tdir which follow the volcat naming
     convention as defined in VolcatName class.
     If a daterange is defined will return only files
 
+    Inputs:
+    tdir : string - volcat files directory
+    vid: string - volcano id
+    daterange : [datetime, datetime] or None
     include_last : boolean
                True - includes volcat data with date = daterange[1]
                False - only include data with date < daterange[1]
-
     return_val : integer
                1 - returns dictionary
                2-  returns list of VolcatName objects.
                3 - returns list of filenames
-
     Returns:
                1 - returns dictionary. key is date. values is VolcatName object.
                2 - returns list of VolcatName objects.
                3 - returns list of filenames
-
     """
     import sys
     vhash = {}  # dictionary
@@ -1036,18 +1099,18 @@ def correct_pc(dset):
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
     effrad = get_radius(dset, clip=False)
-    #ashdet = get_ashdet(dset, clip=False)
+    # ashdet = get_ashdet(dset, clip=False)
 
     newmass = xr.zeros_like(mass.isel(time=0))
     newhgt = xr.zeros_like(height.isel(time=0))
     newrad = xr.zeros_like(effrad.isel(time=0))
-    #newashdet = xr.zeros_like(ashdet.isel(time=0))
+    # newashdet = xr.zeros_like(ashdet.isel(time=0))
 
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
     tlist = np.array(matchvals(pclon, pclat, mass, height))
-    #tlist = np.array(matchvals2(pclon, pclat, ashdet))
+    # tlist = np.array(matchvals2(pclon, pclat, ashdet))
 
     indexlist = []
     prev_point = 0
