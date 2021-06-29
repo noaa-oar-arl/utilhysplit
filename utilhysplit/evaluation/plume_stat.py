@@ -285,8 +285,8 @@ class CalcScores:
         # calculate False Alarm Rate (x axis) and
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
-            self.calc_basics(prob, clip=clip)
-            tframe = self.get_contingency_table(multi=False)
+            #self.calc_basics(prob, clip=clip)
+            tframe = self.get_contingency_table(probthresh=prob,clip=clip,multi=False)
             tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']),axis=1)
             tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']),axis=1)
             #csihash = self.calc_csi()
@@ -346,6 +346,8 @@ class CalcScores:
 
     def table2csi(self, tframe):
         tframe['CSI'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['b'] + row['c']),axis=1)
+        # false alarm ratio (p 310 Wilks) b/(a+b)
+        # proportion of positive forecasts which were wrong.
         tframe['FAR'] = tframe.apply(lambda row: row['b'] / (row['a'] + row['b']),axis=1)
         tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']),axis=1)
         tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']),axis=1)
