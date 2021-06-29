@@ -286,7 +286,7 @@ class CalcScores:
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
             self.calc_basics(prob, clip=clip)
-            csihash = self.calc_csi(multi=multi)
+            csihash = self.calc_csi()
             xlist.append(csihash['F'])
             ylist.append(csihash['POD'])
         return xlist, ylist
@@ -355,13 +355,14 @@ class CalcScores:
         area = np.array(self.area)
         # Getting contingency table from get_contingency_table()
         #tframe = self.get_contingency_table(multi=multi)
-        csihash = []
+        csihash = {}
         # Assigning a, b, and c arrays to csihash dictionary
         # Made these single values, rather than arrays - AMR 6/4/2021
         csihash['hits'] = self.match.sum().values
         csihash['misses'] = self.arr1.sum().values
         csihash['false_alarms'] = self.arr2.sum().values
         csihash['d'] = self.arr3.sum().values      # d correctly forecast no ash.
+        
 
         if area.shape == self.match.shape:
             csihash['CSI'] = ((self.match*self.area).sum() / ((self.match*self.area).sum() +
