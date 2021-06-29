@@ -389,7 +389,7 @@ def average_volcat_new(das, cdump, skipna=False, convert_nans=False):
 
     # Merging datasets
     dsetnew = xr.merge([dnew, avgmass, maxhgt], combine_attrs='drop_conflicts')
-    # return dnew, avgmass, maxhgt
+
     return dsetnew
 
 
