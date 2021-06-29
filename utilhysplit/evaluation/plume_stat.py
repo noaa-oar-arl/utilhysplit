@@ -286,12 +286,19 @@ class CalcScores:
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
             self.calc_basics(prob, clip=clip)
-            csihash = self.calc_csi()
-            xlist.append(csihash['F'])
-            ylist.append(csihash['POD'])
+            tframe = self.get_contingency_table(multi=False)
+            tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']),axis=1)
+            tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']),axis=1)
+            #csihash = self.calc_csi()
+            #xlist.append(csihash['F'])
+            #ylist.append(csihash['POD'])
+            xlist.append(tframe['F'].values)
+            ylist.append(tframe['POD'].values)
         return xlist, ylist
 
     def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False):
+
+        thash = []
         self.calc_basics(probthresh, clip)
 
         aval = self.match.sum().values
@@ -303,8 +310,8 @@ class CalcScores:
             print('b(false alarm) forecast yes, obs no  : {}'.format(bval))
             print('c(misses) forecast no, obs yes : {}'.format(cval))
             print('d(correct no) forecast no, obs no : {}'.format(dval))
-        thash = [{'a (hits)': [aval], 'b (false alarms)': [bval],
-                  'c (misses)': [cval], 'd (correct no)': [dval]}]
+        thash = [{'a': aval, 'b': bval,
+                  'c': cval, 'd': dval}]
         if multi:
             dimens = ['source', 'ens']
             for x in dimens:
@@ -312,19 +319,19 @@ class CalcScores:
                     tval = str(x)
                     num = len(self.binxra2[tval])
                     # AMC - may want to change to using isel/sel for slicing.
-                    # Making sure dimensions are ordered the same for all arrays
+                    # AMR - Making sure dimensions are ordered the same for all arrays
                     match = self.match.transpose(tval, 'y', 'x')
                     arr1 = self.arr1.transpose(tval, 'y', 'x')
                     arr2 = self.arr2.transpose(tval, 'y', 'x')
                     arr3 = self.arr3.transpose(tval, 'y', 'x')
                     for i in range(num):
                         element = str(self.binxra2[tval][i].values)
-                        aval = match[i, :, :].sum().values
-                        cval = arr1[i, :, :].sum().values
-                        bval = arr2[i, :, :].sum().values
-                        dval = arr3[i, :, :].sum().values
-                        tmphash = {tval: element, 'a (hits)': [aval], 'b (false alarms)': [
-                            bval], 'c (misses)': [cval], 'd (correct no)': [dval]}
+                        aval = float(match[i, :, :].sum().values)
+                        cval = float(arr1[i, :, :].sum().values)
+                        bval = float(arr2[i, :, :].sum().values)
+                        dval = float(arr3[i, :, :].sum().values)
+                        tmphash = {tval: element, 'a': aval, 'b': 
+                            bval, 'c': cval, 'd': dval}
                         thash.append(tmphash)
 
         tframe = pd.DataFrame.from_dict(thash)
@@ -336,6 +343,17 @@ class CalcScores:
         if isinstance(self.pm_threshold, (int, float)):
             tframe['pm_threshold'] = self.pm_threshold
         return tframe
+
+    def table2csi(self, tframe):
+        tframe['CSI'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['b'] + row['c']),axis=1)
+        tframe['FAR'] = tframe.apply(lambda row: row['b'] / (row['a'] + row['b']),axis=1)
+        tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']),axis=1)
+        tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']),axis=1)
+        tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'],axis=1)
+        tframe['aref'] = tframe.apply(lambda row: (row['a'] + row['b'])*(row['a']+row['c'])/row['N'],axis=1)
+        tframe['GSS'] = tframe.apply(lambda row: (row['a'] - row['aref']) / (row['a'] - row['aref'] + row['b'] + row['c']),axis=1)
+        return tframe
+
 
     def calc_csi(self, verbose=False):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
