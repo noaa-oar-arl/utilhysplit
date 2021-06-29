@@ -437,15 +437,23 @@ def average_volcat(das, cdump, skipna=False, convert_nans=False):
     return avgmass, maxhgt
 
 
-def get_volcat_name_df(tdir, daterange=None, vid=None):
+def get_volcat_name_df(tdir, daterange=None, vid=None,include_last=False):
     """
     Returns dataframe with columns being the information in the vhash
     dictionary of the VolcatName class. This is all the information collected from the filename.
     """
-    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=2)
+    tlist = find_volcat(tdir, vid=None, daterange=None, return_val=2)
     vlist = [x.vhash for x in tlist]
-    return pd.DataFrame(vlist)
-
+    temp = pd.DataFrame(vlist)
+    if isinstance(daterange, (list,np.ndarray)):
+        temp = temp[temp['edate'] >= daterange[0]]  
+        if include_last:
+            temp = temp[temp['edate'] <= daterange[1]]  
+        else:
+            temp = temp[temp['edate'] < daterange[1]]  
+    if vid:
+        temp = temp[temp['volcano id']==vid]
+    return temp
 
 def get_volcat_list(tdir, daterange, vid, return_val=2, correct_parallax=True, mask_and_scale=True, decode_times=True, verbose=False, include_last=True):
     """
