@@ -221,14 +221,11 @@ def regrid_volcat(das, cdump):
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.time.attrs.update({'standard_name': 'time'})
-
     # propogate attributes on latitude and longitude
     dnew.latitude.attrs.update(dset.latitude.attrs)
     dnew.longitude.attrs.update(dset.longitude.attrs)
-
     dnew.attrs.update({'Regrid Method': 'remap_nearest'})
     return dnew
-
 
 def regrid_volcat2(das, cdump):
     """
@@ -240,7 +237,6 @@ def regrid_volcat2(das, cdump):
     # das is list of volcat datasets.
     # cdump is dataset with appropriate grid.
     # This function maps to new grid.
-
     # mass 'disappear' using this regridding scheme. May want to look into using pyresample.bucket or other
     mlist = []
     hlist = []
@@ -455,7 +451,12 @@ def get_volcat_name_df(tdir, daterange=None, vid=None,include_last=False):
         temp = temp[temp['volcano id']==vid]
     return temp
 
-def get_volcat_list(tdir, daterange, vid, return_val=2, correct_parallax=True, mask_and_scale=True, decode_times=True, verbose=False, include_last=True):
+def get_volcat_list(tdir, daterange, vid, return_val=2, 
+                    correct_parallax=True, 
+                    mask_and_scale=True, 
+                    decode_times=True, 
+                    verbose=False, 
+                    include_last=True):
     """
     returns list of data-arrays with volcat data.
     Inputs:
@@ -471,18 +472,17 @@ def get_volcat_list(tdir, daterange, vid, return_val=2, correct_parallax=True, m
     Outputs:
     das: list of datasets
     """
-    tlist = find_volcat(tdir, vid=vid, daterange=daterange, return_val=return_val,
-                        verbose=verbose, include_last=include_last)
+    tframe = get_volcat_name_df(tdir,vid=vid,daterange=daterange,include_last=include_last)
     das = []
-    for iii in tlist:
+    for iii in tframe.filename.values:
         # opens volcat files using volcat.open_dataset
-        if not iii.pc_corrected:
-            das.append(open_dataset(os.path.join(tdir, iii.fname),
+        if not '_pc' in iii:
+            das.append(open_dataset(os.path.join(tdir, iii),
                                     correct_parallax=correct_parallax,
                                     mask_and_scale=mask_and_scale,
                                     decode_times=decode_times))
         else:
-            das.append(xr.open_dataset(os.path.join(tdir, iii.fname)))
+            das.append(xr.open_dataset(os.path.join(tdir, iii)))
     return das
 
 
