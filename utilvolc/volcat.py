@@ -649,7 +649,12 @@ class VolcatName:
     """
 
     def __init__(self, fname):
-        self.fname = fname
+        # if full directory path is input then just get the filename
+        if '/' in fname:
+            temp = fname.split('/')
+            self.fname = temp[-1]
+        else:
+            self.fname = fname
         self.vhash = {}
         self.date = None
         self.dtfmt = "s%Y%j_%H%M%S"
@@ -670,7 +675,7 @@ class VolcatName:
         self.keylist.append('feature id')
 
         self.pc_corrected = False
-        self.parse(fname)
+        self.parse(self.fname)
         self.vhash['filename'] = fname
 
     def __lt__(self, other):
