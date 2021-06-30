@@ -36,12 +36,13 @@ class MakeNetcdf:
         self.volcid = volcid
         self.volcname = volcname
 
-    def DI_combine(self, all_files, start=None, end=None, tdelta=10):
+    def DI_combine(self, all_files, start=None, end=None, tdelta=10, verbose=False):
         """ Creates xarray dataset of Data Insertion hysplit simulations
         all_files: list of all cdump files from Data Insertion runs
         start: datetime object(first time to be included in ensemble (default: d1 - 24 hours))
         end: datetime object (last time to be included in ensemble (default: d1 - 2 hours))
         tdelta: time interval of files to include in minutes (default: 10)
+        verbose: (boolean)
         """
         if start == None:
             start = self.d1 - timedelta(hours=24)
@@ -65,7 +66,7 @@ class MakeNetcdf:
 
         # Date Range for ensemble hour
         hxrd = hysplit.combine_dataset(
-            blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+            blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=verbose, check_grid=True)
         hxrd.attrs['Volcano Name'] = self.volcname
         hxrd.attrs['Volcano ID'] = self.volcid
         return hxrd
@@ -124,13 +125,12 @@ class MakeNetcdf:
 
         unitmass, mass63 = hysp_func.calc_MER(hxrl)
 
-        hxrline.attrs['Volcano Latitude'] = hxrl.attrs['Starting Locations'][0][0]
-        hxrline.attrs['Volcano Longitude'] = hxrl.attrs['Starting Locations'][0][1]
-        hxrline.attrs['Volcano Vent (m)'] = hxrl.attrs['Starting Locations'][0][2]
-        hxrline.attrs['Plume Height (m)'] = hxrl.attrs['Starting Locations'][1][2]
-        hxrline.attrs['Line and Cylinder Source Date'] = hxrl.attrs['Source Date'][0].strftime('%Y%m%d')
-        hxrline.attrs['Line and Cylinder Source Time'] = hxrl.attrs['Source Date'][0].strftime('%H%M%S')
-        hxrline.attrs['Line Num Start Locations'] = hxrl.attrs['Number Start Locations']
+        hxrline.attrs['Volcano Latitude'] = hxrl.attrs['Starting Latitudes'][0]
+        hxrline.attrs['Volcano Longitude'] = hxrl.attrs['Starting Longitudes'][0]
+        hxrline.attrs['Volcano Vent (m)'] = hxrl.attrs['Starting Heights'][0]
+        hxrline.attrs['Plume Height (m)'] = hxrl.attrs['Starting Heights'][-1]
+        hxrline.attrs['Line and Cylinder Source Date'] = hxrl.attrs['Source Date'][0][0:8]
+        hxrline.attrs['Line and Cylinder Source Time'] = hxrl.attrs['Source Date'][0][9:16]
         hxrline.attrs['Mass Eruption Rate - Mastin'] = unitmass
         hxrline.attrs['Fine Ash MER - Mastin'] = mass63
         hxrline.attrs['MER Units'] = 'g/hr'
@@ -314,6 +314,8 @@ class MakeNetcdf:
         """ Calculates Brier Scores and Pearson Correlations for each ensemble
         member. Must convert concentration to mass loading using deltaz
         value and summing along z axis for comparison to VOLCAT data.
+
+        IN PROGRESS - NEED TO MODIFY FOR USE WITH ENS DIMENSION
         Inputs:
         ensdir: ensemble netcdf directory
         volcdir: regridded volcat netcdf directory
@@ -349,8 +351,8 @@ class MakeNetcdf:
         t = 0
         while t < len(threshold):
             # Converting to VOLCAT binary field for BS calculation
-            ashmass = xr.where(vxr.volcat_AshMass.squeeze() >= threshold[t], 1., 0.)
-            ashmassavg = xr.where(vxr.volcat_AshMass_avg.squeeze() >= threshold[t], 1., 0.)
+            ashmass = xr.where(vxr.ash_mass_loading[-1, :, :].squeeze() >= threshold[t], 1., 0.)
+            ashmassavg = xr.where(vxr.ash_mass_avg[-1, :, :].squeeze() >= threshold[t], 1., 0.)
             # Calculating Brier Score of each ensemble member
             a = 0
             BSlist = []
@@ -361,13 +363,13 @@ class MakeNetcdf:
             PClistuncentavg = []
             while a < numfiles:
                 # Calculating pattern correlation coefficients, centered and uncentered
-                stats = ps.CalcScores(vxr.volcat_AshMass.squeeze(),
+                stats = ps.CalcScores(vxr.ash_mass_loading[-1, :, :].squeeze(),
                                       hxr2[a, :, :], threshold=threshold[t], verbose=False)
                 PCcent, PCuncent = stats.calc_pcorr()
                 PClistcent.append(PCcent.values)
                 PClistuncent.append(PCuncent.values)
 
-                stats2 = ps.CalcScores(vxr.volcat_AshMass_avg.squeeze(),
+                stats2 = ps.CalcScores(vxr.ash_mass_avg[-1, :, :].squeeze(),
                                        hxr2[a, :, :], threshold=threshold[t], verbose=False)
                 PCcentavg, PCuncentavg = stats2.calc_pcorr()
                 PClistcentavg.append(PCcentavg.values)
@@ -427,6 +429,8 @@ def ens_merge(hxrd, hxrc, hxrl, MER=None):
     hxrc: data array of cylinder source hysplit simulations
     hxrl: data array of line source hysplit simulations
     MER: float - default is Mastin MER from hxrl attributes"""
+    from datetime import datetime
+    from monetio.models import hysplit
 
     if MER == None:
         MER = hxrl.attrs['Fine Ash MER - Mastin']
@@ -441,4 +445,6 @@ def ens_merge(hxrd, hxrc, hxrl, MER=None):
         hxrline.attrs['User designated Fine Ash MER (Used)'] = MER
 
     hxr = xr.merge([hxrd, hxrcyl, hxrline], combine_attrs='drop_conflicts')
-    return hxr
+    # Need to confirm no nans in lat/lon arrays
+    hxrnew = hysplit.reset_latlon_coords(hxr)
+    return hxrnew
