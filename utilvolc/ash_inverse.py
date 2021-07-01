@@ -15,7 +15,9 @@ from utilvolc import volcat
 from monetio.models import hysplit
 from utilhysplit import hcontrol
 from utilhysplit.evaluation import plume_stat
+from utilhysplit.evaluation import ensemble_tools
 from utilvolc.basic_checks import compare_grids
+from utilvolc.basic_checks import align_grids
 from utilvolc.basic_checks import calc_grids
 from utilvolc.runhelper import Helper
 from utilvolc.ashapp.metfiles import MetFileFinder
@@ -594,15 +596,20 @@ class InverseAsh:
 
         # keep volcat arrays for different averaging times. 
         self.volcat_hash = {}
+
+        # prepare_one_time method adds data to these dictionaries.
+        # the data in cdump_hash and volcat_avg_hash have been aligned.
+        # and are on the same grid.
         self.volcat_avg_hash = {}
         self.cdump_hash = {}
+
         # multiplication factor if more than 1 unit mass released.
         self.concmult = 1
         #
         self.get_cdump(tdir,fname,verbose)
         self.add_config_info(configdir,configfile)
 
-    def get_cdump(self,tdir,fname,verbose=False,remove_source=True):
+    def get_cdump(self,tdir,fname,verbose=False,remove_source=False):
         # hysplit output. xarray. 
         cdump = xr.open_dataset(os.path.join(tdir,fname))
         if not hysplit.check_grid_continuity(cdump): print('Grid not continuous')
@@ -611,8 +618,9 @@ class InverseAsh:
         temp = list(cdump.keys())
         cdump = cdump[temp[0]]
         # get rid of source dimension (for now)
-        if remove_source:
-            cdump = cdump.isel(source=0)
+        cdump, dim = ensemble_tools.preprocess(cdump)
+        #if remove_source:
+        #    cdump = cdump.isel(source=0)
         self.cdump = cdump.fillna(0)
 
     def add_config_info(self,configdir, configfile):
@@ -655,10 +663,6 @@ class InverseAsh:
         else:
             print('No volcat files found ')
             return xr.DataArray()
-        #vra = vset.ash_mass_loading
-        #vra = vra.fillna(0)
-        #vmean = vra.mean(dim='time')
-
         return vset
 
     def clip(self,dummy, buf=0):
@@ -696,6 +700,7 @@ class InverseAsh:
         try:
            iii = timelist.index(time)
         except:
+           print('timelist', timelist)
            iii = None
         return iii 
 
@@ -1060,7 +1065,7 @@ class InverseAsh:
         if not tii:
             tii = self.time_index(daterange[0])
         print('tii',tii)
-        cdump = self.cdump_hash[tii]
+        cdump = self.concmult * self.cdump_hash[tii]
         volcat = self.volcat_avg_hash[tii] 
         if not zii:
             csum = cdump.sum(dim='ens')
@@ -1099,19 +1104,26 @@ class InverseAsh:
         norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max) 
         return norm
 
+    def generate_pairs(self):
+        for tii in self.volcat_avg_hash.keys():
+            volcat = self.volcat_avg_hash[iii] 
+            cdump = self.cdump_hash[iii]*self.concmult
+            yield volcat, cdump 
+                   
+    def get_pair(self,tii):
+        if isinstance(tii,int):
+           iii = tii 
+        elif isinstance(tii,datetime.datetime):
+           iii = self.time_index(tii)
+        volcat = self.volcat_avg_hash[iii] 
+        cdump = self.cdump_hash[iii]*self.concmult
+        return volcat, cdump 
     
     def match_volcat(self,forecast):
         time = pd.to_datetime(forecast.time.values)
         tii = self.time_index(time)
         volcat = self.volcat_avg_hash[tii] 
         return volcat
-
-    def calc_fss(self,forecast,thresh=None):
-        volcat = self.match_volcat(forecast)
-        evals = forecast.values
-        vvals = volcat.values
-        scores = plume_stat.CalcScores(volcat, forecast, threshold=0.2)
-        return scores
 
     def compare_forecast_dist(self,forecast,thresh=None):
         from utilhysplit.evaluation import statmain
@@ -1202,7 +1214,7 @@ class InverseAsh:
         ax2 = fig.add_subplot(1,2,2)
         tii = self.time_index(daterange[0])
         print('tii',tii)
-        cdump = self.cdump_hash[tii]
+        cdump = self.concmult * self.cdump_hash[tii]
         volcat = self.volcat_avg_hash[tii] 
         csum = cdump.sum(dim='ens')
         volcat.plot.pcolormesh(x='longitude',y='latitude',levels=levels,ax=ax1)
@@ -1235,32 +1247,11 @@ class InverseAsh:
     def add_cdump_hash(self, cdump_hash):
         self.cdump_hash.update(cdump_hash)
 
-    def align_grids(self,grid1,grid2):
-        # takes care of making sure grids are aligned.
-        checks, dlon,dlat,minlat,minlon, maxlat,maxlon = calc_grids(grid1, grid2, verbose=False)
-        try:
-            latra = np.clip(np.arange(minlat,maxlat+dlat,dlat),None,maxlat)
-        except:
-            print(minlat, maxlat, dlat)
-        lonra = np.clip(np.arange(minlon,maxlon+dlon,dlon),None,maxlon)
-        if latra[-1] - latra[-2] < 1e-3: latra = latra[0:-1]
-        if lonra[-1] - lonra[-2] < 1e-3 : lonra = lonra[0:-1]
-        grid1, grid2 = xr.align(grid1, grid2, join='outer')
-
-        # align function will put nans in lat,lon coordinates. need to redo these coords.
-        mgrid = np.meshgrid(lonra, latra)
-        grid1 = grid1.assign_coords(longitude=(("y","x"),mgrid[0]))
-        grid1 = grid1.assign_coords(latitude=(("y","x"),mgrid[1]))
-        grid2 = grid2.assign_coords(longitude=(("y","x"),mgrid[0]))
-        grid2 = grid2.assign_coords(latitude=(("y","x"),mgrid[1]))
-       
-        return grid1, grid2
-
     def set_sampling_time(self,default='start'):
         if 'time description' in self.cdump.attrs.keys():
-            if 'start' in self.cdump.attrs['time description']:
+            if 'start' in str.lower(self.cdump.attrs['time description']):
                return 'start'
-            if 'end' in self.cdump.attrs['time description']:
+            if 'end' in str.lower(self.cdump.attrs['time description']):
                return 'end'
         else:
             return default
@@ -1269,12 +1260,16 @@ class InverseAsh:
         vdir = self.vdir
         vid = self.vid
         # key for hashes is determined from times in cdump file.
-        tii = self.time_index(daterange[0])
         # check whether cdump time is start or end of sampling time.
         if self.set_sampling_time() == 'start':
-           cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[0])) 
-        else:
-           cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[1])) 
+           model_tii = 0
+        elif self.set_sampling_time() == 'end':
+           model_tii = 1
+        tii = self.time_index(daterange[model_tii])
+        if not isinstance(tii,int): 
+          print('No time found for {}'.format(daterange[0]))
+          return None, None
+        cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[model_tii])) 
         if not das:
            vset = self.get_volcat(daterange)
         buf = 5
@@ -1284,35 +1279,39 @@ class InverseAsh:
         except:
             return None, None
         a1,a2,b1,b2 = self.clip(vra.sum(dim='time'),buf=buf)
+        # vra has dimensions of time, y, x
         vra = vra[:,a1:a2,b1:b2]
-
         # clip the cdump array before aligning.
         if 'ens' in cdump_a.coords:
             dummy = cdump_a.sum(dim='ens')
         else:
             dummy = cdump_a
-        a1,a2,b1,b2 = self.clip(dummy,buf=5)
+
+        try:
+            a1,a2,b1,b2 = self.clip(dummy,buf=5)
+        except:
+            print('dummy cannot be clipped', dummy)
+
         if 'ens' in cdump_a.coords:
             cdump_a = cdump_a[:,a1:a2,b1:b2]
         else:
             cdump_a = cdump_a[a1:a2,b1:b2]
 
+        # align the grids.
         if compare_grids(cdump_a, vra):
-            cdump_a, vra = self.align_grids(cdump_a, vra)
-        #if compare_grids(cdump_a, vra):
-        #    cdump_a, vra = xr.align(cdump_a, vra, join='outer')
+            cdump_a, vra = align_grids(cdump_a, vra)
         else:
             print('prepare_one_time: grids cannot be aligned')
             return False
 
         # TO DO: may not need to clip again.
         # need to clip cdump and volcat.
-        if 'ens' in cdump_a.coords:
-            dummy = cdump_a.sum(dim='ens')
-        else:
-            dummy = cdump_a
-        a1,a2,b1,b2 = self.clip(dummy)
-        dummy = dummy[a1:a2,b1:b2]
+        #if 'ens' in cdump_a.coords:
+        #    dummy = cdump_a.sum(dim='ens')
+        #else:
+        #    dummy = cdump_a
+        #a1,a2,b1,b2 = self.clip(dummy)
+        #dummy = dummy[a1:a2,b1:b2]
 
         aa1,aa2,bb1,bb2 = self.clip(vra.sum(dim='time').fillna(0))
         # use bounds which encompass all obs and model data. 
@@ -1502,9 +1501,6 @@ def make_efile(vals,vlat,vlon,
                          nanvalue=0)
     efile.write_new(name) 
     return efile
-
-
-
 
 
 
