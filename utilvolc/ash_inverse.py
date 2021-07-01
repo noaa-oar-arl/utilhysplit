@@ -16,9 +16,9 @@ from monetio.models import hysplit
 from utilhysplit import hcontrol
 from utilhysplit.evaluation import plume_stat
 from utilhysplit.evaluation import ensemble_tools
-from utilvolc.basic_checks import compare_grids
-from utilvolc.basic_checks import align_grids
-from utilvolc.basic_checks import calc_grids
+from utilhysplit.hysplit_gridutil import compare_grids
+from utilhysplit.hysplit_gridutil import align_grids
+#from utilvolc.basic_checks import calc_grids
 from utilvolc.runhelper import Helper
 from utilvolc.ashapp.metfiles import MetFileFinder
 
@@ -178,7 +178,7 @@ class ParametersIn:
         nx_ctrl = int(nx_ctrl)
         self.lines[1] = ' N_ctrl={}\n'.format(nx_ctrl)
         self.lines[2] = ' Nx_ctrl={}\n'.format(nx_ctrl)
-        self.lines[40] = ' lbfgs_nbd={}*0'.format(nx_ctrl) 
+        self.lines[40] = ' lbfgs_nbd={}*0/\n'.format(nx_ctrl) 
  
     def write(self,fname):
         with open(fname,'w') as fid:
@@ -442,9 +442,7 @@ class InverseAshEns:
         for iii, tcm in enumerate(self.tcm_names):
             print(self.taglist[iii])
             os.chdir(self.subdir)
-
             params = ParametersIn(os.path.join(self.wdir, 'Parameters_in.dat.original'))
-            print('changing Parameters_in.dat',self.n_ctrl_list[iii])
             params.change_and_write(os.path.join(self.subdir,'Parameters_in.dat'),self.n_ctrl_list[iii])
 
             Helper.remove(inp_name)
@@ -454,9 +452,9 @@ class InverseAshEns:
             Helper.remove(out_name2)
 
             # run 
+            
             Helper.copy(tcm,inp_name)
             Helper.execute(cmd)
-            
             # move output files to new names
             Helper.move(out_name1, new_name1[iii]) 
             Helper.move(out_name2, new_name2[iii]) 
@@ -1279,19 +1277,21 @@ class InverseAsh:
         except:
             return None, None
         a1,a2,b1,b2 = self.clip(vra.sum(dim='time'),buf=buf)
+        vra = vra.transpose('time','y','x')
         # vra has dimensions of time, y, x
         vra = vra[:,a1:a2,b1:b2]
         # clip the cdump array before aligning.
         if 'ens' in cdump_a.coords:
+            cdump_a = cdump_a.transpose('ens','y','x')
             dummy = cdump_a.sum(dim='ens')
         else:
+            cdump_a = cdump_a.transpose('y','x')
             dummy = cdump_a
 
         try:
             a1,a2,b1,b2 = self.clip(dummy,buf=5)
         except:
             print('dummy cannot be clipped', dummy)
-
         if 'ens' in cdump_a.coords:
             cdump_a = cdump_a[:,a1:a2,b1:b2]
         else:
@@ -1313,29 +1313,31 @@ class InverseAsh:
         #a1,a2,b1,b2 = self.clip(dummy)
         #dummy = dummy[a1:a2,b1:b2]
 
-        aa1,aa2,bb1,bb2 = self.clip(vra.sum(dim='time').fillna(0))
+        #aa1,aa2,bb1,bb2 = self.clip(vra.sum(dim='time').fillna(0))
         # use bounds which encompass all obs and model data. 
-        a1 = np.min([a1,aa1])
-        a2 = np.max([a2,aa2])
-        b1 = np.min([b1,bb1])
-        b2 = np.max([b2,bb2])
-        buf = 5
-        if a2+buf < cdump_a.y.values[-1] and a2+buf < vra.y.values[-1]:
-           a2 = a2+buf
-        if b2+buf < cdump_a.x.values[-1] and b2+buf < vra.x.values[-1]:
-           b2 = b2+5
+        #a1 = np.min([a1,aa1])
+        #a2 = np.max([a2,aa2])
+        #b1 = np.min([b1,bb1])
+        #b2 = np.max([b2,bb2])
+        #buf = 5
+        #if a2+buf < cdump_a.y.values[-1] and a2+buf < vra.y.values[-1]:
+        #   a2 = a2+buf
+        #if b2+buf < cdump_a.x.values[-1] and b2+buf < vra.x.values[-1]:
+        #   b2 = b2+5
 
-        a1 = a1 -5
-        b1 = b1 -5
-        if a1<0: a1=0
-        if b1<0: b1=0
+        #a1 = a1 -5
+        #b1 = b1 -5
+        #if a1<0: a1=0
+        #if b1<0: b1=0
 
         avra = vra.fillna(0).mean(dim='time')
-        if 'ens' in cdump_a.coords:
-            self.cdump_hash[tii] = cdump_a[:,a1:a2,b1:b2]
-        else:
-            self.cdump_hash[tii] = cdump_a[a1:a2,b1:b2]
-        self.volcat_avg_hash[tii] = avra[a1:a2,b1:b2]
+        #if 'ens' in cdump_a.coords:
+        #    self.cdump_hash[tii] = cdump_a[:,a1:a2,b1:b2]
+        #else:
+        #    self.cdump_hash[tii] = cdump_a[a1:a2,b1:b2]
+        #self.volcat_avg_hash[tii] = avra[a1:a2,b1:b2]
+        self.cdump_hash[tii] = cdump_a
+        self.volcat_avg_hash[tii] = avra
         return cdump_a, avra
 
     def compare_time_ave(self, daterange):
