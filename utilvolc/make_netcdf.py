@@ -36,12 +36,13 @@ class MakeNetcdf:
         self.volcid = volcid
         self.volcname = volcname
 
-    def DI_combine(self, all_files, start=None, end=None, tdelta=10):
+    def DI_combine(self, all_files, start=None, end=None, tdelta=10, verbose=False):
         """ Creates xarray dataset of Data Insertion hysplit simulations
         all_files: list of all cdump files from Data Insertion runs
         start: datetime object(first time to be included in ensemble (default: d1 - 24 hours))
         end: datetime object (last time to be included in ensemble (default: d1 - 2 hours))
         tdelta: time interval of files to include in minutes (default: 10)
+        verbose: (boolean)
         """
         if start == None:
             start = self.d1 - timedelta(hours=24)
@@ -65,7 +66,7 @@ class MakeNetcdf:
 
         # Date Range for ensemble hour
         hxrd = hysplit.combine_dataset(
-            blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+            blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=verbose)
         hxrd.attrs['Volcano Name'] = self.volcname
         hxrd.attrs['Volcano ID'] = self.volcid
         return hxrd
@@ -117,20 +118,19 @@ class MakeNetcdf:
                 blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
         else:
             hxrline = hysplit.combine_dataset([(allfiles[0], 'LineSource', self.mettag)], drange=[
-                self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+                                              self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
 
         hxrl = hysplit.open_dataset(allfiles[0], drange=[self.d0, self.d1],
                                     century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
 
         unitmass, mass63 = hysp_func.calc_MER(hxrl)
 
-        hxrline.attrs['Volcano Latitude'] = hxrl.attrs['Starting Locations'][0][0]
-        hxrline.attrs['Volcano Longitude'] = hxrl.attrs['Starting Locations'][0][1]
-        hxrline.attrs['Volcano Vent (m)'] = hxrl.attrs['Starting Locations'][0][2]
-        hxrline.attrs['Plume Height (m)'] = hxrl.attrs['Starting Locations'][1][2]
-        hxrline.attrs['Line and Cylinder Source Date'] = hxrl.attrs['Source Date'][0].strftime('%Y%m%d')
-        hxrline.attrs['Line and Cylinder Source Time'] = hxrl.attrs['Source Date'][0].strftime('%H%M%S')
-        hxrline.attrs['Line Num Start Locations'] = hxrl.attrs['Number Start Locations']
+        hxrline.attrs['Volcano Latitude'] = hxrl.attrs['Starting Latitudes'][0]
+        hxrline.attrs['Volcano Longitude'] = hxrl.attrs['Starting Longitudes'][0]
+        hxrline.attrs['Volcano Vent (m)'] = hxrl.attrs['Starting Heights'][0]
+        hxrline.attrs['Plume Height (m)'] = hxrl.attrs['Starting Heights'][-1]
+        hxrline.attrs['Line and Cylinder Source Date'] = hxrl.attrs['Source Date'][0][0:8]
+        hxrline.attrs['Line and Cylinder Source Time'] = hxrl.attrs['Source Date'][0][9:16]
         hxrline.attrs['Mass Eruption Rate - Mastin'] = unitmass
         hxrline.attrs['Fine Ash MER - Mastin'] = mass63
         hxrline.attrs['MER Units'] = 'g/hr'
@@ -314,11 +314,14 @@ class MakeNetcdf:
         """ Calculates Brier Scores and Pearson Correlations for each ensemble
         member. Must convert concentration to mass loading using deltaz
         value and summing along z axis for comparison to VOLCAT data.
+
+        IN PROGRESS - NEED TO MODIFY FOR USE WITH ENS DIMENSION
         Inputs:
         ensdir: ensemble netcdf directory
         volcdir: regridded volcat netcdf directory
         statdir: statistics netcdf directory
         threshold: list of floats (thresholds to calculate scores for)
+        dimension: (string) dimension name to calculate statistics (source or ens)
         deltaz: z-axis interval size in meters (float) default: 1000.0 meters
         write: (boolean) whether or not to write netcdf file
         Outputs:
@@ -329,28 +332,31 @@ class MakeNetcdf:
         import numpy as np
 
         ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        # ensfile = 'ensemble_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
         volcfile = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        # volcfile = 'regridded_volcat_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
 
-        hxr = xr.open_dataset(ensdir+ensfile).squeeze()
-        vxr = xr.open_dataset(volcdir+volcfile).squeeze()
+        hxr = xr.open_dataset(ensdir+ensfile)
+        vxr = xr.open_dataset(volcdir+volcfile)
         attrs = hxr.attrs
         # Summing along z makes hxr2 have units of g/m^2
         hxr2 = hxr.p006 * deltaz
-        hxr2 = hxr2.sum(dim='z').squeeze()
+        hxr2 = hxr2.sum(dim='z')
         # Calculating number of forecasts with data in each grid box
         numfiles = len(hxr2.source)
         # Creating dummy xarray for merging below
         data = np.zeros((numfiles))
-        statsxr = xr.DataArray(name='dummy', data=data, attrs=attrs,
-                               dims='source', coords=[hxr2.source.values])
+        statsxr = xr.DataArray(name='dummy', data=data,
+                               dims=source, coords=[hxr2.source.values])
         # Calculations for various thresholds
+        threshattr = []
         t = 0
         while t < len(threshold):
             # Converting to VOLCAT binary field for BS calculation
-            ashmass = xr.where(vxr.volcat_AshMass.squeeze() >= threshold[t], 1., 0.)
-            ashmassavg = xr.where(vxr.volcat_AshMass_avg.squeeze() >= threshold[t], 1., 0.)
+            if threshold[t] == 0.:
+                ashmass = xr.where(vxr.ash_mass_loading.isel(time=-1) > threshold[t], 1., 0.)
+                ashmassavg = xr.where(vxr.ash_mass_avg.isel(time=-1) >= threshold[t], 1., 0.)
+            else:
+                ashmass = xr.where(vxr.ash_mass_loading.isel(time=-1) >= threshold[t], 1., 0.)
+                ashmassavg = xr.where(vxr.ash_mass_avg.isel(time=-1) >= threshold[t], 1., 0.)
             # Calculating Brier Score of each ensemble member
             a = 0
             BSlist = []
@@ -361,20 +367,20 @@ class MakeNetcdf:
             PClistuncentavg = []
             while a < numfiles:
                 # Calculating pattern correlation coefficients, centered and uncentered
-                stats = ps.CalcScores(vxr.volcat_AshMass.squeeze(),
-                                      hxr2[a, :, :], threshold=threshold[t], verbose=False)
+                stats = ps.CalcScores(vxr.ash_mass_loading.isel(time=-1),
+                                      hxr2.isel(source=a), threshold=threshold[t], verbose=False)
                 PCcent, PCuncent = stats.calc_pcorr()
                 PClistcent.append(PCcent.values)
                 PClistuncent.append(PCuncent.values)
 
-                stats2 = ps.CalcScores(vxr.volcat_AshMass_avg.squeeze(),
-                                       hxr2[a, :, :], threshold=threshold[t], verbose=False)
+                stats2 = ps.CalcScores(vxr.ash_mass_avg.isel(
+                    time=-1), hxr2.isel(source=a), threshold=threshold[t], verbose=False)
                 PCcentavg, PCuncentavg = stats2.calc_pcorr()
                 PClistcentavg.append(PCcentavg.values)
                 PClistuncentavg.append(PCuncentavg.values)
 
                 # Creating binary field of hysplit output
-                hxr3 = xr.where(hxr2[a, :, :] >= threshold[t], 1., 0.)
+                hxr3 = xr.where(hxr2.isel(source=a) >= threshold[t], 1., 0.)
                # Calculating the BS values of each ensemble member
                 BS = ps.calc_bs(hxr3, ashmass)
                 BSlist.append(BS.values)
@@ -383,31 +389,32 @@ class MakeNetcdf:
                 a += 1
             # Adding Brier Scores to the netcdf, with dimension source
             thresh = str(threshold[t])
-            threshstr = str(threshold[t])+' g/m^2'
+            threshattr.append(thresh)
             BSxr = xr.DataArray(BSlist, dims='source').load().rename('BS'+thresh)
             BSxr.attrs['long name'] = 'Brier Score compared to volcat'
-            BSxr.attrs['threshold'] = threshstr
+            BSxr.attrs['threshold'] = thresh+' g/m^s'
             BSavgxr = xr.DataArray(BSlistavg, dims='source').load().rename('BSavg'+thresh)
             BSavgxr.attrs['long name'] = 'Brier Score compared to 1hr avg volcat'
-            BSavgxr.attrs['threshold'] = threshstr
+            BSavgxr.attrs['threshold'] = thresh+' g/m^s'
             PCxr = xr.DataArray(PClistcent, dims='source').load().rename('PC'+thresh)
             PCxr.attrs['long name'] = 'Pattern Correlation (centered) compared to volcat'
-            PCxr.attrs['threshold'] = threshstr
+            PCxr.attrs['threshold'] = thresh+' g/m^s'
             PCxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCuc'+thresh)
             PCxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to volcat'
-            PCxruc.attrs['threshold'] = threshstr
-            PCavgxr = xr.DataArray(PClistcent, dims='source').load().rename('PC'+thresh)
+            PCxruc.attrs['threshold'] = thresh+' g/m^s'
+            PCavgxr = xr.DataArray(PClistcent, dims='source').load().rename('PCavg'+thresh)
             PCavgxr.attrs['long name'] = 'Pattern Correlation (centered) compared to 1hr avg volcat'
-            PCavgxr.attrs['threshold'] = threshstr
-            PCavgxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCuc'+thresh)
+            PCavgxr.attrs['threshold'] = thresh+' g/m^s'
+            PCavgxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCucavg'+thresh)
             PCavgxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to 1hr avg volcat'
-            PCavgxruc.attrs['threshold'] = threshstr
-
+            PCavgxruc.attrs['threshold'] = thresh+' g/m^s'
             statsxr = xr.merge([statsxr, BSxr, BSavgxr, PCxr, PCxruc, PCavgxr,
                                 PCavgxruc], combine_attrs='drop_conflicts')
             t += 1
         # Dropping dummy variable
         statsxr = statsxr.drop(labels='dummy')
+        statsxr.attrs['threshold'] = threshattr
+        statsxr.attrs['threshold units'] = 'g/m^2'
 
         if write:
             # Removing and rewriting stats netcdf file
@@ -427,6 +434,8 @@ def ens_merge(hxrd, hxrc, hxrl, MER=None):
     hxrc: data array of cylinder source hysplit simulations
     hxrl: data array of line source hysplit simulations
     MER: float - default is Mastin MER from hxrl attributes"""
+    from datetime import datetime
+    from monetio.models import hysplit
 
     if MER == None:
         MER = hxrl.attrs['Fine Ash MER - Mastin']
@@ -441,4 +450,6 @@ def ens_merge(hxrd, hxrc, hxrl, MER=None):
         hxrline.attrs['User designated Fine Ash MER (Used)'] = MER
 
     hxr = xr.merge([hxrd, hxrcyl, hxrline], combine_attrs='drop_conflicts')
-    return hxr
+    # Need to confirm no nans in lat/lon arrays
+    hxrnew = hysplit.reset_latlon_coords(hxr)
+    return hxrnew
