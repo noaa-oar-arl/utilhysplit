@@ -14,24 +14,30 @@ Pattern Correlation, Brier Scores, and ensemble weighting schemes.
 ---------
 Class:
     CalcScores
+         calc_accuracy_measures: calculates the scalar accuracy measures for continuous predictands
+         calc_basics:
+         calc_roc: calculates the relative operating characteristics
+         get_contingency_table: puts contingency table together for further calculations
+         table2csi: 
          calc_csi (critical success index, aka figure of merit in space)
          calc_fss (fraction skill score)
          calc_pcorr (pattern correlation coefficient)
+   
 Functions:
     calc_bs (brier score)
     calc_bss (brier skill score)
+    calc_weights (calculates list of normalized weights for use in ensemble_tools.ATL)
     calc_weightsBS (BS weights for ensemble members)
     calc_weightsPC (PC weights for ensemble members)
+    plot_roc (plots output from CalcScores.calc_roc)
 """
 # 2021 Jun 9 amc added plot_roc function to plot output from the calc_roc method in CalcScores.
-
-
 # AMC - note that we are using ATL from ensemble_tools and ensemble_tools also imports
 # from plume_stat.py. Some of the functions need to be rearranged to avoid this situation.
-
-
 # To go to multicategory forecasts need to add a threshold dimension onto binxra1 and binxra2
-#
+
+# 2021 Jul 2 amr added calc_weights to calculate a normalized list of weights for use with ensemble_tools.ATL function
+
 
 def test_fssA():
     """
@@ -124,6 +130,11 @@ class CalcScores:
         clip: boolean. If True, clips around forecast array, reducing number of correct no-forecasts
         ----------------------------
         Functions:
+        calc_accuracy_measures: calculates the scalar accuracy measures for continuous predictands
+        calc_basics:
+        calc_roc: calculates the relative operating characteristics
+        get_contingency_table: puts contingency table together for further calculations
+        table2csi: 
         calc_csi: calculates the critical success index (gilbert score), probability of detection, false alarm rate, etc.
         calc_fss: calculates the fractions skill score
         calc_pcorr: calculates pattern correlation coefficient (Pearson correlation coefficient)
@@ -286,12 +297,12 @@ class CalcScores:
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
             #self.calc_basics(prob, clip=clip)
-            tframe = self.get_contingency_table(probthresh=prob,clip=clip,multi=False)
-            tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']),axis=1)
-            tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']),axis=1)
+            tframe = self.get_contingency_table(probthresh=prob, clip=clip, multi=False)
+            tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
+            tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
             #csihash = self.calc_csi()
-            #xlist.append(csihash['F'])
-            #ylist.append(csihash['POD'])
+            # xlist.append(csihash['F'])
+            # ylist.append(csihash['POD'])
             xlist.append(tframe['F'].values)
             ylist.append(tframe['POD'].values)
         return xlist, ylist
@@ -330,8 +341,8 @@ class CalcScores:
                         cval = float(arr1[i, :, :].sum().values)
                         bval = float(arr2[i, :, :].sum().values)
                         dval = float(arr3[i, :, :].sum().values)
-                        tmphash = {tval: element, 'a': aval, 'b': 
-                            bval, 'c': cval, 'd': dval}
+                        tmphash = {tval: element, 'a': aval, 'b':
+                                   bval, 'c': cval, 'd': dval}
                         thash.append(tmphash)
 
         tframe = pd.DataFrame.from_dict(thash)
@@ -345,17 +356,17 @@ class CalcScores:
         return tframe
 
     def table2csi(self, tframe):
-        tframe['CSI'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['b'] + row['c']),axis=1)
+        tframe['CSI'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['b'] + row['c']), axis=1)
         # false alarm ratio (p 310 Wilks) b/(a+b)
         # proportion of positive forecasts which were wrong.
-        tframe['FAR'] = tframe.apply(lambda row: row['b'] / (row['a'] + row['b']),axis=1)
-        tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']),axis=1)
-        tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']),axis=1)
-        tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'],axis=1)
-        tframe['aref'] = tframe.apply(lambda row: (row['a'] + row['b'])*(row['a']+row['c'])/row['N'],axis=1)
-        tframe['GSS'] = tframe.apply(lambda row: (row['a'] - row['aref']) / (row['a'] - row['aref'] + row['b'] + row['c']),axis=1)
+        tframe['FAR'] = tframe.apply(lambda row: row['b'] / (row['a'] + row['b']), axis=1)
+        tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
+        tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
+        tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'], axis=1)
+        tframe['aref'] = tframe.apply(lambda row: (row['a'] + row['b'])*(row['a']+row['c'])/row['N'], axis=1)
+        tframe['GSS'] = tframe.apply(lambda row: (row['a'] - row['aref']) /
+                                     (row['a'] - row['aref'] + row['b'] + row['c']), axis=1)
         return tframe
-
 
     def calc_csi(self, verbose=False):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
@@ -382,7 +393,6 @@ class CalcScores:
         csihash['misses'] = self.arr1.sum().values
         csihash['false_alarms'] = self.arr2.sum().values
         csihash['d'] = self.arr3.sum().values      # d correctly forecast no ash.
-        
 
         if area.shape == self.match.shape:
             csihash['CSI'] = ((self.match*self.area).sum() / ((self.match*self.area).sum() +
@@ -598,6 +608,30 @@ def calc_bss(BS, BSref):
     return BSS
 
 
+def calc_weights(scores, types='BS'):
+    """
+    Calculating the weighting scheme based on brier score or pattern correlation values.
+    The scores xarray should be 1 dimension, either 'ens' or 'source' and
+    should be for the desired applied threshold level.
+    Inputs:
+        scores: scores for each ensemble member (xarray) from statistics netcdf
+        types: 9string) 'BS' for Brier Score or 'PC' for Pattern Correlation
+    Output:
+        wgtscore: normalized list of weights to apply to hysplit ensemble
+    """
+    a = 0
+    scorelist = []
+    while a < len(scores):
+        if types == 'BS':
+            weight = 1-scores.values[a]
+        if types == 'PC':
+            weight = scores.values[a]
+        scorelist.append(weight)
+        a += 1
+    wgtscore = scorelist / sum(scorelist)
+    return wgtscore
+
+
 def calc_weightsBS(xra, scores):
     """
     Calculating the weighting scheme based on brier score values.
@@ -613,7 +647,7 @@ def calc_weightsBS(xra, scores):
     W = []
     xra2 = xra
     while a < len(xra.source):
-        weight = 1-scores[a].values
+        weight = 1-scores.values[a]
         W.append(weight)
         xra2[a, :, :] = xra[a, :, :] * weight
         a += 1
@@ -623,7 +657,7 @@ def calc_weightsBS(xra, scores):
 
 
 def calc_weightsPC(xra, scores):
-    """Kat62020
+    """
     Calculating the weighting scheme based on pattern correlation values.
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
@@ -637,7 +671,7 @@ def calc_weightsPC(xra, scores):
     W = []
     xra2 = xra
     while a < len(xra.source):
-        weight = scores[a].values
+        weight = scores.values[a]
         W.append(weight)
         xra2[a, :, :] = xra[a, :, :] * weight
         a += 1
