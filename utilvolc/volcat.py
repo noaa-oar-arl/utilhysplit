@@ -489,7 +489,7 @@ def get_volcat_list(tdir,
     if flist:
        filnames = flist
     else:
-       tframe = get_volcat_name_df(tdir,vid=vid,daterange=daterange,include_last=include_last)
+       tframe = get_volcat_name_df(tdir,vid=vid,fid=fid,daterange=daterange,include_last=include_last)
        filenames = tframe.filename.values 
     das = []
     for iii in filenames:
