@@ -32,6 +32,8 @@ class VolcatPlots:
         radius = []
         minradius = []
         maxradius = []
+        dtlist = []
+        time_elapsed=0
 
         for iii in np.arange(0,len(das)+1):
             try:
@@ -61,15 +63,25 @@ class VolcatPlots:
             minradius.append(np.min(vrad))
             maxradius.append(np.max(vrad))
 
+            
+            if (pd.to_datetime(das[iii-1].time.values[0]) > pd.to_datetime(das[iii].time.values[0])):
+                print('WARNING: time not increasing ')
+                print(das[iii-1].time.values)
+                print(das[iii].time.values)
+
             # mer in kg/s. divide by 1e9 to convert from Tg to kg.
             # divide by 10*60 to get from per retrieval to per second.
             if iii>0:
                 dt = pd.to_datetime(das[iii].time.values[0]) - pd.to_datetime(das[iii-1].time.values[0])
+                mer.append((masstg - massprev)*1e9/(dt.seconds))
             else:
-                dt = datetime.timedelta(minutes=10)
-            mer.append((masstg - massprev)*1e9/(dt.seconds))
+                dt = pd.to_datetime(das[iii+1].time.values[0]) - pd.to_datetime(das[iii].time.values[0])
+                mer.append(0)
             massprev = masstg
+            dtlist.append(time_elapsed)
+            time_elapsed += dt.seconds 
 
+        self.dtlist = dtlist
         self.dlist = dlist
         self.tmasslist = tmasslist
         self.minmass = minmass
@@ -81,8 +93,16 @@ class VolcatPlots:
         self.minrad = minradius
         self.maxrad = maxradius
 
+    def make_spline(self,s=None):
+        import scipy.interpolate 
+        if not s:
+           s = 2.0 / len(self.dtlist)
+        #self.spline = scipy.interpolate.CubicSpline(self.dtlist,self.tmasslist)
+        self.spline = scipy.interpolate.UnivariateSpline(self.dtlist,self.tmasslist,s=s)
+
     def set_plot_settings(self):
         self.main_clr = '--b'
+        self.spline_clr = '-r'
         self.sub_clrs = ['--r','--c']
 
     def plot_multiB(self,fignum=1):
@@ -100,6 +120,8 @@ class VolcatPlots:
         return fig
 
     def plot_multiA(self,fignum=1):
+        self.make_spline()
+
         sns.set_style('whitegrid')
         fig = plt.figure(fignum,figsize=[10,10])
 
@@ -133,7 +155,13 @@ class VolcatPlots:
     def sub_plot_mass(self,ax):
         yval = self.tmasslist
         xval = self.dlist
+
+        ys = self.spline(self.dtlist)
+        ax.plot(xval,ys,self.spline_clr, LineWidth=5,alpha=0.5)
+
         ax.plot(xval,yval,self.main_clr)
+
+
         ax.set_ylabel('Total mass (Tg)')
         ax.set_xlabel('Time')
 
@@ -168,13 +196,18 @@ class VolcatPlots:
     def sub_plot_mer(self,ax):
         yval = self.mer
         xval = self.dlist
-        ax.plot(xval,yval,self.main_clr)
+        #ax.plot(xval,yval,self.main_clr)
+        mer = self.spline.derivative()
+        ys = mer(self.dtlist)
+        ax.plot(xval,ys*1e9,self.spline_clr, LineWidth=5,alpha=0.5)
         ax.set_ylabel('kg s$^{-1}$')
         ax.set_xlabel('Time')
 
     def sub_plot_maxht(self,ax):
         yval = self.htlist
         xval = self.dlist
+
+
         ax.plot(xval,yval,self.main_clr)
         ax.set_ylabel('Maximum height km')
         ax.set_xlabel('Time')
