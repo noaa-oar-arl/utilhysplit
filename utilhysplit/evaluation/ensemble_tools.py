@@ -121,9 +121,10 @@ def preprocess(indra, enslist=None, sourcelist=None):
         enslist = dra.ens.values
 
     if "source" in dra.dims and "ens" in dra.dims:
-        dra = dra.sel(ens=enslist)
+        dra = dra.rename({'ens':'metens'})
+        dra = dra.sel(metens=enslist)
         dra = dra.sel(source=sourcelist)
-        dra = dra.stack(ens=("ens", "source"))
+        dra = dra.stack(ens=("metens", "source"))
 
     elif "source" in dra.dims:
         dra = dra.sel(source=sourcelist)
@@ -165,7 +166,13 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None)
 
      """
     # handle whether using 'ens' dimension, 'source' dimension or both.
+
+    if isinstance(weights, (list, np.ndarray)):
+       norm=False
+
     dra, dim = preprocess(indra, enslist, sourcelist)
+
+
 
     # allow for multiple category forecasts.
     # probability that value is between two values.
@@ -224,11 +231,9 @@ def get_pixel_match(indra, obsra, thresh, return_binary=False):
     above threshold pixels as obsra.
 
     Inputs:
-
     Outputs:
     threshra : xarray dataArray with threshold for each ensemble value.
     matchra  : indra with 
-
     """
     dra, dim = preprocess(indra)
     threshlist = []
