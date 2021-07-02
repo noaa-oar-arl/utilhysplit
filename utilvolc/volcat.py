@@ -456,7 +456,10 @@ def get_volcat_name_df(tdir,
     if fid:
         temp = temp[temp['fid']==fid]
 
-    temp = temp.sort_values(['volcano id','fid','edate'],axis=0)
+    if 'fid' in temp.columns:
+        temp = temp.sort_values(['volcano id','fid','edate'],axis=0)
+    else:
+        temp = temp.sort_values(['volcano id','edate'],axis=0)
 
     return temp
 
