@@ -433,7 +433,11 @@ def average_volcat(das, cdump, skipna=False, convert_nans=False):
     return avgmass, maxhgt
 
 
-def get_volcat_name_df(tdir, daterange=None, vid=None,include_last=False):
+def get_volcat_name_df(tdir, 
+                       daterange=None, 
+                       vid=None,
+                       fid=None,
+                       include_last=False):
     """
     Returns dataframe with columns being the information in the vhash
     dictionary of the VolcatName class. This is all the information collected from the filename.
@@ -449,9 +453,22 @@ def get_volcat_name_df(tdir, daterange=None, vid=None,include_last=False):
             temp = temp[temp['edate'] < daterange[1]]  
     if vid:
         temp = temp[temp['volcano id']==vid]
+    if fid:
+        temp = temp[temp['fid']==fid]
+
+    if 'fid' in temp.columns:
+        temp = temp.sort_values(['volcano id','fid','edate'],axis=0)
+    else:
+        temp = temp.sort_values(['volcano id','edate'],axis=0)
+
     return temp
 
-def get_volcat_list(tdir, daterange, vid, return_val=2, 
+def get_volcat_list(tdir, 
+                    daterange=None, 
+                    vid=None, 
+                    fid=None,
+                    flist=None, 
+                    return_val=2, 
                     correct_parallax=True, 
                     mask_and_scale=True, 
                     decode_times=True, 
@@ -472,9 +489,13 @@ def get_volcat_list(tdir, daterange, vid, return_val=2,
     Outputs:
     das: list of datasets
     """
-    tframe = get_volcat_name_df(tdir,vid=vid,daterange=daterange,include_last=include_last)
+    if flist:
+       filnames = flist
+    else:
+       tframe = get_volcat_name_df(tdir,vid=vid,fid=fid,daterange=daterange,include_last=include_last)
+       filenames = tframe.filename.values 
     das = []
-    for iii in tframe.filename.values:
+    for iii in filenames:
         # opens volcat files using volcat.open_dataset
         if not '_pc' in iii:
             das.append(open_dataset(os.path.join(tdir, iii),
