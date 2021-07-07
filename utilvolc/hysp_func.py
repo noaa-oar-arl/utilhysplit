@@ -79,7 +79,7 @@ def hysp_massload(dset, threshold=0.0):
     Units in (g/m^2)"""
 
     aml_alts = calc_aml(dset)
-    total_aml = aml_alts.sum(dim='z')
+    total_aml = aml_alts.sum(dim='z', keep_attrs=True)
     # Calculate conversion factors
     if 'Starting Heights' in dset.attrs:
         unitmass, mass63 = calc_MER(dset)
