@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
+import scipy
 import matplotlib.pyplot as plt
 import time
 from utilhysplit.evaluation import ensemble_tools
@@ -287,12 +288,16 @@ class CalcScores:
         Should this be ameliorated by clipping the domain tightly around the plume area?
         clip=True will do this.
 
+        Outputs:
+        xlist: list of x values for plotting
+        ylist: list of y values for plotting
         """
         # probability thresholds
         problist = np.arange(0.05, 1, 0.05)
         problist = np.append(problist, 0.99)
-        xlist = []
-        ylist = []
+        # Starts at (1,1) ends at (0.,0.) point
+        xlist = [1.]
+        ylist = [1.]
         # calculate False Alarm Rate (x axis) and
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
@@ -305,7 +310,12 @@ class CalcScores:
             # ylist.append(csihash['POD'])
             xlist.append(tframe['F'].values)
             ylist.append(tframe['POD'].values)
-        return xlist, ylist
+        xlist.append(0.)
+        ylist.append(0.)
+        xlist.reverse()
+        ylist.reverse()
+        area = scipy.integrate.trapz(y=ylist, x=xlist)
+        return xlist, ylist, area[0]
 
     def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False):
 
