@@ -91,6 +91,7 @@ def volcATL(indra):
     return ATL(newra)
 
 
+
 def preprocess(indra, enslist=None, sourcelist=None):
     """
     indra : xarray dataArray
@@ -103,6 +104,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
     dim : str : indicates whether 'ens' or 'source' dimension is to be used.
     """
 
+
     dra = indra.copy()
 
     # handle whether using 'ens' dimension, 'source' dimension or both.
@@ -112,11 +114,19 @@ def preprocess(indra, enslist=None, sourcelist=None):
     # returns an error.
     if isinstance(sourcelist, np.ndarray):
         pass
+    # if no sourcelist is passed and source dimension is only length 1,
+    # then 'squeeze' it rather than stack it.
+    elif "source" in dra.dims and len(dra.source.values)==1:
+        dra = dra.isel(source=0)
     elif "source" in dra.dims and not sourcelist:
         sourcelist = dra.source.values
 
     if isinstance(enslist, np.ndarray):
         pass
+    # if no enslist is passed and source dimension is only length 1,
+    # then 'squeeze' it rather than stack it.
+    elif "ens" in dra.dims and len(dra.ens.values)==1:
+        dra = dra.isel(ens=0)
     elif "ens" in dra.dims and not enslist:
         enslist = dra.ens.values
 
@@ -362,6 +372,7 @@ def plot_ens_accuracy(ensdf,cname='MAE'):
     else:
        rvalue = cname
     sns.set()
+    sns.set_style("whitegrid")
     fig, ax = plt.subplots(1,1)
     sns.set_style('whitegrid')
     if 'time' in ensdf.columns:
@@ -399,9 +410,9 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     colA = uniform.columns[0] 
     uniform.plot(ax=ax, y=colA, LineStyle='--',legend=None,colormap='winter')
     if 'mean' in ensfss.columns:
-        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",label='mean')
     if 'prob' in ensfss.columns:
-        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",label='prob')
     ax.set_ylabel('FSS')
 
 
@@ -446,9 +457,9 @@ def plot_ens_fss(ensdf, sizemult=1,
     nmin = float(np.min(ensdf['Nlen']))* sizemult
     nmax = float(np.max(ensdf['Nlen']))* sizemult
     if 'mean' in ensfss.columns:
-        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",legend=None)
     if 'prob' in ensfss.columns:
-        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",legend=None)
     # plot random forecast
     for randomval in random:
         plt.plot([nmin,nmax],[randomval, randomval], '--k')
