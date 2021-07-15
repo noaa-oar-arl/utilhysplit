@@ -200,7 +200,11 @@ class InverseOutDat:
 
     def read_out(self,name):
         wdir = self.wdir
-        df = pd.read_csv(os.path.join(wdir,name),sep='\s+',header=None)
+        if os.path.isfile(os.path.join(wdir,name)):
+            df = pd.read_csv(os.path.join(wdir,name),sep='\s+',header=None)
+        else:
+            print('File not found {}'.format(os.path.join(wdir,name)))
+            df = pd.DataFrame()
         return df
 
     def get_emis(self,name=None):
@@ -298,11 +302,13 @@ class InverseAshEns:
     def __init__(self, tdirlist, fnamelist,
                  vdir,vid,
                  configdir='./',configfile=None,
+                 ensdim='ens',
                  verbose=False):
         self.invlist = []  # list of  InverseAsh objects
         self.fnamelist = fnamelist
         self.tcm_names = [] # list of names of tcm files written.
         self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
+        self.vdir = vdir
  
         # assume strings of form NAME_gep04.nc
         try:
@@ -311,14 +317,30 @@ class InverseAshEns:
             print('InverseAshEns string not in expected form {}'.format(fnamelist[0]))
             self.taglist = list(map(str,np.arange(0,len(fnamelist))))
         for hruns in zip(tdirlist, fnamelist):
-            self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,configdir,configfile,verbose=verbose))
+            self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,
+                                           configdir,configfile,
+                                           ensdim=ensdim,
+                                           verbose=verbose))
 
-    def set_directory(self,wdir,execdir,hysplitdir,subdir=None):
+    def set_directory(self,wdir,
+                      execdir,
+                      datadir,
+                      hysplitdir,
+                      subdir=None):
+        self.datadir = datadir 
         self.wdir = wdir
         if not subdir: self.subdir = wdir
         else: self.subdir = os.path.join(wdir, subdir)
         self.execdir = execdir
         self.hysplitdir = hysplitdir
+
+    def print_directories(self):
+        print('Working directory, wdir :{}'.format(self.wdir))
+        print('execdir :{}'.format(self.execdir))
+        print('hysplitdir :{}'.format(self.hysplitdir))
+        print('subdir :{}'.format(self.subdir))
+        print('vdir :{}'.format(self.vdir))
+        print('datadir :{}'.format(self.datadir))
 
     def set_subdirectory(self,runtag):
         # make subdirectories for different TCM options.
@@ -506,6 +528,9 @@ class InverseAshEns:
             tag = self.taglist[iii]
             emit_name = self.make_emit_name(self.subdir,tag)
             df = io.get_emis()
+            if df.empty:
+               print('No emissions generated')
+               continue
             vals = self.invlist[iii].make_outdat(df)
             area = self.invlist[iii].inp['area']
             efile = make_efile(vals,vlat=vloc[1], vlon=vloc[0], 
@@ -514,6 +539,8 @@ class InverseAshEns:
                        name = emit_name)
        
             inp = self.invlist[0].inp
+            inp['forecastDirectory'] = os.path.join(self.datadir,'GEFS') 
+            inp['archivesDirectory'] = os.path.join(self.datadir,'wrong') 
             make_control(efile,self.wdir,'CONTROL.default',self.subdir,tag,
                          forecast_directory=inp['forecastDirectory'],
                          archive_directory=inp['archivesDirectory'],
@@ -578,7 +605,7 @@ class InverseAsh:
 
     def __init__(self, tdir, fname,vdir,vid,
                  configdir='./',configfile=None,
-                 verbose=False):
+                 verbose=False,ensdim='ens'):
         """
         configfile : full path to configuration file.
         """
@@ -587,10 +614,10 @@ class InverseAsh:
         self.fname = fname # name of hysplit output
 
         self.vdir = vdir   # directory for volcat data
-        self.vid = vid   # volcano id.
+        self.vid = vid     # volcano id.
 
-        self.n_ctrl = 0  # determined in the write_tcm method.
-                         # needed for Parameters_in.dat input into inversion algorithm
+        self.n_ctrl = 0    # determined in the write_tcm method.
+                           # needed for Parameters_in.dat input into inversion algorithm
 
         # keep volcat arrays for different averaging times. 
         self.volcat_hash = {}
@@ -604,10 +631,16 @@ class InverseAsh:
         # multiplication factor if more than 1 unit mass released.
         self.concmult = 1
         #
-        self.get_cdump(tdir,fname,verbose)
+        self.get_cdump(tdir,fname,verbose,ensdim)
         self.add_config_info(configdir,configfile)
 
-    def get_cdump(self,tdir,fname,verbose=False,remove_source=False):
+    def print_summary(self):
+        print('Observations availalbe in volcat_avg_hash')
+        print(self.volcat_avg_hash.keys())
+        print('times in cdump file')
+        self.print_times() 
+
+    def get_cdump(self,tdir,fname,verbose=False,ensdim='ens'):
         # hysplit output. xarray. 
         cdump = xr.open_dataset(os.path.join(tdir,fname))
         if not hysplit.check_grid_continuity(cdump): print('Grid not continuous')
@@ -615,10 +648,12 @@ class InverseAsh:
         # turn dataset into dataarray
         temp = list(cdump.keys())
         cdump = cdump[temp[0]]
-        # get rid of source dimension (for now)
+        # get rid of source dimension
+        if ensdim=='ens':
+            cdump = cdump.isel(source=0)
+        elif ensdim=='source':
+            cdump = cdump.isel(ens=0)
         cdump, dim = ensemble_tools.preprocess(cdump)
-        #if remove_source:
-        #    cdump = cdump.isel(source=0)
         self.cdump = cdump.fillna(0)
 
     def add_config_info(self,configdir, configfile):

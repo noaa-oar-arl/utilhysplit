@@ -28,7 +28,6 @@ class ScoreCard:
         self.obs_area = None
         self.forecast_area = None
 
-
 class AshEval(InverseAsh):
 
     def __init__(self, tdir, fname,vdir,vid,configdir=None,configfile=None):
@@ -38,18 +37,18 @@ class AshEval(InverseAsh):
     def calc_massload(self):
         self.massload = hysplit.hysp_massload(self.cdump) * self.concmult
 
-
     def calc_max_conc(self):
         levels = self.cdump.z.values
         enslist = self.cdump.ens.values
           
-
-    def calc_fss(self,forecast,thresh=None):
-        volcat = self.match_volcat(forecast)
-        evals = forecast.values
-        vvals = volcat.values
-        scores = plume_stat.CalcScores(volcat, forecast, threshold=0.2)
-        return scores
+    #def calc_fss(self,iii,thresh=None):
+    #    volcat = self.volcat_avg_hash[iii]
+    #    ens_forecast = self.cdump_hash[iii]
+    #    dft, dft2 = ensemble_tools.ens_time_fss(ens_forecast, volcat,
+    #                                            threshold=threshold,
+    #                                            neighborhoods = nb,
+    #                                            plot=False,
+    #                                            pixel_match=pixel_match)
  
     def conc_cdf_plot(self, timelist=None, enslist=None,threshold=0):
         conc = self.cdump * self.concmult
@@ -59,7 +58,7 @@ class AshEval(InverseAsh):
         step = 5
         clr = ['-m','-r','-b','-c','-g']
         for jjj, iii in enumerate(self.volcat_avg_hash.keys()):
-            print(self.cdump.time.values[iii])
+            #print(self.cdump.time.values[iii])
             volcat = self.volcat_avg_hash[iii] 
             volcat = volcat.values.flatten()
             volcat = [x for x in volcat if x > threshold]
@@ -71,7 +70,7 @@ class AshEval(InverseAsh):
             ax = plt.gca()
             if jjj%5 == 0: 
                lw = 3
-               print('here')
+               #print('here')
             else: lw=1
             ax.step(sdata, y, clr[jjj%len(clr)], LineWidth=lw )
  
@@ -82,47 +81,62 @@ class AshEval(InverseAsh):
 
     def mass_cdf_plot(self, timelist=None, enslist=None,
                       threshold=0, use_pixel_match=False,
-                      plotdiff=False):
+                      plotdiff=False,figname=None):
+
         mass = self.massload
         ilist = [self.time_index(time) for time in timelist]
         kshash = {}
+
         for ttt, iii in enumerate(ilist):
             if iii not in self.volcat_avg_hash.keys(): continue
+           
+            # get and process volcat data
             volcat = self.volcat_avg_hash[iii] 
             volcat = volcat.values.flatten()
             volcat = [x for x in volcat if x > threshold]
+            # CDF of volcat data
             sdata, y = statmain.cdf(volcat)
-            print('volcat', len(sdata))
-            print('time', timelist[ttt])
-            print('ens', enslist)
+
+            # CDF of model data
             if not use_pixel_match:
                 cdhash = self.cdf_plot(mass,[timelist[ttt]],enslist,threshold,
                               pixel_match=None)
             else:
                 cdhash = self.cdf_plot(mass,[timelist[ttt]],enslist,threshold,
                               pixel_match= len(sdata))
+
+            # plot the volcat data
             ax = plt.gca()
             ax.step(sdata, y, '--k', LineWidth=5)
+
+            # compute the ks value.
             for key in cdhash.keys():
                 cdf = cdhash[key]
-                kstest = statmain.kstest_sub(sdata,y,cdf[0],cdf[1])
+                try:
+                    kstest = statmain.kstest_sub(sdata,y,cdf[0],cdf[1])
+                except:
+                    continue
                 maxval = np.max(kstest[1])
                 minval = np.min(kstest[1])
                 if np.abs(minval) > np.abs(maxval):
                    kshash[key] = [minval]
                 else: 
                    kshash[key]= [maxval]
-                #kshash.append(np.max(np.abs(kstest[1])))
-                #print(key, 'KSP', np.max(np.abs(kstest[1])))
                 if plotdiff: plt.plot(kstest[0],kstest[1])
+            if figname: 
+               print('saving', figname)
+               plt.savefig(figname)
             plt.show()
+
         # now plot ks score as function of time or ensemble member.
         fig = plt.figure(1)
         self.ksdf = self.kshash_to_df(kshash)
         if isinstance(timelist, np.ndarray) or isinstance(timelist, list):
            if len(timelist) > 1:
+              # plot as function of time
               self.ksdf.plot()
            else:
+              # plot as function of ense member
               temp = self.ksdf.T
               temp.plot()
         return self.ksdf
@@ -158,6 +172,7 @@ class AshEval(InverseAsh):
         return cdhash
  
     def ks_time_series(self,thresh=0,drange=None):
+        # THIS IS OUTDATED.
         dra = self.massload
         kshash = {}
         forecast_area = {}
@@ -204,9 +219,9 @@ class AshEval(InverseAsh):
         #    ax = fig.add_subplot(1,1,1)
         #ax.step(exval, eyval, '-r',label='HYSPLIT')
         #ax.step(vxval, vyval, '-b',label='Volcat')
-        ks1,ks2 = statmain.kstestnan(evals.flatten(),vvals.flatten(),thresh)
+        ks1 = statmain.kstestnan(evals.flatten(),vvals.flatten(),thresh)
         try:
-            print('Kolmogorov-Smirnov Parameter {} {}'.format(np.max(np.abs(ks1)), np.max(np.abs(ks2))))
+            print('Kolmogorov-Smirnov Parameter {}'.format(np.max(np.abs(ks1))))
         except:
             return 1
         return np.max(np.abs(ks1)) 
@@ -220,7 +235,7 @@ class AshEval(InverseAsh):
         volcat_parea = len(vvals)
         return forecast_parea, volcat_parea
        
-    def compare_forecast(self, forecast,cmap='Blues',ptype='pcolormesh',vloc=None):
+    def compare_forecast(self, forecast,cmap='viridis',ptype='pcolormesh',vloc=None):
         # forecast should be an xarray in mass loading format with no time dimension.
         sns.set()
         sns.set_style('whitegrid')
@@ -289,75 +304,98 @@ class AshEval(InverseAsh):
         plt.tight_layout()
         return ax1,ax2
 
-
 def calc_stats_function(hxr,ashmass,threshold):
+        from utilhysplit.evaluation import plume_stat
+        from utilhysplit.evaluation import ensemble_tools
         """
-        This is just for one time period. 
+        Currently this is just for one time period. 
         """
+        if isinstance(threshold, float):
+           threshold = [threshold]
+
+
         # stack ensemble and source dimensions
         dim='ens'
-        if 'source' in hxr.coords and 'ens' in hxr.coords:
+        if 'source' in hxr.dims and 'ens' in hxr.dims:
             hxr = hxr.stack(ens=("ens","source"))
-        elif 'source' in hxr.coords:
+        elif 'source' in hxr.dims:
             dim='source'
+ 
+        # want to evaluate ensemble mean. 
+        hxr_mean = hxr.mean(dim=dim)        
+  
         # Creating dummy xarray for merging below
-        data = np.zeros((numfiles))
-        statsxr = xr.DataArray(name='dummy', data=data, attrs=attrs,
-                               dims=dim, coords=[hxr2.source.values])
+        data = np.zeros(len(hxr.ens.values))
+        #statsxr = xr.DataArray(name='dummy', data=data, attrs=attrs,
+        statsxr = xr.DataArray(name='dummy', data=data, 
+                               dims=dim, coords=[hxr.ens.values])
+        BSlist = []
+        fss_mean_list = []
         for thresh in threshold:
+            # Converting to probabilistic (0-1) field for model data.
+            atl = ensemble_tools.ATL(hxr,norm=True,thresh=thresh)
             # Converting to VOLCAT binary field for BS calculation
             ashmass_binary = xr.where(ashmass >=  thresh, 1., 0.)
+
             # Calculating Brier Score of each ensemble member
             a = 0
-            BSlist = []
-            BSlistavg = []
             PClistcent = []
             PClistuncent = []
             PClistcentavg = []
             PClistuncentavg = []
-            for member in hxr.ens.values:
+
+            BS = plume_stat.calc_bs(atl, ashmass_binary)
+            BSlist.append(BS.values)
+            stats = plume_stat.CalcScores(hxr_mean,ashmass_binary,threshold=thresh,
+                                          verbose=False,makeplots=False,
+                                          szra=[3,5,7,9,11])
+
+            #fssdf = stats.calc_fss(
+
+            #for member in hxr.ens.values:
+            #    print(member)
                 # Calculating pattern correlation coefficients, centered and uncentered
-                stats = ps.CalcScores(ashmass,
-                                      hxr.sel(ens=member), threshold=thresh, verbose=False)
-                PCcent, PCuncent = stats.calc_pcorr()
-                PClistcent.append(PCcent.values)
-                PClistuncent.append(PCuncent.values)
+            #    stats = plume_stat.CalcScores(ashmass,
+            #                          hxr.sel(ens=member), threshold=thresh, verbose=False)
+            #    PCcent, PCuncent = stats.calc_pcorr()
+            #    PClistcent.append(PCcent.values)
+            #    PClistuncent.append(PCuncent.values)
 
                 # Creating binary field of hysplit output
-                hxr_binary = xr.where(hxr.isel(ens=member) >= thresh, 1., 0.)
+                # hxr_binary = xr.where(hxr.isel(ens=member) >= thresh, 1., 0.)
                 # Calculating the BS values of each ensemble member
-                BS = ps.calc_bs(hxr_binary, ashmass_binary)
-                BSlist.append(BS.values)
+            #    BS = ps.calc_bs(atl, ashmass_binary)
+            #    BSlist.append(BS.values)
             # Adding Brier Scores to the netcdf, with dimension source
-            if thresh == 0.1:
-                thresh = '0p1'
-            else:
-                thresh = str(thresh)
+            #if thresh == 0.1:
+            #    thresh = '0p1'
+            #else:
+            #    thresh = str(thresh)
 
-            threshstr = str(thresh)+' g/m^2'
-            BSxr = xr.DataArray(BSlist, dims='source').load().rename('BS'+thresh)
-            BSxr.attrs['long name'] = 'Brier Score compared to volcat'
-            BSxr.attrs['threshold'] = threshstr
-            BSavgxr = xr.DataArray(BSlistavg, dims='source').load().rename('BSavg'+thresh)
-            BSavgxr.attrs['long name'] = 'Brier Score compared to 1hr avg volcat'
-            BSavgxr.attrs['threshold'] = threshstr
-            PCxr = xr.DataArray(PClistcent, dims='source').load().rename('PC'+thresh)
-            PCxr.attrs['long name'] = 'Pattern Correlation (centered) compared to volcat'
-            PCxr.attrs['threshold'] = threshstr
-            PCxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCuc'+thresh)
-            PCxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to volcat'
-            PCxruc.attrs['threshold'] = threshstr
-            PCavgxr = xr.DataArray(PClistcent, dims='source').load().rename('PC'+thresh)
-            PCavgxr.attrs['long name'] = 'Pattern Correlation (centered) compared to 1hr avg volcat'
-            PCavgxr.attrs['threshold'] = threshstr
-            PCavgxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCuc'+thresh)
-            PCavgxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to 1hr avg volcat'
-            PCavgxruc.attrs['threshold'] = threshstr
+            #threshstr = str(thresh)+' g/m^2'
+            #BSxr = xr.DataArray(BSlist, dims='source').load().rename('BS'+thresh)
+            #BSxr.attrs['long name'] = 'Brier Score compared to volcat'
+            #BSxr.attrs['threshold'] = threshstr
+            #BSavgxr = xr.DataArray(BSlistavg, dims='source').load().rename('BSavg'+thresh)
+            #BSavgxr.attrs['long name'] = 'Brier Score compared to 1hr avg volcat'
+            #BSavgxr.attrs['threshold'] = threshstr
+            #PCxr = xr.DataArray(PClistcent, dims='source').load().rename('PC'+thresh)
+            #PCxr.attrs['long name'] = 'Pattern Correlation (centered) compared to volcat'
+            #PCxr.attrs['threshold'] = threshstr
+            #PCxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCuc'+thresh)
+            #PCxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to volcat'
+            #PCxruc.attrs['threshold'] = threshstr
+            #PCavgxr = xr.DataArray(PClistcent, dims='source').load().rename('PC'+thresh)
+            #PCavgxr.attrs['long name'] = 'Pattern Correlation (centered) compared to 1hr avg volcat'
+            #PCavgxr.attrs['threshold'] = threshstr
+            #PCavgxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCuc'+thresh)
+            #PCavgxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to 1hr avg volcat'
+            #PCavgxruc.attrs['threshold'] = threshstr
 
-            statsxr = xr.merge([statsxr, BSxr, BSavgxr, PCxr, PCxruc, PCavgxr,
-                                PCavgxruc], combine_attrs='drop_conflicts')
+            #statsxr = xr.merge([statsxr, BSxr, BSavgxr, PCxr, PCxruc, PCavgxr,
+            #                    PCavgxruc], combine_attrs='drop_conflicts')
         # Dropping dummy variable
-        statsxr = statsxr.drop(labels='dummy')
-        return statsxr
+        #statsxr = statsxr.drop(labels='dummy')
+        return BSlist
 
 
