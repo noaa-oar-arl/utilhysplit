@@ -178,6 +178,8 @@ def get_forecast_info(metid):
         mhash['time_res'] = 3  #3 hour time resolution
     if 'nam' in metid.lower():
         mhash['forecast_length'] = 72
+    if 'gfs0p25' in metid.lower():
+        mhash['forecast_length'] = 24
     return mhash
 
 def get_archive_str(metid, ARCDIR='/pub/archive'):
@@ -185,6 +187,8 @@ def get_archive_str(metid, ARCDIR='/pub/archive'):
         metstr = 'gfs0p25/%Y%m%d_gfs0p25'
     elif (metid.lower() == 'gfs'):
         metstr = 'gdas1/gdas1.%b%y.week'
+    elif('gefs' in metid.lower()):
+        metstr = 'gefs'
     else:
         print('METID not found for archive ', metid)
         sys.exit()
@@ -361,6 +365,7 @@ class MetFiles:
         sdate : datetime.datetime ojbect
         runtime : int (hours of runtime)
         """
+        print('HERE', sdate, runtime)
         nlist = []
         sdate = sdate.replace(tzinfo=None)
         if not isinstance(self.mdt, datetime.timedelta):
@@ -386,7 +391,15 @@ class MetFiles:
                 temp = parse_week(self.strfmt, edate)
             else:
                 temp = edate.strftime(self.strfmt)
+
+            # this is beginning of forecast in the file.
+            mdate = datetime.datetime.strptime(temp,self.strfmt)
+            # end time of this particular file.
+            medate = mdate + self.mdt
+
             temp = temp.lower()
+           
+            # also need to increment the edate to get next possible file name 
             edate = edate + self.mdt
             #if not path.isfile(temp):
             #    temp = temp.lower()
@@ -399,11 +412,12 @@ class MetFiles:
             #if temp != "None":
             elif temp not in nlist:
                nlist.append(temp)
-            if edate > end_date:
+               zzz += 1
+            if medate > end_date:
                 done = True
             if zzz > self.maxfiles:
                 done = True
-            zzz += 1
+                print('warning: maximum number of met files reached {}'.format(self.maxfiles))
         return nlist
 
 def process(nlist):
