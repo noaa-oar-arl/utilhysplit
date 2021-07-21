@@ -7,10 +7,10 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import linregress
-from utilhysplit.statmain import cdf
-from utilhysplit.statmain import MatchedData
+from utilhysplit.evaluation.statmain import cdf
+from utilhysplit.evaluation.statmain import MatchedData
 
-def cdf(newra, scale=1):
+def not_used_cdf(newra, scale=1):
     if method==3:   
        #newra=obsra
        #scale=1
@@ -24,7 +24,6 @@ def cdf(newra, scale=1):
        obs = obsra['obs']
        fc  = obsra['fc']
        if usescale: fc = fc * scale
-       print 'Scaling method 3 with pfit ' , pfit
        if pfit==0:
           fc = fc - (poly[0])
        elif pfit==1:
@@ -34,8 +33,7 @@ def cdf(newra, scale=1):
        elif pfit==3:
           fc= fc - (poly[0]*fc**3 + poly[1]*fc**2 + poly[2]*fc + poly[3])
 
-
-def match_max(obsra)
+def match_max(obsra):
     #scale simply by matching the maxminum observation to the maximum forecast.
     max_obs = np.max(obsra.obs)
     max_fc = np.max(obsra.fc)
@@ -75,8 +73,9 @@ def scale_results(obsraobject,  plotdata='none', method=3, pfit=1, fignum=1):
     ##if method 3, will then go on to do cdf matching.
     ##if method 2, then will return this fit.
     else:
+       return -1
        ##may want to fit line only to larger events
-       if method==2 or method==30:
+       #if method==2 or method==30:
 
 
 def line_fitA(obsraobject,pfit):
@@ -101,28 +100,26 @@ def line_fitB(obsraobject,pfit=None):
               rfc = rfc[int(pfit):]
            return apply_polyfit(rfc,robs)
 
+def linefit_adjust(forecast, obs):
+    poly = np.polyfit(rfc, robs, 1) #fit line to data.
+    slope = poly[0]
+    intercept = poly[1]
+    adjusted_forecast = forecast * slope + intercept
+    return poly 
+
 
 def apply_polyfit(rfc,robs):
        try: 
            poly = np.polyfit(rfc, robs, 1) #fit line to data.
-           print 'POLYFIT SUCCEEDED'
-           print rfc[0:10]
-           print robs[0:10]
-           print('---------------------------')
-           print rfc[-10:]
-           print robs[-10:]
        except:
            poly  = [1] 
-           print 'POLYFIT FAILED'
-           print rfc[0:10]
-           print robs[0:10]
        return poly
 
 def plot_fit(poly,obsra):
        #sys.exit()
        #slope, intercept, rval = linregress(rfc, robs) #fit line to data.
        #poly = [slope, intercept]
-       scale = poly[0] #slope of the line.
+       #scale = poly[0] #slope of the line.
        if plotdata!='none':
            fig = plt.figure(fignum)
            ax = fig.add_subplot(1,1,1)
@@ -150,65 +147,71 @@ def plot_fit(poly,obsra):
 #      scaled_obsra = MatchedData(obs, fc)
 #      return scale, poly , scaled_obsra
 
-def cdf_match(obsra,scale=None,pfit=0):
+def cdf_match(rfc, robs, scale=None,pfit=0):
    """
 
    pfit : int (0,1,2,3) determines order of polynomial to use
    """
-   newra = obsra.copy()
+   # newra = obsra.copy()
    #newra=obsra
    #scale=1
    ##CDF matching of the observations and model forecsat.
-   robs = np.sort(newra.obs)
+   obs = robs
+   fc  = rfc
+   robs = np.sort(robs)
    if scale:
-       rfc = np.sort(newra.fc)* scale    #use scaling from linear regression.
+       rfc = np.sort(rfc)* scale    #use scaling from linear regression.
    else:
-       rfc = np.sort(newra.fc)           #don't use scaling from linear regression.
-   diff = rfc - robs                
-   poly = np.polyfit(robs, diff, pfit)
-   obs = obsra['obs']
-   fc  = obsra['fc']
+       rfc = np.sort(rfc)           #don't use scaling from linear regression.
+   diff = rfc - robs       
+   plt.plot(robs, diff, 'k.')
+   plt.show()         
+   fco = np.array(rfc)
+   poly = np.polyfit(fco, diff, deg=pfit,rcond=None)
+   #obs = obsra['obs']
+   #fc  = obsra['fc']
    print('Scaling method 3 with pfit ' , pfit)
    if pfit==0:
-      fc = fc - (poly[0])
+      fc = fco - (poly[0])
    elif pfit==1:
-      fc= fc - (poly[0]*fc + poly[1])
+      fc= fco - (poly[0]*fco + poly[1])
    elif pfit==2:
-      fc= fc - (poly[0]*fc**2 + poly[1]*fc + poly[2])
+      fc= fco - (poly[0]*robs**2 + poly[1]*robs + poly[2])
    elif pfit==3:
-      fc= fc - (poly[0]*fc**3 + poly[1]*fc**2 + poly[2]*fc + poly[3])
+      fc= fco - (poly[0]*robs**3 + poly[1]*fco**2 + poly[2]*fco + poly[3])
    #scaled_obsra = MatchedData(obs, fc)
    sp= True
    ##This block plots differences between cdfs and fit. 
    if sp:
+       xxx = fco
        fig = plt.figure(1)
        ax1 = fig.add_subplot(1,1,1)
-       ax1.plot(robs, diff,'-b')
+       ax1.plot(xxx, diff,'-b')
        ##blue is the differences 
          
-       poly1 = np.polyfit(robs, diff, 0)
-       y2 = robs*0 +  poly1[0]
-       ax1.plot(robs, y2, '-k')
+       poly1 = np.polyfit(xxx, diff, 0)
+       y2 = xxx*0 +  poly1[0]
+       ax1.plot(xxx, y2, '-k')
        ##black is a line fit to the difference
-       fc0 = fc - (poly1[0])
+       fc0 = fco - (poly1[0])
 
-       poly1 = np.polyfit(robs, diff, 1)
-       y2 = poly1[0]*robs + poly1[1]
-       ax1.plot(robs, y2, '-c')
+       poly1 = np.polyfit(xxx, diff, 1)
+       y2 = poly1[0]*xxx + poly1[1]
+       ax1.plot(xxx,y2, '-c')
        ##cyan is a first order fit to the differences 
-       fc1 = fc - (poly1[0]*fc + poly1[1])
+       fc1 = fco - (poly1[0]*fco + poly1[1])
 
        poly1 = np.polyfit(robs, diff, 2)
        y2 = poly1[0]*robs**2 + poly1[1]*robs + poly1[2]
-       ax1.plot(robs, y2, '-r')
-       fc2 = fc - (poly1[0]*fc**2 + poly1[1]*fc + poly1[2])
+       #ax1.plot(robs, y2, '-r')
+       fc2 = fco - (poly1[0]*fco**2 + poly1[1]*fco + poly1[2])
        ##red is a second order fit to the differences 
 
        poly1 = np.polyfit(robs, diff, 3)
        y3 = poly1[0]*robs**3 + poly1[1]*robs**2 + poly1[2]*robs + poly1[3]
        ##green is a third order fit to the differences 
-       ax1.plot(robs, y3, '-g')
-       fc3 = fc - (poly1[0]*fc**3 + poly1[1]*fc**2 + poly1[2]*fc + poly1[3])
+       #ax1.plot(robs, y3, '-g')
+       fc3 = fco - (poly1[0]*fco**3 + poly1[1]*fco**2 + poly1[2]*fco + poly1[3])
        plt.show()
 
        #yn = robs - y2
@@ -216,12 +219,13 @@ def cdf_match(obsra,scale=None,pfit=0):
        #yn = robs - y3
        #plt.plot(robs, yn, '-g')
        #plt.title('Difference between cdfs and fit')
-       plt.title(plotdata)
+       #plt.title(plotdata)
        #plt.show() 
    ##Plots forecasts transformed by cdf matching.
+   sp=False
    if sp: 
-       plt.plot(newra.obs, '-r')  #measurments are red.
-       plt.plot(newra.fc*scale, '-b') #original forecasts in blue
+       plt.plot(obs, '-r')  #measurments are red.
+       plt.plot(fc*scale, '-b') #original forecasts in blue
        #plt.plot(newra.fc, '-c') #original forecasts in blue
        plt.plot(fc0, '-k')
        plt.plot(fc1, '-c')
@@ -230,19 +234,19 @@ def cdf_match(obsra,scale=None,pfit=0):
        #newfc = newra.fc *scale
        #newfc2 = newfc - (poly[0]*newfc**2 + poly[1]*newfc + poly[2])
        #plt.plot(newfc2, '--g')  #new forecasts in green.
-       plt.plot(scaled_obsra.obsra['fc'], '--m')  #new forecasts in green.
-       plt.title(plotdata + 'Green (forecast scaled), red (obs), blue (unscaled forecasts)')
+       #plt.plot(scaled_obsra.obsra['fc'], '--m')  #new forecasts in green.
+       #plt.title(plotdata + 'Green (forecast scaled), red (obs), blue (unscaled forecasts)')
        plt.show()
    ##This block plots the cdf's of the observed and forecast.
+   sp=True
    if sp:
-       print 'zzz scale poly', scale, poly
        x1, y1 = cdf(robs)
-       x2, y2 = cdf(rfc)
+       x2, y2 = cdf(fco)
        x3, y3 = cdf(fc)
        plt.step(x1, y1, '-r')
        plt.step(x2, y2, '-b')  #blue shows cdf of forecast
        plt.step(x3, y3, '--g') #green shows cdf of scaled forecast.
-       plt.title(plotdata + ' red(obs), blue(forecast), green(scaled forecast)')
+       #plt.title(plotdata + ' red(obs), blue(forecast), green(scaled forecast)')
        plt.show()
    ##This block plots relationship between .
    return scale, poly, obs, fc
