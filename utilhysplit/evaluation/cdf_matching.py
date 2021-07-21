@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import linregress
 from utilhysplit.evaluation.statmain import cdf
 from utilhysplit.evaluation.statmain import MatchedData
+from utilhysplit.evaluation import ensemble_tools
 
 def not_used_cdf(newra, scale=1):
     if method==3:   
@@ -147,38 +148,90 @@ def plot_fit(poly,obsra):
 #      scaled_obsra = MatchedData(obs, fc)
 #      return scale, poly , scaled_obsra
 
-def cdf_match(rfc, robs, scale=None,pfit=0):
-   """
 
-   pfit : int (0,1,2,3) determines order of polynomial to use
+def cdf_match_volcat(forecast, volcat, 
+                     thresh=0.01, ens=0,
+                     scale=1,pfit=1, makeplots=False):
+ 
+    # use pixel matching to determine what forecast values to use.
+    thresh2, match = ensemble_tools.get_pixel_match(forecast,volcat,thresh) 
+    if 'ens' in match.dims:
+        rfc = match.isel(ens=ens).values.flatten()
+    else:      
+        rfc = match.values.flatten()
+    robs = volcat.values.flatten()
+    rfc2 = [x for x in rfc if x >=thresh]
+    robs2 = [x for x in robs if x >=thresh]
+    # make sure arrays are the same shape
+    while len(rfc2) > len(robs2):
+          robs2.append(0)
+    while len(rfc2) < len(robs2):
+          rfc2.append(0)
+    outputs = cdf_match(rfc2, robs2,scale=scale,pfit=pfit,makeplots=makeplots)
+    return outputs
+
+def cdf_match(rfc, robs, scale=None,pfit=1,makeplots=False):
    """
-   # newra = obsra.copy()
-   #newra=obsra
-   #scale=1
-   ##CDF matching of the observations and model forecsat.
-   obs = robs
-   fc  = rfc
-   robs = np.sort(robs)
+   rfc : list of forecast values
+   robs : list of observations
+   Currently length of rfc and robs needs to match.
+   pfit : int (0,1,2,3) determines order of polynomial to use
+
+   # RETURNS
+   poly : polynomial to use for scaling.
+   fc : the scaled values.
+
+   """
+   #obs = robs
+   #fc  = rfc
+   sorted_obs = np.sort(robs)
    if scale:
-       rfc = np.sort(rfc)* scale    #use scaling from linear regression.
+       sorted_fc = np.sort(rfc)* scale    #use scaling from linear regression.
    else:
-       rfc = np.sort(rfc)           #don't use scaling from linear regression.
-   diff = rfc - robs       
-   plt.plot(robs, diff, 'k.')
-   plt.show()         
-   fco = np.array(rfc)
+       sorted_fc = np.sort(rfc)           #don't use scaling from linear regression.
+   diff = sorted_fc -  sorted_obs      
+   #plt.plot(sorted_obs, diff, 'k.')
+   #plt.show()         
+   fco = np.array(sorted_fc)
    poly = np.polyfit(fco, diff, deg=pfit,rcond=None)
-   #obs = obsra['obs']
-   #fc  = obsra['fc']
-   print('Scaling method 3 with pfit ' , pfit)
    if pfit==0:
-      fc = fco - (poly[0])
+      y2 = poly[0]
    elif pfit==1:
-      fc= fco - (poly[0]*fco + poly[1])
+      y2 = poly[0]*fco + poly[1]
    elif pfit==2:
-      fc= fco - (poly[0]*robs**2 + poly[1]*robs + poly[2])
+      y2 = poly[0]*fco**2 + poly[1]*fco + poly[2]
    elif pfit==3:
-      fc= fco - (poly[0]*robs**3 + poly[1]*fco**2 + poly[2]*fco + poly[3])
+      y2 = poly[0]*fco**3 + poly[1]*fco**2 + poly[2]*fco + poly[3]
+   fc = fco - y2
+   if makeplots:
+       fig = plt.figure(1)
+       ax1 = fig.add_subplot(1,1,1)
+       plot_cdf_match_fit(fco,y2,diff,ax1)
+       plt.show()
+       plot_cdf_match(robs,fco,fc)
+
+   return poly, fc
+
+def plot_cdf_match_fit(fco,y2, diff,ax1):
+    ax1.plot(fco, diff,'-k',linewidth=4,label='Difference' )
+    ax1.plot(fco, y2,'-c', label='fit')
+    ax1.set_ylabel('Difference between obs and forecast')
+    ax1.set_xlabel('Forecast value')
+
+def plot_cdf_match(robs, fco, fc):
+       x1, y1 = cdf(robs)
+       x2, y2 = cdf(fco)
+       x3, y3 = cdf(fc)
+       plt.step(x1, y1, '-k', label='Obs',linewidth=4)
+       plt.step(x2, y2, '-b', label='Forecast')  #blue shows cdf of forecast
+       plt.step(x3, y3, '--c', label='Corrected',linewidth=4) #green shows cdf of scaled forecast.
+       #plt.title(plotdata + ' red(obs), blue(forecast), green(scaled forecast)')
+       ax = plt.gca()
+       ax.set_xlabel('Values')
+       plt.show()
+
+
+def old_function(): 
    #scaled_obsra = MatchedData(obs, fc)
    sp= True
    ##This block plots differences between cdfs and fit. 
@@ -248,7 +301,6 @@ def cdf_match(rfc, robs, scale=None,pfit=0):
        plt.step(x3, y3, '--g') #green shows cdf of scaled forecast.
        #plt.title(plotdata + ' red(obs), blue(forecast), green(scaled forecast)')
        plt.show()
-   ##This block plots relationship between .
    return scale, poly, obs, fc
 
 #----------------------------------------------------------------------------------------------------------------------------------------
