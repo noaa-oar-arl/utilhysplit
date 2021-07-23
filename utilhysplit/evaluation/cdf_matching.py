@@ -151,10 +151,13 @@ def plot_fit(poly,obsra):
 
 def cdf_match_volcat(forecast, volcat, 
                      thresh=0.01, ens=0,
-                     scale=1,pfit=1, makeplots=False):
+                     scale=1,pfit=1, 
+                     makeplots=False,
+                     figname=None,
+                     figsize=(10,5)):
  
     # use pixel matching to determine what forecast values to use.
-    thresh2, match = ensemble_tools.get_pixel_match(forecast,volcat,thresh) 
+    thresh2, match = ensemble_tools.get_pixel_match(forecast.isel(ens=ens),volcat,thresh) 
     if 'ens' in match.dims:
         rfc = match.isel(ens=ens).values.flatten()
     else:      
@@ -162,21 +165,40 @@ def cdf_match_volcat(forecast, volcat,
     robs = volcat.values.flatten()
     rfc2 = [x for x in rfc if x >=thresh]
     robs2 = [x for x in robs if x >=thresh]
-    # make sure arrays are the same shape
-    while len(rfc2) > len(robs2):
-          robs2.append(0)
-    while len(rfc2) < len(robs2):
-          rfc2.append(0)
-    outputs = cdf_match(rfc2, robs2,scale=scale,pfit=pfit,makeplots=makeplots)
-    return outputs
+    # make sure arrays are the same shape. Two methods.
+ 
+    # pixel matching should take care of making sure
+    # the arrays are same length unless there are more
+    # obs than forecasts.
 
-def cdf_match(rfc, robs, scale=None,pfit=1,makeplots=False):
+    # This block chops the longer arrays.
+    # If the forecast has less pixels then chop the observations.
+    if len(rfc2) < len(robs2):
+       robs2 = np.sort(robs2)
+       robs2 = robs2[len(robs2)-len(rfc2):]
+
+
+    # This block adds zeros to shorter arrays.
+    #while len(rfc2) > len(robs2):
+    #      robs2.append(0)
+    #while len(rfc2) < len(robs2):
+    #      rfc2.append(0)
+
+    outputs = cdf_match(rfc2, robs2,scale=scale,pfit=pfit,
+                        makeplots=makeplots,figname=figname,
+                        figsize=figsize)
+    return thresh2, outputs[0], outputs[1]
+
+def cdf_match(rfc, robs, scale=None,pfit=1,
+              makeplots=False,
+              figname=None,
+              figsize=(8,5)):
    """
    rfc : list of forecast values
    robs : list of observations
    Currently length of rfc and robs needs to match.
    pfit : int (0,1,2,3) determines order of polynomial to use
-
+          -1 linear fit that must go through 0.
    # RETURNS
    poly : polynomial to use for scaling.
    fc : the scaled values.
@@ -193,42 +215,68 @@ def cdf_match(rfc, robs, scale=None,pfit=1,makeplots=False):
    #plt.plot(sorted_obs, diff, 'k.')
    #plt.show()         
    fco = np.array(sorted_fc)
-   poly = np.polyfit(fco, diff, deg=pfit,rcond=None)
+   poly = np.polyfit(fco, diff, deg=np.abs(pfit),rcond=None)
    if pfit==0:
       y2 = poly[0]
-   elif pfit==1:
+   elif pfit==1 or pfit==-1:
       y2 = poly[0]*fco + poly[1]
+      if pfit==-1:
+          aaa, b,c,d = np.linalg.lstsq(fco[:,np.newaxis],diff,rcond=None)
+          y3 = fco*aaa
+          poly = np.append(poly,aaa)
    elif pfit==2:
       y2 = poly[0]*fco**2 + poly[1]*fco + poly[2]
    elif pfit==3:
       y2 = poly[0]*fco**3 + poly[1]*fco**2 + poly[2]*fco + poly[3]
    fc = fco - y2
+   try:
+      fcp = fco - y3
+   except:
+      fcp = fco 
    if makeplots:
-       fig = plt.figure(1)
+       fig = plt.figure(1,figsize=figsize)
        ax1 = fig.add_subplot(1,1,1)
-       plot_cdf_match_fit(fco,y2,diff,ax1)
-       plt.show()
-       plot_cdf_match(robs,fco,fc)
+       if pfit==-1:
+           plot_cdf_match_fit(fco,y2,y3,diff,ax1)
+       else: 
+           plot_cdf_match_fit(fco,y2,y2,diff,ax1)
+       dstr = "y = {:0.2f}x + ({:0.1f})".format(poly[0],poly[1])
+       xpos=0.1
+       ypos=0.8
+       ax1.text(xpos,ypos,dstr,
+                transform=ax1.transAxes,
+                bbox=dict(facecolor='white'),size=16)
+       if figname: plt.savefig('{}_fit.{}'.format(figname,'png'))
 
+       plt.show()
+       fig = plt.figure(2,figsize=figsize)
+       ax2 = fig.add_subplot(1,1,1)
+       plot_cdf_match(robs,fco,fc,fcp)
+       if figname: plt.savefig('{}_corrected.{}'.format(figname,'png'))
+       plt.show()
    return poly, fc
 
-def plot_cdf_match_fit(fco,y2, diff,ax1):
+def plot_cdf_match_fit(fco,y2,y3,diff,ax1):
     ax1.plot(fco, diff,'-k',linewidth=4,label='Difference' )
     ax1.plot(fco, y2,'-c', label='fit')
-    ax1.set_ylabel('Difference between obs and forecast')
+    #ax1.plot(fco, y3,'-r', label='fit')
+    ax1.set_ylabel('Difference')
     ax1.set_xlabel('Forecast value')
 
-def plot_cdf_match(robs, fco, fc):
+def plot_cdf_match(robs, fco, fc,fcp):
        x1, y1 = cdf(robs)
        x2, y2 = cdf(fco)
        x3, y3 = cdf(fc)
+       x4, y4 = cdf(fcp)
        plt.step(x1, y1, '-k', label='Obs',linewidth=4)
-       plt.step(x2, y2, '-b', label='Forecast')  #blue shows cdf of forecast
-       plt.step(x3, y3, '--c', label='Corrected',linewidth=4) #green shows cdf of scaled forecast.
+       plt.step(x2, y2, '-g', label='Forecast')  #blue shows cdf of forecast
+       plt.step(x3, y3, '--c', label='Corrected',linewidth=3) #green shows cdf of scaled forecast.
+       #plt.step(x4, y4, '--r', label='Corrected',linewidth=3) #green shows cdf of scaled forecast.
        #plt.title(plotdata + ' red(obs), blue(forecast), green(scaled forecast)')
        ax = plt.gca()
        ax.set_xlabel('Values')
-       plt.show()
+       handles,labels = ax.get_legend_handles_labels()
+       ax.legend(handles,labels,loc='lower right')
 
 
 def old_function(): 

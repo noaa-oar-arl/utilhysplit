@@ -247,18 +247,23 @@ def get_pixel_match(indra, obsra, thresh, return_binary=False):
     """
     dra, dim = preprocess(indra)
     threshlist = []
-    for ens in dra[dim].values: 
-        if dim == "ens":
-            subdra = dra.sel(ens=ens)
-        elif dim == "source":
-            subdra = dra.sel(source=ens)
+    if dim:
+        for ens in dra[dim].values: 
+            if dim == "ens":
+                subdra = dra.sel(ens=ens)
+            elif dim == "source":
+                subdra = dra.sel(source=ens)
+            pm_thresh = get_pixel_matching_threshold(obsra,subdra,thresh)
+            threshlist.append(pm_thresh)
+    else:
+        subdra = dra
         pm_thresh = get_pixel_matching_threshold(obsra,subdra,thresh)
         threshlist.append(pm_thresh)
     threshra = xr.DataArray(threshlist, dims=dim)
     if return_binary:
-        matchra = xr.where(indra > threshra,1,0)
+        matchra = xr.where(indra >= threshra,1,0)
     else:
-        matchra = xr.where(indra > threshra,forecast,0)
+        matchra = xr.where(indra>=threshra,indra,0)
     return threshra, matchra
 
 def ens_time_fss(
@@ -307,10 +312,10 @@ def ens_fss(
     indra and obsra need to be same time period and grid.
 
     RETURNS
-    pandas dataframe with columns
+    dfall: pandas dataframe with columns
     Nlen, FBS, FBS_ref, FSS, ens, time
 
-    pandas dataframe with columns
+    dfall2: pandas dataframe with columns
     MSE, MAE, threshold, exclude_zeros, N, ens
 
     """
