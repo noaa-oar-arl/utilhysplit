@@ -287,6 +287,7 @@ def ens_time_fss(
     """
     dflist = []
     df2list = []
+    df3list = []
     for pairs in zip(indralist, obsralist):
         df, df2 = ens_fss(pairs[0],pairs[1],enslist,sourcelist,neighborhoods,
                      threshold,plot,return_objects=False, pixel_match=pixel_match)
@@ -317,11 +318,14 @@ def ens_fss(
 
     dfall2: pandas dataframe with columns
     MSE, MAE, threshold, exclude_zeros, N, ens
-
+ 
+   dfall3: pandas dataframe with columns
+    contingency table./dft2
     """
     dra, dim = preprocess(indra, enslist, sourcelist)
     dflist = []
     df2list = []
+    df3list = []
     # calculate fss for each ensemble member.
     for ens in dra[dim].values:
         if dim == "ens":
@@ -331,10 +335,13 @@ def ens_fss(
         scores = plume_stat.CalcScores(obsra, subdra,threshold=threshold,pixel_match=pixel_match)
         df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
         df2 = scores.calc_accuracy_measures(threshold=0)
+        df3 = scores.table2csi(scores.get_contingency_table())
         df1['ens'] = ens
         df2['ens'] = ens
+        df3['ens'] = ens
         dflist.append(df1)
         df2list.append(df2)
+        df3list.append(df3)
 
     # calculate fss for ensemble mean
     meanra = dra.mean(dim=dim)
@@ -343,11 +350,14 @@ def ens_fss(
     #print('Mean sum', mean_scores.binxra2.sum())
     plt.show()
     df1 = mean_scores.calc_fss(makeplots=False,szra=neighborhoods)
-    df2 = scores.calc_accuracy_measures(threshold=0)
+    df2 = mean_scores.calc_accuracy_measures(threshold=0)
+    df3 = mean_scores.table2csi(mean_scores.get_contingency_table())
     df1['ens'] = 'mean'
     df2['ens'] = 'mean'
+    df3['ens'] = 'mean'
     dflist.append(df1)
     df2list.append(df2)
+    df3list.append(df3)
 
     # calculate fss for probabilistic output
     prob_scores = plume_stat.CalcScores(obsra, dra,threshold=threshold,probabilistic=True,pixel_match=pixel_match)
@@ -361,12 +371,15 @@ def ens_fss(
     # add time to dataframe.
     dfall = pd.concat(dflist)
     dfall2 = pd.concat(df2list)
+    dfall3 = pd.concat(df3list)
     if 'time' in indra.coords:
         dfall['time'] = pd.to_datetime(indra.coords['time'].values)
         dfall2['time'] = pd.to_datetime(indra.coords['time'].values)
+        dfall3['time'] = pd.to_datetime(indra.coords['time'].values)
     if return_objects:
        return mean_scores, prob_scores, dfall, dfall2
-    return dfall, dfall2
+    dfall4 = dfall3.merge(dfall2,how='outer', on=['time','ens'])
+    return dfall, dfall4
 
 
 
