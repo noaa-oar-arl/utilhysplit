@@ -129,20 +129,18 @@ def preprocess(indra, enslist=None, sourcelist=None):
         dra = dra.isel(ens=0)
     elif "ens" in dra.dims and not enslist:
         enslist = dra.ens.values
-
     if "source" in dra.dims and "ens" in dra.dims:
         dra = dra.rename({'ens':'metens'})
         dra = dra.sel(metens=enslist)
         dra = dra.sel(source=sourcelist)
         dra = dra.stack(ens=("metens", "source"))
-
     elif "source" in dra.dims:
         dra = dra.sel(source=sourcelist)
         dim = "source"
     elif "ens" in dra.dims:
         dra = dra.sel(ens=enslist)
     else:
-        print("Warning: could not find source or ens dimension")
+        #print("Warning: could not find source or ens dimension")
         dim = None
     return dra, dim
 

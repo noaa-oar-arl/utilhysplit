@@ -708,10 +708,11 @@ def calc_weightsPC(xra, scores):
     return xraprob
 
 
-def plot_roc(xlist, ylist):
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.plot(xlist, ylist, '--ko')
-    ax.plot([0, 1], [0, 1], '--b')
+def plot_roc(xlist, ylist, ax=None,clr='--ko',label=''):
+    if not ax:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+    ax.plot(xlist, ylist, clr, label=label)
+    ax.plot([0, 1], [0, 1], '-b')
     ax.set_xlabel('False Alarm Rate')
     ax.set_ylabel('Hit Rate')
