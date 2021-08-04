@@ -91,6 +91,7 @@ def volcATL(indra):
     return ATL(newra)
 
 
+
 def preprocess(indra, enslist=None, sourcelist=None):
     """
     indra : xarray dataArray
@@ -103,6 +104,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
     dim : str : indicates whether 'ens' or 'source' dimension is to be used.
     """
 
+
     dra = indra.copy()
 
     # handle whether using 'ens' dimension, 'source' dimension or both.
@@ -112,26 +114,33 @@ def preprocess(indra, enslist=None, sourcelist=None):
     # returns an error.
     if isinstance(sourcelist, np.ndarray):
         pass
+    # if no sourcelist is passed and source dimension is only length 1,
+    # then 'squeeze' it rather than stack it.
+    elif "source" in dra.dims and len(dra.source.values)==1:
+        dra = dra.isel(source=0)
     elif "source" in dra.dims and not sourcelist:
         sourcelist = dra.source.values
 
     if isinstance(enslist, np.ndarray):
         pass
+    # if no enslist is passed and source dimension is only length 1,
+    # then 'squeeze' it rather than stack it.
+    elif "ens" in dra.dims and len(dra.ens.values)==1:
+        dra = dra.isel(ens=0)
     elif "ens" in dra.dims and not enslist:
         enslist = dra.ens.values
-
     if "source" in dra.dims and "ens" in dra.dims:
-        dra = dra.sel(ens=enslist)
+        dra = dra.rename({'ens':'metens'})
+        dra = dra.sel(metens=enslist)
         dra = dra.sel(source=sourcelist)
-        dra = dra.stack(ens=("ens", "source"))
-
+        dra = dra.stack(ens=("metens", "source"))
     elif "source" in dra.dims:
         dra = dra.sel(source=sourcelist)
         dim = "source"
     elif "ens" in dra.dims:
         dra = dra.sel(ens=enslist)
     else:
-        print("Warning: could not find source or ens dimension")
+        #print("Warning: could not find source or ens dimension")
         dim = None
     return dra, dim
 
@@ -165,7 +174,13 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None)
 
      """
     # handle whether using 'ens' dimension, 'source' dimension or both.
+
+    if isinstance(weights, (list, np.ndarray)):
+       norm=False
+
     dra, dim = preprocess(indra, enslist, sourcelist)
+
+
 
     # allow for multiple category forecasts.
     # probability that value is between two values.
@@ -224,26 +239,29 @@ def get_pixel_match(indra, obsra, thresh, return_binary=False):
     above threshold pixels as obsra.
 
     Inputs:
-
     Outputs:
     threshra : xarray dataArray with threshold for each ensemble value.
     matchra  : indra with 
-
     """
     dra, dim = preprocess(indra)
     threshlist = []
-    for ens in dra[dim].values: 
-        if dim == "ens":
-            subdra = dra.sel(ens=ens)
-        elif dim == "source":
-            subdra = dra.sel(source=ens)
+    if dim:
+        for ens in dra[dim].values: 
+            if dim == "ens":
+                subdra = dra.sel(ens=ens)
+            elif dim == "source":
+                subdra = dra.sel(source=ens)
+            pm_thresh = get_pixel_matching_threshold(obsra,subdra,thresh)
+            threshlist.append(pm_thresh)
+    else:
+        subdra = dra
         pm_thresh = get_pixel_matching_threshold(obsra,subdra,thresh)
         threshlist.append(pm_thresh)
     threshra = xr.DataArray(threshlist, dims=dim)
     if return_binary:
-        matchra = xr.where(indra > threshra,1,0)
+        matchra = xr.where(indra >= threshra,1,0)
     else:
-        matchra = xr.where(indra > threshra,forecast,0)
+        matchra = xr.where(indra>=threshra,indra,0)
     return threshra, matchra
 
 def ens_time_fss(
@@ -267,6 +285,7 @@ def ens_time_fss(
     """
     dflist = []
     df2list = []
+    df3list = []
     for pairs in zip(indralist, obsralist):
         df, df2 = ens_fss(pairs[0],pairs[1],enslist,sourcelist,neighborhoods,
                      threshold,plot,return_objects=False, pixel_match=pixel_match)
@@ -292,16 +311,19 @@ def ens_fss(
     indra and obsra need to be same time period and grid.
 
     RETURNS
-    pandas dataframe with columns
+    dfall: pandas dataframe with columns
     Nlen, FBS, FBS_ref, FSS, ens, time
 
-    pandas dataframe with columns
+    dfall2: pandas dataframe with columns
     MSE, MAE, threshold, exclude_zeros, N, ens
-
+ 
+   dfall3: pandas dataframe with columns
+    contingency table./dft2
     """
     dra, dim = preprocess(indra, enslist, sourcelist)
     dflist = []
     df2list = []
+    df3list = []
     # calculate fss for each ensemble member.
     for ens in dra[dim].values:
         if dim == "ens":
@@ -311,10 +333,13 @@ def ens_fss(
         scores = plume_stat.CalcScores(obsra, subdra,threshold=threshold,pixel_match=pixel_match)
         df1 = scores.calc_fss(makeplots=False,szra=neighborhoods)
         df2 = scores.calc_accuracy_measures(threshold=0)
+        df3 = scores.table2csi(scores.get_contingency_table())
         df1['ens'] = ens
         df2['ens'] = ens
+        df3['ens'] = ens
         dflist.append(df1)
         df2list.append(df2)
+        df3list.append(df3)
 
     # calculate fss for ensemble mean
     meanra = dra.mean(dim=dim)
@@ -323,11 +348,14 @@ def ens_fss(
     #print('Mean sum', mean_scores.binxra2.sum())
     plt.show()
     df1 = mean_scores.calc_fss(makeplots=False,szra=neighborhoods)
-    df2 = scores.calc_accuracy_measures(threshold=0)
+    df2 = mean_scores.calc_accuracy_measures(threshold=0)
+    df3 = mean_scores.table2csi(mean_scores.get_contingency_table())
     df1['ens'] = 'mean'
     df2['ens'] = 'mean'
+    df3['ens'] = 'mean'
     dflist.append(df1)
     df2list.append(df2)
+    df3list.append(df3)
 
     # calculate fss for probabilistic output
     prob_scores = plume_stat.CalcScores(obsra, dra,threshold=threshold,probabilistic=True,pixel_match=pixel_match)
@@ -341,12 +369,15 @@ def ens_fss(
     # add time to dataframe.
     dfall = pd.concat(dflist)
     dfall2 = pd.concat(df2list)
+    dfall3 = pd.concat(df3list)
     if 'time' in indra.coords:
         dfall['time'] = pd.to_datetime(indra.coords['time'].values)
         dfall2['time'] = pd.to_datetime(indra.coords['time'].values)
+        dfall3['time'] = pd.to_datetime(indra.coords['time'].values)
     if return_objects:
        return mean_scores, prob_scores, dfall, dfall2
-    return dfall, dfall2
+    dfall4 = dfall3.merge(dfall2,how='outer', on=['time','ens'])
+    return dfall, dfall4
 
 
 
@@ -357,6 +388,7 @@ def plot_ens_accuracy(ensdf,cname='MAE'):
     else:
        rvalue = cname
     sns.set()
+    sns.set_style("whitegrid")
     fig, ax = plt.subplots(1,1)
     sns.set_style('whitegrid')
     if 'time' in ensdf.columns:
@@ -394,9 +426,9 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     colA = uniform.columns[0] 
     uniform.plot(ax=ax, y=colA, LineStyle='--',legend=None,colormap='winter')
     if 'mean' in ensfss.columns:
-        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",label='mean')
     if 'prob' in ensfss.columns:
-        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",label='prob')
     ax.set_ylabel('FSS')
 
 
@@ -441,9 +473,9 @@ def plot_ens_fss(ensdf, sizemult=1,
     nmin = float(np.min(ensdf['Nlen']))* sizemult
     nmax = float(np.max(ensdf['Nlen']))* sizemult
     if 'mean' in ensfss.columns:
-        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",legend=None)
     if 'prob' in ensfss.columns:
-        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",legend=None)
     # plot random forecast
     for randomval in random:
         plt.plot([nmin,nmax],[randomval, randomval], '--k')

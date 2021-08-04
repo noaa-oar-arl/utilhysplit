@@ -38,7 +38,7 @@ Functions:
 # To go to multicategory forecasts need to add a threshold dimension onto binxra1 and binxra2
 
 # 2021 Jul 2 amr added calc_weights to calculate a normalized list of weights for use with ensemble_tools.ATL function
-
+# 2021 Jul 28 amc added calculation of bias and fractional bias to calc_accuracy_measures method.
 
 def test_fssA():
     """
@@ -206,6 +206,9 @@ class CalcScores:
     def calc_accuracy_measures(self, threshold=0, exclude_zeros=True):
         """
         scalar accuracy measures for continuous predictands.
+
+        Computes statistics over the domain where either the model or the 
+        observations is above the threshold. Does not use points where both are below threshold. 
         """
         # set below threshold values to zero.
         if threshold == 0:
@@ -222,7 +225,21 @@ class CalcScores:
 
         # array with all not nan values as 1.
         num = xr.where(~np.isnan(xra1), 1, 0)
+        # number of non nan values.
         num = num.sum().values
+
+        # modelmean
+        mean1 = xra1.sum() / num
+        mean2 = xra2.sum() / num
+
+        # Bias
+        bias = (xra1-xra2)
+        bias = bias.sum()/num
+        # See Stohl 1998 Stohl, A.; Hittenberger, M.; Wotawa, G. 
+        # Validation of the Lagrangian particle dispersion model 
+        # FLEXPART against large-scale tracer experiment data. 
+        # Atmos. Environ. 1998, 32, 4245–4264.
+        fracbias = 2*bias / (mean1+mean2)
 
         # Mean Absolute Error
         # perfect forecast 0.
@@ -238,6 +255,8 @@ class CalcScores:
         thash['threshold'] = threshold
         thash['exclude zeros'] = exclude_zeros
         thash['N'] = num
+        thash['bias'] = [float(bias.values)]
+        thash['fractional_bias'] = [float(fracbias.values)]
         tframe = pd.DataFrame.from_dict(thash)
         return tframe
 
@@ -271,7 +290,7 @@ class CalcScores:
         self.arr3 = xr.where(self.match > 0, 0, 1)
         self.totalpts = binxra1.shape[0] * binxra1.shape[1]
 
-    def calc_roc(self, clip=True, multi=False):
+    def calc_roc(self, clip=True, multi=False, problist = np.arange(0.05,1,0.10)):
         """
         For probabilistic forecasts.
         calculate the ROC (relative operating characteristic)
@@ -288,13 +307,12 @@ class CalcScores:
         Should this be ameliorated by clipping the domain tightly around the plume area?
         clip=True will do this.
 
+        problist : list of floats. Give probability thresholds for the points in the ROC curve.
+
         Outputs:
         xlist: list of x values for plotting
         ylist: list of y values for plotting
         """
-        # probability thresholds
-        problist = np.arange(0.05, 1, 0.05)
-        problist = np.append(problist, 0.99)
         # Starts at (1,1) ends at (0.,0.) point
         xlist = [1.]
         ylist = [1.]
@@ -690,10 +708,11 @@ def calc_weightsPC(xra, scores):
     return xraprob
 
 
-def plot_roc(xlist, ylist):
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.plot(xlist, ylist, '--ko')
-    ax.plot([0, 1], [0, 1], '--b')
+def plot_roc(xlist, ylist, ax=None,clr='--ko',label=''):
+    if not ax:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+    ax.plot(xlist, ylist, clr, label=label)
+    ax.plot([0, 1], [0, 1], '-b')
     ax.set_xlabel('False Alarm Rate')
     ax.set_ylabel('Hit Rate')

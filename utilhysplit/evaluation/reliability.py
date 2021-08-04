@@ -4,6 +4,82 @@ import matplotlib.pyplot as plt
 import seaborn as sns     
 import xarray as xr   
 from utilhysplit.evaluation import ensemble_tools
+
+class TestReliability():
+    """
+    basic tests for ReliabilityCurve class.
+    """     
+    def __init__(self):
+        self.mean = 100
+        self.thresh = self.mean
+        self.num = 1000
+
+
+    def test2(self,div=1):
+        # div=1 will create perfect reliability diagram.
+        thresh = self.thresh
+        problist = []
+        obslist = []
+        num=10
+        self.rc = ReliabilityCurve(self.thresh,num)      
+        for iii in [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]:
+            prob,obs = self.add_data(iii/div,iii,100)
+            problist.extend(prob)
+            obslist.extend(obs) 
+        df = pd.DataFrame([obslist,problist])
+        df2 = df.T
+        df2.columns = ['obs','prob']
+        self.rc.reliability_add_sub(df2)
+        print('perfect forecast.')
+        xxx,yyy,nnn,yesval,noval = self.rc.get_binvals()
+        print('total number of points {} {}'.format(self.num,np.array(nnn).sum())) 
+        self.rc.reliability_plot()
+
+
+    def add_data(self,obs,prob,num):
+        problist = []
+        obslist = []
+        num1 = num * obs 
+        # this many obs should be above threshold
+        for iii in np.arange(0,num1):
+            problist.append(prob)
+            obslist.append(self.thresh + 1)
+        # this many obs should be below threshold
+        for iii in np.arange(0,num-num1):
+            problist.append(prob)
+            obslist.append(self.thresh - 1)
+        return problist, obslist    
+
+
+    def test_random(self):
+        num=10
+        self.rc = ReliabilityCurve(self.thresh,num)      
+        self.obs = self.make_obs()
+        probs = self.make_probs_random()
+        df = pd.DataFrame([self.obs,probs])
+        df2 = df.T
+        df2.columns = ['obs','prob']
+        self.rc.reliability_add_sub(df2)
+        print('random forecast. should show 50%')
+        xxx,yyy,nnn,yesval,noval = self.rc.get_binvals()
+        print('total number of points {} {}'.format(self.num,np.array(nnn).sum())) 
+        self.rc.reliability_plot()
+
+    def make_obs(self):
+        nm = self.num
+        mean = self.mean
+        obsval = np.random.normal(mean,mean/4.0,nm) 
+        return obsval
+
+    def make_probs_random(self):
+        #problist = []
+        #for obs in self.obs:
+        #    problist.append(int(np.uniform(0,10,self.num))
+        problist = np.array(list(map(int,(np.random.uniform(0,11,self.num)))))
+        problist = problist / 10.0
+        return problist
+
+
  
 def plot_freq(obs,prob,name='freq', thresh=2.5):
     #plt.figure(figsize=(5,20))
@@ -414,7 +490,6 @@ class ReliabilityCurve:
             for pbin in self.binlist:
                 if prob <= pbin: 
                    binval = pbin
-                   #print('break', binval)
                    break 
             if row['obs'] >= self.thresh and row['obs'] <= threshmax:
                self.yeshash[binval] += 1
@@ -470,6 +545,7 @@ class ReliabilityCurve:
         #print('meas < thresh', noval)
         plt.plot(xxx, yesval, '-g.',label='Obs above')
         plt.plot(xxx, noval, '-r.',label='Obs below')
+        plt.plot(xxx, np.array(yesval)+np.array(noval), '-b.',label='Obs below')
         plt.show()
 
 def sub_reliability_number_plot(rc,ax, clr='-g.',fs=10,label=''):
@@ -498,7 +574,7 @@ def sub_reliability_number_plot(rc,ax, clr='-g.',fs=10,label=''):
     #ax.set_yticklabels([1,10,100,1000,10000])
     return ax
 
-def sub_reliability_plot(rc,ax, clr='-g.',fs=10,label=''):
+def sub_reliability_plot(rc,ax, clr='-g.',fs=10,label='',plot_climate=False):
     """
     Plot reliability curve defined in ReliabilityCurve object.
 
@@ -524,6 +600,6 @@ def sub_reliability_plot(rc,ax, clr='-g.',fs=10,label=''):
     climate = yes_sum / (yes_sum + no_sum)
     ax.set_ylabel('Fraction observations',fontsize=fs)
     clr2 = clr.replace('-','--')[0:-1]
-    ax.plot([0,1],[climate,climate], clr2 )
+    if plot_climate: ax.plot([0,1],[climate,climate], clr2 )
     ax.tick_params(labelsize=fs)
     return ax
