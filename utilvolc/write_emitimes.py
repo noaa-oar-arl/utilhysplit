@@ -73,15 +73,15 @@ class InsertVolcat:
 
     def __init__(self, wdir, vdir, date_time, stradd='',
                  duration='0010',
-                 pollpercents=[1],
                  pollnum=1,
+                 pollpercents=[1],
                  vname=None,
                  vid=None):
         """
         Class of tools for inserting volcat data into hysplit
         -------------
         Inputs:
-        wdir: working directory - where emitimes file will be located (string)
+        wdir: working directory - base directory(string)
         vdir: volcat directory - where volcat data files are located (string)
         date_time: date and time of volcat file to use (datetime object)
         stradd: QUICK FIX - file formatting has changed for Nishi Data (string)
@@ -189,8 +189,7 @@ class InsertVolcat:
         area.attrs['units'] = 'km^2'
         # Reformatting array attributes
         if write == True:
-            #directory = self.vdir+'Area/'
-            directory = self.wdir
+            directory = self.wdir+'area/'
             match = self.find_match()
             if correct_parallax == True:
                 areafname = 'area_'+match+'_pc.nc'
@@ -225,11 +224,11 @@ class InsertVolcat:
             print('ERROR: Need volcat filename!')
         # Extracts ash mass array - Removes time dimension
         if clip == True:
-            mass0 = volcat.get_mass(dset)[0, :, :]
-            height0 = volcat.get_height(dset)[0, :, :]
+            mass0 = volcat.get_mass(dset).isel(time=0)
+            height0 = volcat.get_height(dset).isel(time=0)
         else:
-            mass0 = dset.ash_mass_loading[0, :, :]
-            height0 = dset.ash_cloud_height[0, :, :]
+            mass0 = dset.ash_mass_loading.isel(time=0)
+            height0 = dset.ash_cloud_height.isel(time=0)
         # Making 0. in arrays nans
         mass = mass0.where(mass0 > 0.)
         height = height0.where(height0 > 0.)
@@ -267,7 +266,7 @@ class InsertVolcat:
 
         return lat, lon, hgt, mass, area
 
-    def write_emit(self, correct_parallax=True, decode_times=False, heat='0.00e+00'):
+    def write_emit(self, heat='0.00e+00', layer=0., correct_parallax=True, decode_times=False):
         """ Writes emitimes file from volcat data.
         Inputs are created using self.make_1D()
         Uses instance variables: date_time, duration, par,
@@ -277,31 +276,47 @@ class InsertVolcat:
         hgt: 1D array of ash top height
         mass: 1D array of ash mass
         area: 1D array of area
-        correct_parallax: (boolean) use parallax corrected lat lon values
         heat: (string) default=0.00e+00
+        layer: (float) height in meters of ash layer. A value of 0. means no layer, ash inserted at observed VOLCAT height.
+        correct_parallax: (boolean) use parallax corrected lat lon values
+
         Output:
         emitimes file located in wdir
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
         lat, lon, hgt, mass, area = self.make_1D(correct_parallax=correct_parallax, decode_times=decode_times)
-        # Need to write some code to handle different durations and
-        # resulting constants for mass rate (g/hr) determination
-        if self.duration == '0010':
-            const = 6
+        # Calculating constants for mass rate (g/hr) determination
+        # AMR: 8/3/2021 - added code to account for different durations under 1 hour
+        # Is this acceptable for durations longer that 1 hour? A constant value of 1?
+        if float(self.duration) <= 60.0:
+            const = (60.0 / float(self.duration))
+        else:
+            const = 1.
         match = self.find_match()
         filename = 'VOLCAT_'+match+'_par'+str(self.pollnum)
-        f = open(self.wdir + filename, 'w')
-        f.write('YYYY MM DD HH        DURATION(HHMM) #RECORDS \n')
+        records = np.shape(hgt)[0]*self.pollnum
+        # AMR: 8/3/2021 - added layer flag, and writing layer capability to emitimes file, accounting for ash in a layer for data insertion method.
+        if layer > 0.:
+            filename = 'VOLCAT_'+match+'_'+str(layer)+'mlayer_par'+str(self.pollnum)
+            records = records * 2
+        f = open(self.wdir+'DataInsertion/' + filename, 'w')
+        f.write('YYYY MM DD HH DURATION(HHMM) #RECORDS \n')
         f.write('YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE(g/hr) AREA(m2) HEAT(w) \n')
-        f.write('{:%Y %m %d %H  } {} {}\n'.format(self.date_time,
-                                                  self.duration, np.shape(hgt)[0] * self.pollnum))
+        f.write('{:%Y %m %d %H} {} {}\n'.format(self.date_time, self.duration, records))
         h = 0
         while h < len(hgt):
             i = 0
             while i < len(self.pollpercents):
-                f.write('{:%Y %m %d %H %M} {} {:9.6f} {:10.6f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
-                    self.date_time, self.duration, lat[h], lon[h], hgt[h], mass[h]*const*self.pollpercents[i], area[h], heat))
+                # AMR: 8/3/2021 - added this for layer flag
+                if layer > 0.:
+                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
+                        self.date_time, self.duration, lat[h], lon[h], hgt[h]-float(layer), mass[h]*const*self.pollpercents[i], area[h], heat))
+                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
+                        self.date_time, self.duration, lat[h], lon[h], hgt[h], 0.0, 0.0, heat))
+                else:
+                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
+                        self.date_time, self.duration, lat[h], lon[h], hgt[h], mass[h]*const*self.pollpercents[i], area[h], heat))
                 i += 1
             h += 1
         f.close()
-        return('Emitimes file written: '+self.wdir+filename)
+        return('Emitimes file written: '+self.wdir+'DataInsertion/'+filename)
