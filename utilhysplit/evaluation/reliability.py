@@ -14,7 +14,6 @@ class TestReliability():
         self.thresh = self.mean
         self.num = 1000
 
-
     def test2(self,div=1):
         # div=1 will create perfect reliability diagram.
         thresh = self.thresh
@@ -35,7 +34,6 @@ class TestReliability():
         print('total number of points {} {}'.format(self.num,np.array(nnn).sum())) 
         self.rc.reliability_plot()
 
-
     def add_data(self,obs,prob,num):
         problist = []
         obslist = []
@@ -54,7 +52,7 @@ class TestReliability():
     def test_random(self):
         num=10
         self.rc = ReliabilityCurve(self.thresh,num)      
-        self.obs = self.make_obs()
+        self.obs = self.make_normal_obs()
         probs = self.make_probs_random()
         df = pd.DataFrame([self.obs,probs])
         df2 = df.T
@@ -65,7 +63,7 @@ class TestReliability():
         print('total number of points {} {}'.format(self.num,np.array(nnn).sum())) 
         self.rc.reliability_plot()
 
-    def make_obs(self):
+    def make_normal_obs(self):
         nm = self.num
         mean = self.mean
         obsval = np.random.normal(mean,mean/4.0,nm) 
@@ -462,7 +460,10 @@ class ReliabilityCurve:
         """
         if self.threshmax: thresh= [self.thresh,self.threshmax]
         else: thresh = self.thresh
-        prob = ensemble_tools.ATL(forecast, thresh=thresh, norm=True) 
+        # need to use the include_zero to get the proper relationship between
+        # reliability diagrams for probability of exceedances (> threshold) 
+        # and probability of being less than a threshold.
+        prob = ensemble_tools.ATL(forecast, thresh=thresh, norm=True,include_zero=True) 
         modelra = prob.values.flatten()
         obsra = obs.values.flatten()
         if modelra.size != obsra.size:

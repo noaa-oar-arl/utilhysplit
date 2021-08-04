@@ -145,7 +145,8 @@ def preprocess(indra, enslist=None, sourcelist=None):
     return dra, dim
 
 
-def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None):
+def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None,
+        include_zero=False):
     """
      Applied Threshold Level (also ensemble frequency of exceedance).
 
@@ -159,6 +160,7 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None)
      thresh : int or float. If 0 then use > for test. otherwise use >=.
      thresh : list or npndarray of 2 floats. Number of ensemble members between the two values.
 
+     include_zero : boolean. If true then use >= when threshold is zero.
      weights : numpy array of same length as enslist + sourcelist containing weight for
                each member.
 
@@ -192,8 +194,8 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None)
         threshmax = None
 
     # place ones where above threshold. zeros elsewhere.
-    if thresh == 0:
-        dra2 = xr.where(dra > thresh, 1, 0)
+    if thresh == 0 and not include_zero:
+        dra2 = xr.where(dra >= thresh, 1, 0)
     else:
         dra2 = xr.where(dra >= thresh, 1, 0)
     
