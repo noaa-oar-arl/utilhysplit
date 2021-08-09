@@ -151,6 +151,10 @@ class CalcScores:
         # 2021 Jun 17 amr added if statement to calculate binxra1/binxra2 if threshold == 0.
         # 2021 Jun 21 amr made get_contingency_table produce values for each ensemble member and total ensemble.
         # 2021 Jun 21 amr Added capability of calc_csi to use get_contingency_table pandas dataframe rather than dictionary.
+        # 2021 Aug 9 amc  fixed bug in how self.arr3 calculated in calc_basics.py
+        #                 added  convolve method  
+        #                 added  prob2det method
+        #                 added sz argument to calc_roc, get_contingency_table, calc_basics
 
         self.xra1 = xra1
         self.xra2 = xra2
@@ -261,9 +265,11 @@ class CalcScores:
         tframe = pd.DataFrame.from_dict(thash)
         return tframe
 
-    def calc_basics(self, sz=1, probthresh=None, clip=False):
+    def calc_basics(self, probthresh=None, clip=False,sz=1):
         """
         probthresh : int or float
+        sz : int. neighborhood size to use for convolution. If 1 then no convolution.
+
         The probthresh can be used to convert probabilistic forecasts back to
         deterministic forecasts.
         This can be used for creating things like ROC diagrams.
@@ -316,6 +322,11 @@ class CalcScores:
         # See figure 8.2 in Wilks.
         # calculate 2x2 contingency table statistics using various
         # probability thresholds.
+        # output can be used in plot_probthresh function
+        """
+        OUTPUT
+        rval : pandas DataFrame
+        """
         for iii, prob in enumerate(problist):
             #self.calc_basics(prob, clip=clip)
             tframe0 = self.get_contingency_table(sz=sz,probthresh=prob, clip=clip, multi=False)
@@ -326,7 +337,7 @@ class CalcScores:
         return rval
 
 
-    def calc_roc(self, sz=1, clip=True, multi=False, problist = np.arange(0.05,1,0.10)):
+    def calc_roc(self, clip=True, multi=False, problist = np.arange(0.05,1,0.10),sz=1):
         """
         For probabilistic forecasts.
         calculate the ROC (relative operating characteristic)
@@ -344,6 +355,8 @@ class CalcScores:
         clip=True will do this.
 
         problist : list of floats. Give probability thresholds for the points in the ROC curve.
+
+        sz : int. neighborhood size to use for convolution. If 1 then no convolution.
 
         Outputs:
         xlist: list of x values for plotting
@@ -374,6 +387,9 @@ class CalcScores:
         return xlist, ylist, area[0]
 
     def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False,sz=1):
+        """
+        sz : int. neighborhood size to use for convolution. If 1 then no convolution.
+        """
         thash = []
         self.calc_basics(sz=sz, probthresh=probthresh, clip=clip)
         aval = self.match.sum().values
@@ -425,16 +441,27 @@ class CalcScores:
             tframe['pm_threshold'] = self.pm_threshold
         return tframe
 
+
     def table2csi(self, tframe):
+        
+        def far(row):
+            # if probability threshold is high then no model data
+            # may meet the criteria (e.g. 80% may never all agree).
+            # then 'b' will be 0.
+            # Then 'a' will also be 0. 
+            # FAR should be 0 in this case.
+            if row['a'] == 0 and row['b'] ==0:
+               return 0
+            else:
+               return row['b']/(row['a']+row['b'])
+
         # bias. comparison of average forecast with average observation.
         # same as frequency of forecast / frequency of observation.
         tframe['B'] = tframe.apply(lambda row: (row['a']+row['b']) / (row['a'] + row['c']), axis=1)
         tframe['CSI'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['b'] + row['c']), axis=1)
         # false alarm ratio (p 310 Wilks) b/(a+b)
         # proportion of positive forecasts which were wrong.
-        #tframe['FAR'] = tframe.apply(lambda row: 2*row['b'],  axis=1)
-        tframe['FAR'] = tframe.apply(lambda row: row['b'] / (row['a'] + row['b']), axis=1)
-        #    print(row['a']+row['b'])
+        tframe['FAR'] = tframe.apply(lambda row: far(row),axis=1)
         tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
         tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
         tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'], axis=1)
