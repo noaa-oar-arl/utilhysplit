@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import time
 from utilhysplit.evaluation import ensemble_tools
 from utilhysplit.evaluation import statmain
+from scipy.signal import convolve2d
 
 """
 Routines to calculate various statistics like Critical Success Index, Gilbert Skill Score, Fractions Skill Score,
@@ -260,37 +261,72 @@ class CalcScores:
         tframe = pd.DataFrame.from_dict(thash)
         return tframe
 
-    def calc_basics(self, probthresh=None, clip=False):
+    def calc_basics(self, sz=1, probthresh=None, clip=False):
         """
         probthresh : int or float
         The probthresh can be used to convert probabilistic forecasts back to
         deterministic forecasts.
         This can be used for creating things like ROC diagrams.
         """
+        if sz == 1:
+           binxra1 = self.binxra1
+           binxra2 = self.binxra2
+        else:
+           binxra1, binxra2 = self.convolve(sz)
+           # need observations to be 1 or 0 ?
+           # result from 1 pixel in the neighborhood being
+           # above threshold.
+           #obs_probthresh = 1/(sz*sz)
+           #if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
+           #binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
+           # use original observation array.
+           binxra1 = self.binxra1
+           #   print('Setting probthresh) {}'.format(probthresh))
 
         if clip:
             # remove all x or y rows that are all 0's.
-            temp = xr.concat([self.binxra1, self.binxra2], dim='temp')
+            temp = xr.concat([binxra1, binxra2], dim='temp')
             temp = xr.where(temp == 0, np.nan, temp)
             temp = temp.dropna(dim='x', how='all')
             temp = temp.dropna(dim='y', how='all')
             binxra2 = temp.isel(temp=1).fillna(0)
             binxra1 = temp.isel(temp=0).fillna(0)
-        else:
-            binxra1 = self.binxra1
-
+        #else:
+        #    binxra1 = self.binxra1
         if isinstance(probthresh, (int, float)):
             # convert probabilistic forecast to deterministic using threshold.
-            binxra2 = xr.where(self.binxra2 >= probthresh, 1.0, 0)
-        else:
-            binxra2 = self.binxra2
+            binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
+        #else:
+        #    binxra2 = self.binxra2
+        # both have above threshold pixels.
         self.match = binxra1 * binxra2
+        # subtract match from observations
         self.arr1 = binxra1 - self.match
+        # subtract model from observations
         self.arr2 = binxra2 - self.match
-        self.arr3 = xr.where(self.match > 0, 0, 1)
+        # correct no forecasts.
+        # add the matched, obs only, model only.
+        # 1's where these are 0.
+        # 
+        allra = self.arr1+self.match+self.arr2
+        self.arr3 = xr.where(allra>0, 1-allra, 1)
         self.totalpts = binxra1.shape[0] * binxra1.shape[1]
 
-    def calc_roc(self, clip=True, multi=False, problist = np.arange(0.05,1,0.10)):
+    def prob2det(self, sz=1, clip=True, multi=False, problist = np.arange(0.05,1,0.10)):
+        # See figure 8.2 in Wilks.
+        # calculate 2x2 contingency table statistics using various
+        # probability thresholds.
+        for iii, prob in enumerate(problist):
+            #self.calc_basics(prob, clip=clip)
+            tframe0 = self.get_contingency_table(sz=sz,probthresh=prob, clip=clip, multi=False)
+            tframe =  self.table2csi(tframe0)
+            tframe['prob'] = prob
+            if iii==0: rval = tframe
+            else: rval = pd.concat([rval,tframe], axis=0)
+        return rval
+
+
+    def calc_roc(self, sz=1, clip=True, multi=False, problist = np.arange(0.05,1,0.10)):
         """
         For probabilistic forecasts.
         calculate the ROC (relative operating characteristic)
@@ -320,9 +356,11 @@ class CalcScores:
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
             #self.calc_basics(prob, clip=clip)
-            tframe = self.get_contingency_table(probthresh=prob, clip=clip, multi=False)
-            tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
-            tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
+            tframe0 = self.get_contingency_table(sz=sz,probthresh=prob, clip=clip, multi=False)
+            tframe =  self.table2csi(tframe0)
+        # bias. comparison of average forecast with average observation.
+            #tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
+            #tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
             #csihash = self.calc_csi()
             # xlist.append(csihash['F'])
             # ylist.append(csihash['POD'])
@@ -335,15 +373,19 @@ class CalcScores:
         area = scipy.integrate.trapz(y=ylist, x=xlist)
         return xlist, ylist, area[0]
 
-    def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False):
-
+    def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False,sz=1):
         thash = []
-        self.calc_basics(probthresh, clip)
-
+        self.calc_basics(sz=sz, probthresh=probthresh, clip=clip)
         aval = self.match.sum().values
         cval = self.arr1.sum().values
         bval = self.arr2.sum().values
         dval = self.arr3.sum().values
+
+        total = aval+cval+bval+dval
+        total2 = self.arr3.shape[0]*self.arr3.shape[1]
+        if int(total) != int(total2):
+           print('WARNING: error in get_contingency_table check')
+
         if verbose:
             print('a(hits) forecast yes, obs yes : {}'.format(aval))
             print('b(false alarm) forecast yes, obs no  : {}'.format(bval))
@@ -384,10 +426,15 @@ class CalcScores:
         return tframe
 
     def table2csi(self, tframe):
+        # bias. comparison of average forecast with average observation.
+        # same as frequency of forecast / frequency of observation.
+        tframe['B'] = tframe.apply(lambda row: (row['a']+row['b']) / (row['a'] + row['c']), axis=1)
         tframe['CSI'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['b'] + row['c']), axis=1)
         # false alarm ratio (p 310 Wilks) b/(a+b)
         # proportion of positive forecasts which were wrong.
+        #tframe['FAR'] = tframe.apply(lambda row: 2*row['b'],  axis=1)
         tframe['FAR'] = tframe.apply(lambda row: row['b'] / (row['a'] + row['b']), axis=1)
+        #    print(row['a']+row['b'])
         tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
         tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
         tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'], axis=1)
@@ -411,7 +458,7 @@ class CalcScores:
         csihash: Dictionary of values pertaining to Critical Success Index calculation - can output dataframe if desired
         contains: hits, misses, false_alarms, CSI, POD, FAR
         """
-        area = np.array(self.area)
+        area = np.array(self.area,dtype='object')
         # Getting contingency table from get_contingency_table()
         #tframe = self.get_contingency_table(multi=multi)
         csihash = {}
@@ -473,8 +520,22 @@ class CalcScores:
                       'GSS  : {:.3f}'.format(csihash['GSS']))
         return csihash
 
+    def convolve(self,sz):
+        #filter_array = np.ones((sz, sz))
+        #filter_array = filter_array * (1/np.sum(filter_array))
+        #conv_array = np.shape(filter_array)
+        mp = int(np.floor(sz/2.0)+1)
+        #arr1 = convolve2d(self.binxra1, filter_array, mode='same', fillvalue=0, boundary='fill')
+        #arr2 = convolve2d(self.binxra2, filter_array, mode='same', fillvalue=0, boundary='fill')
+        arr1 = self.binxra1.rolling(y=sz,center=True,min_periods=mp).mean()
+        arr1 = arr1.rolling(x=sz,center=True,min_periods=mp).mean()
+
+        arr2 = self.binxra2.rolling(y=sz,center=True,min_periods=mp).mean()
+        arr2 = arr2.rolling(x=sz,center=True,min_periods=mp).mean()
+
+        return arr1, arr2  
+ 
     def calc_fss(self, szra=None, makeplots=False):
-        from scipy.signal import convolve2d
         """Calculates the fraction skill score (fss)
         See Robers and Lean (2008) Monthly Weather Review
         and Schwartz et al (2010) Weather and Forecasting
@@ -707,6 +768,28 @@ def calc_weightsPC(xra, scores):
     xraprob = xra2.sum(dim='source') / sum(W)
     return xraprob
 
+def plot_probthresh(tframe, ax=None,clr='--ko',label=''):
+    if not ax:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+    ax2 = ax.twinx()
+    xval = tframe['probthresh']
+    clrs = ['-r.','-k.','-g.','-c.','-b.']
+    for iii, yval in enumerate(['POD','FAR','CSI']):
+        ax.plot(xval,tframe[yval],clrs[iii],label=yval)
+    ax2.plot(xval,tframe['B'],'-c.',label='Bias')
+    #ax.plot(xlist, ylist, clr, label=label)
+    #ax.plot([0, 1], [0, 1], '-b')
+    ax.set_xlabel('Probability threshold')
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles,labels)
+    handles, labels = ax2.get_legend_handles_labels()
+    ax2.legend(handles,labels,loc='upper center')
+    #ax.set_ylabel('Hit Rate')
+    ax.set_ylabel('POD, FAR, CSI')
+    ax2.set_ylabel('Bias')
+    ax2.plot([0,1],[1,1],'-k',LineWidth=4,alpha=0.3)
+    return ax
 
 def plot_roc(xlist, ylist, ax=None,clr='--ko',label=''):
     if not ax:
