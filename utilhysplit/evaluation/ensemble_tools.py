@@ -381,8 +381,6 @@ def ens_fss(
     dfall4 = dfall3.merge(dfall2,how='outer', on=['time','ens'])
     return dfall, dfall4
 
-
-
 def plot_ens_accuracy(ensdf,cname='MAE'):
     if cname == 'RMSE':
        rvalue = 'RMSE'
@@ -401,7 +399,7 @@ def plot_ens_accuracy(ensdf,cname='MAE'):
 
         val.plot(ax=ax,legend=None,colormap='tab20') 
         if 'mean' in val.columns: 
-            val.plot(ax=ax, y='mean', LineWidth=5,colormap='winter')
+            val.plot(ax=ax, y='mean', legend=None, LineWidth=5,colormap='winter')
     else:
         val = ensdf.pivot(columns='ens',values=cname,index='time')
         val = ensdf.pivot(columns='ens',values=cname,index='time')
@@ -428,9 +426,9 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     colA = uniform.columns[0] 
     uniform.plot(ax=ax, y=colA, LineStyle='--',legend=None,colormap='winter')
     if 'mean' in ensfss.columns:
-        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",label='mean')
+        ensfss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",legend=None,label='mean')
     if 'prob' in ensfss.columns:
-        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",label='prob')
+        ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",legend=None,label='prob')
     ax.set_ylabel('FSS')
 
 
@@ -441,9 +439,9 @@ def plot_afss_ts(ensdf):
     afss = afss.pivot(index='time',columns='ens',values='afss')
     afss.plot(ax=ax, legend=None)
     if 'mean' in afss.columns:
-        afss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter")
+        afss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",legend=None)
     if 'prob' in afss.columns:
-        afss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray")
+        afss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",legend=None)
     ax.set_ylabel('AFSS')
     return afss
 
