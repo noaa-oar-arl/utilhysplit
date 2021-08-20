@@ -433,6 +433,7 @@ def average_volcat(das, cdump, skipna=False, convert_nans=False):
     return avgmass, maxhgt
 
 
+
 def get_volcat_name_df(tdir, 
                        daterange=None, 
                        vid=None,
@@ -460,8 +461,32 @@ def get_volcat_name_df(tdir,
         temp = temp.sort_values(['volcano id','fid','edate'],axis=0)
     else:
         temp = temp.sort_values(['volcano id','edate'],axis=0)
-
     return temp
+
+# two json files.
+# the first one 
+def read_event_summary():
+    # list of all active eruptions in the satellite image.
+    # Return dataframe made from dictionary in the event summary.
+    return df
+
+def summarize_files(volcat_event_df):
+    """
+    what volcano id's are available.
+    what time periods.
+    """
+    # return volcano id's.
+    return -1
+
+def choose_files(volcat_event_df, vid, frequency=10):
+    """
+    volcat_event_df with columns specified by VolcatName dictionary.
+    frequency: how far apart should files to be spaced (minutes)
+    """
+    return -1
+
+
+
 
 def get_volcat_list(tdir, 
                     daterange=None, 
@@ -1122,7 +1147,11 @@ def find_iii(tlist, match):
     return -1
 
 
-def correct_pc(dset):
+def determine_pc_grid_space():
+    return 1
+
+
+def correct_pc(dset, gridspace=None):
     """
     moves mass and height values into the coordinate values closest
     to the parallax corrected values. Results in dataset with mass and height shifted
@@ -1135,10 +1164,16 @@ def correct_pc(dset):
     effrad = get_radius(dset, clip=False)
     # ashdet = get_ashdet(dset, clip=False)
 
-    newmass = xr.zeros_like(mass.isel(time=0))
-    newhgt = xr.zeros_like(height.isel(time=0))
-    newrad = xr.zeros_like(effrad.isel(time=0))
+    if not gridspace:
+        newmass = xr.zeros_like(mass.isel(time=0))
+        newhgt = xr.zeros_like(height.isel(time=0))
+        newrad = xr.zeros_like(effrad.isel(time=0))
     # newashdet = xr.zeros_like(ashdet.isel(time=0))
+    else:
+    # TO DO: make newmass, newhgt, newrad a regular grid
+    # with spacing. 
+    # so produce a regular grid.
+        return -1
 
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
