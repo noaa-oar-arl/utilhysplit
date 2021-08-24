@@ -1,4 +1,3 @@
-import sys
 import os
 from subprocess import call
 import datetime
@@ -22,12 +21,14 @@ from utilhysplit.hysplit_gridutil import align_grids
 from utilvolc.runhelper import Helper
 from utilvolc.ashapp.metfiles import MetFileFinder
 
+def automate():
+    return -1 
+
 def check_type_basic(check):
     if isinstance(check,int): return True
     if isinstance(check,float): return True
     if isinstance(check,str): return True
     return False
-
 
 #def check_type_iterable(check):
 
@@ -283,7 +284,9 @@ def get_sourcehash(wdir,configfile):
 # inverse.plot_outdat() 
 
 
-def create_runtag(tag,tii,remove_cols, remove_rows, remove_sources):
+
+
+def create_runtag(tag,tii,remove_cols, remove_rows, remove_sources,remove_ncs=0):
     base = tag
     times = str.join('_',map(str,tii))
     tag2 = ''
@@ -291,7 +294,13 @@ def create_runtag(tag,tii,remove_cols, remove_rows, remove_sources):
     else: tag2+='F' 
     if remove_rows: tag2+='T'
     else: tag2+='F' 
-    rval = 'Run{}_{}_{}'.format(base,times,tag2)
+    if remove_ncs > 0:
+       tag3 = 'w{}'.format(remove_ncs)
+    else: tag3 = ''
+    if remove_sources:
+       tag4 = '_{}'.format(str.join('_',list(map(str,remove_sources))))
+    else: tag4=''
+    rval = 'Run{}_{}_{}{}{}'.format(base,times,tag2,tag3,tag4)
     return rval
 
 
@@ -321,7 +330,6 @@ class InverseAshEns:
                                            configdir,configfile,
                                            ensdim=ensdim,
                                            verbose=verbose))
-
     def set_directory(self,wdir,
                       execdir,
                       datadir,
@@ -395,6 +403,7 @@ class InverseAshEns:
         This can be fed into the AshEval class.
         attrs : dictionary with any additional information to be added to global attributes.
         """
+        print('makeing file', outname)
         blist = []
         if os.path.isfile(outname):
            if not overwrite: 
@@ -414,11 +423,11 @@ class InverseAshEns:
                          tag))
         dset = hysplit.combine_dataset(blist)
         dset.attrs.update(newattr)
-        try:
-            update_attrs_for_netcdf(dset)
-        except:
-            print('attr update did not work')
-            pass
+        #try:
+        #    update_attrs_for_netcdf(dset)
+        #except:
+        #    print('attr update did not work')
+        #    pass
         try:
             dset.to_netcdf(outname) 
         except:
@@ -433,7 +442,7 @@ class InverseAshEns:
         processhandler.pipe_stdout()
         processhandler.pipe_stderr()
         os.chdir(self.subdir)
-        cmd = os.path.join(self.hysplitdir,'hycs_std')
+        cmd = os.path.join(self.hysplitdir,'exec','hycs_std')
         for tag in self.taglist:
             print('running ', cmd, tag)
             processhandler.startnew([cmd,tag],self.subdir,descrip=tag)
@@ -480,6 +489,7 @@ class InverseAshEns:
             # move output files to new names
             Helper.move(out_name1, new_name1[iii]) 
             Helper.move(out_name2, new_name2[iii]) 
+            Helper.move('fort.188', 'fort.188.{}'.format(self.taglist[iii])) 
                    
     def plot_outdat(self, eii=None):
         ilist = self.read_outdat(eii)
@@ -507,9 +517,11 @@ class InverseAshEns:
         """
         name1,name2 = self.make_tcm_names()
         ilist = []
-        if isinstance(eii,int): eii  = [eii]
+        if isinstance(eii,int): 
+            eii  = [eii]
         for iii, outdat in enumerate(zip(name1,name2)):
             if not eii or (iii in eii):  
+                if eii: print(outdat)
                 io = InverseOutDat(self.subdir,outdat[0],outdat[1])
                 ilist.append(io)
         return ilist
@@ -539,38 +551,49 @@ class InverseAshEns:
                        name = emit_name)
        
             inp = self.invlist[0].inp
-            inp['forecastDirectory'] = os.path.join(self.datadir,'GEFS') 
-            inp['archivesDirectory'] = os.path.join(self.datadir,'wrong') 
+            print(inp['meteorologicalData'])
+            if 'gefs' in inp['meteorologicalData'].lower():
+                inp['forecastDirectory'] = os.path.join(self.datadir,'GEFS') 
+                print('Forecast directory', inp['forecastDirectory'])
+                inp['archivesDirectory'] = os.path.join(self.datadir,'wrong') 
+                metstr=inp['meteorologicalData']
+            elif 'gfs0p25' in inp['meteorologicalData'].lower():
+                inp['archivesDirectory'] = os.path.join(self.datadir,'') 
+                inp['forecastDirectory'] = os.path.join(self.datadir,'') 
+                metstr = 'gfs0p25'
             make_control(efile,self.wdir,'CONTROL.default',self.subdir,tag,
                          forecast_directory=inp['forecastDirectory'],
                          archive_directory=inp['archivesDirectory'],
-                         metstr=inp['meteorologicalData'])
+                         metstr=metstr)
             make_setup(self.wdir,'SETUP.default',self.subdir,suffix=tag)
             Helper.copy(os.path.join(self.wdir,'ASCDATA.CFG'), os.path.join(self.subdir,'ASCDATA.CFG')) 
 
         
-    
-
-    def plot_outdat_ts(self, eii=None,unit='kg/s'):
+    def plot_outdat_ts(self, eii=None,unit='kg/s',clr=None):
         # Ensemble.
         sns.set_style('whitegrid')
         fig = plt.figure(1)
         ax = fig.add_subplot(1,1,1)
         ilist = self.read_outdat(eii)
-        clr = ['--k','--r','--b','--g','--c','--y','--m']
+        if not clr:
+           clrlist = ['--k','--r','--b','--g','--c','--y','--m']
+        else:
+           clrlist = [clr]
         jjj=0
-        for iii, io in enumerate(ilist):
+        for iii,io in enumerate(ilist):
             df = io.get_emis()
-            self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clr[jjj],unit=unit)
+            self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clrlist[jjj],unit=unit)
             jjj+=1
-            if jjj >= len(clr): jjj=0
+            if jjj >= len(clrlist): jjj=0
         fig.autofmt_xdate()
         #plt.show()
 
     def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
-                      remove_sources=None):
+                      remove_sources=None, remove_ncs=0):
         for hrun in self.invlist: 
-            a,b,c, = hrun.make_tcm_mult(tiilist,remove_cols,remove_rows,remove_sources)
+            a,b,c, = hrun.make_tcm_mult(tiilist,remove_cols,remove_rows,
+                                        remove_sources,
+                                        remove_ncs)
         
 
     def write_descrip(self,tiilist, remove_cols, remove_rows, remove_sources):
@@ -621,11 +644,11 @@ class InverseAsh:
 
         # keep volcat arrays for different averaging times. 
         self.volcat_hash = {}
-
         # prepare_one_time method adds data to these dictionaries.
         # the data in cdump_hash and volcat_avg_hash have been aligned.
         # and are on the same grid.
         self.volcat_avg_hash = {}
+        self.volcat_ht_hash = {}
         self.cdump_hash = {}
 
         # multiplication factor if more than 1 unit mass released.
@@ -633,6 +656,25 @@ class InverseAsh:
         #
         self.get_cdump(tdir,fname,verbose,ensdim)
         self.add_config_info(configdir,configfile)
+
+        # These values are for if spatial coarsening is used.
+        self.coarsen = None
+        self.original_volcat_avg_hash = {}
+        self.original_volcat_ht_hash = {}
+        self.original_cdump_hash = {}
+
+
+    def copy(self):
+        iacopy = InverseAsh(
+                     self.tdir,
+                     self.fname,
+                     self.vdir,
+                     self.vid,
+                     self.n_ctrl)
+        iacopy.volcat_avg_hash = self.volcat_avg_hash
+        iacopy.volcat_cdump_hash = self.cdump_hash
+        icacopy.concmult = self.concmult
+        return icacopy 
 
     def print_summary(self):
         print('Observations availalbe in volcat_avg_hash')
@@ -642,7 +684,7 @@ class InverseAsh:
 
     def get_cdump(self,tdir,fname,verbose=False,ensdim='ens'):
         # hysplit output. xarray. 
-        cdump = xr.open_dataset(os.path.join(tdir,fname))
+        cdump = xr.open_dataset(os.path.join(tdir,fname),engine='netcdf4')
         if not hysplit.check_grid_continuity(cdump): print('Grid not continuous')
         if verbose: print('opened',tdir,fname)
         # turn dataset into dataarray
@@ -654,6 +696,9 @@ class InverseAsh:
         elif ensdim=='source':
             cdump = cdump.isel(ens=0)
         cdump, dim = ensemble_tools.preprocess(cdump)
+        if dim == 'source':
+           cdump = cdump.rename({'ens':'metid'})
+           cdump = cdump.rename({'source':'ens'})
         self.cdump = cdump.fillna(0)
 
     def add_config_info(self,configdir, configfile):
@@ -738,7 +783,7 @@ class InverseAsh:
         return iii 
 
     def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
-                      remove_sources=None):
+                      remove_sources=None,remove_ncs=0):
         # make the tcm for multiple time periods.
         tcmlist = []
         latlist = []
@@ -747,7 +792,7 @@ class InverseAsh:
             print(self.cdump.time.values[tii])
             tcm, model_lat, model_lon, columns = \
                  self.make_tcm(tii,remove_cols=False,remove_rows=remove_rows,
-                               remove_sources=remove_sources)
+                               remove_sources=remove_sources,remove_ncs=remove_ncs)
             tcmlist.append(tcm)
             latlist.append(np.array(model_lat))
             lonlist.append(np.array(model_lon))
@@ -773,8 +818,27 @@ class InverseAsh:
         self.lonlist = np.array(lonlist)
         return t3, lat, lon
 
+    def remove_near_clear_sky(self, avg, window):
+       # this creates rolling average so nearby 0 pixels will have above zero values.
+       avg2 = avg.rolling(x=window,center=True).max()
+       avg2 = avg2.rolling(y=window,center=True).max()
+       # areas above 0 in the smeared obs are set to True
+       test1 = xr.where(avg2 >0, True, False)
+       # areas above 0 in the original obs are set to True
+       test2 = xr.where(avg >0, True, False)
+       # areas from the original array set back to original value.
+       # above 0 areas from smeared array are set to 0.
+       # zero values are set to -1.
+       test3 = xr.where(np.any([test1,test2],axis=0),avg,-1)
+       # Returns xarray with
+       # original above zero observations.
+       # value of 0 in areas near to the above zero observations
+       # value of -1 in areas far from the observations.
+       return test3 
+
+
     def make_tcm(self,tii, remove_cols=True, remove_rows=False,
-                 remove_sources = None):
+                 remove_sources = None, remove_ncs=0):
         """
         remove sources should be a list of  times / heights to remove
         along the ensemble dimension.
@@ -819,10 +883,13 @@ class InverseAsh:
            cdump = cdump.sel(ens=ekeep)
 
         avg = self.volcat_avg_hash[tii] 
-        cdump = cdump * self.concmult 
 
         s1 = avg.shape[0]*avg.shape[1] 
+        if remove_ncs>0:
+           avg = self.remove_near_clear_sky(avg,remove_ncs)
 
+
+        cdump = cdump * self.concmult 
         model = cdump.stack(pos=['y','x'])
         model = model.transpose('pos','ens')      
         # some have nans? Find out why?
@@ -843,7 +910,21 @@ class InverseAsh:
         volc_lon = avg.longitude.values.reshape(s1,1)
 
         volc = volc.flatten()
+
+        if remove_ncs>0:
+           # remove only values that are 0.
+           vpi = np.where(volc!=0)
+           model = model[vpi]
+           volc = volc[vpi]
+           model_lat = model_lat[vpi]
+           model_lon = model_lon[vpi]
+           volc_lon = volc_lon[vpi]
+           volc_lat = volc_lat[vpi]
+           # set values that are less than 0 back to 0.
+           volc = xr.where(volc<0,0,volc)
+
         if remove_rows:
+           # only consider rows where observations are greater than 0.
            vpi = np.where(volc>0)
            model = model[vpi]
            volc = volc[vpi]
@@ -851,6 +932,8 @@ class InverseAsh:
            model_lon = model_lon[vpi]
            volc_lon = volc_lon[vpi]
            volc_lat = volc_lat[vpi]
+
+
         volc = volc.reshape(volc.shape[0],1)
 
         tcm = np.concatenate([model,volc],axis=1)
@@ -1091,6 +1174,8 @@ class InverseAsh:
         """
         must input either daterange or tii.
         if zii is None then sum along ensemble dimension showing coverage of all HYSPLIT runs.
+        For the inversion runs, the release from different heights is shown by the ens dimension.
+
         """
 
         fig = plt.figure(1,figsize=(10,5))
@@ -1112,19 +1197,20 @@ class InverseAsh:
         #cdump.sum(dim='ens').plot.contour(x='longitude',y='latitude',ax=ax2)
         try:
             #plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds',shading='nearest')
-            plt.pcolormesh(csum.x, csum.y, np.log10(csum),cmap='Reds',shading='nearest')
+            cbm = ax1.pcolormesh(csum.x, csum.y, np.log10(csum),cmap='Reds',shading='nearest')
         except:
             print('FAILED max value', np.max(csum))
             print('------------------')
         #plt.pcolormesh(csum.longitude, csum.latitude, csum,cmap='Reds',shading='nearest')
         #cb= csum.plot.pcolormesh(x='longitude',y='latitude',cmap='viridis',ax=ax2)
-        cb = plt.pcolormesh(volcat.x, volcat.y, np.log10(volcat),cmap='Blues',shading='nearest',alpha=0.5)
+        cb = ax1.pcolormesh(volcat.x, volcat.y, np.log10(volcat),cmap='Blues',shading='nearest',alpha=0.5)
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=np.log10(volcat),s=2,cmap='Blues')
         #cb = plt.scatter(volcat.longitude, volcat.latitude, c=volcat.values,s=2,cmap='viridis',levels=levels)
         #vals = np.log10(volcat)
         #cb = plt.contour(volcat.x, volcat.y, vals.fillna(0),cmap='viridis',levels=[0,1,10,100])
-        # plt.colorbar(cb)
+        plt.colorbar(cbm)
         plt.tight_layout()
+        return ax1
 
 
     def get_norm(self,model,r2):
@@ -1143,13 +1229,20 @@ class InverseAsh:
             cdump = self.cdump_hash[iii]*self.concmult
             yield volcat, cdump 
                    
-    def get_pair(self,tii):
+    def get_pair(self,tii,coarsen=None):
         if isinstance(tii,int):
            iii = tii 
         elif isinstance(tii,datetime.datetime):
            iii = self.time_index(tii)
         volcat = self.volcat_avg_hash[iii] 
         cdump = self.cdump_hash[iii]*self.concmult
+
+        if coarsen:
+           volcat = volcat.coarsen(x=coarsen,boundary='trim').mean()
+           volcat = volcat.coarsen(y=coarsen,boundary='trim').mean()
+           cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
+           cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
+
         return volcat, cdump 
     
     def match_volcat(self,forecast):
@@ -1219,7 +1312,8 @@ class InverseAsh:
         vvals = volcat.values
         vpi = vvals < 0.001
         vvals[vpi] =  np.nan
-        clevels = [0.2,2,5,10]
+        #clevels = [0.2,2,5,10]
+        clevels = [0.2,10]
         if ptype == 'pcolormesh':
             cb = ax1.pcolormesh(volcat.longitude, volcat.latitude,vvals,norm=norm, cmap=cmap,shading='nearest')
             cb2 = ax2.pcolormesh(forecast.longitude, forecast.latitude,evals,norm=norm, cmap=cmap,shading='nearest')
@@ -1289,7 +1383,30 @@ class InverseAsh:
         else:
             return default
 
-    def prepare_one_time(self, daterange, das=None):
+
+    def mass_load_modified(self):
+        # logic for only getting mass loading in certain levels.
+
+        # have an array of top heights.
+        #  
+        return -1
+    
+    def coarsen(self, num=3):
+        if not self.coarsen:
+            self.original_cdump_hash = self.cdump_hash.copy()
+            self.original_volcat_avg_hash = self.volcat_avg_hash.copy()
+        self.coarsen = num
+        for key in self.cdump_hash.keys():
+            c2 = self.original_cdump_hash[key].coarsen(x=num).mean()
+            c2 = c2.coarsen(y=num).mean()
+            v2 = self.original_volcat_avg_hash[key].coarsen(x=num).mean()
+            v2 = v2.coarsen(y=num).mean()
+            self.cdump_hash[key] = c2
+            self.volcat_hash[key] = v2
+
+    def prepare_one_time(self, daterange, das=None, htoptions=0):
+        # currently must coarsen all data at the same time.
+        if self.coarsen: print('Warning: Adding new data after some data has already been coarsened.')
         vdir = self.vdir
         vid = self.vid
         # key for hashes is determined from times in cdump file.
@@ -1302,7 +1419,11 @@ class InverseAsh:
         if not isinstance(tii,int): 
           print('No time found for {}'.format(daterange[0]))
           return None, None
+
         cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[model_tii])) 
+
+        if htoptions==1: cdump_b = self.cdump.sel(time=daterange[model_tii]) 
+
         if not das:
            vset = self.get_volcat(daterange)
         buf = 5
@@ -1311,16 +1432,31 @@ class InverseAsh:
             vra = vset.ash_mass_loading
         except:
             return None, None
+
+        # also get the volcat observed height.
+        try:
+            vhra = vset.ash_cloud_height
+        except:
+            return None, None
+
+         
         a1,a2,b1,b2 = self.clip(vra.sum(dim='time'),buf=buf)
         vra = vra.transpose('time','y','x')
         # vra has dimensions of time, y, x
         vra = vra[:,a1:a2,b1:b2]
+
+        vhra = vhra.transpose('time','y','x')
+        vhra = vhra[:,a1:a2,b1:b2]
+
+
         # clip the cdump array before aligning.
         if 'ens' in cdump_a.coords:
             cdump_a = cdump_a.transpose('ens','y','x')
+            if htoptions==1: cdump_b = cdump_b.transpose('ens','z,','y','x')
             dummy = cdump_a.sum(dim='ens')
         else:
             cdump_a = cdump_a.transpose('y','x')
+            if htoptions==1: cdump_b = cdump_b.transpose('z','y','x')
             dummy = cdump_a
 
         try:
@@ -1329,50 +1465,26 @@ class InverseAsh:
             print('dummy cannot be clipped', dummy)
         if 'ens' in cdump_a.coords:
             cdump_a = cdump_a[:,a1:a2,b1:b2]
+            if htoptions==1: cdump_b = cdump_b[:,:,a1:a2,b1:b2]
         else:
             cdump_a = cdump_a[a1:a2,b1:b2]
+            if htoptions==1: cdump_b = cdump_b[:,a1:a2,b1:b2]
 
         # align the grids.
         if compare_grids(cdump_a, vra):
+            dummy, vhra = align_grids(cdump_a, vhra)
             cdump_a, vra = align_grids(cdump_a, vra)
         else:
             print('prepare_one_time: grids cannot be aligned')
             return False
 
-        # TO DO: may not need to clip again.
-        # need to clip cdump and volcat.
-        #if 'ens' in cdump_a.coords:
-        #    dummy = cdump_a.sum(dim='ens')
-        #else:
-        #    dummy = cdump_a
-        #a1,a2,b1,b2 = self.clip(dummy)
-        #dummy = dummy[a1:a2,b1:b2]
-
-        #aa1,aa2,bb1,bb2 = self.clip(vra.sum(dim='time').fillna(0))
-        # use bounds which encompass all obs and model data. 
-        #a1 = np.min([a1,aa1])
-        #a2 = np.max([a2,aa2])
-        #b1 = np.min([b1,bb1])
-        #b2 = np.max([b2,bb2])
-        #buf = 5
-        #if a2+buf < cdump_a.y.values[-1] and a2+buf < vra.y.values[-1]:
-        #   a2 = a2+buf
-        #if b2+buf < cdump_a.x.values[-1] and b2+buf < vra.x.values[-1]:
-        #   b2 = b2+5
-
-        #a1 = a1 -5
-        #b1 = b1 -5
-        #if a1<0: a1=0
-        #if b1<0: b1=0
 
         avra = vra.fillna(0).mean(dim='time')
-        #if 'ens' in cdump_a.coords:
-        #    self.cdump_hash[tii] = cdump_a[:,a1:a2,b1:b2]
-        #else:
-        #    self.cdump_hash[tii] = cdump_a[a1:a2,b1:b2]
-        #self.volcat_avg_hash[tii] = avra[a1:a2,b1:b2]
+        maxvhra = vhra.fillna(0).max(dim='time')
+
         self.cdump_hash[tii] = cdump_a
         self.volcat_avg_hash[tii] = avra
+        self.volcat_ht_hash[tii] = maxvhra
         return cdump_a, avra
 
     def compare_time_ave(self, daterange):
@@ -1419,7 +1531,9 @@ def make_control(efile,
     duration : if set will over-ride run duration in CONTROL.default.
     """
     # set up met data finder.
-    metfilefinder = MetFileFinder(metstr)
+    metfilefinder = MetFileFinder(metstr.lower())
+    print('making control file ', metstr)
+    print(archive_directory)
     metfilefinder.set_forecast_directory(forecast_directory)
     metfilefinder.set_archives_directory(archive_directory)
     if 'gefs' in metstr.lower():
@@ -1447,7 +1561,7 @@ def make_control(efile,
         grid.outdir = wdir + '/'
     # update metfiles.
     control.remove_metfile(rall=True)
-    metfiles = metfilefinder.find(stime,int(control.run_duration))
+    metfiles = metfilefinder.find(stime,int(control.run_duration),hours=24)
     for mfile in metfiles:
         control.add_metfile(mfile[0],mfile[1])
 
@@ -1536,6 +1650,7 @@ def make_efile(vals,vlat,vlon,
                          heat = 0,
                          spnum=1,
                          nanvalue=0)
+    print('writing efile {}', name)
     efile.write_new(name) 
     return efile
 
