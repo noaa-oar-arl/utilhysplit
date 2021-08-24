@@ -73,7 +73,7 @@ if __name__ == "__main__":
     setup = JobSetUp()
     # create a test to run without inputs from web page.
 
-    if 'ens' in JOBID:
+    if 'ens' in JOBID or 'test' in JOBID:
         logging.getLogger().setLevel(20)
         logging.basicConfig(
                             stream = sys.stdout)
@@ -86,7 +86,7 @@ if __name__ == "__main__":
         # currently 
         #setup.add_inverse_params()
         inp = setup.inp
-        inp['runflag'] = 'dispersion'
+        #inp['runflag'] = 'dispersion'
         arun = create_run_instance(JOBID, inp)
         arun.doit()
         sys.exit(1)
