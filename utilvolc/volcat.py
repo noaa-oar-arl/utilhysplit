@@ -227,6 +227,7 @@ def regrid_volcat(das, cdump):
     dnew.attrs.update({'Regrid Method': 'remap_nearest'})
     return dnew
 
+
 def regrid_volcat2(das, cdump):
     """
     Regridding with monet.remap_xesmf
@@ -433,9 +434,8 @@ def average_volcat(das, cdump, skipna=False, convert_nans=False):
     return avgmass, maxhgt
 
 
-
-def get_volcat_name_df(tdir, 
-                       daterange=None, 
+def get_volcat_name_df(tdir,
+                       daterange=None,
                        vid=None,
                        fid=None,
                        include_last=False):
@@ -446,29 +446,32 @@ def get_volcat_name_df(tdir,
     tlist = find_volcat(tdir, vid=None, daterange=None, return_val=2)
     vlist = [x.vhash for x in tlist]
     temp = pd.DataFrame(vlist)
-    if isinstance(daterange, (list,np.ndarray)):
-        temp = temp[temp['edate'] >= daterange[0]]  
+    if isinstance(daterange, (list, np.ndarray)):
+        temp = temp[temp['edate'] >= daterange[0]]
         if include_last:
-            temp = temp[temp['edate'] <= daterange[1]]  
+            temp = temp[temp['edate'] <= daterange[1]]
         else:
-            temp = temp[temp['edate'] < daterange[1]]  
+            temp = temp[temp['edate'] < daterange[1]]
     if vid:
-        temp = temp[temp['volcano id']==vid]
+        temp = temp[temp['volcano id'] == vid]
     if fid:
-        temp = temp[temp['fid']==fid]
+        temp = temp[temp['fid'] == fid]
 
     if 'fid' in temp.columns:
-        temp = temp.sort_values(['volcano id','fid','edate'],axis=0)
+        temp = temp.sort_values(['volcano id', 'fid', 'edate'], axis=0)
     else:
-        temp = temp.sort_values(['volcano id','edate'],axis=0)
+        temp = temp.sort_values(['volcano id', 'edate'], axis=0)
     return temp
 
 # two json files.
-# the first one 
+# the first one
+
+
 def read_event_summary():
     # list of all active eruptions in the satellite image.
     # Return dataframe made from dictionary in the event summary.
     return df
+
 
 def summarize_files(volcat_event_df):
     """
@@ -478,6 +481,7 @@ def summarize_files(volcat_event_df):
     # return volcano id's.
     return -1
 
+
 def choose_files(volcat_event_df, vid, frequency=10):
     """
     volcat_event_df with columns specified by VolcatName dictionary.
@@ -486,18 +490,16 @@ def choose_files(volcat_event_df, vid, frequency=10):
     return -1
 
 
-
-
-def get_volcat_list(tdir, 
-                    daterange=None, 
-                    vid=None, 
+def get_volcat_list(tdir,
+                    daterange=None,
+                    vid=None,
                     fid=None,
-                    flist=None, 
-                    return_val=2, 
-                    correct_parallax=True, 
-                    mask_and_scale=True, 
-                    decode_times=True, 
-                    verbose=False, 
+                    flist=None,
+                    return_val=2,
+                    correct_parallax=True,
+                    mask_and_scale=True,
+                    decode_times=True,
+                    verbose=False,
                     include_last=True):
     """
     returns list of data-arrays with volcat data.
@@ -515,10 +517,10 @@ def get_volcat_list(tdir,
     das: list of datasets
     """
     if flist:
-       filnames = flist
+        filnames = flist
     else:
-       tframe = get_volcat_name_df(tdir,vid=vid,fid=fid,daterange=daterange,include_last=include_last)
-       filenames = tframe.filename.values 
+        tframe = get_volcat_name_df(tdir, vid=vid, fid=fid, daterange=daterange, include_last=include_last)
+        filenames = tframe.filename.values
     das = []
     for iii in filenames:
         # opens volcat files using volcat.open_dataset
@@ -1170,10 +1172,31 @@ def correct_pc(dset, gridspace=None):
         newrad = xr.zeros_like(effrad.isel(time=0))
     # newashdet = xr.zeros_like(ashdet.isel(time=0))
     else:
-    # TO DO: make newmass, newhgt, newrad a regular grid
-    # with spacing. 
-    # so produce a regular grid.
-        return -1
+        # AMR: Making regular grid for parallax correction
+        # Changes pushed 8/26/2021
+        # Mass, height, and effrad should all have the same lat/lon
+        # if this is not the case, need to adjust this portion of the function
+        # maybe loop through the variables to calculate max,min?
+        # NEED to make this more general, for various grid spaces
+        latmin = float(format(mass.latitude.values.min(), '.1f')) - gridspace
+        latmax = float(format(mass.latitude.values.max(), '.1f')) + gridspace
+        lonmin = float(format(mass.longitude.values.min(), '.1f')) - gridspace
+        lonmax = float(format(mass.longitude.values.max(), '.1f')) + gridspace
+        lats = np.arange(latmin, latmax, gridspace)
+        lons = np.arange(lonmin, lonmax, gridspace)
+        longitude, latitude = np.meshgrid(lons, lats)
+        latitude = np.flipud(latitude)  # Needed to flip orientation to match volcat array
+        tmp = np.zeros_like(latitude)
+        # Making zeros like arrays
+        das = xr.DataArray(data=tmp, dims=['y', 'x'], coords=dict(
+            latitude=(['y', 'x'], latitude), longitude=(['y', 'x'], longitude)))
+        newmass = das
+        newmass.attrs = mass.attrs
+        newhgt = das
+        newhgt.attrs = height.attrs
+        newrad = das
+        newrad.attrs = effrad.attrs
+        # END of Additional code - AMR
 
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
