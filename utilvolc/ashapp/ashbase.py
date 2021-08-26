@@ -94,7 +94,7 @@ class AshRun:
         met_tag = self.inp["meteorologicalData"]
         blist = [(cdumpname, source_tag, met_tag)]
         century = 100 * (int(self.inp["start_date"].year / 100))
-        cdumpxra = hysplit.combine_dataset(blist, century=century)
+        cdumpxra = hysplit.combine_dataset(blist, century=century,sample_time_stamp='start')
         return cdumpxra
 
     def inp2attr(self):
@@ -304,7 +304,7 @@ class AshRun:
         control.concgrids[0].sample_start = sample_start
 
         control.concgrids[0].interval = (self.inp['samplingIntervalHours'],0)
-        control.concgrids[0].type = -1
+        control.concgrids[0].sampletype = -1
 
 
     def compose_control(self, stage, rtype):

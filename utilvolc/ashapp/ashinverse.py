@@ -77,6 +77,8 @@ def inverse_get_suffix_list(inp, suffix_type='date',dtfmt="%m%d%H"):
     suffixhash = {}
     vres = inp['inv_vertical_resolution']
     dt = datetime.timedelta(hours=inp['timeres'])
+    if dt.seconds%3600 > 1e-8:
+       dtfmt = "%m%d%Hh%M" 
     sdate = inp['start_date']
     #edate = inp['start_date'] + datetime.timedelta(hours=inp["durationOfSimulation"])
     edate = inp['start_date'] + datetime.timedelta(hours=inp["emissionHours"])
@@ -159,7 +161,7 @@ class InverseAshRun(AshRun):
     def additional_control_setup(self, control, stage=0):
         super().additional_control_setup(control,stage=stage)
         # one hour average output every hour.
-        control.concgrids[0].sampletype = 1
+        control.concgrids[0].sampletype = -1
         control.concgrids[0].interval = (1,0)
 
     def get_cdump_xra(self):
@@ -170,9 +172,7 @@ class InverseAshRun(AshRun):
             suffix = inval[1]
             iii = inval[0] + 1
             #iii = inval[0] 
-            print('zz', suffix)
             cdumpname = self.filelocator.get_cdump_filename(stage=suffix)
-            print('zzzz', cdumpname)
             #cdumpname = "{}.{:03d}".format(
                 #self.filelocator.get_cdump_base(stage=sxuffix), iii
             #    self.filelocator.get_cdump_base(stage=suffix), iii
@@ -184,7 +184,8 @@ class InverseAshRun(AshRun):
         suffix_list = self.invs_suffix_hash.keys()
         blist = [make_tuple(x) for x in enumerate(suffix_list)]
         century = 100 * (int(self.inp["start_date"].year / 100))
-        cdumpxra = hysplit.combine_dataset(blist, century=century)
+        cdumpxra = hysplit.combine_dataset(blist, century=century,sample_time_stamp='start')
+        print('attrs', cdumpxra.attrs['time description'])
         if cdumpxra.size <= 1:
             logger.debug("ENSEMBLE xra is empty")
         else:
@@ -352,6 +353,7 @@ class InverseAshRun(AshRun):
             cxra = cxra.assign_attrs({"mult": mult})
             logger.info("writing nc file {}".format(fname))
             cxra = cxra.assign_attrs(self.inp2attr())
+            logger.debug(cxra.attrs['time description'])
             cxra.to_netcdf(fname)
             self.cxra = cxra
 

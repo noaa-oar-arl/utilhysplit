@@ -180,16 +180,20 @@ class JobSetUp:
     def add_optional_params(self,inp=None):
         # area emission is used for inverse modeling.
         self.add_input(inp,'area',default=1)
-        self.add_input(inp,'rate',default=1)
+        #self.add_input(inp,'rate',default=1)
 
     def add_inverse_params(self,inp=None):
         # time resolution for each inverse modeling run.
         # in hours. default 1 hour.
         if not inp: inp={}
+        #self.add_input(inp,'timeres',0.5)
+        #self.add_input(inp,'rate',default=2)
         self.add_input(inp,'timeres',1)
+        self.add_input(inp,'rate',default=1)
         # vertical resolution for each inverse modeling run.
         # in m. default 1000m.
         self.add_input(inp,'inv_vertical_resolution',1000)
+        #self.add_input(inp,'inv_vertical_resolution',500)
 
     def add_run_params(self, inp):
         # inputs from web form.
@@ -422,7 +426,6 @@ class JobFileNameComposer:
             if isinstance(stage,int):
                 return "{0!s}_cdump.{1:03d}".format(self.job, stage)
             elif isinstance(stage,str):
-                print('HERE ', stage)
                 return "{}_cdump.{}".format(self.job, stage)
             else:
                 return "{}_cdump.{}".format(self.job, stage)

@@ -76,7 +76,7 @@ class TrajectoryAshRun(AshRun):
         return None
 
     def add_inputs(self, inp):
-        super().__add_inputs__(inp)
+        super().add_inputs(inp)
         # if GEFS picked and trajectory then just use one member.
         # TO DO - add ensemble runs for trajectories.
         # need to figure out how to display output.
@@ -102,6 +102,11 @@ class TrajectoryAshRun(AshRun):
                     "******************************************************************************"
                 )
         return rval
+
+    def write_cxra(self):
+        # dummy function to over-ride function in parent class.
+        # could be used later if need to write a netcdf file with the data.
+        return -1
 
     def create_trajectory_plot(self,stage):
         logger.info('Creating trajectory graphics for job {}.'.format(self.JOBID))
