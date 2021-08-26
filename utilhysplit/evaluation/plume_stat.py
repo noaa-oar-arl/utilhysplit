@@ -163,6 +163,7 @@ class CalcScores:
         self.area = area
         self.verbose = verbose
 
+
         self.pm_threshold = None  # threshold from pixel matching, if any.
 
         # TO DO: Depends on input array
@@ -205,7 +206,6 @@ class CalcScores:
                     self.binxra2 = xr.where(self.xra2 > self.threshold, 1., 0.)
                 else:
                     self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
-
         self.calc_basics()
 
     def calc_accuracy_measures(self, threshold=0, exclude_zeros=True):
@@ -265,7 +265,8 @@ class CalcScores:
         tframe = pd.DataFrame.from_dict(thash)
         return tframe
 
-    def calc_basics(self, probthresh=None, clip=False,sz=1):
+
+    def calc_basics(self, probthresh=None, clip=False,sz=1, obsprob=False):
         """
         probthresh : int or float
         sz : int. neighborhood size to use for convolution. If 1 then no convolution.
@@ -274,6 +275,8 @@ class CalcScores:
         deterministic forecasts.
         This can be used for creating things like ROC diagrams.
         """
+
+
         if sz == 1:
            binxra1 = self.binxra1
            binxra2 = self.binxra2
@@ -286,7 +289,7 @@ class CalcScores:
            #if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
            #binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
            # use original observation array.
-           binxra1 = self.binxra1
+           if not obsprob: binxra1 = self.binxra1
            #   print('Setting probthresh) {}'.format(probthresh))
 
         if clip:
@@ -302,6 +305,8 @@ class CalcScores:
         if isinstance(probthresh, (int, float)):
             # convert probabilistic forecast to deterministic using threshold.
             binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
+            #binxra1 = xr.where(binxra1 >= probthresh, 1.0, 0)
+        #else:
         #else:
         #    binxra2 = self.binxra2
         # both have above threshold pixels.
@@ -334,8 +339,28 @@ class CalcScores:
             tframe['prob'] = prob
             if iii==0: rval = tframe
             else: rval = pd.concat([rval,tframe], axis=0)
+        tframe0 = self.get_contingency_table(sz=sz,probthresh=None, clip=clip, multi=False)
+        tframe =  self.table2csi(tframe0)
+        tframe['prob'] = 0
+        rval = pd.concat([rval,tframe], axis=0)
         return rval
 
+    def calc_precision_recall(self, clip=True, multi=False, problist = np.arange(0,1.05,0.05),sz=1):
+        xlist = []
+        ylist = []
+        for prob in problist:
+            #self.calc_basics(prob, clip=clip)
+            tframe0 = self.get_contingency_table(sz=sz,probthresh=prob, clip=clip, multi=False)
+            tframe =  self.table2csi(tframe0)
+            ylist.append(tframe['precision'].values[0])
+            xlist.append(tframe['POD'].values[0])
+        baseline = tframe['baseline']
+        ylist2 = ylist.copy()
+        xlist2 = xlist.copy()
+        ylist2.reverse()
+        xlist2.reverse()
+        area = scipy.integrate.trapz(y=ylist2, x=xlist2)
+        return xlist, ylist, baseline,area
 
     def calc_roc(self, clip=True, multi=False, problist = np.arange(0.05,1,0.10),sz=1):
         """
@@ -399,8 +424,9 @@ class CalcScores:
 
         total = aval+cval+bval+dval
         total2 = self.arr3.shape[0]*self.arr3.shape[1]
-        if int(total) != int(total2):
-           print('WARNING: error in get_contingency_table check')
+        if np.abs(total - total2) > 0.0001:
+           print('WARNING: error in get_contingency_table check {} {} {}'.format(total,total2,total-total2))
+           print('a:{} b:{} c:{} d:{}'.format(aval,bval,cval,dval))
 
         if verbose:
             print('a(hits) forecast yes, obs yes : {}'.format(aval))
@@ -443,7 +469,19 @@ class CalcScores:
 
 
     def table2csi(self, tframe):
-        
+        def precision(row):
+            if row['a'] == 0 and row['b'] ==0:
+               return 0
+            else:
+               return row['a']/(row['a']+row['b'])
+
+
+        def pod(row):
+            if row['a'] == 0 and row['c'] ==0:
+               return 0
+            else:
+               return row['a']/(row['a']+row['c'])
+
         def far(row):
             # if probability threshold is high then no model data
             # may meet the criteria (e.g. 80% may never all agree).
@@ -462,12 +500,20 @@ class CalcScores:
         # false alarm ratio (p 310 Wilks) b/(a+b)
         # proportion of positive forecasts which were wrong.
         tframe['FAR'] = tframe.apply(lambda row: far(row),axis=1)
+        tframe['POD'] = tframe.apply(lambda row: pod(row),axis=1)
         tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
-        tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
+        #tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
         tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'], axis=1)
         tframe['aref'] = tframe.apply(lambda row: (row['a'] + row['b'])*(row['a']+row['c'])/row['N'], axis=1)
         tframe['GSS'] = tframe.apply(lambda row: (row['a'] - row['aref']) /
                                      (row['a'] - row['aref'] + row['b'] + row['c']), axis=1)
+        tframe['area_fc'] = tframe.apply(lambda row: row['a'] + row['b'], axis=1)
+        tframe['area_obs'] = tframe.apply(lambda row: row['a'] + row['c'], axis=1)
+        tframe['area_clear_obs'] = tframe.apply(lambda row: row['b'] + row['d'], axis=1)
+        tframe['area_clear_fc'] = tframe.apply(lambda row: row['c'] + row['d'], axis=1)
+        tframe['precision'] = tframe.apply(lambda row: precision(row),axis=1)
+        # this is baseline value for the precision-recall curve.
+        tframe['baseline'] = tframe.apply(lambda row: (row['a'] + row['c'])/(row['a']+row['c']+row['b']+row['d']), axis=1)
         return tframe
 
     def calc_csi(self, verbose=False):
@@ -600,8 +646,11 @@ class CalcScores:
         # measure of frequency bias
         # fss will asymptote at this value as neighborhood size
         # approaches domain size.
-        afss = 2*fobs*fmod/(fobs**2+fmod**2)
-
+        try:
+            afss = 2*fobs*fmod/(fobs**2+fmod**2)
+        except:
+            print('afss failed', fobs, fmod)
+            afss = 0
         # loop for the convolutions
         for sz in self.szra:
             if sz == 1:
@@ -795,14 +844,14 @@ def calc_weightsPC(xra, scores):
     xraprob = xra2.sum(dim='source') / sum(W)
     return xraprob
 
-def plot_probthresh(tframe, ax=None,clr='--ko',label=''):
+def plot_probthresh(tframe, ax=None,clr='--ko',label='',plotprob=False):
     if not ax:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
     ax2 = ax.twinx()
     xval = tframe['probthresh']
-    clrs = ['-r.','-k.','-g.','-c.','-b.']
-    for iii, yval in enumerate(['POD','FAR','CSI']):
+    clrs = ['-r.','-k.','-g.','-b.','-c.']
+    for iii, yval in enumerate(['POD','FAR','CSI','F']):
         ax.plot(xval,tframe[yval],clrs[iii],label=yval)
     ax2.plot(xval,tframe['B'],'-c.',label='Bias')
     #ax.plot(xlist, ylist, clr, label=label)
@@ -816,6 +865,17 @@ def plot_probthresh(tframe, ax=None,clr='--ko',label=''):
     ax.set_ylabel('POD, FAR, CSI')
     ax2.set_ylabel('Bias')
     ax2.plot([0,1],[1,1],'-k',LineWidth=4,alpha=0.3)
+    prob = tframe[tframe['probthresh'].isnull()].reset_index()
+
+    # Not sure what the interpretation of this should be?
+    if not prob.empty and plotprob:
+        for iii, yval in enumerate(['POD','FAR','CSI']):
+            yvv = [prob[yval],prob[yval]]
+            xvv = [xval.values[0], xval.values[-2]]
+            ax.plot(xvv,yvv,clrs[iii].replace('.','').replace('-','--'),label=yval)
+        yvv = [prob['B'],prob['B']]
+        ax2.plot(xvv,yvv,'--c',label='Bias')
+           
     return ax
 
 def plot_roc(xlist, ylist, ax=None,clr='--ko',label=''):
@@ -826,3 +886,13 @@ def plot_roc(xlist, ylist, ax=None,clr='--ko',label=''):
     ax.plot([0, 1], [0, 1], '-b')
     ax.set_xlabel('False Alarm Rate')
     ax.set_ylabel('Hit Rate')
+
+def plot_precision_recall(xlist, ylist, baseline, ax=None,clr='--ko',label=''):
+    if not ax:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+    ax.plot(xlist, ylist, clr, label=label)
+    ax.plot(xlist[0],xlist[-1], [baseline,baseline], clr.replace('o',''), LineWidth=3, alpha=0.5)
+    #ax.plot([0, 1], [0, 1], '-b')
+    ax.set_ylabel('Precision $p(o_1|y_1)$')
+    ax.set_xlabel('POD $p(y_1|o_1)$')
