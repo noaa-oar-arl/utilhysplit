@@ -310,7 +310,7 @@ class MakeNetcdf:
         xra2.attrs['from_file'] = xra1.attrs['dataset_name']
         return xra2
 
-    def calc_stats(self, ensdir, volcdir, statdir, threshold, deltaz=1000., write=False):
+    def calc_stats(self, ensdir, volcdir, statdir, threshold, deltaz=1000., namestr='', write=False):
         """ Calculates Brier Scores and Pearson Correlations for each ensemble
         member. Must convert concentration to mass loading using deltaz
         value and summing along z axis for comparison to VOLCAT data.
@@ -323,6 +323,7 @@ class MakeNetcdf:
         threshold: list of floats (thresholds to calculate scores for)
         dimension: (string) dimension name to calculate statistics (source or ens)
         deltaz: z-axis interval size in meters (float) default: 1000.0 meters
+        namestr: string in name for particular file
         write: (boolean) whether or not to write netcdf file
         Outputs:
         If write = True, returns stats netcdf file
@@ -331,7 +332,7 @@ class MakeNetcdf:
         from utilhysplit.evaluation import plume_stat as ps
         import numpy as np
 
-        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+        ensfile = 'ensemble_DIonly_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'.nc'
         volcfile = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
 
         hxr = xr.open_dataset(ensdir+ensfile)
@@ -345,7 +346,7 @@ class MakeNetcdf:
         # Creating dummy xarray for merging below
         data = np.zeros((numfiles))
         statsxr = xr.DataArray(name='dummy', data=data,
-                               dims=source, coords=[hxr2.source.values])
+                               dims='source', coords=[hxr2.source.values])
         # Calculations for various thresholds
         threshattr = []
         t = 0
@@ -418,7 +419,7 @@ class MakeNetcdf:
 
         if write:
             # Removing and rewriting stats netcdf file
-            statfile = self.volcname+'_statistics_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
+            statfile = self.volcname+'_statistics_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'.nc'
             if os.path.exists(statdir+statfile):
                 os.remove(statdir+statfile)
             # Creating netcdf file
