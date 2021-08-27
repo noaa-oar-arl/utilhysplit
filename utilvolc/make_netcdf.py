@@ -332,7 +332,7 @@ class MakeNetcdf:
         from utilhysplit.evaluation import plume_stat as ps
         import numpy as np
 
-        ensfile = 'ensemble_DIonly_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'.nc'
+        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'.nc'
         volcfile = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
 
         hxr = xr.open_dataset(ensdir+ensfile)
