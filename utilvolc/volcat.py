@@ -69,11 +69,12 @@ Class: VolcatName
 """
 
 
-def open_dataset(fname,
+def open_dataset(fname, gridspace=None,
                  correct_parallax=False,
                  mask_and_scale=True, decode_times=False):
     """
     Opens single VOLCAT file
+    gridspace: only necessary if doing parallax correction
     mask_and_scale : needs to be set to True for Bezymianny data.
     decode_times   : needs to be True for some of the hdf data.
 
@@ -100,7 +101,10 @@ def open_dataset(fname,
         dset = _get_time(dset)
     if 'pc_latitude' in dset.data_vars and correct_parallax:
         print('correcting pc')
-        dset = correct_pc(dset)
+        if not gridspace:
+            dset = correct_pc(dset)
+        else:
+            dset = correct_pc(dset, gridspace=gridspace)
         dset.attrs.update({'parallax corrected coordinates': 'True'})
     elif 'pc_latitude' not in dset.data_vars and correct_parallax:
         print('WARNING: cannot correct parallax. Data not found in file')
@@ -571,7 +575,7 @@ def write_regridded_files(cdump, tdir, wdir,
 
 def write_parallax_corrected_files(tdir, wdir, vid=None,
                                    daterange=None, verbose=False,
-                                   flist=None,
+                                   flist=None, gridspace=None,
                                    tag='pc'):
     """
     tdir : str : location of volcat files.
@@ -579,6 +583,8 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
     vid : volcano id : if None will find all
     daterange : [datetime, datetime] : if None will find all.
     verbose: boolean
+    flist: list of files?
+    gridspace: float : grid size of pc array
     tag: used to create filename of new file.
 
     creates netcdf files with parallax corrected values.
@@ -605,7 +611,7 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
         else:
             if verbose:
                 print('writing {} to {}'.format(new_fname, wdir))
-            dset = open_dataset(os.path.join(tdir, fname), correct_parallax=True)
+            dset = open_dataset(os.path.join(tdir, fname), gridspace=gridspace, correct_parallax=True)
             dset.to_netcdf(os.path.join(wdir, new_fname))
 
 
@@ -1160,6 +1166,7 @@ def correct_pc(dset, gridspace=None):
     to parallax corrected positions.
     """
     # 06/02/2021 amc commented out use of the ashdet field.
+    # AMR: Added ability to grid parallax corrected data to regular grid
 
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
@@ -1178,18 +1185,18 @@ def correct_pc(dset, gridspace=None):
         # if this is not the case, need to adjust this portion of the function
         # maybe loop through the variables to calculate max,min?
         # NEED to make this more general, for various grid spaces
-        latmin = float(format(mass.latitude.values.min(), '.1f')) - gridspace
-        latmax = float(format(mass.latitude.values.max(), '.1f')) + gridspace
-        lonmin = float(format(mass.longitude.values.min(), '.1f')) - gridspace
-        lonmax = float(format(mass.longitude.values.max(), '.1f')) + gridspace
+        latmin = round(mass.latitude.values.min())
+        latmax = round(mass.latitude.values.max()) + 1.
+        lonmin = round(mass.longitude.values.min())
+        lonmax = round(mass.longitude.values.max()) + 1.
         lats = np.arange(latmin, latmax, gridspace)
         lons = np.arange(lonmin, lonmax, gridspace)
         longitude, latitude = np.meshgrid(lons, lats)
-        latitude = np.flipud(latitude)  # Needed to flip orientation to match volcat array
+        # latitude = np.flipud(latitude)  # Needed to flip orientation to match volcat array
         tmp = np.zeros_like(latitude)
         # Making zeros like arrays
         das = xr.DataArray(data=tmp, dims=['y', 'x'], coords=dict(
-            latitude=(['y', 'x'], latitude), longitude=(['y', 'x'], longitude)))
+            latitude=(['x', 'y'], latitude), longitude=(['x', 'y'], longitude)))
         newmass = das
         newmass.attrs = mass.attrs
         newhgt = das
