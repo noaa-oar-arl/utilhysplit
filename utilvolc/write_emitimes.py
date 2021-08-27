@@ -266,7 +266,7 @@ class InsertVolcat:
 
         return lat, lon, hgt, mass, area
 
-    def write_emit(self, heat='0.00e+00', layer=0., correct_parallax=True, decode_times=False):
+    def write_emit(self, heat='0.00e+00', layer=0., centered=False, correct_parallax=True, decode_times=False):
         """ Writes emitimes file from volcat data.
         Inputs are created using self.make_1D()
         Uses instance variables: date_time, duration, par,
@@ -278,6 +278,7 @@ class InsertVolcat:
         area: 1D array of area
         heat: (string) default=0.00e+00
         layer: (float) height in meters of ash layer. A value of 0. means no layer, ash inserted at observed VOLCAT height.
+        centered: (boolean) center ash layer on volcat height
         correct_parallax: (boolean) use parallax corrected lat lon values
 
         Output:
@@ -299,6 +300,9 @@ class InsertVolcat:
         if layer > 0.:
             filename = 'VOLCAT_'+match+'_'+str(layer)+'mlayer_par'+str(self.pollnum)
             records = records * 2
+            # AMR: 8/23/2021 - added center flag, and writing centered layer capability
+            if centered:
+                filename = 'VOLCAT_'+match+'_'+str(layer)+'mlayer_centered_par'+str(self.pollnum)
         f = open(self.wdir+'DataInsertion/' + filename, 'w')
         f.write('YYYY MM DD HH DURATION(HHMM) #RECORDS \n')
         f.write('YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE(g/hr) AREA(m2) HEAT(w) \n')
@@ -308,7 +312,14 @@ class InsertVolcat:
             i = 0
             while i < len(self.pollpercents):
                 # AMR: 8/3/2021 - added this for layer flag
-                if layer > 0.:
+                # AMR: 8/23/2021 - added centered flag
+                if layer > 0. and centered:
+                    layhalf = float(layer) / 2.
+                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
+                        self.date_time, self.duration, lat[h], lon[h], hgt[h]-float(layhalf), mass[h]*const*self.pollpercents[i], area[h], heat))
+                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
+                        self.date_time, self.duration, lat[h], lon[h], hgt[h]+float(layhalf), 0.0, 0.0, heat))
+                elif layer > 0. and not centered:
                     f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
                         self.date_time, self.duration, lat[h], lon[h], hgt[h]-float(layer), mass[h]*const*self.pollpercents[i], area[h], heat))
                     f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
