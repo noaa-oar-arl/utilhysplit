@@ -1189,14 +1189,14 @@ def correct_pc(dset, gridspace=None):
         latmax = round(mass.latitude.values.max()) + 1.
         lonmin = round(mass.longitude.values.min())
         lonmax = round(mass.longitude.values.max()) + 1.
-        lats = np.arange(latmin, latmax, gridspace)
+        #lats = np.arange(latmin, latmax, gridspace)
+        lats = np.arange(latmax, latmin, gridspace*-1)
         lons = np.arange(lonmin, lonmax, gridspace)
         longitude, latitude = np.meshgrid(lons, lats)
-        # latitude = np.flipud(latitude)  # Needed to flip orientation to match volcat array
         tmp = np.zeros_like(latitude)
         # Making zeros like arrays
         das = xr.DataArray(data=tmp, dims=['y', 'x'], coords=dict(
-            latitude=(['x', 'y'], latitude), longitude=(['x', 'y'], longitude)))
+            latitude=(['y', 'x'], latitude), longitude=(['y', 'x'], longitude)))
         newmass = das
         newmass.attrs = mass.attrs
         newhgt = das
@@ -1214,7 +1214,7 @@ def correct_pc(dset, gridspace=None):
     indexlist = []
     prev_point = 0
     for point in tlist:
-        iii = mass.monet.nearest_ij(lat=point[1], lon=point[0])
+        iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
         if iii in indexlist:
             print('WARNING: correct_pc function: some values mapped to same point')
             print(iii, point)
