@@ -187,6 +187,17 @@ class ParametersIn:
 
 
 
+def read_emis_df(savename):
+    """
+    reads dataframe saved by the make_outdat_df method.
+    index is height
+    columns are date
+    values are emissions.
+    """
+    emisdf = pd.read_csv(savename,index_col=0,header=1)
+    return emisdf.dropna()
+
+
 class InverseOutDat:
 
     def __init__(self,wdir,fname='out.dat',fname2='out2.dat'):
@@ -491,7 +502,7 @@ class InverseAshEns:
             Helper.move(out_name2, new_name2[iii]) 
             Helper.move('fort.188', 'fort.188.{}'.format(self.taglist[iii])) 
                    
-    def plot_outdat(self, eii=None):
+    def plot_outdat(self, eii=None,name=None):
         ilist = self.read_outdat(eii)
         for iii, io in enumerate(ilist):
             if not eii: nnn=iii
@@ -499,7 +510,7 @@ class InverseAshEns:
                 if (isinstance(eii,int)): nnn=eii
                 else: nnn=eii[iii]
             print(self.taglist[nnn])
-            df2 = io.get_conc()
+            df2 = io.get_conc(name=name)
             #df = io.get_emis()
             try: 
                 ax = io.plot_conc()
@@ -515,6 +526,7 @@ class InverseAshEns:
         """
         eii : int or list of ints.
         """
+        # ensemble 
         name1,name2 = self.make_tcm_names()
         ilist = []
         if isinstance(eii,int): 
@@ -522,6 +534,7 @@ class InverseAshEns:
         for iii, outdat in enumerate(zip(name1,name2)):
             if not eii or (iii in eii):  
                 if eii: print(outdat)
+                #print(self.subdir, outdat[0])
                 io = InverseOutDat(self.subdir,outdat[0],outdat[1])
                 ilist.append(io)
         return ilist
@@ -568,12 +581,20 @@ class InverseAshEns:
             make_setup(self.wdir,'SETUP.default',self.subdir,suffix=tag)
             Helper.copy(os.path.join(self.wdir,'ASCDATA.CFG'), os.path.join(self.subdir,'ASCDATA.CFG')) 
 
+    def save_emis(self,savename,eii=None,name=None):
+        ilist = self.read_outdat(eii)
+        for iii,io in enumerate(ilist):
+            df = io.get_emis(name=name)
+            savename = os.path.join(self.subdir, savename)
+            self.invlist[0].make_outdat_df(df,savename=savename)
         
-    def plot_outdat_ts(self, eii=None,unit='kg/s',clr=None):
+    def plot_outdat_ts(self, eii=None,unit='kg/s',clr=None, profile=False, ax=None,name=None):
         # Ensemble.
         sns.set_style('whitegrid')
-        fig = plt.figure(1)
-        ax = fig.add_subplot(1,1,1)
+        if not ax:
+            fig = plt.figure(1)
+            ax = fig.add_subplot(1,1,1)
+        # list of InverseOutDat objects
         ilist = self.read_outdat(eii)
         if not clr:
            clrlist = ['--k','--r','--b','--g','--c','--y','--m']
@@ -581,11 +602,12 @@ class InverseAshEns:
            clrlist = [clr]
         jjj=0
         for iii,io in enumerate(ilist):
-            df = io.get_emis()
-            self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clrlist[jjj],unit=unit)
+            df = io.get_emis(name=name)
+            if profile: ax, df = self.invlist[0].plot_outdat_profile(df,ax=ax,clr=clrlist[jjj],unit=unit)
+            else: ax, df = self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clrlist[jjj],unit=unit)
             jjj+=1
             if jjj >= len(clrlist): jjj=0
-        fig.autofmt_xdate()
+        #fig.autofmt_xdate()
         #plt.show()
 
     def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
@@ -607,21 +629,26 @@ class InverseAshEns:
               fid.write('Columns Removed')    
 
 
-    def prepare_one_time(self,daterange):
+    def prepare_one_time(self,daterange,st='start'):
         for iii, hrun in enumerate(self.invlist):
             try:
-                hrun.prepare_one_time(daterange)    
+                hrun.prepare_one_time(daterange,st=st)    
             except:
                 print('ERROR in preparing time {}'.format(self.taglist[iii]))
 
     def compare_plotsA(self,daterange=None,tii=None,zii=None,vloc=None):
+        clist = []
         for iii, hrun in enumerate(self.invlist):
             print(tii, self.taglist[iii])
             if not daterange: daterange = [datetime.datetime.now(), datetime.datetime.now()]
-            hrun.compare_plotsA(daterange=daterange, tii=tii,zii=zii)
+            csum = hrun.compare_plotsA(daterange=daterange, tii=tii,zii=zii)
+            clist.append(csum)
             if vloc:
                plt.plot(vloc[0],vloc[1], 'y^', MarkerSize=20)
             plt.show()
+        #if len(clist)>1:
+        #   cxra = xr.concat(clist)
+        return clist 
 
 
 class InverseAsh:
@@ -1016,7 +1043,7 @@ class InverseAsh:
         return vals
 
 
-    def make_outdat_df(self,dfdat):
+    def make_outdat_df(self,dfdat,savename=None):
         #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
         vals = self.make_outdat(dfdat)
         vals = list(zip(*vals))
@@ -1026,6 +1053,9 @@ class InverseAsh:
         emit = np.array(vals[2])
         dfout = pd.DataFrame(zip(time,ht,emit))
         dfout = dfout.pivot(columns=0,index=1)
+        if savename: 
+           print('saving to ', savename)
+           dfout.to_csv(savename)
         return dfout
 
     def plot_outdat(self,vals,
@@ -1061,6 +1091,29 @@ class InverseAsh:
         cbar.ax.set_ylabel(unit)
         fig.autofmt_xdate()
 
+    def plot_outdat_profile(self,dfdat,
+                            fignum=1,
+                            unit='kg',
+                            ax=None,
+                            clr='--ko'):
+        if not ax:
+            sns.set()
+            sns.set_style('whitegrid')
+            fig = plt.figure(fignum, figsize=(10,5))
+            ax = fig.add_subplot(1,1,1)
+        df = self.make_outdat_df(dfdat)     
+        ts = df.sum(axis=1)
+        
+        sns.set()
+        yval = ts.values * 1 / 1e12
+        ax.plot(yval, ts.index.values/1000.0,  clr)
+        ax.set_xlabel('Tg of mass emitted',fontsize=15)
+        ax.set_ylabel('Height (km)',fontsize=15)
+        totalmass = yval.sum()
+        print('total {} Tg'.format(totalmass))
+        return ax, df
+
+
     def plot_outdat_ts(self,dfdat,log=False,fignum=1,unit='kg/s',
                        ax=None,clr='--ko'):
         # plots time series of MER. summed along column.
@@ -1077,10 +1130,10 @@ class InverseAsh:
            yval = ts.values/3.6e6
         elif unit == 'g/h':
            yval = ts.values
-        plt.plot([x[1] for x in ts.index.values], yval, clr)
+        ax.plot([x[1] for x in ts.index.values], yval, clr)
         #fig.autofmt_xdate()
-        ax.set_ylabel('MER {}'.format(unit))
-        #return ax, df
+        ax.set_ylabel('MER {}'.format(unit),fontsize=15)
+        return ax, df
 
     def plot_out2dat_times(self,df2,cmap='viridis'):
         return -1 
@@ -1189,9 +1242,9 @@ class InverseAsh:
             csum = cdump.sum(dim='ens')
         else:
             csum = cdump.isel(ens=zii)
-            print(csum.ens.values)
-            print(self.sourcehash[str(csum.ens.values)]) 
-        print(cdump.time)
+            #print(csum.ens.values)
+            #print(self.sourcehash[str(csum.ens.values)]) 
+        #print(cdump.time)
         #print(csum.coords)
         #volcat.plot.pcolormesh(x='longitude',y='latitude',levels=levels,ax=ax1)
         #cdump.sum(dim='ens').plot.contour(x='longitude',y='latitude',ax=ax2)
@@ -1210,7 +1263,8 @@ class InverseAsh:
         #cb = plt.contour(volcat.x, volcat.y, vals.fillna(0),cmap='viridis',levels=[0,1,10,100])
         plt.colorbar(cbm)
         plt.tight_layout()
-        return ax1
+        #return csum.copy()
+        return csum.copy()
 
 
     def get_norm(self,model,r2):
@@ -1404,7 +1458,7 @@ class InverseAsh:
             self.cdump_hash[key] = c2
             self.volcat_hash[key] = v2
 
-    def prepare_one_time(self, daterange, das=None, htoptions=0):
+    def prepare_one_time(self, daterange, das=None, htoptions=0, st='start'):
         # currently must coarsen all data at the same time.
         if self.coarsen: print('Warning: Adding new data after some data has already been coarsened.')
         vdir = self.vdir
@@ -1415,6 +1469,8 @@ class InverseAsh:
            model_tii = 0
         elif self.set_sampling_time() == 'end':
            model_tii = 1
+        if 'st' == 'end': model_tii=1
+        else: model_tii=0
         tii = self.time_index(daterange[model_tii])
         if not isinstance(tii,int): 
           print('No time found for {}'.format(daterange[0]))
@@ -1656,3 +1712,57 @@ def make_efile(vals,vlat,vlon,
 
 
 
+def plot_outdat_ts_function(dfdat,log=False,fignum=1,unit='kg/s',
+                   ax=None,clr='--ko'):
+    # plots time series of MER. summed along column.
+    #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+    if not ax:
+        sns.set()
+        sns.set_style('whitegrid')
+        fig = plt.figure(fignum, figsize=(10,5))
+        ax = fig.add_subplot(1,1,1)
+    if isinstance(dfdat,str):
+       df = pd.read_csv(dfdat,index_col=0,header=1)
+       df = df.dropna()
+    else:
+       df = dfdat
+    sns.set()
+    ts = df.sum()
+    if unit == 'kg/s':
+       yval = ts.values/3.6e6
+    elif unit == 'g/h':
+       yval = ts.values
+    xval = [pd.to_datetime(x) for x in ts.index.values]
+    #ax.plot([x[0] for x in ts.index.values], yval, clr)
+    ax.plot(xval, yval, clr)
+    #fig.autofmt_xdate()
+    ax.set_ylabel('MER {}'.format(unit),fontsize=15)
+    return ax, df
+
+def plot_outdat_profile_function(dfdat,
+                        fignum=1,
+                        unit='kg',
+                        ax=None,
+                        clr='--ko',
+                        label=None):
+    if not ax:
+        sns.set()
+        sns.set_style('whitegrid')
+        fig = plt.figure(fignum, figsize=(10,5))
+        ax = fig.add_subplot(1,1,1)
+
+    if isinstance(dfdat,str):
+       df = pd.read_csv(dfdat,index_col=0,header=1)
+       df = df.dropna()
+    else:
+       df = dfdat
+    
+    ts = df.sum(axis=1)
+    sns.set()
+    yval = ts.values * 1 / 1e12
+    ax.plot(yval, ts.index.values/1000.0,  clr,label=label)
+    ax.set_xlabel('Tg of mass emitted',fontsize=15)
+    ax.set_ylabel('Height (km)',fontsize=15)
+    totalmass = yval.sum()
+    print('total {} Tg'.format(totalmass))
+    return ax, totalmass
