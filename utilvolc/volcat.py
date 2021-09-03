@@ -578,12 +578,14 @@ def write_parallax_corrected_files(tdir, wdir, vid=None,
                                    flist=None, gridspace=None,
                                    tag='pc'):
     """
+    ***If flist is not specified, this does not work. There are folders in the tdir and they
+    cause a problem with the function. Flist must not include directories, just file names***
     tdir : str : location of volcat files.
     wdir : str : location to write new files
     vid : volcano id : if None will find all
     daterange : [datetime, datetime] : if None will find all.
     verbose: boolean
-    flist: list of files?
+    flist: list of files? ***NEED TO SPECIFY FILE LIST***
     gridspace: float : grid size of pc array
     tag: used to create filename of new file.
 
@@ -1220,10 +1222,21 @@ def correct_pc(dset, gridspace=None):
             print(iii, point)
             vpi = find_iii(indexlist, iii)
             print(tlist[vpi])
+            #AMR: 9/1/2021
+            # Need to add mass from values mapped to same grid point (conserve mass)
+            # Take max height from values mappend to same grid point (conserve top height)
+            totmass = tlist[vpi][2]+point[2]
+            maxhgt = np.max([tlist[vpi][3], point[3]])
+            # Reassigning values in point array for mass and height
+            point[2] = totmass
+            point[3] = maxhgt
+            print('Total mass, max height: ', point)
+            # End of AMR additions
         newmass = xr.where((newmass.coords['x'] == iii[0]) & (newmass.coords['y'] == iii[1]),
                            point[2], newmass)
         newhgt = xr.where((newhgt.coords['x'] == iii[0]) & (newhgt.coords['y'] == iii[1]),
                           point[3], newhgt)
+        # AMR: Need to adjust this for effective radius - not currently in tlist, and therefore not in iii
         newrad = xr.where((newrad.coords['x'] == iii[0]) & (newrad.coords['y'] == iii[1]),
                           point[3], newrad)
         # keeps track of new indices of lat lon points.
