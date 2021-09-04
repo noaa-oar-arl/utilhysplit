@@ -32,6 +32,46 @@ def check_type_basic(check):
 
 #def check_type_iterable(check):
 
+def stack_psizes(xrlist, psizelist):
+    """
+    xrlist : list of data arrays.
+    psizelist : list of particle sizes
+    lists need to be the same length.
+    Returns:
+    combined xarray with new ensemble
+    dimension which is a tuple of (ens, psize).
+
+    """
+    #xrlist = []
+    xnewlist = []
+    # get list of all xarrays.
+    #for xname in namelist[1:]:
+    #    xrlist.append(xr.open_dataset(xname))
+
+    # get xbig which is xarray which has domain that 
+    # encompasses the rest of the domains.
+    xbig,xtemp = xr.align(xrlist[0],xrlist[1])
+    for iii, xrr in enumerate(xrlist):
+        xbig,xtemp = xr.align(xbig,xrr)
+
+    for iii, xrr in enumerate(xrlist):
+        if 'source' in xrr.coords: xrr = xrr.isel(source=0)
+        # align to largest domain
+        xbig,xnew = xr.align(xbig,xrr)
+        # add the psize dimension
+        print(psizelist[iii])
+        #xnew = xnew.p060
+        print(type(xnew))
+
+        xnew = xnew.assign_coords(psize=psizelist[iii]).expand_dims('psize')
+        # stack the peize with the ensemble name.
+        xnew = xnew.rename({'ens':'ens1'})
+        xnew = xnew.stack(ens=('ens1','psize'))
+        xnewlist.append(xnew)
+    # concatenate along the ensemble dimension. 
+    xens = xr.concat(xnewlist, dim='ens')
+    return xens
+
 def update_attrs_for_netcdf(dset, datefmt="%Y%m%d %H:%M"):
     for attr in dset.attrs:
         # if attribute is int, float, str then pass.
@@ -315,6 +355,7 @@ def create_runtag(tag,tii,remove_cols, remove_rows, remove_sources,remove_ncs=0)
     return rval
 
 
+
 class InverseAshEns:
     """
     Inverse runs from a meteorological ensemble.
@@ -341,6 +382,11 @@ class InverseAshEns:
                                            configdir,configfile,
                                            ensdim=ensdim,
                                            verbose=verbose))
+
+    def add_config_info(self,configdir,configfile):    
+        for inv in self.invlist:
+            inv.add_config_info(configdir,configfile)
+
     def set_directory(self,wdir,
                       execdir,
                       datadir,
@@ -650,6 +696,34 @@ class InverseAshEns:
         #   cxra = xr.concat(clist)
         return clist 
 
+class InverseAshPartEns(InverseAshEns):
+    """
+    Inverse runs from a meteorological ensemble.
+    """
+    def __init__(self, tdirlist, fnamelist,
+                 vdir,vid,
+                 configdir='./',configfile=None,
+                 ensdim='ens',
+                 taglist = ['P'],
+                 verbose=False):
+        self.invlist = []  # list of  InverseAsh objects
+        self.fnamelist = fnamelist
+        self.tcm_names = [] # list of names of tcm files written.
+        self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
+        self.vdir = vdir
+
+        self.taglist = taglist 
+
+        self.invlist.append(InverseAshPart(tdirlist,fnamelist,vdir,vid,
+                                      configdir,configfile,
+                                      ensdim=ensdim,
+                                      verbose=verbose))
+
+        #for hruns in zip(tdirlist, fnamelist):
+        #    self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,
+        #                                   configdir,configfile,
+        #                                   ensdim=ensdim,
+        #                                   verbose=verbose))
 
 class InverseAsh:
 
@@ -1023,6 +1097,8 @@ class InverseAsh:
 
     def make_outdat(self,dfdat):
         """
+        make_outdat for InverseAsh class.
+        There is a duplicate method in the InverseAshPart class.
         dfdat : pandas dataframe output by InverseOutDat class get_emis method.
         Returns
         vals : tuple (date, height, emission mass)
@@ -1045,14 +1121,26 @@ class InverseAsh:
 
     def make_outdat_df(self,dfdat,savename=None):
         #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+        # this is a list of tuples (source tag), value from emissions
         vals = self.make_outdat(dfdat)
         vals = list(zip(*vals))
         ht = vals[1]
         time = vals[0]
         #emit = np.array(vals[2])/1.0e3/3600.0 
         emit = np.array(vals[2])
-        dfout = pd.DataFrame(zip(time,ht,emit))
-        dfout = dfout.pivot(columns=0,index=1)
+ 
+        # this is for particle size. Used by the InverseAshPart class.
+        if len(vals)==4:
+           psize = vals[3]
+           data = zip(time,ht,psize,emit)
+           iii = [1,2] 
+        # this is for only height and time
+        else:
+           data = zip(time,ht,emit)
+           iii = 1
+
+        dfout = pd.DataFrame(data)
+        dfout = dfout.pivot(columns=0,index=iii)
         if savename: 
            print('saving to ', savename)
            dfout.to_csv(savename)
@@ -1242,6 +1330,7 @@ class InverseAsh:
             csum = cdump.sum(dim='ens')
         else:
             csum = cdump.isel(ens=zii)
+            print(cdump.ens.values[zii])
             #print(csum.ens.values)
             #print(self.sourcehash[str(csum.ens.values)]) 
         #print(cdump.time)
@@ -1766,3 +1855,80 @@ def plot_outdat_profile_function(dfdat,
     totalmass = yval.sum()
     print('total {} Tg'.format(totalmass))
     return ax, totalmass
+
+class InverseAshPart(InverseAsh):
+
+    def get_cdump(self, tdirlist, fnamelist, verbose, dummy):
+                 #vdir,
+                 #vid,
+                 #configdir='./',configfile=None,
+                 #ensdim='ens',
+                 #verbose=False):
+       psizelist = ['p060','p200','p500']
+       #self.invlist = []  # list of  InverseAsh objects
+       #self.fnamelist = fnamelist
+       #self.tcm_names = [] # list of names of tcm files written.
+       #self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
+       #self.vdir = vdir
+       xrlist = []
+       for fname in zip(tdirlist,fnamelist):
+           print('appending ', fname)
+           temp = xr.open_dataset(os.path.join(fname[0],fname[1]))
+           temp = temp[list(temp.data_vars.keys())[0]]
+           temp = temp.rename('pall')
+           print(temp)
+           xrlist.append(temp)
+       xrlist = xrlist
+       self.cdump = stack_psizes(xrlist,psizelist)
+
+    def make_outdat(self,dfdat):
+        """
+        makeoutdat for InverseAshPart class.
+        dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+        Returns
+        vals : tuple (date, height, emission mass, particle size)
+        """
+        # matches emissions from the out.dat file with
+        # the date and time of emission.
+        # uses the tcm_columns array which has the key
+        # and the sourehash dictionary which contains the information.
+        datelist = []
+        htlist = []
+        valra = []
+        psizera = []
+        for val in zip(self.tcm_columns,dfdat[1]):
+            shash = self.sourcehash[val[0][0]]
+            datelist.append(shash['sdate'])
+            htlist.append(shash['bottom'])
+            valra.append(val[1])
+            psizera.append(val[0][1])
+        vals =  list(zip(datelist,htlist,valra,psizera))
+        return vals
+ 
+    def plot_outdat_profile(self,dfdat,
+                            fignum=1,
+                            unit='kg',
+                            ax=None,
+                            clr='--ko'):
+        if not ax:
+            sns.set()
+            sns.set_style('whitegrid')
+            fig = plt.figure(fignum, figsize=(10,5))
+            ax = fig.add_subplot(1,1,1)
+        df = self.make_outdat_df(dfdat)     
+        df3 = df.sum(axis=1)
+        df3 = df3.reset_index()
+        df3 = df3.pivot(index=1,columns=2) 
+        
+        sns.set()
+        yval = df3.values * 1 / 1e12
+        print(yval)
+        ax.plot(yval, df3.index.values/1000.0,label='dummy')
+        ax.set_xlabel('Tg of mass emitted',fontsize=15)
+        ax.set_ylabel('Height (km)',fontsize=15)
+        totalmass = yval.sum()
+        handles,labels=ax.get_legend_handles_labels()
+        labels = ['a','b','c']
+        ax.legend(handles,labels) 
+        print('total {} Tg'.format(totalmass))
+        return ax, df3
