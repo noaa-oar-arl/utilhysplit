@@ -20,6 +20,7 @@ from utilhysplit.hysplit_gridutil import align_grids
 #from utilvolc.basic_checks import calc_grids
 from utilvolc.runhelper import Helper
 from utilvolc.ashapp.metfiles import MetFileFinder
+from utilhysplit.plotutils import colormaker
 
 def automate():
     return -1 
@@ -370,7 +371,7 @@ class InverseAshEns:
         self.tcm_names = [] # list of names of tcm files written.
         self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
         self.vdir = vdir
- 
+        self.phash=None   
         # assume strings of form NAME_gep04.nc
         try:
             self.taglist = [x[-8:-3] for x in fnamelist]
@@ -382,6 +383,9 @@ class InverseAshEns:
                                            configdir,configfile,
                                            ensdim=ensdim,
                                            verbose=verbose))
+
+    #def add_phash(self,phash=None):
+    #    self.phash=phash
 
     def add_config_info(self,configdir,configfile):    
         for inv in self.invlist:
@@ -588,6 +592,9 @@ class InverseAshEns:
     def make_emit_name(self,subdir,tag):
         return os.path.join(self.subdir, '{}_{}'.format(tag,self.emitname))
 
+    def add_phash(self,phash=None):
+        self.phash = self.invlist[0].phash
+
     def make_efile(self,vloc,emis_threshold=1e5,eii=None):
         """
         creates emit-times, CONTROL and SETUP files.
@@ -604,11 +611,13 @@ class InverseAshEns:
                continue
             vals = self.invlist[iii].make_outdat(df)
             area = self.invlist[iii].inp['area']
+            print("using particle size ", self.phash)
             efile = make_efile(vals,vlat=vloc[1], vlon=vloc[0], 
                        area=area, 
                        emis_threshold = emis_threshold, 
-                       name = emit_name)
-       
+                       name = emit_name,
+                       phash=self.phash)
+            return efile  
             inp = self.invlist[0].inp
             print(inp['meteorologicalData'])
             if 'gefs' in inp['meteorologicalData'].lower():
@@ -653,8 +662,7 @@ class InverseAshEns:
             else: ax, df = self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clrlist[jjj],unit=unit)
             jjj+=1
             if jjj >= len(clrlist): jjj=0
-        #fig.autofmt_xdate()
-        #plt.show()
+        return ax
 
     def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
                       remove_sources=None, remove_ncs=0):
@@ -675,10 +683,10 @@ class InverseAshEns:
               fid.write('Columns Removed')    
 
 
-    def prepare_one_time(self,daterange,st='start'):
+    def prepare_one_time(self,daterange,st='start',zvals=None):
         for iii, hrun in enumerate(self.invlist):
             try:
-                hrun.prepare_one_time(daterange,st=st)    
+                hrun.prepare_one_time(daterange,st=st,zvals=zvals)    
             except:
                 print('ERROR in preparing time {}'.format(self.taglist[iii]))
 
@@ -724,6 +732,9 @@ class InverseAshPartEns(InverseAshEns):
         #                                   configdir,configfile,
         #                                   ensdim=ensdim,
         #                                   verbose=verbose))
+
+    
+
 
 class InverseAsh:
 
@@ -1119,7 +1130,7 @@ class InverseAsh:
         return vals
 
 
-    def make_outdat_df(self,dfdat,savename=None):
+    def make_outdat_df(self,dfdat,savename=None,part='basic'):
         #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
         # this is a list of tuples (source tag), value from emissions
         vals = self.make_outdat(dfdat)
@@ -1133,14 +1144,25 @@ class InverseAsh:
         if len(vals)==4:
            psize = vals[3]
            data = zip(time,ht,psize,emit)
-           iii = [1,2] 
+           if part == 'index':  
+               iii = 0
+               cols=[1,2]
+           elif part == 'cols':
+               iii=1
+               cols=[0,2]
+           colnames = ['date', 'ht', 'psize', 'mass']
         # this is for only height and time
         else:
            data = zip(time,ht,emit)
            iii = 1
+           cols=0
+           colnames = ['date', 'ht', 'mass']
 
         dfout = pd.DataFrame(data)
-        dfout = dfout.pivot(columns=0,index=iii)
+        if part=='basic': 
+           dfout.columns = colnames
+           return dfout
+        dfout = dfout.pivot(columns=cols,index=iii)
         if savename: 
            print('saving to ', savename)
            dfout.to_csv(savename)
@@ -1189,7 +1211,7 @@ class InverseAsh:
             sns.set_style('whitegrid')
             fig = plt.figure(fignum, figsize=(10,5))
             ax = fig.add_subplot(1,1,1)
-        df = self.make_outdat_df(dfdat)     
+        df = self.make_outdat_df(dfdat,part='cols')     
         ts = df.sum(axis=1)
         
         sns.set()
@@ -1211,10 +1233,10 @@ class InverseAsh:
             sns.set_style('whitegrid')
             fig = plt.figure(fignum, figsize=(10,5))
             ax = fig.add_subplot(1,1,1)
-        df = self.make_outdat_df(dfdat)     
+        df = self.make_outdat_df(dfdat,part='index')     
         sns.set()
         ts = df.sum()
-        if unit == 'kg/s':
+        if unit=='kg/s':
            yval = ts.values/3.6e6
         elif unit == 'g/h':
            yval = ts.values
@@ -1547,7 +1569,8 @@ class InverseAsh:
             self.cdump_hash[key] = c2
             self.volcat_hash[key] = v2
 
-    def prepare_one_time(self, daterange, das=None, htoptions=0, st='start'):
+    def prepare_one_time(self, daterange, das=None, htoptions=0, 
+                         st='start',zvals=None):
         # currently must coarsen all data at the same time.
         if self.coarsen: print('Warning: Adding new data after some data has already been coarsened.')
         vdir = self.vdir
@@ -1564,8 +1587,9 @@ class InverseAsh:
         if not isinstance(tii,int): 
           print('No time found for {}'.format(daterange[0]))
           return None, None
-
-        cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[model_tii])) 
+        if isinstance(zvals, np.ndarray): zvals=list(zvals)
+        cdump_a = hysplit.hysp_massload(self.cdump.sel(time=daterange[model_tii]),
+                                        zvals=zvals) 
 
         if htoptions==1: cdump_b = self.cdump.sel(time=daterange[model_tii]) 
 
@@ -1740,7 +1764,8 @@ def make_efile(vals,vlat,vlon,
                emis_threshold=50,
                vres=1000, 
                name='emit.txt',
-               date_cutoff=None):
+               date_cutoff=None,
+               phash = None):
     """
     vals : output from make_outdat method in Inverse class.
     vlat : latitude of vent
@@ -1748,26 +1773,30 @@ def make_efile(vals,vlat,vlon,
     area : area to place ash over.
     emis_threshold : do not use emissions below this value.
     vres : vertical resolution. Needed to create last point in vertical line source.
+    phash : dictionary mapping the value in vals (such as 'p006', 'p200') to
+            the particle number which is an integer (1,2,3).
+
     """
     from utilhysplit import emitimes
     efile = emitimes.EmiTimes()
     duration = "0100"
-    ptime = vals[0][0]
-    numcycles = 0
+    cycle_list = [] 
+
     for iii, value in enumerate(vals):
         time = value[0]
         if date_cutoff:
            if time >= date_cutoff: break
         height = value[1]
         emis = value[2]
+        if len(value)>3: 
+           part=phash[value[3]]
+        else: part=1
         if emis < emis_threshold: emis=0
         newcycle = False
-        if iii == 0 : newcycle = True
-        elif time != ptime: newcycle =True
-        else: newcycle=False
+        if time not in cycle_list: newcycle =True
         if newcycle:
-           numcycles += 1
            efile.add_cycle(time,duration=1)
+           cycle_list.append(time)
         #if emis > emis_threshold:
         efile.add_record(time,
                          duration=duration,
@@ -1777,14 +1806,15 @@ def make_efile(vals,vlat,vlon,
                          rate = emis,
                          area = area,  
                          heat = 0,
-                         spnum=1,
+                         spnum=part,
                          nanvalue=0)
-        ptime = time       
         # if there will be a new cycle
         # need to add another record for top height of last point.
+        # TO DO. do this for each particle number
         if iii+1 < len(vals): next_time = vals[iii+1][0] 
         else: next_time = vals[0][0]
         if next_time != time and vres > 0:
+            # do this for each particle number
             efile.add_record(time,
                          duration=duration,
                          lat=vlat,
@@ -1793,12 +1823,91 @@ def make_efile(vals,vlat,vlon,
                          rate = 0,
                          area = area,  
                          heat = 0,
-                         spnum=1,
+                         spnum=part,
                          nanvalue=0)
     print('writing efile {}', name)
-    efile.write_new(name) 
+    #efile.write_new(name) 
     return efile
 
+def plot_outdat_profile_psize_function(dfdat,log=False,fignum=1,unit='kg/s',
+                   ax=None,cmap='viridis'):
+    # plots time series of MER. summed along column.
+    #dfdat : pandas dataframe output by make_outdat_df function with
+    #        part='basic'
+    if not ax:
+        sns.set()
+        sns.set_style('whitegrid')
+        fig = plt.figure(fignum, figsize=(10,5))
+        ax = fig.add_subplot(1,1,1)
+    if isinstance(dfdat,str):
+       df = pd.read_csv(dfdat,index_col=0,header=1)
+       df = df.dropna()
+    else:
+       df = dfdat
+    sns.set()
+    plist = df.psize.unique()
+    cm = colormaker.ColorMaker(cmap, len(plist),ctype='hex',transparency=None)
+    cmlist = cm() 
+    for iii, psize in enumerate(plist):
+        dfp = df[df.psize == psize]
+        dfp = dfp.drop('psize',axis=1)
+        #dfp = dfp.pivot(index='date',columns='ht')
+        dfp = dfp.pivot(index='date',columns='ht')
+        try:
+           dfp = dfp.mass
+        except:
+           pass
+        ts = dfp.sum()
+        xval = ts.index.values * 1 / 1.0e3
+        yvals = ts.values/1.0e12
+        ax.plot(yvals, xval,  '#'+cmlist[iii],label=psize)
+    ax.set_xlabel('Tg of mass emitted',fontsize=15)
+    ax.set_ylabel('Height (km)',fontsize=15)
+        #ax.set_ylabel('Mass {}'.format(unit),fontsize=15)
+    return ax, ts
+
+def plot_outdat_ts_psize_function(dfdat,log=False,fignum=1,unit='kg/s',
+                   ax=None,cmap='viridis'):
+    # plots time series of MER. summed along column.
+    #dfdat : pandas dataframe output by make_outdat_df function with
+    #        part='basic'
+
+    if not ax:
+        sns.set()
+        sns.set_style('whitegrid')
+        fig = plt.figure(fignum, figsize=(10,5))
+        ax = fig.add_subplot(1,1,1)
+    if isinstance(dfdat,str):
+       df = pd.read_csv(dfdat,index_col=0,header=1)
+       df = df.dropna()
+    else:
+       df = dfdat
+    sns.set()
+    plist = df.psize.unique()
+    cm = colormaker.ColorMaker(cmap, len(plist),ctype='hex',transparency=None)
+    cmlist = cm() 
+    for iii, psize in enumerate(plist):
+        dfp = df[df.psize == psize]
+        dfp = dfp.drop('psize',axis=1)
+        #dfp = dfp.pivot(index='date',columns='ht')
+        dfp = dfp.pivot(index='ht',columns='date')
+        try:
+           dfp = dfp.mass
+        except:
+           pass
+        ts = dfp.sum()
+        if unit == 'kg/s':
+           yval = ts.values/3.6e6
+        elif unit == 'g/h':
+           yval = ts.values
+        print(type(ts.index.values[0]),ts.index.values[0])
+        xval = [pd.to_datetime(x) for x in ts.index.values]
+        #ax.plot([x[0] for x in ts.index.values], yval, clr)
+        print(cmlist[iii])
+        ax.plot(xval, yval,  '#' + cmlist[iii], label=psize)
+        #fig.autofmt_xdate()
+        ax.set_ylabel('MER {}'.format(unit),fontsize=15)
+    return ax, ts
 
 
 def plot_outdat_ts_function(dfdat,log=False,fignum=1,unit='kg/s',
@@ -1865,6 +1974,7 @@ class InverseAshPart(InverseAsh):
                  #ensdim='ens',
                  #verbose=False):
        psizelist = ['p060','p200','p500']
+       spnum = np.arange(1,len(psizelist)+1)
        #self.invlist = []  # list of  InverseAsh objects
        #self.fnamelist = fnamelist
        #self.tcm_names = [] # list of names of tcm files written.
@@ -1880,6 +1990,15 @@ class InverseAshPart(InverseAsh):
            xrlist.append(temp)
        xrlist = xrlist
        self.cdump = stack_psizes(xrlist,psizelist)
+       self.phash = self.add_phash()
+
+    def add_phash(self,phash=None):
+        if not phash:
+           ptemp = list(set(self.cdump.ens.psize.values))
+           ptemp.sort()
+           iii = np.arange(1,len(ptemp)+1)
+           self.phash = dict(zip(ptemp,iii))
+        return self.phash
 
     def make_outdat(self,dfdat):
         """
@@ -1904,31 +2023,47 @@ class InverseAshPart(InverseAsh):
             psizera.append(val[0][1])
         vals =  list(zip(datelist,htlist,valra,psizera))
         return vals
+
+    def plot_outdat_ts(self,dfdat,log=False,fignum=1,unit='kg/s',
+                       ax=None,clr='--ko'):
+        # InverseAshPart class
+
+        # plots time series of MER. summed along column.
+        #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+        if not ax:
+            sns.set()
+            sns.set_style('whitegrid')
+            fig = plt.figure(fignum, figsize=(10,5))
+            ax = fig.add_subplot(1,1,1)
+        df = self.make_outdat_df(dfdat,part='basic')     
+        ax,ts = plot_outdat_ts_psize_function(df)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles,labels)
+        return ax, ts
+        #sns.set()
+        #ts = df.sum()
+        #if unit == 'kg/s':
+        #   yval = ts.values/3.6e6
+        ##jjelif unit == 'g/h':
+        #   yval = ts.values
+        #ax.plot([x[1] for x in ts.index.values], yval, clr)
+        #fig.autofmt_xdate()
+        #ax.set_ylabel('MER {}'.format(unit),fontsize=15)
+        #return ax, df
  
     def plot_outdat_profile(self,dfdat,
                             fignum=1,
                             unit='kg',
                             ax=None,
                             clr='--ko'):
+        # InverseAshPart class
         if not ax:
             sns.set()
             sns.set_style('whitegrid')
             fig = plt.figure(fignum, figsize=(10,5))
             ax = fig.add_subplot(1,1,1)
-        df = self.make_outdat_df(dfdat)     
-        df3 = df.sum(axis=1)
-        df3 = df3.reset_index()
-        df3 = df3.pivot(index=1,columns=2) 
-        
-        sns.set()
-        yval = df3.values * 1 / 1e12
-        print(yval)
-        ax.plot(yval, df3.index.values/1000.0,label='dummy')
-        ax.set_xlabel('Tg of mass emitted',fontsize=15)
-        ax.set_ylabel('Height (km)',fontsize=15)
-        totalmass = yval.sum()
-        handles,labels=ax.get_legend_handles_labels()
-        labels = ['a','b','c']
-        ax.legend(handles,labels) 
-        print('total {} Tg'.format(totalmass))
-        return ax, df3
+        df = self.make_outdat_df(dfdat,part='basic')     
+        ax,ts = plot_outdat_profile_psize_function(df)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles,labels)
+        return ax, ts
