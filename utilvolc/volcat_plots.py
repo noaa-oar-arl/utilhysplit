@@ -6,7 +6,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import xarray as xr
 from utilvolc import volcat
+from utilhysplit.evaluation import hysplit_boxplots
 from utilhysplit.evaluation import statmain
+
+
 
 class VolcatPlots:
 
@@ -98,36 +101,11 @@ class VolcatPlots:
         self.maxrad = maxradius
 
     def boxplotdata(self, datelist, vdata):
-        newdata = []
-        mlen=2
-        for ra in vdata:
-            ra = np.array(ra)
-            mlen = np.max([mlen,ra.shape[0]])
-        for ra in vdata:
-            ra = np.array(ra)
-            if ra.shape[0] < mlen:
-               newra = np.pad(ra, (0,mlen-ra.shape[0]),'constant',constant_values=(0,-999))
-            else:
-               newra = ra
-            newdata.append(newra)
-        newdata = np.array(newdata)
-        dj = pd.DataFrame(newdata.T, columns=datelist)
-        dj = dj.replace(-999,np.NaN)
-        self.dj = dj
-        return dj
+        self.dj = hysplit_boxplots.prepare_boxplotdata(datelist,vdata)
+
 
     def make_boxplot(self, cols=None):
-        sns.set_style('whitegrid')
-        fig = plt.figure(1,figsize=(20,5))
-        if isinstance(cols,(list,np.ndarray)):
-            self.dj.iloc[:,cols].boxplot()
-        else:
-            self.dj.boxplot()
-        ax = plt.gca()
-        ax.set_yscale('log')
-        #ax.set_xlim([d1,d2])
-        fig.autofmt_xdate()
-        plt.show()  
+        hysplit_boxplots.make_boxplot(self.dj, cols=cols)
 
     def volcat_describe_plot(self,threshold=0,nums=None):
         date = []
