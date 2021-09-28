@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import linregress
+from scipy.stats import describe
 from utilhysplit.evaluation.statmain import cdf
 from utilhysplit.evaluation.statmain import MatchedData
 from utilhysplit.evaluation import ensemble_tools
@@ -70,13 +71,8 @@ def scale_results(obsraobject,  plotdata='none', method=3, pfit=1, fignum=1):
         return 1, [0], obsraobject
     elif method==1:
         poly = match_max(obsra)
-    ##this block fits a line to plot of obs vs forecast.
-    ##if method 3, will then go on to do cdf matching.
-    ##if method 2, then will return this fit.
     else:
        return -1
-       ##may want to fit line only to larger events
-       #if method==2 or method==30:
 
 
 def line_fitA(obsraobject,pfit):
@@ -157,7 +153,15 @@ def cdf_match_volcat(forecast, volcat,
                      figsize=(10,5)):
  
     # use pixel matching to determine what forecast values to use.
-    thresh2, match = ensemble_tools.get_pixel_match(forecast.isel(ens=ens),volcat,thresh) 
+    try:
+        fc = forecast.isel(ens=ens)
+    except:
+        print('ens {}'.format(ens))
+        print(forecast.ens.values)
+        return 0, [0,0], [0]
+    thresh2, match = ensemble_tools.get_pixel_match(fc,volcat,thresh) 
+    if np.isnan(thresh2):
+       thresh2=0
     if 'ens' in match.dims:
         rfc = match.isel(ens=ens).values.flatten()
     else:      
@@ -183,11 +187,10 @@ def cdf_match_volcat(forecast, volcat,
     #      robs2.append(0)
     #while len(rfc2) < len(robs2):
     #      rfc2.append(0)
-
     outputs = cdf_match(rfc2, robs2,scale=scale,pfit=pfit,
                         makeplots=makeplots,figname=figname,
                         figsize=figsize)
-    return thresh2, outputs[0], outputs[1]
+    return thresh2, outputs[0], outputs[1], outputs[2]
 
 def cdf_match(rfc, robs, scale=None,pfit=1,
               makeplots=False,
@@ -206,6 +209,7 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
    """
    #obs = robs
    #fc  = rfc
+   rhash = {}
    sorted_obs = np.sort(robs)
    if scale:
        sorted_fc = np.sort(rfc)* scale    #use scaling from linear regression.
@@ -215,7 +219,10 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
    #plt.plot(sorted_obs, diff, 'k.')
    #plt.show()         
    fco = np.array(sorted_fc)
-   poly = np.polyfit(fco, diff, deg=np.abs(pfit),rcond=None)
+   #print('fco', fco)
+   #print('diff', diff)
+   poly, covmatrix = np.polyfit(fco, diff, deg=np.abs(pfit),rcond=None,cov=True)
+   poly, rhash['residuals'], rank, svs, rcond = np.polyfit(fco, diff, deg=np.abs(pfit),rcond=None,full=True)
    if pfit==0:
       y2 = poly[0]
    elif pfit==1 or pfit==-1:
@@ -232,34 +239,78 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
    try:
       fcp = fco - y3
    except:
-      fcp = fco 
+      fcp = None
    if makeplots:
        fig = plt.figure(1,figsize=figsize)
        ax1 = fig.add_subplot(1,1,1)
        if pfit==-1:
            plot_cdf_match_fit(fco,y2,y3,diff,ax1)
        else: 
-           plot_cdf_match_fit(fco,y2,y2,diff,ax1)
-       dstr = "y = {:0.2f}x + ({:0.1f})".format(poly[0],poly[1])
+           plot_cdf_match_fit(fco,y2,None,diff,ax1)
        xpos=0.1
        ypos=0.8
+
+       if len(poly)== 2 or pfit==-1:
+           dstr = "y = {:0.2f}x + ({:0.1f})".format(poly[0],poly[1])
+           xpos=0.1
+           ypos=0.6
+       elif len(poly)==3 and pfit == -1:
+           dstr = "y = {:0.2f}x ".format(poly[2])
+       elif len(poly)==3:
+           dstr = "y = {:0.2f}$x^2$ + ({:0.1f})x + ({:0.1f})".format(poly[0],poly[1],poly[2])
+       elif len(poly)==4:
+           dstr = "y = {:0.2f}$x^3$ + ({:0.1f})$x^2$ + ({:0.1f})x + ({:0.1f})".format(poly[0],poly[1],poly[2],poly[3])
        ax1.text(xpos,ypos,dstr,
                 transform=ax1.transAxes,
                 bbox=dict(facecolor='white'),size=16)
+
+       if pfit == -1:
+           dstr = "y = {:0.2f}x ".format(poly[2])
+           xpos=0.1
+           ypos=0.8
+           ax1.text(xpos,ypos,dstr,
+                transform=ax1.transAxes,
+                bbox=dict(facecolor='white'),size=16)
+
+       ax1.text(xpos,ypos,dstr,
+                transform=ax1.transAxes,
+                bbox=dict(facecolor='white'),size=16)
+ 
+       
        if figname: plt.savefig('{}_fit.{}'.format(figname,'png'))
+
 
        plt.show()
        fig = plt.figure(2,figsize=figsize)
        ax2 = fig.add_subplot(1,1,1)
        plot_cdf_match(robs,fco,fc,fcp)
+       dobs = describe(robs)
+       dfco = describe(fco)
+       dfc =  describe(fc)
+       if isinstance(fcp, np.ndarray):
+           dfcp = describe(fcp)
+       else:
+           dfcp = describe(fc)
+       mean = [dobs.mean, dfco.mean,dfc.mean,dfcp.mean]
+       var = [dobs.variance, dfco.variance,dfc.variance,dfcp.variance]
+       skew = [dobs.skewness, dfco.skewness,dfc.skewness,dfcp.skewness]
+       kurt = [dobs.kurtosis, dfco.kurtosis,dfc.kurtosis,dfcp.kurtosis]
+       small = [dobs.minmax[0], dfco.minmax[0],dfc.minmax[0],dfcp.minmax[0]]
+       big = [dobs.minmax[1], dfco.minmax[1],dfc.minmax[1],dfcp.minmax[1]]
+       num = [dobs.nobs, dfco.nobs, dfc.nobs, dfcp.nobs]
+       name = ['obs','fc','corrected','corrected 0']
+       dfout = pd.DataFrame(zip(name,mean,var,skew,kurt,num,small,big))
+       dfout.columns=['name','mean','variance','skewness','kurtosis','N','min','max']
+       print(dfout)
+
        if figname: plt.savefig('{}_corrected.{}'.format(figname,'png'))
        plt.show()
-   return poly, fc
+   return poly, fc, rhash
 
 def plot_cdf_match_fit(fco,y2,y3,diff,ax1):
     ax1.plot(fco, diff,'-k',linewidth=4,label='Difference' )
     ax1.plot(fco, y2,'-c', label='fit')
-    #ax1.plot(fco, y3,'-r', label='fit')
+    if isinstance(y3,np.ndarray): ax1.plot(fco, y3,'-r', label='fit')
     ax1.set_ylabel('Difference')
     ax1.set_xlabel('Forecast value')
 
@@ -267,11 +318,11 @@ def plot_cdf_match(robs, fco, fc,fcp):
        x1, y1 = cdf(robs)
        x2, y2 = cdf(fco)
        x3, y3 = cdf(fc)
-       x4, y4 = cdf(fcp)
+       if isinstance(fcp, np.ndarray): x4, y4 = cdf(fcp)
        plt.step(x1, y1, '-k', label='Obs',linewidth=4)
        plt.step(x2, y2, '-g', label='Forecast')  #blue shows cdf of forecast
        plt.step(x3, y3, '--c', label='Corrected',linewidth=3) #green shows cdf of scaled forecast.
-       #plt.step(x4, y4, '--r', label='Corrected',linewidth=3) #green shows cdf of scaled forecast.
+       if isinstance(fcp,np.ndarray):  plt.step(x4, y4, '--r', label='Corrected',linewidth=3) #green shows cdf of scaled forecast.
        #plt.title(plotdata + ' red(obs), blue(forecast), green(scaled forecast)')
        ax = plt.gca()
        ax.set_xlabel('Values')
