@@ -19,7 +19,7 @@ from utilvolc.ash_inverse import InverseAsh
 import utilvolc.ash_inverse as ainv
 from utilhysplit.evaluation import statmain
 from utilhysplit.plotutils import colormaker
-import utilvolc.volcat_plots as vplot
+from utilhysplit.evaluation import hysplit_boxplots
 
 class ScoreCard:
     def __init__(self, tag, time):
@@ -129,8 +129,8 @@ class AshEval(InverseAsh):
             datelist.append(self.get_time(iii))
             vdata.append(volcat)
         # dj is a pandas dataframe
-        dj = vplot.prepare_boxplotdata(datelist, vdata)
-        vplot.make_boxplot(dj)
+        dj = hysplit_boxplots.prepare_boxplotdata(datelist, vdata)
+        hysplit_boxplots.make_boxplot(dj)
 
 
     def volcat_cdf_plot(self, threshold=0):
