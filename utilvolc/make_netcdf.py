@@ -15,7 +15,7 @@ class MakeNetcdf:
         ----------------
         Inputs:
         d1: datetime object (time stamp of of ensemble)
-        d0: datetime object (date range from d1 (default: d1 - 1 hour))
+        d0: datetime object (date range from d1)
         sample_time_stamp: determining if time stamp is attributed to the end or beginning
         mettag: met field data tag (default: 'gfs0p25')
         volcid: volcano ID (string)
@@ -40,20 +40,20 @@ class MakeNetcdf:
         """ Creates xarray dataset of Data Insertion hysplit simulations
         all_files: list of all cdump files from Data Insertion runs
         start: datetime object(first time to be included in ensemble (default: d1 - 24 hours))
-        end: datetime object (last time to be included in ensemble (default: d1 - 2 hours))
+        end: datetime object (last time to be included in ensemble (default: d1 - tdelta))
         tdelta: time interval of files to include in minutes (default: 10)
         verbose: (boolean)
         """
         if start == None:
             start = self.d1 - timedelta(hours=24)
         if end == None:
-            end = self.d1 - timedelta(hours=2)
+            end = self.d1
         files = []
         sourcetag = []
         metdatatag = []
 
         # Adding Data Insertion cdump files
-        while start <= end:
+        while start < end:
             t = start.strftime('%Y%j_%H%M%S')
             for match in all_files:
                 if t in match:
@@ -69,6 +69,7 @@ class MakeNetcdf:
             blist, drange=[self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=verbose)
         hxrd.attrs['Volcano Name'] = self.volcname
         hxrd.attrs['Volcano ID'] = self.volcid
+        del(hxrd.attrs['Coordinate time description'])
         return hxrd
 
     def Cyl_combine(self, allfiles, match=''):
@@ -94,6 +95,7 @@ class MakeNetcdf:
         else:
             hxrcyl = hysplit.combine_dataset([(allfiles[0], 'CylinderSource', self.mettag)], drange=[
                 self.d0, self.d1], century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
+            del(hxrcyl.attrs['Coordinate time description'])
         return hxrcyl
 
     def Line_combine(self, allfiles, match=''):
@@ -134,6 +136,7 @@ class MakeNetcdf:
         hxrline.attrs['Mass Eruption Rate - Mastin'] = unitmass
         hxrline.attrs['Fine Ash MER - Mastin'] = mass63
         hxrline.attrs['MER Units'] = 'g/hr'
+        del(hxrline.attrs['Coordinate time description'])
         return hxrline
 
     def create_ens(self, hxrd, hxrc, hxrl, netdir, MER=None, write=False):
@@ -158,12 +161,13 @@ class MakeNetcdf:
             return print(netdir+newfile+' created!')
         return hxr
 
-    def create_volcat(self, volcatdir, netdir, volcdir, skipna=False, convert_nans=False, write=False):
+    def create_volcat(self, volcatdir, netdir, volcdir, ensname, skipna=False, convert_nans=False, write=False):
         """ Creates netcdf of VOLCAT, gridded to HYSPLIT grid
         Inputs:
         volcatdir: directory of VOLCAT data
         netdir: directory of ensemble netcdf
         volcdir: directory of regridded VOLCAT data
+        ensname: ensemble netcdf name
         skipna: (boolean) skips nan values when calculating average (default=False)
         convert_nans: (bolean) converts nan values to 0. when calculating average (default=False)
         write: (boolean) if True, netcdf file is written (default = False)
@@ -175,8 +179,8 @@ class MakeNetcdf:
         from utilvolc import volcat
 
         # Will adjust this to use the VolcatName class in volcat.py
-        vnames = glob(volcatdir+'*'+self.d0.strftime('%Y%j_%H')+'*'+self.volcid+'*')
-        vname2 = glob(volcatdir+'*'+self.d1.strftime('%Y%j_%H%M%S')+'*'+self.volcid+'*')
+        vnames = glob(volcatdir+'*'+self.d0.strftime('s%Y%j_%H')+'*'+self.volcid+'*')
+        vname2 = glob(volcatdir+'*'+self.d1.strftime('s%Y%j_%H%M%S')+'*'+self.volcid+'*')
         if len(vname2) != 0:
             vnames.append(vname2[0])
         dset = []
@@ -185,8 +189,7 @@ class MakeNetcdf:
             dset.append(volcat.open_dataset(vnames[x], decode_times=True, mask_and_scale=True))
             x += 1
 
-        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
-        hxr = xr.open_dataset(netdir+ensfile)
+        hxr = xr.open_dataset(netdir+ensname)
         # Regridding volcat files to hysplit lat/lon
         # dnew is xarray (time, x, y) with a regridded file for each time period
         dnew = volcat.average_volcat_new(dset, hxr, skipna=skipna, convert_nans=convert_nans)
@@ -310,12 +313,13 @@ class MakeNetcdf:
         xra2.attrs['from_file'] = xra1.attrs['dataset_name']
         return xra2
 
-    def calc_stats(self, ensdir, volcdir, statdir, threshold, deltaz=1000., namestr='', write=False):
+    def calc_stats(self, ensdir, volcdir, statdir, threshold, deltaz=1000., namestr='', pstr='par006', write=False):
         """ Calculates Brier Scores and Pearson Correlations for each ensemble
         member. Must convert concentration to mass loading using deltaz
         value and summing along z axis for comparison to VOLCAT data.
 
-        IN PROGRESS - NEED TO MODIFY FOR USE WITH ENS DIMENSION
+        IN PROGRESS - NEED TO MODIFY FOR USE WITH ENS DIMENSION 
+        AND MULTIPLE VARIABLES
         Inputs:
         ensdir: ensemble netcdf directory
         volcdir: regridded volcat netcdf directory
@@ -324,6 +328,7 @@ class MakeNetcdf:
         dimension: (string) dimension name to calculate statistics (source or ens)
         deltaz: z-axis interval size in meters (float) default: 1000.0 meters
         namestr: string in name for particular file
+        pstr: string particle name (variable) 
         write: (boolean) whether or not to write netcdf file
         Outputs:
         If write = True, returns stats netcdf file
@@ -332,14 +337,15 @@ class MakeNetcdf:
         from utilhysplit.evaluation import plume_stat as ps
         import numpy as np
 
-        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'.nc'
+        ensfile = 'ensemble_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'_'+pstr+'.nc'
         volcfile = 'regridded_volcat_'+self.volcname+'_'+self.d1.strftime('%Y%m%d.%H%M%S')+'.nc'
 
         hxr = xr.open_dataset(ensdir+ensfile)
         vxr = xr.open_dataset(volcdir+volcfile)
         attrs = hxr.attrs
         # Summing along z makes hxr2 have units of g/m^2
-        hxr2 = hxr.p006 * deltaz
+        var = 'p'+pstr[3:]
+        hxr2 = hxr[var] * deltaz
         hxr2 = hxr2.sum(dim='z')
         # Calculating number of forecasts with data in each grid box
         numfiles = len(hxr2.source)
@@ -419,7 +425,7 @@ class MakeNetcdf:
 
         if write:
             # Removing and rewriting stats netcdf file
-            statfile = self.volcname+'_statistics_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'.nc'
+            statfile = self.volcname+'_statistics_'+self.d1.strftime('%Y%m%d.%H%M%S')+namestr+'_'+pstr+'.nc'
             if os.path.exists(statdir+statfile):
                 os.remove(statdir+statfile)
             # Creating netcdf file
@@ -454,3 +460,43 @@ def ens_merge(hxrd, hxrc, hxrl, MER=None):
     # Need to confirm no nans in lat/lon arrays
     hxrnew = hysplit.reset_latlon_coords(hxr)
     return hxrnew
+
+
+def calc_area(filename):
+    from math import pi
+    """Calculates the area (km^2) of each hysplit grid cell
+    Converts degress to meters using a radius of 6378.137km.
+    Input:
+    filename: full file name of hysplit netcdf file
+    output:
+    area: xarray containing gridded area values
+    """
+    d2r = pi / 180.0  # convert degress to radians
+    d2km = 6378.137 * d2r  # convert degree latitude to kilometers
+
+    hxr = xr.open_dataset(filename)
+
+    # Pulls out latitude and longitude
+    lat = hxr.latitude
+    lon = hxr.longitude
+    latrad = lat * d2r  # Creating latitude array in radians
+    coslat = np.cos(latrad) * d2km * d2km
+    shape = np.shape(hxr.latitude)
+
+    # Make shifted lat and shifted lon arrays to use for calculations
+    lat_shift = lat[1:, :].values
+    lon_shift = lon[:, 1:].values
+    # Adding row/column of nans to shifted lat/lon arrays
+    to_add_lon = np.empty([shape[0]]) * np.nan
+    to_add_lat = np.empty([shape[1]]) * np.nan
+    # Back to xarray for calculations
+    lat2 = xr.DataArray(np.vstack((lat_shift, to_add_lat)), dims=['y', 'x'])
+    lon2 = xr.DataArray(np.column_stack((lon_shift, to_add_lon)), dims=['y', 'x'])
+
+    # area calculation
+    area = abs(lat-lat2) * abs(abs(lon)-abs(lon2)) * coslat
+    area.name = 'area'
+    area.attrs['long_name'] = 'area of each hysplit lat/lon grid box'
+    area.attrs['units'] = 'km^2'
+
+    return area
