@@ -1,7 +1,7 @@
 # write_emitimes.py
 # Writes a HYSPLIT EMITIMES.txt file for a cylindrical volcanic source
 # and for inserting volcat data into hysplit
-#from utilhysplit import cylsource
+# from utilhysplit import cylsource
 from utilhysplit import emitimes
 from datetime import datetime
 from glob import glob
@@ -30,8 +30,21 @@ Class: InsertVolcat
 """
 
 
-def write_cyl_file(wdir, date_time, lat, lon, volcname, radius, dr, duration, pollnum, pollpercents, altitude, umbrella):
-    """ Write EMITIMES.txt file for cylinder source hysplit runs
+def write_cyl_file(
+    wdir,
+    date_time,
+    lat,
+    lon,
+    volcname,
+    radius,
+    dr,
+    duration,
+    pollnum,
+    pollpercents,
+    altitude,
+    umbrella,
+):
+    """Write EMITIMES.txt file for cylinder source hysplit runs
     Inputs:
     wdir: working directory (string)
     date_time: date and time of emission start (datetime object)
@@ -53,30 +66,51 @@ def write_cyl_file(wdir, date_time, lat, lon, volcname, radius, dr, duration, po
     """
 
     dt = date_time
-    fname = 'EMIT_'+volcname+'_cyl_'+dt.strftime("%Y%m%d%H%M")+'_'+duration+'hrs.txt'
+    fname = (
+        "EMIT_"
+        + volcname
+        + "_cyl_"
+        + dt.strftime("%Y%m%d%H%M")
+        + "_"
+        + duration
+        + "hrs.txt"
+    )
 
-    filename = wdir+fname
+    filename = wdir + fname
 
     # Creating emitimes files
     efile = cylsource.EmitCyl(filename=filename)
     latlist, lonlist = efile.calc_cyl(lat, lon, radius, dr)
     nrecords = efile.calc_nrecs(latlist, pollnum=pollnum, umbrella=umbrella)
-    efile.write_data(dt, latlist, lonlist, nrecords, pollnum, duration=duration,
-                     pollpercents=pollpercents, height=altitude)
+    efile.write_data(
+        dt,
+        latlist,
+        lonlist,
+        nrecords,
+        pollnum,
+        duration=duration,
+        pollpercents=pollpercents,
+        height=altitude,
+    )
 
-    print('File '+filename+' created')
+    print("File " + filename + " created")
 
     return filename
 
 
 class InsertVolcat:
-
-    def __init__(self, wdir, vdir, date_time, stradd='',
-                 duration='0010',
-                 pollnum=1,
-                 pollpercents=[1],
-                 vname=None,
-                 vid=None):
+    def __init__(
+        self,
+        wdir,
+        vdir,
+        date_time,
+        stradd="",
+        duration="0010",
+        pollnum=1,
+        pollpercents=[1],
+        vname=None,
+        vid=None,
+    ):
         """
         Class of tools for inserting volcat data into hysplit
         -------------
@@ -110,36 +144,53 @@ class InsertVolcat:
         self.vdir = vdir
         self.date_time = date_time
         self.stradd = stradd
-        self.pollnum = pollnum
-        self.pollpercents = pollpercents
+        self.set_pollnum(pollnum, pollpercents)
+        # self.pollnum = pollnum
+        # self.pollpercents = pollpercents
         self.duration = duration
         self.vname = vname
         self.vid = vid
         self.find_fname()
 
+    def set_duration(self, duration):
+        self.duration = duration
+
+    def set_pollnum(self, pollnum, pollpercents):
+        self.pollnum = pollnum
+        if isinstance(pollpercents, (float, int)):
+            pollpercents = [pollpercents]
+        totpercents = np.array(pollpercents).sum()
+        if np.abs(totpercents - 1) > 0.02:
+            print("warning particle percentages do not add to 1 {}".format(totpercents))
+        self.pollpercents = pollpercents
+
     def add_vname(self, vname):
-        """ Adds volcano name"""
+        """Adds volcano name"""
         self.vname = vname
 
     def find_match(self):
         """Determines matching string to identify file
         FORMATTING HAS CHANGED!"""
         if self.vid != None:
-            match = self.date_time.strftime('%Y%j_%H%M%S')+self.stradd+'_v'+self.vid
+            match = "{}{}_v{}".format(
+                self.date_time.strftime("%Y%j_%H%M%S"), self.stradd, self.vid
+            )
         else:
-            match = self.date_time.strftime('%Y%j_%H%M%S')
+            match = self.date_time.strftime("%Y%j_%H%M%S")
         return match
 
     def find_fname(self):
-        """ Determines filename for volcat file based on vdir, date_time and vid"""
-        vfiles = '*.nc'
-        volclist = glob(self.vdir+vfiles)
+        """Determines filename for volcat file based on vdir, date_time and vid"""
+        vfiles = "*.nc"
+        volclist = glob(self.vdir + vfiles)
         match = self.find_match()
         fname = [f for f in volclist if match in f]
         self.fname = fname[0]
         return self.fname
 
-    def get_area(self, write=False, correct_parallax=True, decode_times=False, clip=True):
+    def get_area(
+        self, write=False, correct_parallax=True, decode_times=False, clip=True
+    ):
         """Calculates the area (km^2) of each volcat grid cell
         Converts degress to meters using a radius of 6378.137km.
         Input:
@@ -154,18 +205,17 @@ class InsertVolcat:
         d2km = 6378.137 * d2r  # convert degree latitude to kilometers
 
         if self.fname:
-            dset = volcat.open_dataset(self.fname, correct_parallax=correct_parallax,
-                                       decode_times=decode_times)
+            dset = volcat.open_dataset(
+                self.fname, correct_parallax=correct_parallax, decode_times=decode_times
+            )
         else:
-            print('ERROR: Need volcat filename!')
-
+            print("ERROR: Need volcat filename!")
         # Extracts ash mass array (two methods - one is smaller domain around feature)
         # Removes time dimension
         if clip == True:
             mass = volcat.get_mass(dset)[0, :, :]
         else:
             mass = dset.ash_mass_loading[0, :, :]
-
         lat = mass.latitude
         lon = mass.longitude
         latrad = lat * d2r  # Creating latitude array in radians
@@ -179,28 +229,29 @@ class InsertVolcat:
         to_add_lon = np.empty([shape[0]]) * np.nan
         to_add_lat = np.empty([shape[1]]) * np.nan
         # Back to xarray for calculations
-        lat2 = xr.DataArray(np.vstack((lat_shift, to_add_lat)), dims=['y', 'x'])
-        lon2 = xr.DataArray(np.column_stack((lon_shift, to_add_lon)), dims=['y', 'x'])
+        lat2 = xr.DataArray(np.vstack((lat_shift, to_add_lat)), dims=["y", "x"])
+        lon2 = xr.DataArray(np.column_stack((lon_shift, to_add_lon)), dims=["y", "x"])
 
         # area calculation
-        area = abs(lat-lat2) * abs(abs(lon)-abs(lon2)) * coslat
-        area.name = 'area'
-        area.attrs['long_name'] = 'area of each lat/lon grid box'
-        area.attrs['units'] = 'km^2'
+        area = abs(lat - lat2) * abs(abs(lon) - abs(lon2)) * coslat
+        area.name = "area"
+        area.attrs["long_name"] = "area of each lat/lon grid box"
+        area.attrs["units"] = "km^2"
         # Reformatting array attributes
         if write == True:
-            directory = self.wdir+'area/'
+            directory = self.wdir + "area/"
             match = self.find_match()
             if correct_parallax == True:
-                areafname = 'area_'+match+'_pc.nc'
+                areafname = "area_" + match + "_pc.nc"
             else:
-                areafname = 'area_'+match+'.nc'
-            print(directory+areafname)
-            area.to_netcdf(directory+areafname)
+                areafname = "area_" + match + ".nc"
+            print(directory + areafname)
+            area.to_netcdf(directory + areafname)
+        dset.close()
         return area
 
     def make_1D(self, correct_parallax=True, decode_times=False, clip=True):
-        """ Makes compressed 1D arrays of latitude, longitude, ash height,
+        """Makes compressed 1D arrays of latitude, longitude, ash height,
         mass emission rate, and area
         For use in writing emitimes files. See self.write_emit()
         Input:
@@ -218,10 +269,11 @@ class InsertVolcat:
         import numpy.ma as ma
 
         if self.fname:
-            dset = volcat.open_dataset(self.fname, correct_parallax=correct_parallax,
-                                       decode_times=decode_times)
+            dset = volcat.open_dataset(
+                self.fname, correct_parallax=correct_parallax, decode_times=decode_times
+            )
         else:
-            print('ERROR: Need volcat filename!')
+            print("ERROR: Need volcat filename!")
         # Extracts ash mass array - Removes time dimension
         if clip == True:
             mass0 = volcat.get_mass(dset).isel(time=0)
@@ -230,29 +282,33 @@ class InsertVolcat:
             mass0 = dset.ash_mass_loading.isel(time=0)
             height0 = dset.ash_cloud_height.isel(time=0)
         # Making 0. in arrays nans
-        mass = mass0.where(mass0 > 0.)
-        height = height0.where(height0 > 0.)
+        mass = mass0.where(mass0 > 0.0)
+        height = height0.where(height0 > 0.0)
 
         # Finds and area files. If no file detected, produces warning
-        #areadir = self.vdir+'Area/'
-        areadir = self.wdir+'area/'
+        # areadir = self.vdir+'Area/'
+        areadir = self.wdir + "area/"
         match = self.find_match()
         if correct_parallax == True:
-            arealist = glob(areadir+'*_pc.nc')
+            arealist = glob(areadir + "*_pc.nc")
         else:
-            arealist = glob(areadir + '*0.nc')
+            arealist = glob(areadir + "*0.nc")
         areafile = [f for f in arealist if match in f]
         if areafile:
             areafile = areafile[0]
             areaf = xr.open_dataset(areafile).area
         else:
-            print('No area file detected! Please use self.get_area()')
+            print("No area file detected! Please use self.get_area()")
 
         # Calculating mass - rate is (mass/hr) in HYSPLIT
         # area needs to be in m^2 not km^2!
-        ashmass = mass * areaf * 1000. * 1000.
+        ashmass = mass * areaf * 1000.0 * 1000.0
         latitude = mass.latitude
         longitude = mass.longitude
+
+        # AMC added close statements.
+        areaf.close()
+        dset.close()
 
         # Creating compressed 1-d arrays (removing nans) to prepare for file writing
         hgt_nan = ma.compressed(height)  # arra with nan values to remove
@@ -261,13 +317,20 @@ class InsertVolcat:
         lat = ma.compressed(latitude)[~np.isnan(hgt_nan)]  # removing nan values
         lon = ma.compressed(longitude)[~np.isnan(hgt_nan)]  # removing nan values
         area = ma.compressed(areaf)[~np.isnan(hgt_nan)]  # removing nan values
-        area = area * 1000. * 1000  # Moving area from (km^2) to (m^2)
-        hgt = hgt * 1000.  # Moving hgt from (km) to (m)
+        area = area * 1000.0 * 1000  # Moving area from (km^2) to (m^2)
+        hgt = hgt * 1000.0  # Moving hgt from (km) to (m)
 
         return lat, lon, hgt, mass, area
 
-    def write_emit(self, heat='0.00e+00', layer=0., centered=False, correct_parallax=True, decode_times=False):
-        """ Writes emitimes file from volcat data.
+    def write_emit(
+        self,
+        heat="0.00e+00",
+        layer=0.0,
+        centered=False,
+        correct_parallax=True,
+        decode_times=False,
+    ):
+        """Writes emitimes file from volcat data.
         Inputs are created using self.make_1D()
         Uses instance variables: date_time, duration, par,
         Inputs:
@@ -285,49 +348,113 @@ class InsertVolcat:
         emitimes file located in wdir
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
-        lat, lon, hgt, mass, area = self.make_1D(correct_parallax=correct_parallax, decode_times=decode_times)
+        lat, lon, hgt, mass, area = self.make_1D(
+            correct_parallax=correct_parallax, decode_times=decode_times
+        )
         # Calculating constants for mass rate (g/hr) determination
         # AMR: 8/3/2021 - added code to account for different durations under 1 hour
         # Is this acceptable for durations longer that 1 hour? A constant value of 1?
-        if float(self.duration) <= 60.0:
-            const = (60.0 / float(self.duration))
-        else:
-            const = 1.
+        # AMC conversion to g/h is same whether smaller or larger than hour.
+        # if float(self.duration) <= 60.0:
+        const = 60.0 / float(self.duration)
+        # else:
+        #    const = 1.
         match = self.find_match()
-        filename = 'VOLCAT_'+match+'_par'+str(self.pollnum)
-        records = np.shape(hgt)[0]*self.pollnum
+        filename = "VOLCAT_" + match + "_par" + str(self.pollnum)
+        records = np.shape(hgt)[0] * self.pollnum
         # AMR: 8/3/2021 - added layer flag, and writing layer capability to emitimes file, accounting for ash in a layer for data insertion method.
-        if layer > 0.:
-            filename = 'VOLCAT_'+match+'_'+str(layer)+'mlayer_par'+str(self.pollnum)
+        if layer > 0.0:
+            filename = (
+                "VOLCAT_" + match + "_" + str(layer) + "mlayer_par" + str(self.pollnum)
+            )
             records = records * 2
             # AMR: 8/23/2021 - added center flag, and writing centered layer capability
             if centered:
-                filename = 'VOLCAT_'+match+'_'+str(layer)+'mlayer_centered_par'+str(self.pollnum)
-        f = open(self.wdir+'DataInsertion/' + filename, 'w')
-        f.write('YYYY MM DD HH DURATION(HHMM) #RECORDS \n')
-        f.write('YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE(g/hr) AREA(m2) HEAT(w) \n')
-        f.write('{:%Y %m %d %H} {} {}\n'.format(self.date_time, self.duration, records))
+                filename = (
+                    "VOLCAT_"
+                    + match
+                    + "_"
+                    + str(layer)
+                    + "mlayer_centered_par"
+                    + str(self.pollnum)
+                )
+        f = open(self.wdir + "DataInsertion/" + filename, "w")
+        f.write("YYYY MM DD HH DURATION(HHMM) #RECORDS \n")
+        f.write(
+            "YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE(g/hr) AREA(m2) HEAT(w) \n"
+        )
+        f.write("{:%Y %m %d %H} {} {}\n".format(self.date_time, self.duration, records))
         h = 0
         while h < len(hgt):
             i = 0
             while i < len(self.pollpercents):
                 # AMR: 8/3/2021 - added this for layer flag
                 # AMR: 8/23/2021 - added centered flag
-                if layer > 0. and centered:
-                    layhalf = float(layer) / 2.
-                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
-                        self.date_time, self.duration, lat[h], lon[h], hgt[h]-float(layhalf), mass[h]*const*self.pollpercents[i], area[h], heat))
-                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
-                        self.date_time, self.duration, lat[h], lon[h], hgt[h]+float(layhalf), 0.0, 0.0, heat))
-                elif layer > 0. and not centered:
-                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
-                        self.date_time, self.duration, lat[h], lon[h], hgt[h]-float(layer), mass[h]*const*self.pollpercents[i], area[h], heat))
-                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
-                        self.date_time, self.duration, lat[h], lon[h], hgt[h], 0.0, 0.0, heat))
+                if layer > 0.0 and centered:
+                    layhalf = float(layer) / 2.0
+                    f.write(
+                        "{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n".format(
+                            self.date_time,
+                            self.duration,
+                            lat[h],
+                            lon[h],
+                            hgt[h] - float(layhalf),
+                            mass[h] * const * self.pollpercents[i],
+                            area[h],
+                            heat,
+                        )
+                    )
+                    f.write(
+                        "{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n".format(
+                            self.date_time,
+                            self.duration,
+                            lat[h],
+                            lon[h],
+                            hgt[h] + float(layhalf),
+                            0.0,
+                            0.0,
+                            heat,
+                        )
+                    )
+                elif layer > 0.0 and not centered:
+                    f.write(
+                        "{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n".format(
+                            self.date_time,
+                            self.duration,
+                            lat[h],
+                            lon[h],
+                            hgt[h] - float(layer),
+                            mass[h] * const * self.pollpercents[i],
+                            area[h],
+                            heat,
+                        )
+                    )
+                    f.write(
+                        "{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n".format(
+                            self.date_time,
+                            self.duration,
+                            lat[h],
+                            lon[h],
+                            hgt[h],
+                            0.0,
+                            0.0,
+                            heat,
+                        )
+                    )
                 else:
-                    f.write('{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n'.format(
-                        self.date_time, self.duration, lat[h], lon[h], hgt[h], mass[h]*const*self.pollpercents[i], area[h], heat))
+                    f.write(
+                        "{:%Y %m %d %H %M} {} {:9.4f} {:10.4f} {:8.2f} {:.2E} {:.2E} {} \n".format(
+                            self.date_time,
+                            self.duration,
+                            lat[h],
+                            lon[h],
+                            hgt[h],
+                            mass[h] * const * self.pollpercents[i],
+                            area[h],
+                            heat,
+                        )
+                    )
                 i += 1
             h += 1
         f.close()
-        return('Emitimes file written: '+self.wdir+'DataInsertion/'+filename)
+        return "Emitimes file written: " + self.wdir + "DataInsertion/" + filename

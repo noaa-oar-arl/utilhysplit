@@ -235,7 +235,12 @@ def read_emis_df(savename):
     columns are date
     values are emissions.
     """
-    emisdf = pd.read_csv(savename,index_col=0,header=1)
+    try:
+        emisdf = pd.read_csv(savename,index_col=0,header=1)
+    except:
+        print('trying this')
+        #emisdf = pd.read_csv(savename,index_col='date',header='ht',dtype={'ht':'float'})
+        emisdf = pd.read_csv(savename,index_col='date',header='ht')
     return emisdf.dropna()
 
 
@@ -617,7 +622,6 @@ class InverseAshEns:
                        emis_threshold = emis_threshold, 
                        name = emit_name,
                        phash=self.phash)
-            return efile  
             inp = self.invlist[0].inp
             print(inp['meteorologicalData'])
             if 'gefs' in inp['meteorologicalData'].lower():
@@ -635,13 +639,16 @@ class InverseAshEns:
                          metstr=metstr)
             make_setup(self.wdir,'SETUP.default',self.subdir,suffix=tag)
             Helper.copy(os.path.join(self.wdir,'ASCDATA.CFG'), os.path.join(self.subdir,'ASCDATA.CFG')) 
+            return efile  
 
     def save_emis(self,savename,eii=None,name=None):
+        print('saving emissions')
         ilist = self.read_outdat(eii)
         for iii,io in enumerate(ilist):
             df = io.get_emis(name=name)
             savename = os.path.join(self.subdir, savename)
-            self.invlist[0].make_outdat_df(df,savename=savename)
+            print('saving emissions ', savename)
+            self.invlist[0].make_outdat_df(df,savename=savename,part='condense')
         
     def plot_outdat_ts(self, eii=None,unit='kg/s',clr=None, profile=False, ax=None,name=None):
         # Ensemble.
@@ -775,6 +782,9 @@ class InverseAsh:
         self.original_volcat_ht_hash = {}
         self.original_cdump_hash = {}
 
+    def close_arrays(self):
+        self.cdump.close()
+        #self.massload.close()
 
     def copy(self):
         iacopy = InverseAsh(
@@ -1131,6 +1141,7 @@ class InverseAsh:
 
 
     def make_outdat_df(self,dfdat,savename=None,part='basic'):
+        
         #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
         # this is a list of tuples (source tag), value from emissions
         vals = self.make_outdat(dfdat)
@@ -1157,14 +1168,21 @@ class InverseAsh:
            iii = 1
            cols=0
            colnames = ['date', 'ht', 'mass']
-
         dfout = pd.DataFrame(data)
+        if part == 'condense' and len(vals)==4:
+           dfout.columns = colnames
+           dfout = dfout.groupby(['date','ht']).sum()
+           dfout = dfout.reset_index()
+           dfout.columns = [0,1,2]
+           iii = 1
+           cols= 0
+
         if part=='basic': 
            dfout.columns = colnames
            return dfout
         dfout = dfout.pivot(columns=cols,index=iii)
         if savename: 
-           print('saving to ', savename)
+           print('saving  emissions to ', savename)
            dfout.to_csv(savename)
         return dfout
 
@@ -1215,6 +1233,7 @@ class InverseAsh:
         ts = df.sum(axis=1)
         
         sns.set()
+        # the one represents one hour time period.
         yval = ts.values * 1 / 1e12
         ax.plot(yval, ts.index.values/1000.0,  clr)
         ax.set_xlabel('Tg of mass emitted',fontsize=15)
@@ -1644,6 +1663,7 @@ class InverseAsh:
             dummy, vhra = align_grids(cdump_a, vhra)
             cdump_a, vra = align_grids(cdump_a, vra)
         else:
+            compare_grids(cdump_a,vra,verbose=True)
             print('prepare_one_time: grids cannot be aligned')
             return False
 
@@ -1826,7 +1846,7 @@ def make_efile(vals,vlat,vlon,
                          spnum=part,
                          nanvalue=0)
     print('writing efile {}', name)
-    #efile.write_new(name) 
+    efile.write_new(name) 
     return efile
 
 def plot_outdat_profile_psize_function(dfdat,log=False,fignum=1,unit='kg/s',
@@ -1957,11 +1977,16 @@ def plot_outdat_profile_function(dfdat,
     
     ts = df.sum(axis=1)
     sns.set()
-    yval = ts.values * 1 / 1e12
-    ax.plot(yval, ts.index.values/1000.0,  clr,label=label)
+    xval = ts.values * 1 / 1e12
+    try:
+       yval = ts.index.values/1000.0
+    except:
+       yval = list(map(float,list(ts.index.values)))
+       yval = np.array(yval) / 1000.0
+    ax.plot(xval, yval,  clr,label=label)
     ax.set_xlabel('Tg of mass emitted',fontsize=15)
     ax.set_ylabel('Height (km)',fontsize=15)
-    totalmass = yval.sum()
+    totalmass = xval.sum()
     print('total {} Tg'.format(totalmass))
     return ax, totalmass
 
@@ -1986,11 +2011,12 @@ class InverseAshPart(InverseAsh):
            temp = xr.open_dataset(os.path.join(fname[0],fname[1]))
            temp = temp[list(temp.data_vars.keys())[0]]
            temp = temp.rename('pall')
-           print(temp)
            xrlist.append(temp)
        xrlist = xrlist
        self.cdump = stack_psizes(xrlist,psizelist)
        self.phash = self.add_phash()
+       for xrl in xrlist:
+           xrl.close()
 
     def add_phash(self,phash=None):
         if not phash:
