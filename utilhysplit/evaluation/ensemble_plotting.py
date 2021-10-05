@@ -421,7 +421,7 @@ def ens_mean(revash, time, enslist, level=1):
     return m2
 
 
-def slice_fig(hxr, vxr, lon=None, lat=None, volcat=False, verbose=False):
+def slice_fig_individ(hxr, vxr, lon=None, lat=None, volcat=False, verbose=False):
     from utilhysplit import concutils
     from matplotlib.colors import BoundaryNorm
     import matplotlib.patches as mpatches
@@ -429,11 +429,12 @@ def slice_fig(hxr, vxr, lon=None, lat=None, volcat=False, verbose=False):
     from datetime import datetime
     from utilvolc import volcat
     import pandas as pd
-    """ Function to make slice figures. Will make latitude or longitude slices.
-    Plots the hysplit with pcolormesh, and the volcat as scatter points
+    """ Function to make slice figures of individual ensemble members.
+    Will make latitude or longitude slices.
+    Plots the hysplit with pcolormesh, and the volcat as scatter points.
     Hysplit is in concentration (mg/m^3) and VOLCAT is in mass loading (g/m^2)
     Inputs:
-    hxr: dataarray of hysplit runs produced by combine_dataset
+    hxr: dataarray of hysplit ensemble runs produced by combine_dataset
     vxr: xarray of volcat (either regridded or original grid volcat data)
     lon: longitude for slice
     lat: latitude for slice
@@ -442,6 +443,9 @@ def slice_fig(hxr, vxr, lon=None, lat=None, volcat=False, verbose=False):
     Outputs:
     slice figure generated
     """
+    # TO DO: Use ensemble_tools.preprocess to fix array for either 'ens' or 'source' or both
+    # TO DO: Add threshold flag
+
     # VOLCAT Dataset
     if volcat:
         mass = volcat.get_mass(vxr).isel(time=0)
@@ -519,4 +523,146 @@ def slice_fig(hxr, vxr, lon=None, lat=None, volcat=False, verbose=False):
         plt.show()
         plt.close()
         t += 1
+    return -1
+
+
+def slice_fig_ens(hxr, vxr, ixr=None, lon=None, lat=None, weights=None, volcat=False, verbose=False):
+    from utilhysplit import concutils
+    from matplotlib.colors import BoundaryNorm
+    from utilhysplit.evaluation import ensemble_tools as etool
+    import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
+    from datetime import datetime
+    from utilvolc import volcat
+    import pandas as pd
+    """ Function to make slice figures of individual ensemble members.
+    Will make latitude or longitude slices.
+    Plots the hysplit with pcolormesh, and the volcat as scatter points.
+    Hysplit is in concentration (mg/m^3) and VOLCAT is in mass loading (g/m^2)
+    Inputs:
+    hxr: dataarray of hysplit ensemble runs produced by combine_dataset
+    vxr: xarray of volcat (either regridded or original grid volcat data)
+    ixr: xarray dataarray of second dataset to plot (inverse, line source, some reference)
+           Should just have dimensions of y and x
+    lon: longitude for slice
+    lat: latitude for slice
+    weights: numpy array of same length as enslist + sourcelist containing 
+            weight for each member. If none, avg weight is applied.
+    volcat: Flag for indicating if  vxr is regridded (False) on the original volcat grid (True)
+    verbose: include print statements
+    Outputs:
+    slice figure generated
+    """
+    # TO DO: Use ensemble_tools.preprocess to fix array for either 'ens' or 'source' or both
+    # TO DO: Add threshold flag
+
+    # VOLCAT Dataset
+    if volcat:
+        mass = volcat.get_mass(vxr).isel(time=0)
+        hgts = volcat.get_height(vxr).isel(time=0)
+        label2 = 'VOLCAT: Mass Loading $\mathregular{g/m^2}$'
+    else:
+        mass = vxr.ash_mass_avg.isel(time=-1)
+        hgts = vxr.ash_height_mas.isel(time=-1)
+        label2 = 'VOLCAT: 1hr Avg Mass Loading $\mathregular{g/m^2}$'
+    if lon != None:
+        mslicev = concutils.xslice(mass, lon, volcat=volcat)
+        hslicev = concutils.xslice(hgts, lon, volcat=volcat)
+        vx = mslicev.latitude
+        if isinstance(ixr, xr.DataArray):
+            ixr2 = concutils.xslice(ixr, lon)
+            ix = ixr2.latitude
+    if lat != None:
+        mslicev = concutils.yslice(mass, lat, volcat=volcat)
+        hslicev = concutils.yslice(hgts, lat, volcat=volcat)
+        vx = mslicev.longitude
+        if isinstance(ixr, xr.DataArray):
+            ixr2 = concutils.yslice(ixr, lat)
+            ix = ixr2.longitude
+    # HYSPLIT DataArray
+    sources = len(hxr.source)
+    ensembles = len(hxr.ens)
+    volcano = hxr.attrs['Volcano Name']
+    enstime = pd.to_datetime(hxr.time.values).to_pydatetime()[0]
+
+    #ixr2 = ixr.where(ixr > 0., drop=True)
+
+    if sources > 1:
+        dimens = 'source'
+        dimlen = sources
+        indices = [i for i, s in enumerate(hxr.source.values) if 'DI' in s]
+        hxr2 = hxr.isel(source=indices, time=0, ens=0) * 1000.0  # Converting to mg
+    if ensembles > 1:
+        dimens = 'ens'
+        dimlen = ensembles
+        hxr2 = hxr.isel(time=0, source=0) * 1000.0  # Converting to mg
+    if verbose:
+        print(enstime)
+
+    if isinstance(weights, (np.ndarray, list)):
+        if len(weights) != len(hxr[dimens].values):
+            print('WARNING: weights do not correspond to values')
+            print('weights :', weights)
+            print('values: ', hxr[dimens].values)
+        else:
+            wra = xr.DataArray(weights, dims=dimens)
+            hxr2 = wra * hxr2
+            hxr2 = hxr2.sum(dim=dimens)
+    else:
+        # Default: Finding the ensemble mean
+        hxr2 = hxr2.mean(dim=dimens, skipna=True, keep_attrs=True)
+
+    # Making figure
+    fig = plt.figure('Slice figure', figsize=(20, 10))
+    if lon != None:
+        hxr3 = concutils.xslice(hxr2, lon)
+        hx = hxr3.latitude
+        xlab = 'Latitude'
+        coord = 'Longitude'
+        val = str(lon)
+    if lat != None:
+        hxr3 = concutils.yslice(hxr2, lat)
+        hx = hxr3.longitude
+        xlab = 'Longitude'
+        coord = 'Latitude'
+        val = str(lat)
+    hxr3 = hxr3.where(hxr3 > 0.)
+    hy = (hxr3.z) / 1000.0  # Putting height in km
+    iy = ixr.z / 1000.0
+    plt.ylabel('Height (km)')
+    plt.xlabel(xlab)
+
+    levels = [0, 0.1, 0.2, 2.0, 5.0, 10.0, 40.0, 100.0]
+    cmap = plt.get_cmap('viridis')
+    norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
+
+    label1 = 'HYSPLIT: Concentration $\mathregular{mg/m^3}$\n'
+    plt.pcolormesh(hx, hy, hxr3, norm=norm, cmap=cmap, shading='auto')
+    cb = plt.colorbar(extend='max')
+    cb.set_label(label1+label2, fontsize=16, rotation='270', labelpad=45)
+    cb.ax.tick_params(labelsize=12)
+
+    if ixr != None:
+        CS = plt.contour(ix, iy, ixr2, levels=levels, linewidths=2, norm=norm, cmap=cmap)
+        plt.clabel(CS, inline=True, fontsize=12)
+
+    plt.scatter(vx, hslicev, s=150, c='black', marker='o')
+    plt.scatter(vx, hslicev, s=70, c=mslicev, marker='o', cmap=cmap, norm=norm)
+
+    if ixr != None:
+        plt.title('HYSPLIT Ensemble with Inverse HYSPLIT and VOLCAT\nfor '+volcano + ' Eruption on '+enstime.strftime(
+            '%m/%d/%Y at %H:%M UTC') + '\nSlice along '+coord+' = '+val, fontsize=16, verticalalignment='top', horizontalalignment='center')
+    else:
+        plt.title('HYSPLIT Ensemble and VOLCAT\nfor '+volcano + ' Eruption on '+enstime.strftime('%m/%d/%Y at %H:%M UTC') +
+                  '\nSlice along '+coord+' = '+val, fontsize=16, verticalalignment='top', horizontalalignment='center')
+
+    if verbose:
+        if weights != None:
+            print('Suggested file name: '+volcano+'_'+coord+'Slice'+val +
+                  '_WeightedEns_'+enstime.strftime('_%Y%m%d.%H%M%S')+'.png')
+        else:
+            print('Suggested file name: '+volcano+'_'+coord+'Slice'+val +
+                  '_AvgWgtEns_'+enstime.strftime('_%Y%m%d.%H%M%S')+'.png')
+    plt.show()
+    plt.close()
     return -1
