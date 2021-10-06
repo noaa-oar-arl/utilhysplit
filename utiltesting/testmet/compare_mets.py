@@ -9,6 +9,74 @@ from utilhysplit.profile import callprofile
 from utilhysplit.profile import MeteoProfile
 from utilhysplit.plotutils import colormaker
 
+def test_wind_direction():
+    """
+    checks that wind direction function is working.
+    """
+
+    u = [10]
+    v = [0]
+    wdir, wspd = wind_direction(v,u)
+    print('270 degrees', wdir[0])
+    print('10 m/s', wspd[0])
+
+    u = [-10]
+    v = [0]
+    wdir, wspd = wind_direction(v,u)
+    print('90 degrees', wdir[0])
+    print('10 m/s', wspd[0])
+   
+    u = [0]
+    v = [5]
+    wdir, wspd = wind_direction(v,u)
+    print('180 degrees', wdir[0])
+    print('5 m/s', wspd[0])
+
+    u = [0]
+    v = [-5]
+    wdir, wspd = wind_direction(v,u)
+    print('360 degrees', wdir[0])
+    print('5 m/s', wspd[0])
+ 
+    u = [-5]
+    v = [-5]
+    wdir, wspd = wind_direction(v,u)
+    print('45 degrees', wdir[0])
+    print('{} m/s'.format(50**0.5), wspd[0])
+
+    u = [-5]
+    v = [5]
+    wdir, wspd = wind_direction(v,u)
+    print('135 degrees', wdir[0])
+    print('{} m/s'.format(50**0.5), wspd[0])
+
+    u = [5]
+    v = [-5]
+    wdir, wspd = wind_direction(v,u)
+    print('315 degrees', wdir[0])
+    print('{} m/s'.format(50**0.5), wspd[0])
+
+
+def wind_direction(vwind, uwind):
+        #vwind is magnitude of wind going from south to north
+        #uwind is magnitude of wind going from West to East
+        #print(len(vwind), len(uwind))
+        
+        uwind = np.array(uwind)
+        vwind = np.array(vwind)
+        zrs = np.where(uwind==0)
+        uwind[zrs] = 0.001
+        wind_dir = np.arctan(vwind/uwind)*180/np.pi
+        upos = np.where(uwind >= 0)
+        wind_dir[upos]= 270 - wind_dir[upos] 
+        uneg = np.where(uwind < 0)
+        wind_dir[uneg] = 90 - wind_dir[uneg] 
+
+        wspd = (uwind**2 + vwind**2)**0.5
+        #print(wind_dir.shape , wind_dir[2])
+        #print('U' , uwind.shape, uwind[2])
+        #print('V' , vwind.shape, vwind[2])
+        return wind_dir, wspd
 
 def example_use(hdir, tdir):
     from utilhysplit.metfiles import MetFiles
@@ -165,18 +233,20 @@ class CompareMetProfile:
         pnamelist = []
         
         for iii, metnames in enumerate(self.metlist):
+            print(iii, metnames)
             for jjj, met_tuple in enumerate(metnames):
                 mdir = met_tuple[0]
                 met = met_tuple[1] 
-                pname = '{}_profile.txt'.format(met)
+                pname = '{}_profile.txt'.format(met.replace('/',''))
                 # don't call if file already exitst unless overwrite is true.
                 test = overwrite or not os.path.isfile(os.path.join(self.wdir,pname)) 
                 if call and test: 
-                   print('calling profile')
+                   print('calling profile',self.hdir,mdir,met)
                    callprofile(self.hdir, mdir,  met, lat, lon, dt, mfname=pname, nstop=nstop)
                 pnamelist.append(pname)
                 if jjj==0: prof = MeteoProfile(fname=pname, pdir=self.wdir, datesvalid=[d1,d2])
                 else: prof.readnew(os.path.join(self.wdir,pname))
+                print(pname, met, mdir)
             proflist.append(prof)
             if not self.labels: labels.append(pname)    
         self.proflist = proflist
@@ -186,6 +256,9 @@ class CompareMetProfile:
     def read(self):
         self.call_and_read(call=False)
 
+    def set_ref(self,ref):
+        self.ref = ref
+
     def plot_ts(self,yvarname):
         sns.set()
         sns.set_style('whitegrid')
@@ -194,7 +267,9 @@ class CompareMetProfile:
         for prof,label,color in self.generate_prof():
             #print(label, '-----')
             xvar = prof.get_var(yvarname)
-            if xvar!= -1: ax1.plot(prof.date_ra, xvar,marker='.', color=color, label=label)
+            if label == self.ref: lw=5
+            else: lw=1
+            if xvar!= -1: ax1.plot(prof.date_ra, xvar,marker='.', color=color, label=label,LineWidth=lw)
         handles, labels = ax1.get_legend_handles_labels()
         plt.legend(handles,labels,loc='best',prop={'size':10})
         ax1.set_ylabel(yvarname)
@@ -213,6 +288,7 @@ class CompareMetProfile:
         varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M','V10M']
         #varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M']
         if plotall: varlist = self.twodlist
+        varlist.sort()
         for var in varlist:
             print(var)
             ax = self.plot_ts(var)
@@ -257,7 +333,54 @@ class CompareMetProfile:
         plt.legend(handles,labels,loc='best',prop={'size':10})
         ax1.set_ylabel('difference for {}'.format(var))
 
-    def check_3d(self,var,date):
+    def windspd(self,date,legend=False):
+        fig = plt.figure(10)
+        ax = fig.add_subplot(1,1,1)
+        fig1 = plt.figure(11)
+        ax1 = fig1.add_subplot(1,1,1)
+        #iii=0
+        for prof, label, color in self.generate_prof():
+            if 'VWND_rot' not in prof.var3d: continue
+            df = prof.get_3dvar_df()
+            uwnd = df['UWND_rot'].values
+            vwnd = df['VWND_rot'].values
+            wdir, wspd = wind_direction(vwnd,uwnd)
+            df['wdir'] = wdir
+            df['wspd'] = wspd
+            df = df[df['time'] == date]
+            df.set_index('PRES1',inplace=True)
+            if label == self.ref: 
+               lw=1
+               ms=10
+               alpha=1
+            else: 
+               lw=1
+               ms=5
+               alpha=0.5
+            dfdir = df['wdir']
+            dfspd = df['wspd']
+            try:
+               ax.plot(dfdir,df.index,color=color,marker='.',
+                       label=label,linewidth=lw,alpha=alpha,
+                       MarkerSize=ms)
+            except:
+                print('failed {}'.format(label))
+            try:
+               ax1.plot(dfspd,df.index,color=color,marker='.',
+                       label=label,linewidth=lw,alpha=alpha,
+                       MarkerSize=ms)
+            except:
+                print('failed {}'.format(label))
+            #if iii> 1: break
+            #iii+=1
+        handles, labels = ax.get_legend_handles_labels()
+        if legend: plt.legend(handles,labels,loc='best',prop={'size':10})
+        ax.set_ylabel('Level (mb)')
+        ax.invert_yaxis()
+        ax1.invert_yaxis()
+        return ax, ax1
+
+    def check_3d(self,var,date,legend=False):
         fig = plt.figure(10)
         ax = fig.add_subplot(1,1,1)
         #iii=0
@@ -266,6 +389,12 @@ class CompareMetProfile:
             df = prof.get_3dvar_df()
             df = df[df['time'] == date]
             df.set_index('PRES1',inplace=True)
+            if label == self.ref: 
+               lw=8
+               alpha=1
+            else: 
+               lw=1
+               alpha=0.5
             if var == 'WWND' and 'DIFW' in df.columns.values:
                print('adding difw to wwnd', label)
                df['NEW'] = df['WWND'] + df['DIFW']
@@ -273,15 +402,21 @@ class CompareMetProfile:
             else:
                df = df[var]
             try:
-               ax.plot(df,df.index,color=color,marker='.',label=label)
+               ax.plot(df,df.index,color=color,marker='.',label=label,linewidth=lw,alpha=alpha)
             except:
                 print('failed {}'.format(label))
             #if iii> 1: break
             #iii+=1
         handles, labels = ax.get_legend_handles_labels()
-        plt.legend(handles,labels,loc='best',prop={'size':10})
-        ax.set_ylabel('Level'.format(var))
-        ax.set_xlabel('{}'.format(var))
+        if legend: plt.legend(handles,labels,loc='best',prop={'size':10})
+        ax.set_ylabel('Level (mb)'.format(var),fontsize=20)
+        if(var=='VWND_rot'): xlabel='V (m/s)'
+        elif(var=='UWND_rot'): xlabel='U (m/s)'
+        elif(var=='WWND'): xlabel='W (m/s)'
+        elif(var=='RELH'): xlabel='Relative Humidity (%)'
+        elif(var=='TEMP'): xlabel='Temperature ($^o$C)'
+        else: xlabel=var
+        ax.set_xlabel('{}'.format(xlabel),fontsize=20)
         ax.invert_yaxis()
         return ax
 
