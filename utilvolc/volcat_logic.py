@@ -1,4 +1,5 @@
-import volcat_files.py
+import json
+import pandas as pd
 
 
 def workflow():
@@ -60,22 +61,22 @@ def workflow():
     # graphics
 
     # Evaluation against observations.
+    return 0
 
 
 def open_json(fname):
     """Opens json file.
     Input: full filename (with directory) (string)
     Output: dictionary"""
-    with open(fname) as f:
-        jsonf = json.load(f)
+    f = open(fname)
+    jsonf = json.load(f)
     return jsonf
 
 
-def open_dataframe(fname, variable='VOLCANOES'):
+def open_dataframe(fname):
     """ Opens json file, and converts to pandas dataframe
     Inputs: 
     fname: full filename (with directory) (string)
-    variable: name of top most
     Output: pandas dataframe"""
     jsonf = open_json(fname)
     dataf = jsonf['VOLCANOES']
@@ -83,11 +84,37 @@ def open_dataframe(fname, variable='VOLCANOES'):
     return data
 
 
-def parse_dataframe():
-    """Parses the pandas dataframe
-    This function parses the json file and puts the contents into a pandas dataframe
+def get_log_list(data):
+    """Pulls the log url from the pandas dataframe
     Inputs:
-    filename: full filename (string)
+    data: pandas dataframe
     Outputs:
-    events: event summary (pandas dataframe)
+    logurl: list of urls for the event log files
     """
+    events = data['EVENTS']
+    log_url = []
+    i = 0
+    while i < len(events):
+        tmp = pd.DataFrame([events[i]])
+        log_url.append(tmp['LOG_URL'].values[0])
+        i += 1
+    return log_url
+
+
+def get_log(log_url, verbose=False):
+    """ Downloads desired json event log files from ftp.
+    Inputs:
+    log_url: list of urls to the log files
+    Outputs:
+    Log files are downloaded to specified location
+    """
+    import os
+    # Log_dir should be changed to something more generic (/pub/volcat_logs/ ?)
+    log_dir = '/hysplit-users/allisonr/Hysplit_Tools/utilhysplit/utilvolc/data/'
+    i = 0
+    while i < len(log_url):
+        os.system('wget -P '+log_dir+' '+log_url[i])
+        if verbose:
+            print('File '+log_url[i]+' downloaded to '+log_dir)
+        i += 1
+    return 0
