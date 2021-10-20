@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import os
 
 
 def workflow():
@@ -64,6 +65,21 @@ def workflow():
     return 0
 
 
+def new_json(jdir, directory, logfile='json_log.txt', verbose=False):
+    """ Get list of json files pushed to our system
+    Inputs
+    jdir: directory containing json event summary files (string)
+    directory: directory of json_log file (string)
+    logfile: name of log file (string)
+    Outputs:
+    sum_list: list of summary json files (list)
+    """
+    # record_change(ddir=jdir, directory=directory, logfile=logfile, suffix='.json', verbose=verbose)
+    original, current, added, removed = determine_change(jdir, directory, logfile, '.json')
+
+    return added
+
+
 def open_json(fname):
     """Opens json file.
     Input: full filename (with directory) (string)
@@ -123,7 +139,21 @@ def get_log(log_url, verbose=False):
         if verbose:
             print('File '+log_url[i]+' downloaded to '+log_dir)
         i += 1
-    return 0
+    return print('Event log json files downloaded')
+
+
+def open_log(directory, logfile=None):
+    """Opens the event file download log file
+    Inputs:
+    directory: Directory location for data log file
+    logfile: name of log file (string)
+    Outputs:
+    original: list of files already downloaded to our server (list)
+    """
+    import json
+    with open(directory+logfile, 'r') as f:
+        original = json.loads(f.read())
+    return original
 
 
 def check_file(fname_url, directory, verbose=False):
@@ -134,17 +164,61 @@ def check_file(fname_url, directory, verbose=False):
     outputs:
     Boolean: True, False
     """
-    import json
-    with open(directory+'data_logfile.txt', 'r') as f:
-        original = json.loads(f.read())
+    original = open_log(directory)
     s = fname_url.rfind('/')
     current = fname_url[s+1:]
-    if f in original:
+    if current in original:
         if verbose:
             print('File '+current+' already downloaded')
         return False
     else:
         return True
+
+
+def determine_change(ddir, directory, logfile, suffix):
+    """Determines which files were original, which are current, which were added, which were removed"""
+    # Files downloaded during previous check
+    original = open_log(directory, logfile=logfile)
+    # Includes files just downloaded (if any)
+    current = list(fi for fi in os.listdir(ddir) if fi.endswith(suffix))
+    # Determining what was added and what was removed
+    added = [fs for fs in current if not fs in original]
+    removed = [fs for fs in original if not fs in current]
+    return original, current, added, removed
+
+
+def record_change(ddir=None, directory=None, logfile=None, suffix='.nc', verbose=False):
+    """Records file changes in data directory
+    Inputs:
+    ddir: data directory (string)
+    directory: location of event file download log file (string)
+    logfile: name of log file (string)
+    suffix: file suffix for list criteria (string)
+    Outputs:
+    """
+    original, current, added, removed = determine_change(ddir, directory, logfile, suffix)
+
+    if added:
+        h = 0
+        while h < len(added):
+            original.append(''.join(added[h]))
+            h += 1
+        if verbose:
+            print('Added '+str(len(added))+' files')
+    if removed:
+        g = 0
+        while g < len(removed):
+            original.remove(''.join(removed[g]))
+            g += 1
+        if verbose:
+            print('Removed '+str(len(removed))+' files')
+    if added or removed:
+        with open(directory+'tmp_file2.txt', 'w') as fis:
+            fis.write(json.dumps(original))
+        os.system('mv '+directory+'tmp_file2.txt '+directory+logfile)
+        return print('Updates recorded to file!\n')
+    else:
+        return print('No updates to '+ddir+' folder\n')
 
 
 def get_nc(fname, verbose=False):
@@ -163,11 +237,13 @@ def get_nc(fname, verbose=False):
     while i < len(dfile_list):
         # Check if file exists or has already been downloaded
         # If it has not, the download file from event_url
+
         file_download = check_file(dfile_list[i], data_dir, verbose=verbose)
         if file_download:
-            #os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
+            # os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
             os.system('wget -P'+data_dir+' '+dfile_list[i])
             if verbose:
                 print('File '+dfile_list[i]+' downloaded to '+data_dir)
         i += 1
-    return 0
+    record_change(ddir=data_dir, directory=data_dir, logfile='data_logfile.txt')
+    return print('File downloads complete')
