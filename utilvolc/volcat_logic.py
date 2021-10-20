@@ -73,13 +73,19 @@ def open_json(fname):
     return jsonf
 
 
-def open_dataframe(fname):
+def open_dataframe(fname, varname=None):
     """ Opens json file, and converts to pandas dataframe
-    Inputs: 
+    Inputs:
     fname: full filename (with directory) (string)
+    varname: VOLCANOES if opening event summary json file (string)
+                    Not needed for event log json files.
+                    FILES if looking for event netcdf files from event log files (string)
     Output: pandas dataframe"""
     jsonf = open_json(fname)
-    dataf = jsonf['VOLCANOES']
+    if varname:
+        dataf = jsonf[varname]
+    else:
+        dataf = jsonf
     data = pd.DataFrame.from_dict(dataf)
     return data
 
@@ -116,5 +122,52 @@ def get_log(log_url, verbose=False):
         os.system('wget -P '+log_dir+' '+log_url[i])
         if verbose:
             print('File '+log_url[i]+' downloaded to '+log_dir)
+        i += 1
+    return 0
+
+
+def check_file(fname_url, directory, verbose=False):
+    """ Checks if file in fname_url exists on our servers
+    Inputs:
+    fname_url: full ftp url for file (string)
+    directory: directory of data file list
+    outputs:
+    Boolean: True, False
+    """
+    import json
+    with open(directory+'data_logfile.txt', 'r') as f:
+        original = json.loads(f.read())
+    s = fname_url.rfind('/')
+    current = fname_url[s+1:]
+    if f in original:
+        if verbose:
+            print('File '+current+' already downloaded')
+        return False
+    else:
+        return True
+
+
+def get_nc(fname, verbose=False):
+    """ Finds and downloads netcdf files in json event log files from ftp.
+    Inputs:
+    fname: filename of json event log file
+    Outputs:
+    Netcdf event files are download to specified location
+    """
+    import os
+    # This should be changed, a specified data file location
+    data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+    dfiles = open_dataframe(fname, varname='FILES')
+    dfile_list = dfiles['EVENT_URL'].values
+    i = 0
+    while i < len(dfile_list):
+        # Check if file exists or has already been downloaded
+        # If it has not, the download file from event_url
+        file_download = check_file(dfile_list[i], data_dir, verbose=verbose)
+        if file_download:
+            #os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
+            os.system('wget -P'+data_dir+' '+dfile_list[i])
+            if verbose:
+                print('File '+dfile_list[i]+' downloaded to '+data_dir)
         i += 1
     return 0
