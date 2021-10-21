@@ -65,18 +65,62 @@ def workflow():
     return 0
 
 
-def new_json(jdir, directory, logfile='json_log.txt', verbose=False):
+def get_files(verbose=False):
+    """ Use various functions to get all available netcdf files from json event log files
+    Uses the different functions within volcat_logic.py
+    Sorts through the ftp directory to find json event summary files
+    Loops through them, and downloads the corresponding json event log files
+    Keeps track of the json event summary files that have already been downloaded
+    Lists event log files, finds the correspondind event file urls for download
+    Downloads the event netcdf files
+    Keeps track of the downloaded netcdf files"""
+
+    jdir = '/pub/jpsss_upload/'
+    ddir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+    logdir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+    # TO DO:
+    # Delete files from jpsss_uploads folder that is older than 7 days
+    # Files are only available for 7 days on the ftp
+
+    # Finds json files added to ftp folder
+    added = new_json(jdir, logdir, verbose=verbose)
+    added = sorted(added)
+    i = 0
+    while i < len(added):
+        data = open_dataframe(jdir+added[i], varname='VOLCANOES')
+        log_url = get_log_list(data)
+        # Downloads json event log files
+        get_log(log_url, verbose=verbose)
+        i += 1
+    # Logs event summary json files
+    record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
+
+    # TO DO:
+    # Create function that determines age of json log files. Delete files older than 7 days
+    # Netcdf files are only available for 7 days on the ftp
+
+    # Opens json event files
+    # Finds event file urls for download
+    # Downloads netcdf files
+    # Creates list of downloaded netcdf files for reference
+    log_list = sorted(list(f for f in os.listdir(logdir) if f.endswith('.json')))
+    x = 0
+    while x < len(log_list):
+        print(logdir+log_list[x])
+        get_nc(logdir+log_list[x], verbose=verbose)
+        x += 1
+
+
+def new_json(jdir, logdir, logfile='json_log.txt', verbose=False):
     """ Get list of json files pushed to our system
     Inputs
     jdir: directory containing json event summary files (string)
-    directory: directory of json_log file (string)
+    logdir: directory of json_log file (string)
     logfile: name of log file (string)
     Outputs:
     sum_list: list of summary json files (list)
     """
-    # record_change(ddir=jdir, directory=directory, logfile=logfile, suffix='.json', verbose=verbose)
-    original, current, added, removed = determine_change(jdir, directory, logfile, '.json')
-
+    original, current, added, removed = determine_change(jdir, logdir, logfile, '.json')
     return added
 
 
@@ -117,8 +161,15 @@ def get_log_list(data):
     log_url = []
     i = 0
     while i < len(events):
-        tmp = pd.DataFrame([events[i]])
-        log_url.append(tmp['LOG_URL'].values[0])
+        if type(events[i]) == dict:
+            tmp = pd.DataFrame([events[i]])
+            log_url.append(tmp['LOG_URL'].values[0])
+        elif type(events[i]) == list:
+            j = 0
+            while j < len(events[i]):
+                tmp = pd.DataFrame([events[i][j]])
+                log_url.append(tmp['LOG_URL'].values[0])
+                j += 1
         i += 1
     return log_url
 
@@ -132,26 +183,28 @@ def get_log(log_url, verbose=False):
     """
     import os
     # Log_dir should be changed to something more generic (/pub/volcat_logs/ ?)
-    log_dir = '/hysplit-users/allisonr/Hysplit_Tools/utilhysplit/utilvolc/data/'
+    log_dir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
     i = 0
     while i < len(log_url):
-        os.system('wget -P '+log_dir+' '+log_url[i])
+        # wget -N: timestamping - retrieve files only if newer than local
+        # wget -P: designates location for file download
+        os.system('wget -N -P '+log_dir+' '+log_url[i])
         if verbose:
             print('File '+log_url[i]+' downloaded to '+log_dir)
         i += 1
     return print('Event log json files downloaded')
 
 
-def open_log(directory, logfile=None):
+def open_log(logdir, logfile=None):
     """Opens the event file download log file
     Inputs:
-    directory: Directory location for data log file
+    logdir: Directory location for data log file
     logfile: name of log file (string)
     Outputs:
     original: list of files already downloaded to our server (list)
     """
     import json
-    with open(directory+logfile, 'r') as f:
+    with open(logdir+logfile, 'r') as f:
         original = json.loads(f.read())
     return original
 
@@ -164,7 +217,8 @@ def check_file(fname_url, directory, verbose=False):
     outputs:
     Boolean: True, False
     """
-    original = open_log(directory)
+    #original = open_log(directory)
+    original = list(f for f in os.listdir(directory) if f.endswith('.nc'))
     s = fname_url.rfind('/')
     current = fname_url[s+1:]
     if current in original:
@@ -175,10 +229,10 @@ def check_file(fname_url, directory, verbose=False):
         return True
 
 
-def determine_change(ddir, directory, logfile, suffix):
+def determine_change(ddir, logdir, logfile, suffix):
     """Determines which files were original, which are current, which were added, which were removed"""
     # Files downloaded during previous check
-    original = open_log(directory, logfile=logfile)
+    original = open_log(logdir, logfile=logfile)
     # Includes files just downloaded (if any)
     current = list(fi for fi in os.listdir(ddir) if fi.endswith(suffix))
     # Determining what was added and what was removed
@@ -187,16 +241,16 @@ def determine_change(ddir, directory, logfile, suffix):
     return original, current, added, removed
 
 
-def record_change(ddir=None, directory=None, logfile=None, suffix='.nc', verbose=False):
+def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=False):
     """Records file changes in data directory
     Inputs:
     ddir: data directory (string)
-    directory: location of event file download log file (string)
+    logdir: location of event file download log file (string)
     logfile: name of log file (string)
     suffix: file suffix for list criteria (string)
     Outputs:
     """
-    original, current, added, removed = determine_change(ddir, directory, logfile, suffix)
+    original, current, added, removed = determine_change(ddir, logdir, logfile, suffix)
 
     if added:
         h = 0
@@ -213,9 +267,9 @@ def record_change(ddir=None, directory=None, logfile=None, suffix='.nc', verbose
         if verbose:
             print('Removed '+str(len(removed))+' files')
     if added or removed:
-        with open(directory+'tmp_file2.txt', 'w') as fis:
+        with open(logdir+'tmp_file2.txt', 'w') as fis:
             fis.write(json.dumps(original))
-        os.system('mv '+directory+'tmp_file2.txt '+directory+logfile)
+        os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
         return print('Updates recorded to file!\n')
     else:
         return print('No updates to '+ddir+' folder\n')
@@ -233,6 +287,10 @@ def get_nc(fname, verbose=False):
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
     dfiles = open_dataframe(fname, varname='FILES')
     dfile_list = dfiles['EVENT_URL'].values
+    # Checking for type - if only one file in json event log, then event_url will be string
+    # Need a list type
+    if type(dfile_list) == str:
+        dfile_list = [dfile_list]
     i = 0
     while i < len(dfile_list):
         # Check if file exists or has already been downloaded
@@ -240,10 +298,12 @@ def get_nc(fname, verbose=False):
 
         file_download = check_file(dfile_list[i], data_dir, verbose=verbose)
         if file_download:
+            # Might want to add a check for complete download of files
+            # Need to figure out a good way to do this
             # os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
             os.system('wget -P'+data_dir+' '+dfile_list[i])
             if verbose:
                 print('File '+dfile_list[i]+' downloaded to '+data_dir)
         i += 1
-    record_change(ddir=data_dir, directory=data_dir, logfile='data_logfile.txt')
+    record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
     return print('File downloads complete')
