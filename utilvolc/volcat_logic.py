@@ -78,9 +78,11 @@ def get_files(verbose=False):
     jdir = '/pub/jpsss_upload/'
     ddir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
     logdir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
-    # TO DO:
+
     # Delete files from jpsss_uploads folder that is older than 7 days
     # Files are only available for 7 days on the ftp
+    # Dont have permissions to delete files from jpsss_upload!
+    # delete_old(jdir, verbose=verbose)
 
     # Finds json files added to ftp folder
     added = new_json(jdir, logdir, verbose=verbose)
@@ -95,9 +97,9 @@ def get_files(verbose=False):
     # Logs event summary json files
     record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
 
-    # TO DO:
-    # Create function that determines age of json log files. Delete files older than 7 days
+    # Delete files from json event log folder that are older than 7 days
     # Netcdf files are only available for 7 days on the ftp
+    delete_old(logdir, verbose=verbose)
 
     # Opens json event files
     # Finds event file urls for download
@@ -109,6 +111,10 @@ def get_files(verbose=False):
         print(logdir+log_list[x])
         get_nc(logdir+log_list[x], verbose=verbose)
         x += 1
+
+    # TO DO:
+    # Could create a function that moves already downloaded netcdf files to new location
+    # Some sort of filing system if desired
 
 
 def new_json(jdir, logdir, logfile='json_log.txt', verbose=False):
@@ -146,8 +152,51 @@ def open_dataframe(fname, varname=None):
         dataf = jsonf[varname]
     else:
         dataf = jsonf
-    data = pd.DataFrame.from_dict(dataf)
+    if type(dataf) == list:
+        data = pd.DataFrame.from_dict(dataf)
+    if type(dataf) == dict:
+        data = pd.DataFrame.from_dict([dataf])
     return data
+
+
+def delete_old(directory, verbose=False):
+    """ Determines the age of the files in the specified folder.
+    Deletes files older than 7 days, since this is the length of time
+    the files exist on the wisconsin ftp site.
+    CURRENTLY NOT CREATING A LOG
+    Could modify to adjust time for deletion (longer or shower than 7 days)
+    Inputs:
+    directory: directory of files to determine age (string)
+    Outputs:
+    string: number of files deleted from directory and total size of files (string)
+    """
+    import time
+    import shutil
+    import glob
+    # import
+    days = 7
+    now = time.time()  # current time
+    deletetime = now - (days * 86400)  # delete time
+    deletefiles = []  # creating list of files to delete
+    for files in os.listdir(directory):
+        files = os.path.join(directory, files)  # Joining path and filename
+        if os.stat(files).st_mtime < deletetime:
+            if os.path.isfile(files):
+                deletefiles.append(files)  # Creating list of files to delete
+    if verbose:
+        print("Files to be deleted: "+str(deletefiles))
+    count = 0
+    size = 0.0
+    mm = 0
+    while mm < len(deletefiles):
+        size = size + (os.path.getsize(deletefiles[mm]) / (124*124))
+        os.remove(deletefiles[mm])
+        count = count+1
+        mm += 1
+    if verbose:
+        return print('Deleted '+str(count) + ' files, totalling '+str(round(size, 2))+' MB.')
+    else:
+        return print('Done')
 
 
 def get_log_list(data):
@@ -217,7 +266,7 @@ def check_file(fname_url, directory, verbose=False):
     outputs:
     Boolean: True, False
     """
-    #original = open_log(directory)
+    # original = open_log(directory)
     original = list(f for f in os.listdir(directory) if f.endswith('.nc'))
     s = fname_url.rfind('/')
     current = fname_url[s+1:]
@@ -275,6 +324,25 @@ def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=Fa
         return print('No updates to '+ddir+' folder\n')
 
 
+def record_missing(mlist, mdir, mfile='missing_files.txt'):
+    """ Records files that are not downloaded.
+    Inputs:
+    mlist: list of missing files (list)
+    mdir: directory to write missing file (string)
+    mfile: missing file full name (string)
+    Outputs:
+    text file with list of missing files
+    """
+    if os.path.exists(mdir+mfile):
+        txtfile = open(mdir+mfile, 'a')
+    else:
+        txtfile = open(mdir+mfile, 'w')
+    for element in mlist:
+        txtfile.write(element + '\n')
+    txtfile.close()
+    return print('Missing files added to '+mdir+mfile)
+
+
 def get_nc(fname, verbose=False):
     """ Finds and downloads netcdf files in json event log files from ftp.
     Inputs:
@@ -287,6 +355,7 @@ def get_nc(fname, verbose=False):
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
     dfiles = open_dataframe(fname, varname='FILES')
     dfile_list = dfiles['EVENT_URL'].values
+    missing = []
     # Checking for type - if only one file in json event log, then event_url will be string
     # Need a list type
     if type(dfile_list) == str:
@@ -302,8 +371,30 @@ def get_nc(fname, verbose=False):
             # Need to figure out a good way to do this
             # os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
             os.system('wget -P'+data_dir+' '+dfile_list[i])
-            if verbose:
-                print('File '+dfile_list[i]+' downloaded to '+data_dir)
+            if os.path.exists(data_dir+dfile_list[i]):
+                if verbose:
+                    print('File '+dfile_list[i]+' downloaded to '+data_dir)
+            else:
+                missing.append(dfile_list[i])
+                if verbose:
+                    print('File '+dfile_list[i]+' NOT DOWNLOADED!')
+                    print('From json file: '+fname)
         i += 1
     record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
-    return print('File downloads complete')
+    if len(missing) > 0:
+        record_missing(missing, data_dir, mfile='missing_netcdfs.txt')
+        return print('File downloads complete. Missing files located in missing_netcdfs.txt')
+    else:
+        return print('File downloads complete. No missing files.')
+
+
+def write_emitimes(fname, emitdir, inputdict, verbose=True):
+    """Writes emitimes file from the volcat netcdf file provided. Still in progress!
+    Inputs:
+    fname: name of netcdf file (string)
+    emitdir: Directory to write emitimes files (string)
+    inputdict: dictionary of inputs for writing emitimes file (number of particles, duration,layer, etc.)
+    Output:
+    emitimes file written to designated directory
+    """
+    from utilvolc import write_emitimes as we
