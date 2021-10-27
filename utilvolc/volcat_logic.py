@@ -109,7 +109,7 @@ def get_files(verbose=False):
     x = 0
     while x < len(log_list):
         print(logdir+log_list[x])
-        get_nc(logdir+log_list[x], verbose=verbose)
+        get_nc(logdir+log_list[x], mkdir=True, verbose=verbose)
         x += 1
 
     # TO DO:
@@ -258,16 +258,17 @@ def open_log(logdir, logfile=None):
     return original
 
 
-def check_file(fname_url, directory, verbose=False):
+def check_file(fname_url, directory, suffix='.nc', verbose=False):
     """ Checks if file in fname_url exists on our servers
     Inputs:
     fname_url: full ftp url for file (string)
     directory: directory of data file list
+    suffix: file suffix (string)
     outputs:
     Boolean: True, False
     """
     # original = open_log(directory)
-    original = list(f for f in os.listdir(directory) if f.endswith('.nc'))
+    original = list(f for f in os.listdir(directory) if f.endswith(suffix))
     s = fname_url.rfind('/')
     current = fname_url[s+1:]
     if current in original:
@@ -343,16 +344,45 @@ def record_missing(mlist, mdir, mfile='missing_files.txt'):
     return print('Missing files added to '+mdir+mfile)
 
 
-def get_nc(fname, verbose=False):
+def make_dir(data_dir, fname, verbose=False):
+    """ Finds volcano name from json event log file.
+    If name has ',' or spaces, the name is modified.
+    Example: Tigre, Isla el --> Isla_el_Tigre
+    Checks if a folder by that name already exists. If it does not, the folder is generated.
+    Inputs:
+    data_dir: directory where data are located
+    fname: name of json event log file
+    Outputs:
+    volcname: string
+    New directory is created if it didn't exist
+    """
+    volcname = open_dataframe(fname)['VOLCANO_NAME'].values[0]
+    if ',' in volcname:
+        s = volcname.find(',')
+        tmp = volcname[:s]
+        tmp2 = volcname[s+2:]
+        volcname = tmp2+'_'+tmp
+    if ' ' in volcname:
+        volcname = volcname.replace(' ', '_')
+    if not os.path.exists(data_dir+volcname):
+        os.makedirs(data_dir+volcname)
+        if verbose:
+            print('Directory '+data_dir+volcname+' created')
+    return volcname
+
+
+def get_nc(fname, mkdir=True, verbose=False):
     """ Finds and downloads netcdf files in json event log files from ftp.
     Inputs:
     fname: filename of json event log file
+    mkdir: make directory of volcano name, download files to that directory (boolean)
+    verbose: (boolean)
     Outputs:
     Netcdf event files are download to specified location
     """
-    import os
     # This should be changed, a specified data file location
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+    volcname = make_dir(data_dir, fname, verbose=verbose)
     dfiles = open_dataframe(fname, varname='FILES')
     dfile_list = dfiles['EVENT_URL'].values
     missing = []
@@ -365,22 +395,24 @@ def get_nc(fname, verbose=False):
         # Check if file exists or has already been downloaded
         # If it has not, the download file from event_url
 
-        file_download = check_file(dfile_list[i], data_dir, verbose=verbose)
+        file_download = check_file(dfile_list[i], data_dir+volcname, verbose=verbose)
         if file_download:
             # Might want to add a check for complete download of files
             # Need to figure out a good way to do this
             # os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
-            os.system('wget -P'+data_dir+' '+dfile_list[i])
-            if os.path.exists(data_dir+dfile_list[i]):
+            os.system('wget -P'+data_dir+volcname+'/ '+dfile_list[i])
+            s = dfile_list[i].rfind('/')
+            dfile = dfile_list[i][s+1:]
+            if os.path.isfile(data_dir+volcname+'/'+dfile):
                 if verbose:
-                    print('File '+dfile_list[i]+' downloaded to '+data_dir)
+                    print('File '+dfile+' downloaded to '+data_dir+volcname)
             else:
                 missing.append(dfile_list[i])
                 if verbose:
-                    print('File '+dfile_list[i]+' NOT DOWNLOADED!')
+                    print('File '+dfile+' NOT DOWNLOADED!')
                     print('From json file: '+fname)
         i += 1
-    record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
+    #record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
     if len(missing) > 0:
         record_missing(missing, data_dir, mfile='missing_netcdfs.txt')
         return print('File downloads complete. Missing files located in missing_netcdfs.txt')
