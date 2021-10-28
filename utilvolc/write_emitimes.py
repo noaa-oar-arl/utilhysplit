@@ -298,7 +298,9 @@ class InsertVolcat:
             areafile = areafile[0]
             areaf = xr.open_dataset(areafile).area
         else:
-            print("No area file detected! Please use self.get_area()")
+            print('No area file detected! Calculating area now')
+            areaf = self.get_area()
+            #print("No area file detected! Please use self.get_area()")
 
         # Calculating mass - rate is (mass/hr) in HYSPLIT
         # area needs to be in m^2 not km^2!
