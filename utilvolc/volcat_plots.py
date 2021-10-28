@@ -14,6 +14,9 @@ from utilhysplit.evaluation import statmain
 class VolcatPlots:
 
     def __init__(self,dsetlist):
+        """
+        dsetlist can be from output of volcat.get_volcat_list function
+        """
         self.dset = dsetlist
         self.set_plot_settings()
 
@@ -312,7 +315,7 @@ class VolcatPlots:
         yval = self.tmasslist
         xval = self.dlist
 
-        ys = self.spline(self.dtlist)
+        #ys = self.spline(self.dtlist)
         #ax.plot(xval,ys,self.spline_clr, LineWidth=3,alpha=0.6)
         eee = 80
         #ax.plot(xval[20:eee],yval[20:eee],self.main_clr)

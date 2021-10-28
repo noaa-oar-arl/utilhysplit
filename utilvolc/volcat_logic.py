@@ -4,22 +4,30 @@ import os
 
 
 def workflow():
-    # check for event summary files and read
-    # decide which file list json files to pull
-    # these files change so will need to be re-pulled (or maybe new files are written?).
-    # pull file list json files and read
-    # decide which event files to pull.
-    # check if file already exists.
-    # os.isfile(filename)
-    # check if file meets time resolution requirement (spacing every 10 minutes)
-    # check if file meets other requirements as needed.
-    # pull file(s)
-    # link from json dictionary
-    # make parallax corrected files
-    # make emit-times files
-    # area calculation
-    # some decision logic about when and what kind of HYSPLIT runs we make.
-    # are they automatic
+    # done - check for event summary files and read
+               # use a text log file to keep track.
+    # (later?) - decide which file list json files to pull (may not be needed).
+    # (now) - pulling all event log files (json format). 
+               # (done) check if modified on their site. if not modified don't pull them again.
+               #  no log file.
+    # (later?) decide which event files (netcdf) to pull.
+    # (now) -  pull all event files (netcdf) to pull.
+               # checks to see if file already exists. only pulls non-existing files.
+               # use a text log file to keep track.
+               # (later?) check if file meets other requirements (time resolution???) as needed.
+    # in progress:  
+           # link from json dictionary. has some information such as vaac region.
+           # information is going into a pandas data frame with column headers.
+           # functions can be added 
+    # in progress: make parallax corrected files
+    # TO DO: combine g001 g002 g003 etc. files.
+    #        for now only use g001 but will need to add them together later.
+    # TO DO: generate plots of total mass, total area, max top height for event (defined by events in event log file). Can use volcplot.py functions.
+    # in progress: make emit-times files
+    # in progress: area calculation
+                   # do not need to have separate area file.
+    # (skip for now?) some decision logic about when and what kind of HYSPLIT runs we make.
+    # (next step) automatic
     # are they triggered by a request from web.
     # Limited number of runs for active volcano and then link to READY website
     # where they can choose to modify inputs.
