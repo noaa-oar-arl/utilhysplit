@@ -17,11 +17,14 @@ class VolcatPlots:
         """
         dsetlist can be from output of volcat.get_volcat_list function
         """
+        # sort dset list by time
+        def ftime(x):
+            return x.time.values
+        dsetlist.sort(key=ftime)
         self.dset = dsetlist
         self.set_plot_settings()
 
     def make_arrays(self):
-        print('here')
         das = self.dset
  
         #sns.set()
@@ -48,6 +51,7 @@ class VolcatPlots:
             try:
                 vmass  = volcat.get_mass(das[iii],clip=True)
             except:
+                print('cannot get mass',iii)
                 break
             vht  = volcat.get_height(das[iii],clip=True)
             vrad  = volcat.get_radius(das[iii],clip=True)
@@ -178,9 +182,9 @@ class VolcatPlots:
         self.spline = scipy.interpolate.UnivariateSpline(self.dtlist,self.tmasslist,s=s)
 
     def set_plot_settings(self):
-        self.main_clr = '--b'
+        self.main_clr = '-b.'
         self.spline_clr = '-r'
-        self.sub_clrs = ['--r','--c']
+        self.sub_clrs = ['r.','c.']
 
     def plot_multiB(self,fignum=1):
         sns.set_style('whitegrid')
@@ -221,14 +225,14 @@ class VolcatPlots:
         plt.tight_layout()
         return fig
 
-    def plot_multiA(self,fignum=1,smooth=20):
+    def plot_multiA(self,fignum=1,smooth=20,yscale='linear'):
         self.make_spline(s=smooth)
 
         sns.set_style('whitegrid')
         fig = plt.figure(fignum,figsize=[10,10])
 
         ax1 = fig.add_subplot(2,2,1)
-        self.sub_plot_mass(ax1)
+        self.sub_plot_mass(ax1,yscale=yscale)
 
         ax2 = fig.add_subplot(2,2,2)
         self.sub_plot_area(ax2)
@@ -286,8 +290,6 @@ class VolcatPlots:
         ax.plot(xval,yval,self.main_clr)
         ax.set_ylabel('Kurtosis')
         ax.set_xlabel('Time')
-       
-       
 
     def sub_plot_skew(self,ax):
         xval = self.dfstats['date']
@@ -324,7 +326,6 @@ class VolcatPlots:
         if yscale == 'ln': 
            ax.semilogy(basey=np.e) 
            ax.yaxis.set_major_formatter(mtick.FuncFormatter(ticks)) 
-
         ax.set_ylabel('Total mass (Tg)')
         ax.set_xlabel('Time')
 

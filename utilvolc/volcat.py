@@ -865,6 +865,9 @@ class VolcatName:
         return str.join("_", val)
 
     def parse(self, fname):
+        # if full_disk in filename replace with fulldisk because _ is used as separator
+        fname = fname.replace('Full_Disk', 'FullDisk')
+        fname = fname.replace('FULL_DISK', 'FullDisk')
         temp = fname.split("_")
         if "pc" in temp[-1]:
             self.pc_corrected = True
