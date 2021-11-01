@@ -4,31 +4,33 @@ import os
 
 
 def workflow():
+    # COMPLETED:
     # done - check for event summary files and read
-               # use a text log file to keep track.
+    # use a text log file to keep track.
     # (later?) - decide which file list json files to pull (may not be needed).
-    # (now) - pulling all event log files (json format). 
-               # (done) check if modified on their site. if not modified don't pull them again.
-               #  no log file.
+    # (now) - pulling all event log files (json format).
+    # (done) check if modified on their site. if not modified don't pull them again.
+    #  no log file.
     # (later?) decide which event files (netcdf) to pull.
-    # (now) -  pull all event files (netcdf) to pull.
-               # checks to see if file already exists. only pulls non-existing files.
-               # use a text log file to keep track.
-               # (later?) check if file meets other requirements (time resolution???) as needed.
-    # in progress:  
-           # link from json dictionary. has some information such as vaac region.
-           # information is going into a pandas data frame with column headers.
-           # functions can be added 
+    # (now) -  pull all event files (netcdf). Organized by volcano name (folder)
+    # checks to see if file already exists. only pulls non-existing files.
+    # (later?) check if file meets other requirements (time resolution???) as needed.
+
+    # IN PROGRESS:
+    # link from json dictionary. has some information such as vaac region.
+    # information is going into a pandas data frame with column headers.
+    # functions can be added
     # in progress: make parallax corrected files
     # TO DO: combine g001 g002 g003 etc. files.
     #        for now only use g001 but will need to add them together later.
     # TO DO: generate plots of total mass, total area, max top height for event (defined by events in event log file). Can use volcplot.py functions.
     # in progress: make emit-times files
     # in progress: area calculation
-                   # do not need to have separate area file.
+    # do not need to have separate area file.
     # (skip for now?) some decision logic about when and what kind of HYSPLIT runs we make.
-    # (next step) automatic
-    # are they triggered by a request from web.
+
+    # NEXT STEPS:
+    # automatic runs are they triggered by a request from web.
     # Limited number of runs for active volcano and then link to READY website
     # where they can choose to modify inputs.
     # populate with latitude longitude what satellite retrievals are available.etc
@@ -266,10 +268,10 @@ def open_log(logdir, logfile=None):
     return original
 
 
-def check_file(fname_url, directory, suffix='.nc', verbose=False):
-    """ Checks if file in fname_url exists on our servers
+def check_file(fname, directory, suffix='.nc', verbose=False):
+    """ Checks if file in fname exists on our servers
     Inputs:
-    fname_url: full ftp url for file (string)
+    fname: full path filename of file (string)
     directory: directory of data file list
     suffix: file suffix (string)
     outputs:
@@ -277,8 +279,8 @@ def check_file(fname_url, directory, suffix='.nc', verbose=False):
     """
     # original = open_log(directory)
     original = list(f for f in os.listdir(directory) if f.endswith(suffix))
-    s = fname_url.rfind('/')
-    current = fname_url[s+1:]
+    s = fname.rfind('/')
+    current = fname[s+1:]
     if current in original:
         if verbose:
             print('File '+current+' already downloaded')
@@ -352,7 +354,7 @@ def record_missing(mlist, mdir, mfile='missing_files.txt'):
     return print('Missing files added to '+mdir+mfile)
 
 
-def make_dir(data_dir, fname, verbose=False):
+def make_volcdir(data_dir, fname, verbose=False):
     """ Finds volcano name from json event log file.
     If name has ',' or spaces, the name is modified.
     Example: Tigre, Isla el --> Isla_el_Tigre
@@ -372,10 +374,7 @@ def make_dir(data_dir, fname, verbose=False):
         volcname = tmp2+'_'+tmp
     if ' ' in volcname:
         volcname = volcname.replace(' ', '_')
-    if not os.path.exists(data_dir+volcname):
-        os.makedirs(data_dir+volcname)
-        if verbose:
-            print('Directory '+data_dir+volcname+' created')
+    make_dir(data_dir, newdir=volcname, verbose=verbose)
     return volcname
 
 
@@ -390,7 +389,7 @@ def get_nc(fname, mkdir=True, verbose=False):
     """
     # This should be changed, a specified data file location
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
-    volcname = make_dir(data_dir, fname, verbose=verbose)
+    volcname = make_volcdir(data_dir, fname, verbose=verbose)
     dfiles = open_dataframe(fname, varname='FILES')
     dfile_list = dfiles['EVENT_URL'].values
     missing = []
@@ -420,12 +419,84 @@ def get_nc(fname, mkdir=True, verbose=False):
                     print('File '+dfile+' NOT DOWNLOADED!')
                     print('From json file: '+fname)
         i += 1
-    #record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
+    # record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
     if len(missing) > 0:
         record_missing(missing, data_dir, mfile='missing_netcdfs.txt')
         return print('File downloads complete. Missing files located in missing_netcdfs.txt')
     else:
         return print('File downloads complete. No missing files.')
+
+
+def make_dir(data_dir, newdir='pc_corrected', verbose=False):
+    """Create new directory if it does not exist.
+    Inputs:
+    datadir: Directory in which to create new directory (string)
+    newdir: name of new directory (string)
+    """
+    # Make sure data_dir ends with '/'
+    data_dir = os.path.join(data_dir, '')
+    # Go in to given directory, create create new directory if not already there
+    if not os.path.exists(data_dir+newdir):
+        os.makedirs(data_dir+newdir)
+        if verbose:
+            return print('Directory '+data_dir+newdir+' created')
+        else:
+            return None
+
+
+def correct_pc(data_dir, newdir='pc_corrected', verbose=False):
+    """Create pc_corrected folder if not already there.
+    Create pc_corrected netcdf file in pc_corrected folder if not already there
+    """
+    # May want to streamline this more so all files are not checked each time!
+    from glob import glob
+    from utilvolc import volcat
+    # Create pc_corrected netcdf files if not already created, put in pc_corrected folder
+    # Make sure data_dir ends with '/'
+    data_dir = os.path.join(data_dir, '')
+    # Create pc_corrected folder if not already there
+    make_dir(data_dir, verbose=verbose)
+    pc_dir = os.path.join(data_dir, newdir, '')
+    # Create list of files original directory
+    dfile_list = sorted(glob(data_dir+'*.nc'))
+    # Create hypothetical list of pc corrected files
+    file_list = []
+    pcfile_list = []
+    for element in dfile_list:
+        s = element.rfind('/')
+        fname = element[s+1:]
+        pcfname = os.path.splitext(fname)[0]+'_pc.nc'
+        make_pcfile = check_file(pcfname, pc_dir, verbose=verbose)
+        if make_pcfile:
+            # Create pc_corrected file if not in pc directory
+            flist = [fname]
+            print(data_dir+fname)
+            volcat.write_parallax_corrected_files(data_dir, pc_dir, flist=flist)
+    return None
+
+
+def make_pc_files(data_dir, verbose=False):
+    """ Makes corrected pc files.
+    Might want to streamline the check process"""
+    # Make list of available directories
+    dirlist = os.listdir(data_dir)
+    for direct in dirlist:
+        file_dir = os.path.join(data_dir, direct, '')
+        correct_pc(file_dir, verbose=verbose)
+    return None
+
+
+def make_volcat_plots(fnames, saveas=None):
+    """Makes time series plots of total mass, total area, MER, max height.
+    Inputs:
+    fnames: list of volcat netcdfs
+    saveas: full filename for image (string)
+    Outputs:
+    Shows 4-panel figure
+    Saves figure to designated filepath+name if saveas is not None
+    """
+    # Open volcat files in list as xarray
+    # Create list of xarray datasets
 
 
 def write_emitimes(fname, emitdir, inputdict, verbose=True):
