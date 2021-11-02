@@ -52,8 +52,12 @@ class VolcatPlots:
                 vmass  = volcat.get_mass(das[iii],clip=True)
             except:
                 print('cannot get mass',iii)
-                break
-            vht  = volcat.get_height(das[iii],clip=True)
+                continue
+            try:
+                vht  = volcat.get_height(das[iii],clip=True)
+            except:
+                print('cannot get height',iii)
+                continue
             vrad  = volcat.get_radius(das[iii],clip=True)
 
             self.vmass.append(vmass)  
@@ -357,7 +361,7 @@ class VolcatPlots:
         ax.set_ylabel('Total Area (km$^2$)')
         ax.set_xlabel('Time')
 
-    def sub_plot_mer(self,ax, yscale='linear', spline=False):
+    def sub_plot_mer(self,ax, yscale='log', spline=False):
         yval = self.mer
         xval = self.dlist
         if not spline:
