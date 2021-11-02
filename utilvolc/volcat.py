@@ -81,7 +81,7 @@ def open_dataset(
     Opens single VOLCAT file
     gridspace: only necessary if doing parallax correction
     mask_and_scale : needs to be set to True for Bezymianny data.
-    decode_times   : needs to be True for some of the hdf data.
+    decode_times   : needs to be True for parallax corrected files and some of hdf data.
 
     """
     # 03/07/2021 The Bezy height data has a fill value of -1,
@@ -89,18 +89,18 @@ def open_dataset(
     # The scale factor needs to be applied to get output in km.
 
     # ash_mass_loading has no scale_factor of offset and fill value is -999.
-    dset = xr.open_dataset(
-        fname, mask_and_scale=mask_and_scale, decode_times=decode_times
-    )
-    # not needed for new Bezy data.
+    if "pc.nc" in fname or "rg.nc" in fname:
+        dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale, decode_times=True)
+        return dset
+    else:
+        dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale, decode_times=decode_times)
+        # not needed for new Bezy data.
     try:
         dset = dset.rename({"Dim1": "y", "Dim0": "x"})
     except:
         pass
     if "some_vars.nc" in fname:
         pass
-    elif "pc.nc" in fname or "rg.nc" in fname:
-        return dset
     else:
         # use parallax corrected if available and flag is set.
         dset = _get_latlon(dset, "latitude", "longitude")
@@ -994,7 +994,7 @@ def get_data(dset, vname, clip=True):
         fillvalue = None
     if clip:
         box = bbox(gen, fillvalue)
-        gen = gen[:, box[0][0] : box[1][0], box[0][1] : box[1][1]]
+        gen = gen[:, box[0][0]: box[1][0], box[0][1]: box[1][1]]
         if "_FillValue" in gen.attrs:
             gen = gen.where(gen != fillvalue)
         else:
