@@ -47,7 +47,7 @@ class VolcatPlots:
         time_elapsed=0
         self.vmass =  []
 
-        for iii in np.arange(0,len(das)+1):
+        for iii in np.arange(0,len(das)):
             try:
                 vmass  = volcat.get_mass(das[iii],clip=True)
             except:
