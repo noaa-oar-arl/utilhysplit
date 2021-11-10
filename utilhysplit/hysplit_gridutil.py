@@ -14,11 +14,12 @@ def align_grids(grid1,grid2):
     # takes care of making sure grids are aligned.
     # can use when grid definition not in the attributes.
     grida, gridb = xr.align(grid1, grid2, join='outer')
-    
-    if not attr_check(grid1) or not attr_check(grid2):     
-        attrs = calc_grids(grid1, grid2, verbose=False)
-        grida.attrs.update(attrs)
-        gridb.attrs.update(attrs)
+
+    # always update the attributes?
+    #if not attr_check(grid1) or not attr_check(grid2):     
+    attrs = calc_grids(grid1, grid2, verbose=False)
+    grida.attrs.update(attrs)
+    gridb.attrs.update(attrs)
 
     grida = hysplit.reset_latlon_coords(grida)
     gridb = hysplit.reset_latlon_coords(gridb)
@@ -36,17 +37,28 @@ def compare_grids(c1,c2,verbose=False, tolerance=1e-5):
     check = [] 
     for key in ['llcrnr latitude','llcrnr longitude','Latitude Spacing','Longitude Spacing']:
         check.append(np.abs(grid1[key]-grid2[key]))
-    return check_grids(check,verbose)
+    if not check_grids(check) and verbose:
+       print('Grids do not match')
+       print('check values', check)
+    return check_grids(check)
 
-def check_grids(check, verbose=False, tolerance=1e-5):
+def check_grids(check, tolerance=1e-5, verbose=False):
     for val in check:
         if val > tolerance: 
-           if verbose:
-               print('Grids do not match')
-               print(grid1)
-               print(grid2)
            return False
     return True
+
+def convert_lon(grid):
+    # if corner longitude is negative
+    # convert to positive and then reset the coordinates
+    attrs = find_grid_specs(grid)
+    if attrs['llcrnr longitude'] < 0:
+       attrs['llcrnr longitude'] += 360
+       grid.attrs.update(attrs)
+       grid2 = hysplit.reset_latlon_coords(grid)
+       return grid2
+    else:
+       return grid
 
 def find_grid_specs(grid,verbose=False):
     """
@@ -56,6 +68,9 @@ def find_grid_specs(grid,verbose=False):
     Note that the extent of the grid is just calculated from the
     maximum value of the latitude and longitude in the file and may
     not reflect the true extent of the original grid.
+
+    Note : this function may not work  if there are nans in the
+    latitude longitude field.
     """
     xv = grid.x.values
     iii = len(xv)-2
@@ -64,7 +79,7 @@ def find_grid_specs(grid,verbose=False):
     dlon = np.abs(lon2 - lon1)
     xval = grid.isel(x=iii).x.values-1
     corner_lon = lon1 - xval*dlon
-
+         
     yv = grid.y.values
     iii = len(yv)-2
     lat1 = grid.isel(y=iii).latitude.values[0]
@@ -104,10 +119,12 @@ def calc_grids(c1,c2,verbose=False):
     #check = [] 
     #for key in ['llcrnr latitude','llcrnr longitude','Latitude Spacing','Longitude Spacing']:
     #    check.append(np.abs(grid1[key]-grid2[key]))
-    if not compare_grids(c1,c2):
-       print('Warning: calc_grids : grids are not the same')
-       return {}
 
+    if not compare_grids(c1,c2,verbose=True):
+       print('Warning: calc_grids : grids are not the same')
+       print('grid1' , grid1)
+       print('grid2' , grid1)
+       return {}
     attrs = grid1
     nlat = np.max([grid1['Number Lat Points'],grid2['Number Lat Points']])
     nlon = np.max([grid1['Number Lon Points'],grid2['Number Lon Points']])
