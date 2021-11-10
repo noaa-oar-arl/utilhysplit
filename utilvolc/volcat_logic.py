@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 import os
+from glob import glob
 
 
 def workflow():
@@ -354,6 +355,18 @@ def record_missing(mlist, mdir, mfile='missing_files.txt'):
     return print('Missing files added to '+mdir+mfile)
 
 
+def fix_volc_name(volcname):
+    """ Fixes the volcano name if a comma, or space appear in the name"""
+    if ',' in volcname:
+        s = volcname.find(',')
+        tmp = volcname[:s]
+        tmp2 = volcname[s+2:]
+        volcname = tmp2+'_'+tmp
+    if ' ' in volcname:
+        volcname = volcname.replace(' ', '_')
+    return volcname
+
+
 def make_volcdir(data_dir, fname, verbose=False):
     """ Finds volcano name from json event log file.
     If name has ',' or spaces, the name is modified.
@@ -366,14 +379,8 @@ def make_volcdir(data_dir, fname, verbose=False):
     volcname: string
     New directory is created if it didn't exist
     """
-    volcname = open_dataframe(fname)['VOLCANO_NAME'].values[0]
-    if ',' in volcname:
-        s = volcname.find(',')
-        tmp = volcname[:s]
-        tmp2 = volcname[s+2:]
-        volcname = tmp2+'_'+tmp
-    if ' ' in volcname:
-        volcname = volcname.replace(' ', '_')
+    volc = open_dataframe(fname)['VOLCANO_NAME'].values[0]
+    volcname = fix_volc_name(volc)
     make_dir(data_dir, newdir=volcname, verbose=verbose)
     return volcname
 
@@ -475,28 +482,119 @@ def correct_pc(data_dir, newdir='pc_corrected', verbose=False):
     return None
 
 
+def list_dirs(data_dir):
+    """ Lists subdirectories within give directory
+    Inputs:
+    data_dir: directory path of parent directory (string)
+    Outputs:
+    dirlist: list of subdirectories within data_dir
+    """
+    dirlist = os.listdir(data_dir)
+    for f in dirlist:
+        if f.endswith('txt'):
+            dirlist.remove(f)
+    return dirlist
+
+
 def make_pc_files(data_dir, verbose=False):
     """ Makes corrected pc files.
-    Might want to streamline the check process"""
+    Might want to streamline the check process at some point. Not necessary now"""
     # Make list of available directories
-    dirlist = os.listdir(data_dir)
+    dirlist = list_dirs(data_dir)
     for direct in dirlist:
         file_dir = os.path.join(data_dir, direct, '')
         correct_pc(file_dir, verbose=verbose)
-    return None
+    return print('Parallax corrected files available in these directories: '+str(dirlist))
 
 
-def make_volcat_plots(fnames, saveas=None):
+def volcplots(das_list, img_dir, pc=True, saveas=True):
     """Makes time series plots of total mass, total area, MER, max height.
     Inputs:
-    fnames: list of volcat netcdfs
-    saveas: full filename for image (string)
+    dfile_list: list of volcat xarray (list)
+    imd_dir: filepath of image directory (string)
+    saveas: (boolean) default=True
     Outputs:
     Shows 4-panel figure
-    Saves figure to designated filepath+name if saveas is not None
+    Saves figure image filepath if saveas=True
     """
-    # Open volcat files in list as xarray
-    # Create list of xarray datasets
+    from utilvolc import volcat_plots as vp
+    import matplotlib.pyplot as plt
+    # Initalize VolcatPlots class
+    vplot = vp.VolcatPlots(das_list)
+    vplot.make_arrays()
+    vplot.set_plot_settings()
+    fig1 = vplot.plot_multiA(fignum=1, smooth=0.08, yscale='linear')
+    fig1.autofmt_xdate()
+    volcname = das_list[0].attrs['volcano_name']
+    volcano = fix_volc_name(volcname)
+    dset_name = das_list[0].attrs['dataset_name']
+    s = dset_name.find('b')
+    e = dset_name.rfind('_')
+    begin_time = dset_name[s+1:e]
+    if saveas:
+        if pc:
+            figname = volcano+'_'+begin_time+'_mass_area_kgs_maxhgt_pc_corrected.png'
+        else:
+            figname = volcano+'_'+begin_time+'mass_area_kgs_maxhgt.png'
+        fig1.savefig(img_dir+figname)
+        plt.close()
+        return print('Figure saved: '+img_dir+figname)
+    else:
+        return fig1.show()
+
+
+def make_volcat_plots(data_dir, volcano=None, pc=True, saveas=True, verbose=False):
+    """Calls functions to create plots of volcat files within designated data directory.
+    To add: Make flag for calling different plotting funtions with this function?
+    Inputs:
+    data_dir: path for data directory (string)
+    volcano: name of specific volcano (string)
+         If None, function goes through all available volcano subdirectories
+    pc: (boolean) default=True - use parallax corrected files
+    saveas: (boolean) default=True
+    verbose: (boolean) default=False
+    Outputs:
+    Figures generated in image directory
+
+    TO DO: May want to add capbility to use subset of files (feature id?, beginning time?)
+    Should be done in volcat.get_volcat_list() function.
+    """
+    from utilvolc import volcat
+    # List directories in data_dir
+    dirlist = list_dirs(data_dir)
+    datadirs = []
+    # Check to see if given volcano is within list of directories (if not None)
+    # Generate list of volcano directories
+    if volcano:
+        if (volcano in dirlist):
+            datadirs.append(os.path.join(data_dir, volcano, ''))
+        else:
+            return(print(volcano+' not in '+str(dirlist)))
+    else:
+        for volcano in dirlist:
+            datadirs.append(os.path.join(data_dir, volcano, ''))
+    # Create image directory within volcano directory if it doesnt exist
+    img_dirs = []
+    for directory in datadirs:
+        newdir = 'Images'
+        make_dir(directory, newdir=newdir, verbose=verbose)
+        image_dir = os.path.join(directory, newdir, '')
+        img_dirs.append(image_dir)
+        # Generate list of files
+        if pc:
+            # Check if pc_corrected directory exists
+            pcdir = 'pc_corrected'
+            if not os.path.exists(directory+pcdir):
+                return (print('pc_corrected directory does not exist! Make '+directory+pcdir))
+            else:
+                das_list = volcat.get_volcat_list(directory+pcdir)
+        else:
+            # Using non-parallax corrected files
+            das_list = volcat.get_volcat_list(directory)
+        # Generate plots
+        volcplots(das_list, image_dir, pc=pc, saveas=saveas)
+    # return das_list
+    return print('Figures generated in '+str(img_dirs))
 
 
 def write_emitimes(fname, emitdir, inputdict, verbose=True):
