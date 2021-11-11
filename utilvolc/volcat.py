@@ -540,25 +540,16 @@ def choose_files(volcat_event_df, vid, frequency=10):
     return -1
 
 
-def get_volcat_list(
-    tdir,
-    daterange=None,
-    vid=None,
-    fid=None,
-    flist=None,
-    return_val=2,
-    correct_parallax=True,
-    mask_and_scale=True,
-    decode_times=True,
-    verbose=False,
-    include_last=True,
-):
+def get_volcat_list(tdir, daterange=None, vid=None, fid=None, fdate=None, flist=None, return_val=2, correct_parallax=True, mask_and_scale=True, decode_times=True, verbose=False, include_last=True,):
     """
     returns list of data-arrays with volcat data.
     Inputs:
     tdir: string - directory of volcat files
     daterange: datetime object -  [datetime0, datetime1] or none
     vid: string - volcano ID
+    fid: feature ID
+    fdate: Feature datetime - idate (datetime object or datetime64)
+    flist: list of filenames
     return_val: integer (1,2,3) - see find_volcat() for explanation
     correct_parallax: boolean
     mask_and_scale: boolean
@@ -569,12 +560,16 @@ def get_volcat_list(
     das: list of datasets
     """
     if flist:
-        filnames = flist
+        filenames = flist
     else:
         tframe = get_volcat_name_df(
             tdir, vid=vid, fid=fid, daterange=daterange, include_last=include_last
         )
-        filenames = tframe.filename.values
+        if fdate:
+            eventd = pd.to_datetime(fdate).to_datetime64()
+            filenames = tframe.loc[tframe['idate'] == eventd, 'filename'].tolist()
+        else:
+            filenames = tframe.filename.values
     das = []
     for iii in filenames:
         # opens volcat files using volcat.open_dataset
