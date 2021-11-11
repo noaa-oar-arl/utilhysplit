@@ -543,13 +543,51 @@ def volcplots(das_list, img_dir, pc=True, saveas=True):
         return fig1.show()
 
 
-def make_volcat_plots(data_dir, volcano=None, pc=True, saveas=True, verbose=False):
+def list_times(data_dir, verbose=False):
+    """ Lists all available volcanic beginning event times in given data directory
+    Provides number of files attributed to the given beginning event time.
+    Used to determine which time to create images.
+    Inputs:
+    data_dir: data directory (full path) (string)
+    Outputs:
+    events: pandas dataframe of available times, number files for each time
+    """
+    from utilvolc import volcat
+    import pandas as pd
+    # Creating dataframe of filename information
+    dataf = volcat.get_volcat_name_df(data_dir, include_last=True)
+    event_dates = dataf['idate'].unique()
+    eventd = pd.DataFrame(event_dates, columns=['Event_Dates'])
+    lens = []
+    g = 0
+    while g < len(event_dates):
+        files = dataf.loc[dataf['idate'] == event_dates[g], 'filename']
+        lens.append(len(files))
+        g += 1
+    lensd = pd.DataFrame(lens, columns=['Num_Files'])
+    events = pd.concat([eventd, lensd], axis=1)
+    return events
+
+
+def get_file_list(data_dir, event_date=None, verbose=False):
+    """ Makes list of files based on event date
+    Inputs:
+    data_dir: data directory (full path) (string)
+    event_date: date/time of volcanic eruption (datetime object or datetime64)
+    Outputs:
+    filelist: list of file names (list)
+    """
+    from utilvolc import volcat
+
+
+def make_volcat_plots(data_dir, volcano=None, event_date=None, pc=True, saveas=True, verbose=False):
     """Calls functions to create plots of volcat files within designated data directory.
     To add: Make flag for calling different plotting funtions with this function?
     Inputs:
     data_dir: path for data directory (string)
     volcano: name of specific volcano (string)
          If None, function goes through all available volcano subdirectories
+    event_date: date/time of volcanic eruption (datetime object or datetime64)
     pc: (boolean) default=True - use parallax corrected files
     saveas: (boolean) default=True
     verbose: (boolean) default=False
@@ -560,6 +598,7 @@ def make_volcat_plots(data_dir, volcano=None, pc=True, saveas=True, verbose=Fals
     Should be done in volcat.get_volcat_list() function.
     """
     from utilvolc import volcat
+    from datetime import datetime
     # List directories in data_dir
     dirlist = list_dirs(data_dir)
     datadirs = []
@@ -569,7 +608,7 @@ def make_volcat_plots(data_dir, volcano=None, pc=True, saveas=True, verbose=Fals
         if (volcano in dirlist):
             datadirs.append(os.path.join(data_dir, volcano, ''))
         else:
-            return(print(volcano+' not in '+str(dirlist)))
+            return print(volcano+' not in '+str(dirlist))
     else:
         for volcano in dirlist:
             datadirs.append(os.path.join(data_dir, volcano, ''))
@@ -585,15 +624,20 @@ def make_volcat_plots(data_dir, volcano=None, pc=True, saveas=True, verbose=Fals
             # Check if pc_corrected directory exists
             pcdir = 'pc_corrected'
             if not os.path.exists(directory+pcdir):
-                return (print('pc_corrected directory does not exist! Make '+directory+pcdir))
+                return print('pc_corrected directory does not exist! Make '+directory+pcdir)
             else:
-                das_list = volcat.get_volcat_list(directory+pcdir)
+                volc_dir = (directory+pcdir)
         else:
             # Using non-parallax corrected files
-            das_list = volcat.get_volcat_list(directory)
+            volc_dir = directory
+        if event_date:
+            # Files only with specific event date
+            das_list = volcat.get_volcat_list(volc_dir, fdate=event_date)
+        else:
+            # All files in directory
+            das_list = volcat.get_volcat_list(volc_dir)
         # Generate plots
         volcplots(das_list, image_dir, pc=pc, saveas=saveas)
-    # return das_list
     return print('Figures generated in '+str(img_dirs))
 
 
