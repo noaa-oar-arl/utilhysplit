@@ -9,22 +9,24 @@ def workflow():
     # done - check for event summary files and read
     # use a text log file to keep track.
     # (later?) - decide which file list json files to pull (may not be needed).
-    # (now) - pulling all event log files (json format).
+    # (done) - pulling all event log files (json format).
     # (done) check if modified on their site. if not modified don't pull them again.
     #  no log file.
     # (later?) decide which event files (netcdf) to pull.
-    # (now) -  pull all event files (netcdf). Organized by volcano name (folder)
+    # (done) -  pull all event files (netcdf). Organized by volcano name (folder)
     # checks to see if file already exists. only pulls non-existing files.
     # (later?) check if file meets other requirements (time resolution???) as needed.
+    # (done) - parallax corrected files automatically generated
+    # (done) - generate plots of total mass, total area, max top height for event (defined by events in event log file). Uses volcplot.py functions.
+    # (done) - function generated to list unique eruption event times in each volcano folder so images can be created for individual eruption events
+    #
 
     # IN PROGRESS:
     # link from json dictionary. has some information such as vaac region.
     # information is going into a pandas data frame with column headers.
     # functions can be added
-    # in progress: make parallax corrected files
     # TO DO: combine g001 g002 g003 etc. files.
     #        for now only use g001 but will need to add them together later.
-    # TO DO: generate plots of total mass, total area, max top height for event (defined by events in event log file). Can use volcplot.py functions.
     # in progress: make emit-times files
     # in progress: area calculation
     # do not need to have separate area file.
@@ -489,11 +491,49 @@ def list_dirs(data_dir):
     Outputs:
     dirlist: list of subdirectories within data_dir
     """
-    dirlist = os.listdir(data_dir)
+    dirlist = sorted(os.listdir(data_dir))
     for f in dirlist:
         if f.endswith('txt'):
             dirlist.remove(f)
     return dirlist
+
+
+def num_files(data_dir, verbose=False):
+    """ Lists the subdirectories within the given directory
+    and the number of files within the subdirectories.
+    Inputs:
+    data_dir: directory path of parent string()
+    outputs:
+    dirs_num: pandas DataFrame with directories and number of volcat files within
+    """
+    from glob import glob
+    import pandas as pd
+    vdirlist = list_dirs(data_dir)
+    volcname = []
+    numfiles = []
+    for fdir in vdirlist:
+        tdir = data_dir+'{}/'.format(fdir)
+        fnames = glob(tdir+'*.nc')
+        volcname.append(fdir)
+        numfiles.append(len(fnames))
+        if verbose:
+            print(fdir, len(fnames))
+    vdf = pd.DataFrame(volcname, columns=['Volcano Name'])
+    numdf = pd.DataFrame(numfiles, columns=['Num Files'])
+    dirs_num = pd.concat([vdf, numdf], axis=1)
+    return dirs_num
+
+
+def get_latlon(data_dir):
+    """ Read csv file containing volcano name, latitude, longitude
+    Inputs:
+    data_dir: directory where Volcanoes.csv is located
+    Outputs:
+    volcdf: pandas dataframe of volcanos, latitude, longitude
+    """
+    import pandas as pd
+    volcdf = pd.read_csv(data_dir+'Volcanoes.csv', sep=',')
+    return volcdf
 
 
 def make_pc_files(data_dir, verbose=False):
@@ -531,6 +571,7 @@ def volcplots(das_list, img_dir, pc=True, saveas=True):
     s = dset_name.find('b')
     e = dset_name.rfind('_')
     begin_time = dset_name[s+1:e]
+    # TO DO: Use volcat.get_volcat_name_df to get begin_time value
     if saveas:
         if pc:
             figname = volcano+'_'+begin_time+'_mass_area_kgs_maxhgt_pc_corrected.png'
@@ -569,17 +610,6 @@ def list_times(data_dir, verbose=False):
     return events
 
 
-def get_file_list(data_dir, event_date=None, verbose=False):
-    """ Makes list of files based on event date
-    Inputs:
-    data_dir: data directory (full path) (string)
-    event_date: date/time of volcanic eruption (datetime object or datetime64)
-    Outputs:
-    filelist: list of file names (list)
-    """
-    from utilvolc import volcat
-
-
 def make_volcat_plots(data_dir, volcano=None, event_date=None, pc=True, saveas=True, verbose=False):
     """Calls functions to create plots of volcat files within designated data directory.
     To add: Make flag for calling different plotting funtions with this function?
@@ -587,15 +617,12 @@ def make_volcat_plots(data_dir, volcano=None, event_date=None, pc=True, saveas=T
     data_dir: path for data directory (string)
     volcano: name of specific volcano (string)
          If None, function goes through all available volcano subdirectories
-    event_date: date/time of volcanic eruption (datetime object or datetime64)
+    event_date: date/time of volcanic eruption (datetime object,datetime64, or timestamp)
     pc: (boolean) default=True - use parallax corrected files
     saveas: (boolean) default=True
     verbose: (boolean) default=False
     Outputs:
     Figures generated in image directory
-
-    TO DO: May want to add capbility to use subset of files (feature id?, beginning time?)
-    Should be done in volcat.get_volcat_list() function.
     """
     from utilvolc import volcat
     from datetime import datetime
@@ -639,6 +666,31 @@ def make_volcat_plots(data_dir, volcano=None, event_date=None, pc=True, saveas=T
         # Generate plots
         volcplots(das_list, image_dir, pc=pc, saveas=saveas)
     return print('Figures generated in '+str(img_dirs))
+
+
+def multi_plots(data_dir, volcano=None, eventdf=None, pc=True, saveas=True, verbose=False):
+    """Creates multiple plots in a volcano directory based on event
+    dataframe from vl.list_times().
+    Inputs:
+    data_dir: data parent directory (string)
+    volcano: volcano name (string)
+    eventdf: event dataframe (pandas dataframe)
+    pc: use parallax corrected files? (boolean)
+    saveas: save figures? (boolean)
+    verbose: (boolean)
+    """
+    if eventdf is not None:
+        a = 0
+        while a < len(eventdf):
+            event = eventdf['Event_Dates'][a]
+            numfiles = eventdf['Num_Files'][a]
+            if numfiles > 4:
+                make_volcat_plots(data_dir, volcano=volcano, event_date=event,
+                                  pc=pc, saveas=saveas, verbose=verbose)
+            a += 1
+    else:
+        return "Missing event dataframe: use volcat_logic.list_times()"
+    return "Image files created for events with more than 4 observation files"
 
 
 def write_emitimes(fname, emitdir, inputdict, verbose=True):
