@@ -12,7 +12,7 @@ def workflow():
     # (done) - pulling all event log files (json format).
     # (done) check if modified on their site. if not modified don't pull them again.
     #  no log file.
-    # (later?) decide which event files (netcdf) to pull.
+    # (done) specify vaac region to pull netcdf files from event log files
     # (done) -  pull all event files (netcdf). Organized by volcano name (folder)
     # checks to see if file already exists. only pulls non-existing files.
     # (later?) check if file meets other requirements (time resolution???) as needed.
@@ -27,9 +27,16 @@ def workflow():
     # functions can be added
     # TO DO: combine g001 g002 g003 etc. files.
     #        for now only use g001 but will need to add them together later.
+    # in progress: add function to plot ash mass loading and ash max height
     # in progress: make emit-times files
-    # in progress: area calculation
-    # do not need to have separate area file.
+    # in progress: area calculation - do not need to have separate area file.
+    # in progress: false alarm logic
+    # List volcanoes that are green light - yes it is probably real
+    # Volcanoes that are active
+    # List volcanoes that are red light - we dont think this is active
+    # Delete files in red category after a week or so
+    # List volcanoes that are yellow light - this should be checked by a person
+    # process but dont post to webpage
     # (skip for now?) some decision logic about when and what kind of HYSPLIT runs we make.
 
     # NEXT STEPS:
@@ -78,7 +85,7 @@ def workflow():
     return 0
 
 
-def get_files(verbose=False):
+def get_files(vaac=None, verbose=False):
     """ Use various functions to get all available netcdf files from json event log files
     Uses the different functions within volcat_logic.py
     Sorts through the ftp directory to find json event summary files
@@ -86,7 +93,8 @@ def get_files(verbose=False):
     Keeps track of the json event summary files that have already been downloaded
     Lists event log files, finds the correspondind event file urls for download
     Downloads the event netcdf files
-    Keeps track of the downloaded netcdf files"""
+    Keeps track of the downloaded netcdf files
+    vaac: vaac region (string) can specify region. If None, pulls all available files"""
 
     jdir = '/pub/jpsss_upload/'
     ddir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
@@ -98,7 +106,7 @@ def get_files(verbose=False):
     # delete_old(jdir, verbose=verbose)
 
     # Finds json files added to ftp folder
-    added = new_json(jdir, logdir, verbose=verbose)
+    added = new_json(jdir, logdir)
     added = sorted(added)
     i = 0
     while i < len(added):
@@ -121,8 +129,10 @@ def get_files(verbose=False):
     log_list = sorted(list(f for f in os.listdir(logdir) if f.endswith('.json')))
     x = 0
     while x < len(log_list):
-        print(logdir+log_list[x])
-        get_nc(logdir+log_list[x], mkdir=True, verbose=verbose)
+        if verbose:
+            print(logdir+log_list[x])
+        get_nc(logdir+log_list[x], vaac=vaac, mkdir=True, verbose=verbose)
+
         x += 1
 
     # TO DO:
@@ -130,7 +140,7 @@ def get_files(verbose=False):
     # Some sort of filing system if desired
 
 
-def new_json(jdir, logdir, logfile='json_log.txt', verbose=False):
+def new_json(jdir, logdir, logfile='json_log.txt'):
     """ Get list of json files pushed to our system
     Inputs
     jdir: directory containing json event summary files (string)
@@ -159,7 +169,8 @@ def open_dataframe(fname, varname=None):
     varname: VOLCANOES if opening event summary json file (string)
                     Not needed for event log json files.
                     FILES if looking for event netcdf files from event log files (string)
-    Output: pandas dataframe"""
+                    VAAC_REGION is looking for the vaac region of the events
+    Output: pandas dataframe (or string depending on varname)"""
     jsonf = open_json(fname)
     if varname:
         dataf = jsonf[varname]
@@ -169,6 +180,8 @@ def open_dataframe(fname, varname=None):
         data = pd.DataFrame.from_dict(dataf)
     if type(dataf) == dict:
         data = pd.DataFrame.from_dict([dataf])
+    if type(dataf) == str:
+        data = dataf
     return data
 
 
@@ -209,7 +222,7 @@ def delete_old(directory, verbose=False):
     if verbose:
         return print('Deleted '+str(count) + ' files, totalling '+str(round(size, 2))+' MB.')
     else:
-        return print('Done')
+        return None
 
 
 def get_log_list(data):
@@ -254,7 +267,7 @@ def get_log(log_url, verbose=False):
         if verbose:
             print('File '+log_url[i]+' downloaded to '+log_dir)
         i += 1
-    return print('Event log json files downloaded')
+    return None
 
 
 def open_log(logdir, logfile=None):
@@ -333,12 +346,16 @@ def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=Fa
         with open(logdir+'tmp_file2.txt', 'w') as fis:
             fis.write(json.dumps(original))
         os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
-        return print('Updates recorded to file!\n')
+        if verbose:
+            print('Updates recorded to file!\n')
+        return None
     else:
-        return print('No updates to '+ddir+' folder\n')
+        if verbose:
+            print('No updates to '+ddir+' folder\n')
+        return None
 
 
-def record_missing(mlist, mdir, mfile='missing_files.txt'):
+def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
     """ Records files that are not downloaded.
     Inputs:
     mlist: list of missing files (list)
@@ -354,7 +371,9 @@ def record_missing(mlist, mdir, mfile='missing_files.txt'):
     for element in mlist:
         txtfile.write(element + '\n')
     txtfile.close()
-    return print('Missing files added to '+mdir+mfile)
+    if verbose:
+        print('Missing files added to '+mdir+mfile)
+    return None
 
 
 def fix_volc_name(volcname):
@@ -387,10 +406,11 @@ def make_volcdir(data_dir, fname, verbose=False):
     return volcname
 
 
-def get_nc(fname, mkdir=True, verbose=False):
+def get_nc(fname, vaac=None, mkdir=True, verbose=False):
     """ Finds and downloads netcdf files in json event log files from ftp.
     Inputs:
     fname: filename of json event log file
+    vaac: vaac region for file downloads (string) Default: None, all files are downloaded
     mkdir: make directory of volcano name, download files to that directory (boolean)
     verbose: (boolean)
     Outputs:
@@ -399,6 +419,14 @@ def get_nc(fname, mkdir=True, verbose=False):
     # This should be changed, a specified data file location
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
     volcname = make_volcdir(data_dir, fname, verbose=verbose)
+    if vaac is not None:
+        # checking that file is for specified vaac region
+        vaac2 = open_dataframe(fname, varname='VAAC_REGION')
+        if vaac != vaac2:
+            # if the regions do not agree, then files are not downloaded
+            if verbose:
+                print('Files in '+fname+' are not for '+vaac+' VAAC region')
+            return None
     dfiles = open_dataframe(fname, varname='FILES')
     dfile_list = dfiles['EVENT_URL'].values
     missing = []
@@ -431,9 +459,12 @@ def get_nc(fname, mkdir=True, verbose=False):
     # record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
     if len(missing) > 0:
         record_missing(missing, data_dir, mfile='missing_netcdfs.txt')
-        return print('File downloads complete. Missing files located in missing_netcdfs.txt')
+        if verbose:
+            return print('File downloads complete. Missing files located in missing_netcdfs.txt')
+        else:
+            return None
     else:
-        return print('File downloads complete. No missing files.')
+        return None
 
 
 def make_dir(data_dir, newdir='pc_corrected', verbose=False):
@@ -446,7 +477,7 @@ def make_dir(data_dir, newdir='pc_corrected', verbose=False):
     data_dir = os.path.join(data_dir, '')
     # Go in to given directory, create create new directory if not already there
     if not os.path.exists(data_dir+newdir):
-        os.makedirs(data_dir+newdir)
+        os.mkdir(data_dir+newdir, mode=0o775)
         if verbose:
             return print('Directory '+data_dir+newdir+' created')
         else:
@@ -544,7 +575,9 @@ def make_pc_files(data_dir, verbose=False):
     for direct in dirlist:
         file_dir = os.path.join(data_dir, direct, '')
         correct_pc(file_dir, verbose=verbose)
-    return print('Parallax corrected files available in these directories: '+str(dirlist))
+    if verbose:
+        print('Parallax corrected files available in these directories: '+str(dirlist))
+    return None
 
 
 def volcplots(das_list, img_dir, pc=True, saveas=True):
@@ -693,12 +726,16 @@ def multi_plots(data_dir, volcano=None, eventdf=None, pc=True, saveas=True, verb
     return "Image files created for events with more than 4 observation files"
 
 
+def update_vaac_files():
+    """ Writes three files based on data from Washington vaac webpage."""
+
+
 def write_emitimes(fname, emitdir, inputdict, verbose=True):
     """Writes emitimes file from the volcat netcdf file provided. Still in progress!
     Inputs:
-    fname: name of netcdf file (string)
-    emitdir: Directory to write emitimes files (string)
-    inputdict: dictionary of inputs for writing emitimes file (number of particles, duration,layer, etc.)
+    fname: name of netcdf file(string)
+    emitdir: Directory to write emitimes files(string)
+    inputdict: dictionary of inputs for writing emitimes file(number of particles, duration, layer, etc.)
     Output:
     emitimes file written to designated directory
     """
