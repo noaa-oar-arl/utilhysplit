@@ -114,11 +114,13 @@ def file_progression():
     # The figures are generated for the individual events
     # Step 4:
     events = vl.list_times(volc_dir)
-    vl.write_emitimes(data_dir, volcano='volcano name', event_date=events[0], pc=True, verbose=False)
+    vl.write_emitimes(data_dir, volcano='volcano name', event_date=events[i], pc=True, verbose=False)
     # In step 4, Emitimes files are generated for the available data. If the volcano is
     # specified, then files are generated for only that volcano. If the eruption event time
     # and volcano are specified, then the files are generated only for the specified
     # eruption event.
+    # When you have the events list, you can loop through the list (events[i]) for the
+    #value in event_date
     # I have been running into some errors with files that have values of 0:
     # ValueError: zero-size array to reduction operation minimum which has no identity
     # This error comes from the make_1D function in write_emitimes.py. I don't have
