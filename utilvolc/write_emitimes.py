@@ -99,18 +99,7 @@ def write_cyl_file(
 
 
 class InsertVolcat:
-    def __init__(
-        self,
-        wdir,
-        vdir,
-        date_time,
-        stradd="",
-        duration="0010",
-        pollnum=1,
-        pollpercents=[1],
-        vname=None,
-        vid=None,
-    ):
+    def __init__(self, wdir, vdir, date_time, stradd="", duration="0010", pollnum=1, pollpercents=[1], vname=None, vid=None, fname=None):
         """
         Class of tools for inserting volcat data into hysplit
         -------------
@@ -125,6 +114,7 @@ class InsertVolcat:
         represented as values from [0] to [1] - default is [1] (list)
         vname: volcano name - default is None (string)
         vid: volcano id - default is None (string)
+        filename: name of volcat file (string) default is None
         Outputs:
         --------------
         Functions:
@@ -150,7 +140,10 @@ class InsertVolcat:
         self.duration = duration
         self.vname = vname
         self.vid = vid
-        self.find_fname()
+        if fname == None:
+            self.find_fname()
+        else:
+            self.fname = fname
 
     def set_duration(self, duration):
         self.duration = duration
@@ -250,12 +243,12 @@ class InsertVolcat:
         dset.close()
         return area
 
-    def make_1D(self, correct_parallax=True, decode_times=False, clip=True):
+    def make_1D(self, correct_parallax=True, area_file=True, decode_times=False, clip=True):
         """Makes compressed 1D arrays of latitude, longitude, ash height,
         mass emission rate, and area
         For use in writing emitimes files. See self.write_emit()
         Input:
-        area: xarray dataset of area between lat/lon grid (from netcdf files)
+        areafile: (boolean) True if area netcdf is created
         correct_parallax: use parallax corrected lat/lon (default = True)
         decode_times: boolean (default=False) Must be TRUE if using L1L2 netcdf files
         clip: boolean(default=True) Use data clipped around feature, reduces array size
@@ -287,20 +280,19 @@ class InsertVolcat:
 
         # Finds and area files. If no file detected, produces warning
         # areadir = self.vdir+'Area/'
-        areadir = self.wdir + "area/"
-        match = self.find_match()
-        if correct_parallax == True:
-            arealist = glob(areadir + "*_pc.nc")
+        if area_file:
+            areadir = self.wdir + 'area/'
+            match = self.find_match()
+            if correct_parallax == True:
+                arealist = glob(areadir + "*_pc.nc")
+            else:
+                arealist = glob(areadir + "*0.nc")
+            areafile = [f for f in arealist if match in f]
+            if areafile:
+                areafile = areafile[0]
+                areaf = xr.open_dataset(areafile).area
         else:
-            arealist = glob(areadir + "*0.nc")
-        areafile = [f for f in arealist if match in f]
-        if areafile:
-            areafile = areafile[0]
-            areaf = xr.open_dataset(areafile).area
-        else:
-            print('No area file detected! Calculating area now')
             areaf = self.get_area()
-            #print("No area file detected! Please use self.get_area()")
 
         # Calculating mass - rate is (mass/hr) in HYSPLIT
         # area needs to be in m^2 not km^2!
@@ -328,9 +320,12 @@ class InsertVolcat:
         self,
         heat="0.00e+00",
         layer=0.0,
+        area_file=True,
         centered=False,
         correct_parallax=True,
         decode_times=False,
+        clip=True,
+        verbose=False
     ):
         """Writes emitimes file from volcat data.
         Inputs are created using self.make_1D()
@@ -345,14 +340,13 @@ class InsertVolcat:
         layer: (float) height in meters of ash layer. A value of 0. means no layer, ash inserted at observed VOLCAT height.
         centered: (boolean) center ash layer on volcat height
         correct_parallax: (boolean) use parallax corrected lat lon values
-
+        areafile: (boolean) uses area file if True, calculates area if False
         Output:
         emitimes file located in wdir
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
         lat, lon, hgt, mass, area = self.make_1D(
-            correct_parallax=correct_parallax, decode_times=decode_times
-        )
+            correct_parallax=correct_parallax, area_file=area_file, decode_times=decode_times, clip=clip)
         # Calculating constants for mass rate (g/hr) determination
         # AMR: 8/3/2021 - added code to account for different durations under 1 hour
         # Is this acceptable for durations longer that 1 hour? A constant value of 1?
@@ -380,7 +374,7 @@ class InsertVolcat:
                     + "mlayer_centered_par"
                     + str(self.pollnum)
                 )
-        f = open(self.wdir + "DataInsertion/" + filename, "w")
+        f = open(self.wdir + filename, "w")
         f.write("YYYY MM DD HH DURATION(HHMM) #RECORDS \n")
         f.write(
             "YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE(g/hr) AREA(m2) HEAT(w) \n"
@@ -459,4 +453,7 @@ class InsertVolcat:
                 i += 1
             h += 1
         f.close()
-        return "Emitimes file written: " + self.wdir + "DataInsertion/" + filename
+        if verbose:
+            return "Emitimes file written: " + self.wdir + "DataInsertion/" + filename
+        else:
+            return None
