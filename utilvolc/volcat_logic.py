@@ -3,6 +3,13 @@ import pandas as pd
 import os
 from glob import glob
 
+# ISSUES
+# Error when creating pc_corrected files - e.g. The Quill - fix later?
+# ERROR with emittimes file - possibly related to small files / no data. 
+#       
+# 
+
+
 
 def workflow():
     # COMPLETED:
@@ -28,6 +35,13 @@ def workflow():
     # functions can be added
     # TO DO: combine g001 g002 g003 etc. files.
     #        for now only use g001 but will need to add them together later.
+    # SANGAY eruption may have some examples of this.
+    # a) Do we Need to merge files that have the same timestamp?
+    #    Alternative is to just do separate HYSPLIT runs for them.
+    #    However need to be careful of combining them for ensemble relative frequency then.
+    #    How good a classifier is the event time? (Probably not great?) 
+    # b) Keep track of the event dates is useful
+    # 
 
     # in progress: false alarm logic
     # List volcanoes that are green light - yes it is probably real
@@ -126,6 +140,25 @@ def file_progression():
     # This error comes from the make_1D function in write_emitimes.py. I don't have
     # a fix for it yet, but if you specify the event_date, you can move past the files that
     # are causing a problem.
+
+
+def generate_report():
+    import matplotlib.pyplot as plt
+    #get_files()
+    data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+    vnames = os.listdir(data_dir)
+    print(vnames)
+    for volc in vnames:
+        fig = plt.figure(figsize=[10,2])
+        try:
+            events = list_times(os.path.join(data_dir, volc))
+        except:
+            print('warning in generate report for directory ', volc)
+            continue 
+        plt.plot(events['Event_Dates'],events['Num_Files'], 'ko')
+        plt.title(volc)
+        fig.autofmt_xdate()
+        plt.show()  
 
 
 def get_files(vaac=None, verbose=False):
