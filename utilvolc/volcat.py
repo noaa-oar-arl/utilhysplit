@@ -540,7 +540,11 @@ def choose_files(volcat_event_df, vid, frequency=10):
     return -1
 
 
-def get_volcat_list(tdir, daterange=None, vid=None, fid=None, fdate=None, flist=None, return_val=2, correct_parallax=True, mask_and_scale=True, decode_times=True, verbose=False, include_last=True,):
+def get_volcat_list(tdir, daterange=None, vid=None, fid=None, 
+                    fdate=None, flist=None, return_val=2, 
+                    correct_parallax=True, mask_and_scale=True, 
+                    decode_times=True, verbose=False, 
+                    include_last=True,):
     """
     returns list of data-arrays with volcat data.
     Inputs:
@@ -571,7 +575,8 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None, fdate=None, flist=
         else:
             filenames = tframe.filename.values
     das = []
-    for iii in filenames:
+    for nnn, iii in enumerate(filenames):
+        if verbose: print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
         # opens volcat files using volcat.open_dataset
         if not "_pc" in iii:
             das.append(
@@ -796,15 +801,15 @@ class VolcatName:
         self.keylist = ["algorithm name"]
         self.keylist.append("satellite platform")
         self.keylist.append("event scanning strategy")
-        self.keylist.append("event date")
-        self.keylist.append("event time")
+        self.keylist.append("image date") # should be image date (check)
+        self.keylist.append("image time")
         self.keylist.append("fid")
         self.keylist.append("volcano id")
         self.keylist.append("description")
         self.keylist.append("WMO satellite id")
         self.keylist.append("image scanning strategy")
-        self.keylist.append("image date")
-        self.keylist.append("image time")
+        self.keylist.append("event date") # should be event date (check)
+        self.keylist.append("event time")
         self.keylist.append("feature id")
 
         self.pc_corrected = False
