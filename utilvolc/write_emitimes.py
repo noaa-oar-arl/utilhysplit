@@ -20,9 +20,10 @@ Functions:
 write_cyl_file: writes emitimes file to working directory
 Class: InsertVolcat
      add_vname: adds volcano name to instance variables
-     find_match: finds the indentifying string of date, time, volcano ID
-     find_fname: finds volcat file based on directory and datetime object
+     find_fnames: finds list of volcat files based on datetime object 
      (can also use volcano ID)
+     make_match: makes a string containing event datetime, image datetime, and 
+     volcano id which is used for generating emitimes filenames and area filenames
      get_area: calculates area of lat/lon grid
      make_1D: makes 1D arrays of lat, lon, ash height, ash mass, and area
      write_emit: writes emitimes files
@@ -114,13 +115,14 @@ class InsertVolcat:
         represented as values from [0] to [1] - default is [1] (list)
         vname: volcano name - default is None (string)
         vid: volcano id - default is None (string)
-        filename: name of volcat file (string) default is None
+        fname: name of volcat file (string) default is None
         Outputs:
         --------------
         Functions:
         add_vname: adds volcano name
-        find_match: finds string with date_time and vid to match
-        find_fname: finds volcat filename
+        find_fnames: finds volcat filename, returns list of possible filenames 
+        make_match: makes a string containing event datetime, image datetime, and 
+        volcano id which is used for generating emitimes filenames and area filenames
         get_area: calculates the domain area, gridded
         make_1D: makes 1D array of lat, lon, ash height, ash mass, area
         write_emit: writes emitimes files
@@ -141,9 +143,10 @@ class InsertVolcat:
         self.vname = vname
         self.vid = vid
         if fname == None:
-            self.find_fname()
+            self.volclist = find_fnames()
         else:
             self.fname = fname
+        self.emit_name = None
 
     def set_duration(self, duration):
         self.duration = duration
@@ -161,25 +164,27 @@ class InsertVolcat:
         """Adds volcano name"""
         self.vname = vname
 
-    def find_match(self):
-        """Determines matching string to identify file
-        FORMATTING HAS CHANGED!"""
-        if self.vid != None:
-            match = "{}{}_v{}".format(
-                self.date_time.strftime("%Y%j_%H%M%S"), self.stradd, self.vid
-            )
-        else:
-            match = self.date_time.strftime("%Y%j_%H%M%S")
-        return match
-
-    def find_fname(self):
+    def find_fnames(self):
         """Determines filename for volcat file based on vdir, date_time and vid"""
-        vfiles = "*.nc"
-        volclist = glob(self.vdir + vfiles)
-        match = self.find_match()
-        fname = [f for f in volclist if match in f]
-        self.fname = fname[0]
-        return self.fname
+        #vfiles = "*.nc"
+        volcframe = volcat.get_volcat_name_df(volc_dir)
+        volcframe1 = volcframe.loc[(volcframe['event date'] == "s{}".format(self.date_time.strftime("%Y%j"))) & (
+            volcframe['event time'] == self.date_time.strftime("%H%M%S"))]
+        volclist = volcframe1['filename'].tolist()
+        if self.vid != None:
+            volclist = volcframe1.loc[volcframe1['volcano id'] == "v{}".format(self.vid), 'filename'].tolist()
+        return volclist
+
+    def make_match(self):
+        """Makes unique string for various filenames from volcat filename
+        Inputs:
+        fname: name of volcat file - just volcat file, not full path (string)
+        Outputs:
+        match: (string) of important identifiying information"""
+        # Parse filename for image datetime, event datetime, and volcano id
+        parsedf = self.fname.split('_')
+        match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
+        return match
 
     def get_area(
         self, write=False, correct_parallax=True, decode_times=False, clip=True
@@ -199,8 +204,7 @@ class InsertVolcat:
 
         if self.fname:
             dset = volcat.open_dataset(
-                self.fname, correct_parallax=correct_parallax, decode_times=decode_times
-            )
+                self.vdir+self.fname, correct_parallax=correct_parallax, decode_times=decode_times)
         else:
             print("ERROR: Need volcat filename!")
         # Extracts ash mass array (two methods - one is smaller domain around feature)
@@ -233,7 +237,7 @@ class InsertVolcat:
         # Reformatting array attributes
         if write == True:
             directory = self.wdir + "area/"
-            match = self.find_match()
+            match = self.make_match()
             if correct_parallax == True:
                 areafname = "area_" + match + "_pc.nc"
             else:
@@ -263,8 +267,7 @@ class InsertVolcat:
 
         if self.fname:
             dset = volcat.open_dataset(
-                self.fname, correct_parallax=correct_parallax, decode_times=decode_times
-            )
+                self.vdir+self.fname, correct_parallax=correct_parallax, decode_times=decode_times)
         else:
             print("ERROR: Need volcat filename!")
         # Extracts ash mass array - Removes time dimension
@@ -282,7 +285,7 @@ class InsertVolcat:
         # areadir = self.vdir+'Area/'
         if area_file:
             areadir = self.wdir + 'area/'
-            match = self.find_match()
+            match = self.make_match()
             if correct_parallax == True:
                 arealist = glob(areadir + "*_pc.nc")
             else:
@@ -354,8 +357,8 @@ class InsertVolcat:
         # if float(self.duration) <= 60.0:
         const = 60.0 / float(self.duration)
         # else:
-        #    const = 1.
-        match = self.find_match()
+        # const = 1.
+        match = self.make_match()
         filename = "VOLCAT_" + match + "_par" + str(self.pollnum)
         records = np.shape(hgt)[0] * self.pollnum
         # AMR: 8/3/2021 - added layer flag, and writing layer capability to emitimes file, accounting for ash in a layer for data insertion method.
@@ -454,6 +457,6 @@ class InsertVolcat:
             h += 1
         f.close()
         if verbose:
-            return "Emitimes file written: " + self.wdir + "DataInsertion/" + filename
+            return "Emitimes file written: " + self.wdir + filename
         else:
             return None
