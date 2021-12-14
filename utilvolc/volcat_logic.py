@@ -5,10 +5,9 @@ from glob import glob
 
 # ISSUES
 # Error when creating pc_corrected files - e.g. The Quill - fix later?
-# ERROR with emittimes file - possibly related to small files / no data. 
-#       
-# 
-
+# ERROR with emittimes file - possibly related to small files / no data.
+#
+#
 
 
 def workflow():
@@ -30,6 +29,7 @@ def workflow():
     # (done) make emit-times files - might want to modify for more flexibility
     # (done) area calculation is necessary for emitimes files generation
     # no separate area file generated.
+    # (done) fixed naming of emit-times file issues - now includes event datetime, imagedatetime, and volcano id in name of file
 
     # IN PROGRESS:
     # functions can be added
@@ -39,9 +39,9 @@ def workflow():
     # a) Do we Need to merge files that have the same timestamp?
     #    Alternative is to just do separate HYSPLIT runs for them.
     #    However need to be careful of combining them for ensemble relative frequency then.
-    #    How good a classifier is the event time? (Probably not great?) 
+    #    How good a classifier is the event time? (Probably not great?)
     # b) Keep track of the event dates is useful
-    # 
+    # starting dispersion runs from volcat and emitimes files
 
     # in progress: false alarm logic
     # List volcanoes that are green light - yes it is probably real
@@ -111,54 +111,59 @@ def file_progression():
     # The netcdf files are filed by volcano in the data_dir (/pub/ECMWF/JPSS/VOLCAT/Files/)
     # Step 2:
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
-    vl.make_pc_files(data_dir)
+    vl.make_pc_files(data_dir, volcano='volcano name')
     # In step 2, you MUST specify the data directory, which is the parent directory
     # for all the volcanoes. You can also specify verbose=True if desired
+    # You can also specify the volcano if desired
     # In this step, a parallax_corrected folder is created in each volcano directory.
     # Then parallax corrected files are written for all netcdf files in within the volcano
     # directory.
     # Step 3:
-    volc_dir = data_dir+'volcano name/pc_corrected/'
-    events = vl.list_times(volc_dir)
-    vl.multi_plots(data_dir, volcano='volcano name', eventdf=events, pc=True, saveas=True)
+    events = vl.list_times(data_dir, volcano='volcano name', pc=True)
+    vl.multi_plots(data_dir, volcano='volcano name', eventdf=events.Event_Dates[i], pc=True, saveas=True)
     # In this step, figures can be generated for each eruption showing the timeseries
     # of area, maximum height, total mass, etc.
     # This step requires first creating a list of the individual eruption events, then this list
     # is used to determine the individual eruption events for each volcano.
-    # The figures are generated for the individual events
+    # This is done using vl.list_times(). The figures are generated for the individual events
     # Step 4:
-    events = vl.list_times(volc_dir)
-    vl.write_emitimes(data_dir, volcano='volcano name', event_date=events[i], pc=True, verbose=False)
+    events = vl.list_times(data_dir, volcano='volcano name', pc=True)
+    vl.write_emitimes(data_dir, volcano='volcano name',
+                      event_date=events.Event_Dates[i], pc=True, verbose=False)
     # In step 4, Emitimes files are generated for the available data. If the volcano is
     # specified, then files are generated for only that volcano. If the eruption event time
     # and volcano are specified, then the files are generated only for the specified
     # eruption event.
-    # When you have the events list, you can loop through the list (events[i]) for the
-    #value in event_date
+    # When you have the events list, you can loop through the list (events.Event_Dates[i])
+    # for the value in event_date.
     # I have been running into some errors with files that have values of 0:
     # ValueError: zero-size array to reduction operation minimum which has no identity
     # This error comes from the make_1D function in write_emitimes.py. I don't have
     # a fix for it yet, but if you specify the event_date, you can move past the files that
     # are causing a problem.
+    # Step 5:
+    vl.setup_runs()
+    # In this step, control and setup files are generated for data insertion runs.
+    # IN PROGRESS
 
 
 def generate_report():
     import matplotlib.pyplot as plt
-    #get_files()
+    # get_files()
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
     vnames = os.listdir(data_dir)
     print(vnames)
     for volc in vnames:
-        fig = plt.figure(figsize=[10,2])
+        fig = plt.figure(figsize=[10, 2])
         try:
             events = list_times(os.path.join(data_dir, volc))
         except:
             print('warning in generate report for directory ', volc)
-            continue 
-        plt.plot(events['Event_Dates'],events['Num_Files'], 'ko')
+            continue
+        plt.plot(events['Event_Dates'], events['Num_Files'], 'ko')
         plt.title(volc)
         fig.autofmt_xdate()
-        plt.show()  
+        plt.show()
 
 
 def get_files(vaac=None, verbose=False):
@@ -646,16 +651,23 @@ def get_latlon(data_dir):
     return volcdf
 
 
-def make_pc_files(data_dir, verbose=False):
+def make_pc_files(data_dir, volcano=None, verbose=False):
     """ Makes corrected pc files.
     Might want to streamline the check process at some point. Not necessary now"""
     # Make list of available directories
     dirlist = list_dirs(data_dir)
-    for direct in dirlist:
-        file_dir = os.path.join(data_dir, direct, '')
-        correct_pc(file_dir, verbose=verbose)
-    if verbose:
-        print('Parallax corrected files available in these directories: '+str(dirlist))
+    if volcano != None:
+        if volcano in dirlist:
+            file_dir = os.path.join(data_dir, volcano, '')
+            correct_pc(file_dir, verbose=verbose)
+        if verbose:
+            print('Parallax corrected files available in '+volcano+' directory')
+    else:
+        for direct in dirlist:
+            file_dir = os.path.join(data_dir, direct, '')
+            correct_pc(file_dir, verbose=verbose)
+        if verbose:
+            print('Parallax corrected files available in these directories: '+str(dirlist))
     return None
 
 
@@ -696,17 +708,50 @@ def volcplots(das_list, img_dir, pc=True, saveas=True):
         return fig1.show()
 
 
-def list_times(data_dir, verbose=False):
+def check_volcano(data_dir, volcano=None, verbose=False):
+    """ Checks to see if specified volcano is in data directory
+    Inputs:
+    data_dir: data_directory (string)
+    volcano: volcano name (string)
+    verbose: (boolean)
+    Outputs:
+    result: (boolean) True if volcano is in data directory, False if not
+    """
+    # List directories in data_dir
+    dirlist = list_dirs(data_dir)
+    if volcano is not None:
+        if volcano in dirlist:
+            return True
+        else:
+            if verbose:
+                return print(volcano+' not in '+str(dirlist))
+            else:
+                return False
+    else:
+        if verbose:
+            return print('Need to specify volcano name.')
+        else:
+            return False
+
+
+def list_times(data_dir, volcano=None, pc=True):
     """ Lists all available volcanic beginning event times in given data directory
     Provides number of files attributed to the given beginning event time.
     Used to determine which time to create images.
     Inputs:
-    data_dir: data directory (full path) (string)
+    data_dir: data directory (string)
+    volcano: volcano name (string)
+    pc: using pc files - default True (boolean)
     Outputs:
     events: pandas dataframe of available times, number files for each time
     """
     from utilvolc import volcat
     import pandas as pd
+    volc_check = check_volcano(data_dir, volcano=volcano)
+    if volc_check:
+        volc_dir = os.path.join(data_dir, volcano, '')
+    if pc:
+        volc_dir = os.path.join(volc_dir, 'pc_corrected', '')
     # Creating dataframe of filename information
     dataf = volcat.get_volcat_name_df(data_dir, include_last=True)
     event_dates = dataf['idate'].unique()
@@ -826,29 +871,28 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
     Inputs:
     data_dir: path for data directory (string)
     volcano: name of specific volcano (string)
-         If None, function goes through all available volcano subdirectories
     event_date: date/time of volcanic eruption (datetime object,datetime64, or timestamp)
     pc: (boolean) default=True - use parallax corrected files
     verbose: (boolean)
     Output:
-    emitimes file written to designated directory
+    emitimes files written to designated directory
     """
     from utilvolc import write_emitimes as we
     from utilvolc import volcat
     # List directories in data_dir
     dirlist = list_dirs(data_dir)
     datadirs = []
-    # Check to see if given volcano is within list of directories (if not None)
-    # Generate list of volcano directories
-    if volcano:
-        if (volcano in dirlist):
+    # Check to see if volcano is in data_directory
+    if volcano != None:
+        volc_check = check_volcano(data_dir, volcano=volcano, verbose=verbose)
+        if volc_check:
             datadirs.append(os.path.join(data_dir, volcano, ''))
-        else:
-            return print(volcano+' not in '+str(dirlist))
     else:
-        for volcano in dirlist:
-            datadirs.append(os.path.join(data_dir, volcano, ''))
-    # Create emitimes directory within volcano directory if it doesnt exist
+        if verbose:
+            return 'Must specify volcano'
+        else:
+            return None
+            # Create emitimes directory within volcano directory if it doesnt exist
     emit_dirs = []
     for directory in datadirs:
         newdir = 'emitimes'
@@ -860,7 +904,7 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
             # Check if pc_corrected directory exists
             pcdir = 'pc_corrected'
             if not os.path.exists(directory+pcdir):
-                return print('pc_corrected directory does not exist! Make '+directory+pcdir)
+                return print('pc_corrected directory does not exist!')
             else:
                 volc_dir = (directory+pcdir)
         else:
@@ -868,17 +912,38 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
             volc_dir = directory
         # Dataframe of files in directory
         dframe = volcat.get_volcat_name_df(volc_dir)
+        dframe = dframe.sort_values(by='edate')
         if event_date:
             eventd = pd.to_datetime(event_date).to_datetime64()
             imgdates = dframe.loc[dframe['idate'] == eventd, 'edate'].tolist()
+            filenames = dframe.loc[dframe['idate'] == eventd, 'filename'].tolist()
         else:
             imgdates = dframe.edate.values
-        for img in imgdates:
+            filenames = dframe.filename.values.tolist()
+
+        i = 0
+        while i < len(filenames):
             # Convert date to datetime object
-            date_time = pd.to_datetime(img).to_pydatetime()
+            date_time = pd.to_datetime(imgdates[i]).to_pydatetime()
             # Initialize write_emitimes function
-            volcemit = we.InsertVolcat(emit_dir, volc_dir, date_time)
+            volcemit = we.InsertVolcat(emit_dir, volc_dir, date_time, fname=filenames[i])
             if verbose:
-                print(volcemit.fname)
+                print('Emitimes file with '+volcemit.make_match()+' created for '+volcemit.fname)
             volcemit.write_emit(area_file=False)
+            i += 1
         return None
+
+
+def setup_runs():
+    """ Sets up the control and setup files for data insertion runs. 
+    Quite a few inputs are needed here, not all information is available in netcdfs or
+    emitimes files. Need to figure out a good way to get this info.
+    IN PROGRESS
+    Inputs:
+    Outputs:
+    """
+    from utilhysplit import hcontrol
+    from utilhysplit import emitimes
+    from utilhysplit import metdata
+    from datetime import datetime, timedelta
+    import os
