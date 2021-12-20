@@ -1,8 +1,11 @@
+import logging
 import json
 import pandas as pd
 import numpy as np
 import os
 from glob import glob
+
+logger = logging.getLogger(__name__)
 
 # ISSUES
 # Error when creating pc_corrected files - e.g. The Quill - fix later?
@@ -229,7 +232,6 @@ def get_files(inp={'JPSS_DIR':'/pub/jpsss_upload'},vaac=None, verbose=False):
     # delete_old(jdir, verbose=verbose)
 
     # Finds json files added to ftp folder
-
     status = check_dirs(jdir,logdir,verbose=True)
     if np.all(status):
         added = new_json(jdir, logdir)
@@ -244,7 +246,7 @@ def get_files(inp={'JPSS_DIR':'/pub/jpsss_upload'},vaac=None, verbose=False):
         # Logs event summary json files
         record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
 
-    status = check_dirs(logdir,verbose=True)
+    status = check_dirs(logdir,ddir,verbose=True)
         # Delete files from json event log folder that are older than 7 days
         # Netcdf files are only available for 7 days on the ftp
     if np.all(status):
@@ -444,12 +446,13 @@ def check_file(fname, directory, suffix='.nc', verbose=False):
     else:
         return True
 
-def check_dirs(*args, verbose=True):
+def check_dirs(*args, verbose=False):
     status = []
     for direc in args:
         if not os.path.isdir(direc):
            status.append(False)
            if verbose: print('{} NOT FOUND'.format(direc))
+           logger.warning('{} directory not found'.format(direc))
         else:
            status.append(True)
     return status
