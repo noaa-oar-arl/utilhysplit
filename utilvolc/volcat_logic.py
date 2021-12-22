@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 from glob import glob
+from utilvolc import runhelper
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,8 @@ logger = logging.getLogger(__name__)
 # Error when creating pc_corrected files - e.g. The Quill - fix later?
 # ERROR with emittimes file - possibly related to small files / no data.
 #
-#
+# Issue = vl.get_files pauses and asks if you want to overwrite the logfiles.
+# TODO  -  figure out what permissions need to be set for files.
 
 
 def workflow():
@@ -166,6 +168,8 @@ def file_progression():
     # are causing a problem.
     # Step 5:
     vl.setup_runs()  # AMC adapt the ashapp functions to do this.
+    #  read the emit-times files
+    #  might trigger on the emit-times file runs
     # In this step, control and setup files are generated for data insertion runs.
     # IN PROGRESS
 
@@ -226,7 +230,12 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
     if 'VOLCAT_LOGFILES' in inp.keys():
         logdir = inp['VOLCAT_LOGFILES']
     else:
+        # this is location of the event log files 
+        # which are pulled according to the summary files which are in the jpsss upload.
+        # these contain the netcdf file names and tell us which netcdfs to upload.
+        # json_log.txt is just a list of all
         logdir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+
 
     # Delete files from jpsss_uploads folder that is older than 7 days
     # Files are only available for 7 days on the ftp
@@ -239,20 +248,24 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
         added = new_json(jdir, logdir)
         added = sorted(added)
         i = 0
-        while i < len(added):
-            data = open_dataframe(jdir+added[i], varname='VOLCANOES')
+        for afiles in added:
+        #while i < len(added):
+            data = open_dataframe(os.path.join(jdir,afiles), varname='VOLCANOES')
             log_url = get_log_list(data)
             # Downloads json event log files
             get_log(log_url, verbose=verbose, VOLCAT_LOGFILES=log_dir)
-            i += 1
         # Logs event summary json files
+        # writes names of files in jpsss directory which we have already read and pulled the
+        # relevant files from.
         record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
 
     status = check_dirs(logdir, ddir, verbose=True)
     # Delete files from json event log folder that are older than 7 days
     # Netcdf files are only available for 7 days on the ftp
     if np.all(status):
-        delete_old(logdir, verbose=verbose)
+        delete_old(logdir, days=7,verbose=verbose)
+        # TODO - delete old files in jpsss folder when permissions are set correctly.
+        # delete_old(jdir, days=7,verbose=verbose)
         # Opens json event files
         # Finds event file urls for download
         # Downloads netcdf files
@@ -265,14 +278,14 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
             get_nc(logdir+log_list[x], vaac=vaac, mkdir=True, verbose=verbose, VOLCAT_DIR=ddir)
 
             x += 1
-
         # TO DO:
         # Could create a function that moves already downloaded netcdf files to new location
         # Some sort of filing system if desired
     return check_dirs(logdir,ddir,jdir,verbose=verbose) 
 
 def new_json(jdir, logdir, logfile='json_log.txt'):
-    """ Get list of json files pushed to our system
+    """ 
+    Get list of json files pushed to our system.
     Inputs
     jdir: directory containing json event summary files (string)
     logdir: directory of json_log file (string)
@@ -316,7 +329,7 @@ def open_dataframe(fname, varname=None):
     return data
 
 
-def delete_old(directory, verbose=False):
+def delete_old(directory, days=7, verbose=False):
     """ Determines the age of the files in the specified folder.
     Deletes files older than 7 days, since this is the length of time
     the files exist on the wisconsin ftp site.
@@ -331,7 +344,6 @@ def delete_old(directory, verbose=False):
     import shutil
     import glob
     # import
-    days = 7
     now = time.time()  # current time
     deletetime = now - (days * 86400)  # delete time
     deletefiles = []  # creating list of files to delete
@@ -467,12 +479,11 @@ def check_dirs(*args, verbose=False):
 def determine_change(ddir, logdir, logfile, suffix):
     """Determines which files were original, which are current, which were added, which were removed
 
-
     Returns
-    original : list
-    current  : list
-    added    : list
-    removed  : list
+    original : list  : files in log when opened
+    current  : list  : all files in the jpsss directory
+    added    : listi : files in jpss directory but not in log 
+    removed  : list  : files in log but not in jpss directory.
     """
     status = check_dirs(ddir, logdir, verbose=True)
     if not np.all(status):
@@ -515,8 +526,9 @@ def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=Fa
     if added or removed:
         with open(logdir+'tmp_file2.txt', 'w') as fis:
             fis.write(json.dumps(original))
-        os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
-        os.chmod(logdir+logfile, 0o664)
+        runhelper.Helper.move(os.path.join(logdir,'tmp_file2.txt'),os.path.join(logdir,logfile))
+        #os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
+        #os.chmod(logdir+logfile, 0o664)
         if verbose:
             print('Updates recorded to file!\n')
         return None
@@ -535,6 +547,7 @@ def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
     Outputs:
     text file with list of missing files
     """
+    #os.chmod(mdir+mfile, 0o666)
     if os.path.exists(mdir+mfile):
         txtfile = open(mdir+mfile, 'a')
     else:
@@ -542,7 +555,7 @@ def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
     for element in mlist:
         txtfile.write(element + '\n')
     txtfile.close()
-    os.chmod(mdir+mfile, 0o664)
+    #os.chmod(mdir+mfile, 0o666)
     if verbose:
         print('Missing files added to '+mdir+mfile)
     return None
@@ -747,7 +760,7 @@ def red_list(data_dir):
     for volc in red:
         tfile.write(volc+'\n')
     tfile.close()
-    os.chmod(data_dir+'red_list.txt', 0o664)
+    os.chmod(data_dir+'red_list.txt', 0o666)
     return None
 
 
