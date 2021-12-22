@@ -136,10 +136,12 @@ def file_progression():
     # The netcdf files are filed by volcano in the data_dir (/pub/ECMWF/JPSS/VOLCAT/Files/)
     # Step 2:
     data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
-    vl.make_pc_files(data_dir, volcano='volcano name')
+    vl.make_pc_files(data_dir, volcano='volcano name', vlist_file='green_list.txt')
     # In step 2, you MUST specify the data directory, which is the parent directory
     # for all the volcanoes. You can also specify verbose=True if desired
     # You can also specify the volcano if desired
+    # You can specify a file which contains a list of volcanoes to process
+    # If you do not want to specify either volcano or vlist_file, all files will be processed.
     # In this step, a parallax_corrected folder is created in each volcano directory.
     # Then parallax corrected files are written for all netcdf files in within the volcano
     # directory.
@@ -173,7 +175,8 @@ def file_progression():
     # In this step, control and setup files are generated for data insertion runs.
     # IN PROGRESS
 
-def generate_report(vmin=None,vmax=None,**kwargs):
+
+def generate_report(vmin=None, vmax=None, **kwargs):
     import matplotlib.pyplot as plt
     # get_files()
     if 'VOLCAT_DIR' in kwargs.keys():
@@ -230,12 +233,11 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
     if 'VOLCAT_LOGFILES' in inp.keys():
         logdir = inp['VOLCAT_LOGFILES']
     else:
-        # this is location of the event log files 
+        # this is location of the event log files
         # which are pulled according to the summary files which are in the jpsss upload.
         # these contain the netcdf file names and tell us which netcdfs to upload.
         # json_log.txt is just a list of all
         logdir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
-
 
     # Delete files from jpsss_uploads folder that is older than 7 days
     # Files are only available for 7 days on the ftp
@@ -243,14 +245,14 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
     # delete_old(jdir, verbose=verbose)
 
     # Finds json files added to ftp folder
-    status = check_dirs(jdir,logdir,verbose=False)
+    status = check_dirs(jdir, logdir, verbose=False)
     if np.all(status):
         added = new_json(jdir, logdir)
         added = sorted(added)
         i = 0
         for afiles in added:
-        #while i < len(added):
-            data = open_dataframe(os.path.join(jdir,afiles), varname='VOLCANOES')
+            # while i < len(added):
+            data = open_dataframe(os.path.join(jdir, afiles), varname='VOLCANOES')
             log_url = get_log_list(data)
             # Downloads json event log files
             get_log(log_url, verbose=verbose, VOLCAT_LOGFILES=log_dir)
@@ -263,7 +265,7 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
     # Delete files from json event log folder that are older than 7 days
     # Netcdf files are only available for 7 days on the ftp
     if np.all(status):
-        delete_old(logdir, days=7,verbose=verbose)
+        delete_old(logdir, days=7, verbose=verbose)
         # TODO - delete old files in jpsss folder when permissions are set correctly.
         # delete_old(jdir, days=7,verbose=verbose)
         # Opens json event files
@@ -278,7 +280,8 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
         # TO DO:
         # Could create a function that moves already downloaded netcdf files to new location
         # Some sort of filing system if desired
-    return check_dirs(logdir,ddir,jdir,verbose=verbose) 
+    return check_dirs(logdir, ddir, jdir, verbose=verbose)
+
 
 def new_json(jdir, logdir, logfile='json_log.txt'):
     """ 
@@ -372,13 +375,13 @@ def get_log_list(data):
     events = data['EVENTS']
     log_url = []
     for eve in events:
-        if isinstance(eve,dict):
+        if isinstance(eve, dict):
             tmp = pd.DataFrame(eve)
             log_url.append(tmp['LOG_URL'].values[0])
-        elif isinstance(eve,list):
+        elif isinstance(eve, list):
             for subeve in eve:
-               tmp = pd.DataFrame(subeve)
-               log_url.append(tmp['LOG_URL'].values[0])
+                tmp = pd.DataFrame(subeve)
+                log_url.append(tmp['LOG_URL'].values[0])
     return log_url
 
 
@@ -444,7 +447,7 @@ def check_file(fname, directory, suffix='.nc', verbose=False):
     s = fname.rfind('/')
     current = fname[s+1:]
     if current in original:
-        #if verbose:
+        # if verbose:
         #    print('File '+current+' already downloaded')
         return False
     else:
@@ -514,7 +517,7 @@ def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=Fa
     if added or removed:
         with open(logdir+'tmp_file2.txt', 'w') as fis:
             fis.write(json.dumps(original))
-        runhelper.Helper.move(os.path.join(logdir,'tmp_file2.txt'),os.path.join(logdir,logfile))
+        runhelper.Helper.move(os.path.join(logdir, 'tmp_file2.txt'), os.path.join(logdir, logfile))
         #os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
         #os.chmod(logdir+logfile, 0o666)
         if verbose:
@@ -545,7 +548,7 @@ def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
     txtfile.close()
     #os.chmod(mdir+mfile, 0o666)
     if verbose:
-        print('Missing files added to {}'.format(os.path.join(mdir,mfile)))
+        print('Missing files added to {}'.format(os.path.join(mdir, mfile)))
     return None
 
 
@@ -599,7 +602,7 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
     Returns:
     num_downloaded : number of files downloaded
     """
-    num_missing    = 0
+    num_missing = 0
     num_downloaded = 0
     if 'VOLCAT_DIR' in kwargs.keys():
         data_dir = kwargs['VOLCAT_DIR']
@@ -642,7 +645,7 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
             else:
                 missing.append(dfile_list[i])
                 num_missing += 1
-                #if verbose:
+                # if verbose:
                 #    print('File '+dfile+' NOT DOWNLOADED!')
                 #    print('From json file: '+fname)
         i += 1
@@ -650,9 +653,9 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
     if len(missing) > 0:
         record_missing(missing, data_dir, mfile='missing_netcdfs.txt')
         if verbose:
-           print('File downloads complete. {} Missing files located in missing_netcdfs.txt'.format(num_missing))
+            print('File downloads complete. {} Missing files located in missing_netcdfs.txt'.format(num_missing))
     if verbose:
-       print('File downloads complete. {} files downloaded'.format(num_downloaded))
+        print('File downloads complete. {} files downloaded'.format(num_downloaded))
     return num_downloaded
 
 
@@ -815,6 +818,17 @@ def make_pc_files(data_dir, volcano=None, vlist_file=None, verbose=False):
             correct_pc(file_dir, verbose=verbose)
         if verbose:
             print('Parallax corrected files available in '+volcano+' directory')
+    if vlist_file != None:
+        with open(vlist_file) as file:
+            volclist = file.readlines()
+            volclist = [line.rstrip() for line in volclist]
+            file.close()
+        for volcano in volclist:
+            if volcano in dirlist:
+                file_dir = os.path.join(data_dir, volcano, '')
+                correct_pc(file_dir, verbose=verbose)
+                if verbose:
+                    print('Parallax corrected files available in '+volcano+' directory!')
     else:
         for direct in dirlist:
             file_dir = os.path.join(data_dir, direct, '')
@@ -1076,8 +1090,8 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
             imgdates = dframe.edate.values
             filenames = dframe.filename.values.tolist()
 
-        for iii, fname in enumerate(filenames):  
-        #while i < len(filenames):
+        for iii, fname in enumerate(filenames):
+            # while i < len(filenames):
             # Convert date to datetime object
             date_time = pd.to_datetime(imgdates[iii]).to_pydatetime()
             # Initialize write_emitimes function
@@ -1087,8 +1101,6 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
             volcemit.write_emit(area_file=False)
         #    i += 1
         return None
-
-
 
 
 def setup_runs():
