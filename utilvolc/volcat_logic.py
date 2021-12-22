@@ -271,13 +271,10 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
         # Downloads netcdf files
         # Creates list of downloaded netcdf files for reference
         log_list = sorted(list(f for f in os.listdir(logdir) if f.endswith('.json')))
-        x = 0
-        while x < len(log_list):
+        for log in log_list:
             if verbose:
-                print(logdir+log_list[x])
-            get_nc(logdir+log_list[x], vaac=vaac, mkdir=True, verbose=verbose, VOLCAT_DIR=ddir)
-
-            x += 1
+                print(logdir+log)
+            num_downloaded = get_nc(logdir+log, vaac=vaac, mkdir=True, verbose=verbose, VOLCAT_DIR=ddir)
         # TO DO:
         # Could create a function that moves already downloaded netcdf files to new location
         # Some sort of filing system if desired
@@ -354,14 +351,11 @@ def delete_old(directory, days=7, verbose=False):
                 deletefiles.append(files)  # Creating list of files to delete
     if verbose:
         print("Files to be deleted: "+str(deletefiles))
-    count = 0
     size = 0.0
-    mm = 0
-    while mm < len(deletefiles):
-        size = size + (os.path.getsize(deletefiles[mm]) / (124*124))
-        os.remove(deletefiles[mm])
-        count = count+1
-        mm += 1
+    count = 0
+    for count, deletef in enumerate(deletefiles):
+        size += (os.path.getsize(deletef) / (124*124))
+        os.remove(deletef)
     if verbose:
         return print('Deleted '+str(count) + ' files, totalling '+str(round(size, 2))+' MB.')
     else:
@@ -377,18 +371,14 @@ def get_log_list(data):
     """
     events = data['EVENTS']
     log_url = []
-    i = 0
-    while i < len(events):
-        if type(events[i]) == dict:
-            tmp = pd.DataFrame([events[i]])
+    for eve in events:
+        if isinstance(eve,dict):
+            tmp = pd.DataFrame(eve)
             log_url.append(tmp['LOG_URL'].values[0])
-        elif type(events[i]) == list:
-            j = 0
-            while j < len(events[i]):
-                tmp = pd.DataFrame([events[i][j]])
-                log_url.append(tmp['LOG_URL'].values[0])
-                j += 1
-        i += 1
+        elif isinstance(eve,list):
+            for subeve in eve:
+               tmp = pd.DataFrame(subeve)
+               log_url.append(tmp['LOG_URL'].values[0])
     return log_url
 
 
@@ -414,14 +404,12 @@ def get_log(log_url, verbose=False, **kwargs):
         log_dir = kwargs['VOLCAT_LOGFILES']
     else:
         log_dir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
-    i = 0
-    while i < len(log_url):
+    for gurl in log_url:
         # wget -N: timestamping - retrieve files only if newer than local
         # wget -P: designates location for file download
-        os.system('wget -N -P '+log_dir+' '+log_url[i])
+        os.system('wget -N -P '+log_dir+' '+gurl)
         if verbose:
-            print('File '+log_url[i]+' downloaded to '+log_dir)
-        i += 1
+            print('File '+gurl+' downloaded to '+log_dir)
     return None
 
 
@@ -456,8 +444,8 @@ def check_file(fname, directory, suffix='.nc', verbose=False):
     s = fname.rfind('/')
     current = fname[s+1:]
     if current in original:
-        if verbose:
-            print('File '+current+' already downloaded')
+        #if verbose:
+        #    print('File '+current+' already downloaded')
         return False
     else:
         return True
@@ -557,7 +545,7 @@ def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
     txtfile.close()
     #os.chmod(mdir+mfile, 0o666)
     if verbose:
-        print('Missing files added to '+mdir+mfile)
+        print('Missing files added to {}'.format(os.path.join(mdir,mfile)))
     return None
 
 
@@ -609,9 +597,10 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
                                      with volcano name under this directory.
 
     Returns:
-    None
+    num_downloaded : number of files downloaded
     """
-
+    num_missing    = 0
+    num_downloaded = 0
     if 'VOLCAT_DIR' in kwargs.keys():
         data_dir = kwargs['VOLCAT_DIR']
     else:
@@ -649,21 +638,22 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
             if os.path.isfile(data_dir+volcname+'/'+dfile):
                 if verbose:
                     print('File '+dfile+' downloaded to '+data_dir+volcname)
+                num_downloaded += 1
             else:
                 missing.append(dfile_list[i])
-                if verbose:
-                    print('File '+dfile+' NOT DOWNLOADED!')
-                    print('From json file: '+fname)
+                num_missing += 1
+                #if verbose:
+                #    print('File '+dfile+' NOT DOWNLOADED!')
+                #    print('From json file: '+fname)
         i += 1
     # record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
     if len(missing) > 0:
         record_missing(missing, data_dir, mfile='missing_netcdfs.txt')
         if verbose:
-            return print('File downloads complete. Missing files located in missing_netcdfs.txt')
-        else:
-            return None
-    else:
-        return None
+           print('File downloads complete. {} Missing files located in missing_netcdfs.txt'.format(num_missing))
+    if verbose:
+       print('File downloads complete. {} files downloaded'.format(num_downloaded))
+    return num_downloaded
 
 
 def make_dir(data_dir, newdir='pc_corrected', verbose=False):
