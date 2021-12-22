@@ -54,6 +54,9 @@ def create_run_instance(JOBID, inp):
     elif inp['runflag'] == 'inverse':
          from ashinverse import InverseAshRun
          arun = InverseAshRun(JOBID)
+    elif inp['runflag'] == 'DataInsertion':
+         from ashdatainsertion import DataInsertionRun
+         arun = DataInsertionRun(JOBID)
     else:
        from ashtrajectory import TrajectoryAshRun
        arun = TrajectoryAshRun(JOBID)
@@ -73,13 +76,14 @@ if __name__ == "__main__":
     setup = JobSetUp()
     # create a test to run without inputs from web page.
 
-    if 'ens' in JOBID or 'test' in JOBID:
+    if 'ens' in JOBID or 'test' in JOBID or 'DI' in JOBID:
         logging.getLogger().setLevel(20)
         logging.basicConfig(
                             stream = sys.stdout)
         #inp = setup.make_test_inputs()
         configname = 'config.{}.txt'.format(JOBID)
         logger.info('CONFIG FILE {}'.format(configname))
+        logger.info('ensemble, test or DI run')
         setup =  make_inputs_from_file('./',configname)
         inp = setup.inp
         # run inverse dispersion run.
@@ -98,6 +102,7 @@ if __name__ == "__main__":
         #inp = setup.make_test_inputs()
         configname = 'config.{}.txt'.format(JOBID)
         logger.info('CONFIG FILE {}'.format(configname))
+        logger.info('inverse run')
         setup =  make_inputs_from_file('./',configname)
         inp = setup.inp
         logger.info('Inverse run')

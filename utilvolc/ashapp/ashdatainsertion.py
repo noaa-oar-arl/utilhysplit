@@ -5,7 +5,7 @@ import datetime
 import logging
 import os
 import time
-
+from glob import glob
 # from hysplitdata.traj import model
 # from hysplitplot import timezone
 
@@ -17,7 +17,8 @@ from runhandler import ProcessList
 from ashbase import AshRun
 import ensemble_tools
 from cdump2xml import HysplitKml
-from emitimes import EmitTimes
+from emitimes import EmiTimes
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,23 @@ The following environment variables must be set prior to calling this script:
     RUN_URL             - URL to the Locusts web application."""
     )
 
-class DataInsertionAshRun(AshRun):
+
+def find_emit_file(wdir):
+    elist = glob(os.path.join(wdir,'EMIT_*'))
+    return elist[0]
+
+class DataInsertionRun(AshRun):
 
     def __init__(self, JOBID):
         super().__init__(JOBID)
+
+
+    def add_inputs(self, inp):
+        inp['WORK_DIR'] = os.path.join(inp['WORK_DIR'],
+                                            inp['VolcanoName'],
+                                            'emitimes/')
+        logger.info('Working directory set {}'.format(inp["WORK_DIR"]))
+        super().add_inputs(inp)
 
     def get_maptext_info(self):
         maptexthash = {}
@@ -79,7 +93,7 @@ class DataInsertionAshRun(AshRun):
         setup.add("efile",self.inp['emitfile'])
 
     def additional_control_setup(self, control, stage=0):
-        emitfile = self.inp['emitfile']
+        emitfile = find_emit_file(self.inp['WORK_DIR'])
         # get number of locations from emit-times file
         # and set some values in inp needed for the control setup.
         nlocs = self.read_emittimes(emitfile)
