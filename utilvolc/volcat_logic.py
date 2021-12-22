@@ -36,26 +36,26 @@ def workflow():
     # TO DO: combine g001 g002 g003 etc. files.
     #        for now only use g001 but will need to add them together later.
     # SANGAY eruption may have some examples of this.
-    # a) Do we Need to merge files that have the same timestamp? 
+    # a) Do we Need to merge files that have the same timestamp?
     #    Alternative is to just do separate HYSPLIT runs for them.
     #    However need to be careful of combining them for ensemble relative frequency then.
     #    How good a classifier is the event time? (Probably not great?)
     #     (i) CASE 1 is that they have the same image date time.
     #                                  the same event date time.
     #                                  different image identifier g001, g002, g003 etc.
-    #         we think that in this case the ash is probably close together and could be 
-    #         merged for 1 emit-times file. 
+    #         we think that in this case the ash is probably close together and could be
+    #         merged for 1 emit-times file.
 
     #     (ii) CASE 2 is that they have the same image date time.
     #                                  the different event date time.
     #                                  same or different g001, g002, g003 etc.
     #         we think that in this case the ash clouds are more likely to be far apart.
     #         may want seperate emit-times files - what would we do with them?
-    #             may be useful for evaluation. 
-    #             will have to be combined for the forecast. 
-    
+    #             may be useful for evaluation.
+    #             will have to be combined for the forecast.
+
     #       The problem with the seperate is that you have to be careful when you combine
-    #       them into the probabilistic forecast. 
+    #       them into the probabilistic forecast.
 
     # b) Keep track of the event dates is useful
     # starting dispersion runs from volcat and emitimes files
@@ -159,8 +159,8 @@ def file_progression():
     # a fix for it yet, but if you specify the event_date, you can move past the files that
     # are causing a problem.
     # Step 5:
-   
-    vl.setup_runs() #AMC adapt the ashapp functions to do this.
+
+    vl.setup_runs()  # AMC adapt the ashapp functions to do this.
     # In this step, control and setup files are generated for data insertion runs.
     # IN PROGRESS
 
@@ -625,10 +625,43 @@ def list_dirs(data_dir):
     dirlist: list of subdirectories within data_dir
     """
     dirlist = sorted(os.listdir(data_dir))
-    for f in dirlist:
-        if f.endswith('txt'):
-            dirlist.remove(f)
-    return dirlist
+    newlist = [volc for volc in dirlist if not volc.endswith('.txt')]
+    return newlist
+
+
+def red_list(data_dir):
+    """Makes list of volcanoes not expected to be active - left over from green and 
+    yellow list. If on the red list, parallax files will not be written, emitimes files will not 
+    be generated, further processing will not occur. 
+    Could change this to not even download netcdf files, but this will take some further
+    logic generation.
+    Inputs:
+    data_dir: directory path of parent directory (string)
+    Outputs:
+    Text file listing volcanoes that are likely false positives for VOLCAT
+    """
+    dirlist = list_dirs(data_dir)
+    red = []
+    # Read green list
+    with open('green_list.txt') as file:
+        green = file.readlines()
+        green = [line.rstrip() for line in green]
+    # Read yellow list
+    with open('yellow_list.txt') as file:
+        yellow = file.readlines()
+        yellow = [line.rstrip() for line in yellow]
+    # Compare dirlist to green and yellow lists
+    for volc in dirlist:
+        if volc not in green:
+            if volc not in yellow:
+                red.append(volc)
+    # Write red_list.txt file
+    tfile = open(data_dir+'red_list.txt', 'w')
+    for volc in red:
+        tfile.write(volc+'\n')
+    tfile.close()
+    os.chmod(data_dir+'red_list.txt', 0o664)
+    return None
 
 
 def num_files(data_dir, verbose=False):
@@ -965,7 +998,7 @@ def setup_runs():
           customize vertical levels?  probably prescribed by ICAO.
     Outputs:
     """
-    ## AMC - use the ashapp for this. What information is needed?
+    # AMC - use the ashapp for this. What information is needed?
     from utilhysplit import hcontrol
     from utilhysplit import emitimes
     from utilhysplit import metdata
