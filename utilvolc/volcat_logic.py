@@ -168,7 +168,7 @@ def file_progression():
     # In this step, control and setup files are generated for data insertion runs.
     # IN PROGRESS
 
-def generate_report(**kwargs):
+def generate_report(vmin=None,vmax=None,**kwargs):
     import matplotlib.pyplot as plt
     # get_files()
     if 'VOLCAT_DIR' in kwargs.keys():
@@ -178,7 +178,9 @@ def generate_report(**kwargs):
 
     vnames = os.listdir(data_dir)
     print(vnames)
-    for volc in vnames:
+    vnames = vnames[vmin:vmax]
+    print(len(vnames))
+    for iii, volc in enumerate(vnames):
         fig = plt.figure(figsize=[10, 2])
         try:
             events = list_times(os.path.join(data_dir, volc))
@@ -232,7 +234,7 @@ def get_files(inp={'JPSS_DIR':'/pub/jpsss_upload'},vaac=None, verbose=False):
     # delete_old(jdir, verbose=verbose)
 
     # Finds json files added to ftp folder
-    status = check_dirs(jdir,logdir,verbose=True)
+    status = check_dirs(jdir,logdir,verbose=False)
     if np.all(status):
         added = new_json(jdir, logdir)
         added = sorted(added)
@@ -246,7 +248,7 @@ def get_files(inp={'JPSS_DIR':'/pub/jpsss_upload'},vaac=None, verbose=False):
         # Logs event summary json files
         record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
 
-    status = check_dirs(logdir,ddir,verbose=True)
+    status = check_dirs(logdir,ddir,verbose=False)
         # Delete files from json event log folder that are older than 7 days
         # Netcdf files are only available for 7 days on the ftp
     if np.all(status):
@@ -267,7 +269,7 @@ def get_files(inp={'JPSS_DIR':'/pub/jpsss_upload'},vaac=None, verbose=False):
         # TO DO:
         # Could create a function that moves already downloaded netcdf files to new location
         # Some sort of filing system if desired
-
+    return check_dirs(logdir,ddir,jdir,verbose=verbose) 
 
 def new_json(jdir, logdir, logfile='json_log.txt'):
     """ Get list of json files pushed to our system
@@ -452,7 +454,7 @@ def check_dirs(*args, verbose=False):
         if not os.path.isdir(direc):
            status.append(False)
            if verbose: print('{} NOT FOUND'.format(direc))
-           logger.warning('{} directory not found'.format(direc))
+           logger.error('{} directory not found'.format(direc))
         else:
            status.append(True)
     return status
@@ -845,10 +847,12 @@ def list_times(data_dir, volcano=None, pc=True):
     volc_check = check_volcano(data_dir, volcano=volcano)
     if volc_check:
         volc_dir = os.path.join(data_dir, volcano, '')
+    else:
+        volc_dir = data_dir
     if pc:
         volc_dir = os.path.join(volc_dir, 'pc_corrected', '')
     # Creating dataframe of filename information
-    dataf = volcat.get_volcat_name_df(data_dir, include_last=True)
+    dataf = volcat.get_volcat_name_df(volc_dir, include_last=True)
     event_dates = dataf['idate'].unique()
     eventd = pd.DataFrame(event_dates, columns=['Event_Dates'])
     lens = []
@@ -1016,17 +1020,19 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
             imgdates = dframe.edate.values
             filenames = dframe.filename.values.tolist()
 
-        i = 0
-        while i < len(filenames):
+        for iii, fname in enumerate(filenames):  
+        #while i < len(filenames):
             # Convert date to datetime object
-            date_time = pd.to_datetime(imgdates[i]).to_pydatetime()
+            date_time = pd.to_datetime(imgdates[iii]).to_pydatetime()
             # Initialize write_emitimes function
-            volcemit = we.InsertVolcat(emit_dir, volc_dir, date_time, fname=filenames[i])
+            volcemit = we.InsertVolcat(emit_dir, volc_dir, date_time, fname=fname)
             if verbose:
                 print('Emitimes file with '+volcemit.make_match()+' created for '+volcemit.fname)
             volcemit.write_emit(area_file=False)
-            i += 1
+        #    i += 1
         return None
+
+
 
 
 def setup_runs():
