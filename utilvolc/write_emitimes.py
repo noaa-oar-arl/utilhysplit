@@ -30,6 +30,37 @@ Class: InsertVolcat
 --------------
 """
 
+def make_filename(volcat_fname,prefix,suffix):
+    """Makes unique string for various filenames from volcat filename
+    Inputs:
+    fname: name of volcat file - just volcat file, not full path (string)
+    Outputs:
+    match: (string) of important identifiying information"""
+    # Parse filename for image datetime, event datetime, and volcano id
+    parsedf = volcat_fname.split('_')
+    match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
+    filename = '{}_{}_{}'.format(prefix, match, suffix)
+    return filename
+
+# species tag could be p006p001p002p003 for multiple particle sizes
+def make_cdump_filename(volcat_fname, speciestag, layertag):
+    suffix = '{}_{}'.format(layertag, speciestag)
+    return make_filename(volcat_fname, prefix='CDUMP', suffix = suffix)
+
+def make_emit_filename(volcat_fname, speciestag, layertag):
+    suffix = '{}_{}'.format(layertag, speciestag)
+    return make_filename(volcat_fname, prefix='EMIT', suffix = suffix)
+
+def parse_filename(ename):
+    ehash = {}
+    temp = ename.split('_')
+    ehash['imagedate'] = temp[1]
+    ehash['imagetime'] = temp[2]
+    ehash['vid'] = temp[3] 
+    ehash['eventdate'] = temp[1]
+    ehash['eventime'] = temp[2]
+    ehash['layertag'] = temp[4]
+    ehash['speciestag'] = temp[5]
 
 def write_cyl_file(
     wdir,
@@ -211,6 +242,7 @@ class InsertVolcat:
         # Removes time dimension
         if clip == True:
             mass = volcat.get_mass(dset)[0, :, :]
+            #mass = volcat.get_mass(dset)
         else:
             mass = dset.ash_mass_loading[0, :, :]
         lat = mass.latitude
@@ -264,13 +296,13 @@ class InsertVolcat:
         area: 1D array of area
         """
         import numpy.ma as ma
-
         if self.fname:
             dset = volcat.open_dataset(
                 self.vdir+self.fname, correct_parallax=correct_parallax, decode_times=decode_times)
         else:
             print("ERROR: Need volcat filename!")
         # Extracts ash mass array - Removes time dimension
+        # TO DO - there is some error associated with the clipping.
         if clip == True:
             mass0 = volcat.get_mass(dset).isel(time=0)
             height0 = volcat.get_height(dset).isel(time=0)
@@ -295,7 +327,7 @@ class InsertVolcat:
                 areafile = areafile[0]
                 areaf = xr.open_dataset(areafile).area
         else:
-            areaf = self.get_area()
+            areaf = self.get_area(clip=clip)
 
         # Calculating mass - rate is (mass/hr) in HYSPLIT
         # area needs to be in m^2 not km^2!
@@ -318,6 +350,8 @@ class InsertVolcat:
         hgt = hgt * 1000.0  # Moving hgt from (km) to (m)
 
         return lat, lon, hgt, mass, area
+
+
 
     def write_emit(
         self,
@@ -348,8 +382,12 @@ class InsertVolcat:
         emitimes file located in wdir
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
+        #try:
         lat, lon, hgt, mass, area = self.make_1D(
-            correct_parallax=correct_parallax, area_file=area_file, decode_times=decode_times, clip=clip)
+                correct_parallax=correct_parallax, area_file=area_file, decode_times=decode_times, clip=clip)
+        if verbose: print('{} number of lines'.format(len(mass)))
+        #except:
+        #    print('error in make_1d')
         # Calculating constants for mass rate (g/hr) determination
         # AMR: 8/3/2021 - added code to account for different durations under 1 hour
         # Is this acceptable for durations longer that 1 hour? A constant value of 1?
@@ -358,25 +396,21 @@ class InsertVolcat:
         const = 60.0 / float(self.duration)
         # else:
         # const = 1.
-        match = self.make_match()
-        filename = "VOLCAT_" + match + "_par" + str(self.pollnum)
+        #match = self.make_match()
+
+        speciestag = 'par{}'.format(self.pollnum)
+        layertag = 'nolayer'
+        if layer > 0.0:
+           layertag = 'mlayer'
+           if centered:
+              layertag = 'clayer'
+        filename = make_emit_filename(self.fname,speciestag,layertag)
+
+        #filename = "VOLCAT_" + match + "_par" + str(self.pollnum)
         records = np.shape(hgt)[0] * self.pollnum
         # AMR: 8/3/2021 - added layer flag, and writing layer capability to emitimes file, accounting for ash in a layer for data insertion method.
         if layer > 0.0:
-            filename = (
-                "VOLCAT_" + match + "_" + str(layer) + "mlayer_par" + str(self.pollnum)
-            )
             records = records * 2
-            # AMR: 8/23/2021 - added center flag, and writing centered layer capability
-            if centered:
-                filename = (
-                    "VOLCAT_"
-                    + match
-                    + "_"
-                    + str(layer)
-                    + "mlayer_centered_par"
-                    + str(self.pollnum)
-                )
         f = open(self.wdir + filename, "w")
         f.write("YYYY MM DD HH DURATION(HHMM) #RECORDS \n")
         f.write(
