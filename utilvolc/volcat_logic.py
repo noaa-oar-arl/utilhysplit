@@ -825,7 +825,6 @@ def make_pc_files(data_dir, volcano=None, vlist_file=None, verbose=False):
             correct_pc(file_dir, verbose=verbose)
         if verbose:
             print('Parallax corrected files available in '+volcano+' directory')
-    if vlist != None:
     else:
         for direct in dirlist:
             file_dir = os.path.join(data_dir, direct, '')
