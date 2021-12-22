@@ -921,7 +921,10 @@ def bbox(darray, fillvalue):
     around data.
     if fillvalue is None then assume Nan's.
     """
-    arr = darray[0, :, :].values
+    try:
+        arr = darray[0, :, :].values
+    except:
+        print('arr failed', darray)
     if fillvalue:
         a = np.where(arr != fillvalue)
     else:
@@ -993,12 +996,18 @@ def get_data(dset, vname, clip=True):
         gen = gen.where(gen != fillvalue)
         fillvalue = None
     if clip:
-        box = bbox(gen, fillvalue)
-        gen = gen[:, box[0][0]: box[1][0], box[0][1]: box[1][1]]
-        if "_FillValue" in gen.attrs:
-            gen = gen.where(gen != fillvalue)
-        else:
-            gen = gen.where(gen)
+        status=True
+        try:
+            box = bbox(gen, fillvalue)
+        except:
+            print('volcat get_data bbox for clipping failed')
+            status=False
+        if status:
+            gen = gen[:, box[0][0]: box[1][0], box[0][1]: box[1][1]]
+            if "_FillValue" in gen.attrs:
+                gen = gen.where(gen != fillvalue)
+            else:
+                gen = gen.where(gen)
     # applies scale_factor and offset if they are in the attributes.
     if "scale_factor" in gen.attrs:
         gen = gen * gen.attrs["scale_factor"]
