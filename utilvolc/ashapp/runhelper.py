@@ -429,7 +429,7 @@ class JobFileNameComposer:
                 return "{}_cdump.{}".format(self.job, stage)
             else:
                 return "{}_cdump.{}".format(self.job, stage)
-        #return "cdump.{}".format(self.job)
+        return "cdump.{}".format(self.job)
 
     def get_pardump_filename(self, stage=0):
         if stage != 0:

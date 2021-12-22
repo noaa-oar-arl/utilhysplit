@@ -63,7 +63,9 @@ class DataInsertionRun(AshRun):
 
     def read_emittimes(self, emitfile):
         """
-        get start date and number of locations from emit file.
+        get information from emit-times file including
+        start date, number of locations, latitude, longitude
+        
         """
         self.file_not_found_error(emitfile, message=True)
         etf = EmiTimes(filename=emitfile)
@@ -73,8 +75,7 @@ class DataInsertionRun(AshRun):
         ecycle = etf.cycle_list[0]
         #print('ecycle', ecycle)
         # number of locations that need to be in CONTROL file.
-        nlocs = ecycle.nrecs
-        logger.info('{} number of locations'.format(nlocs))
+        self.inp['nlocs'] = ecycle.nrecs
         # starting date of this cycle      
         sdate = ecycle.sdate
         self.inp['start_date'] = sdate
@@ -91,11 +92,10 @@ class DataInsertionRun(AshRun):
         self.inp['area'] = 0
         self.inp['bottom'] = 0
         self.inp['top'] = 0
-        self.inp['nlocs'] = nlocs
-        return nlocs
 
     def setup_setup(self,stage):
         setup = super().setup_setup(stage)
+        # add the emit times file
         eloc = self.inp['emitfile'].split('/')
         eloc = eloc[-1]
         setup.add("efile",eloc)
@@ -103,15 +103,11 @@ class DataInsertionRun(AshRun):
 
     def setup_basic_control(self,stage=0,rtype='dispersion'):
         emitfile = find_emit_file(self.inp['WORK_DIR'])
-        nlocs = self.read_emittimes(emitfile)
+        self.read_emittimes(emitfile)
         control = super().setup_basic_control(stage=stage,rtype=rtype)
         return control
 
     def additional_control_setup(self, control, stage=0):
-        #emitfile = find_emit_file(self.inp['WORK_DIR'])
-        # get number of locations from emit-times file
-        # and set some values in inp needed for the control setup.
-        #nlocs = self.read_emittimes(emitfile)
         nlocs = self.inp['nlocs']
         super().additional_control_setup(control,stage=stage)
         # add as many dummy locations as in emit-times file
@@ -123,8 +119,6 @@ class DataInsertionRun(AshRun):
         rate = self.inp['rate']
         for loc in np.arange(0,nlocs):
             control.add_location((lat,lon),vent,rate=rate,area=area) 
-        #control.concgrids[0].outfile = self.filelocator.get_cdump_filename(stage)
-        #control.concgrids[0].outdir = self.inp['WORK_DIR']
 
     def file_not_found_error(self, fln, message=False):
         if not os.path.exists(fln):
