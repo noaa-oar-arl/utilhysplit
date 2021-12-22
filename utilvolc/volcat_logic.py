@@ -515,7 +515,7 @@ def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=Fa
         with open(logdir+'tmp_file2.txt', 'w') as fis:
             fis.write(json.dumps(original))
         os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
-        os.chmod(logdir+logfile, 0o664)
+        os.chmod(logdir+logfile, 0o666)
         if verbose:
             print('Updates recorded to file!\n')
         return None
@@ -541,7 +541,7 @@ def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
     for element in mlist:
         txtfile.write(element + '\n')
     txtfile.close()
-    os.chmod(mdir+mfile, 0o664)
+    os.chmod(mdir+mfile, 0o666)
     if verbose:
         print('Missing files added to '+mdir+mfile)
     return None
@@ -746,7 +746,7 @@ def red_list(data_dir):
     for volc in red:
         tfile.write(volc+'\n')
     tfile.close()
-    os.chmod(data_dir+'red_list.txt', 0o664)
+    os.chmod(data_dir+'red_list.txt', 0o666)
     return None
 
 
@@ -788,9 +788,21 @@ def get_latlon(data_dir):
     return volcdf
 
 
-def make_pc_files(data_dir, volcano=None, verbose=False):
+def make_pc_files(data_dir, volcano=None, vlist_file=None, verbose=False):
     """ Makes corrected pc files.
-    Might want to streamline the check process at some point. Not necessary now"""
+    Might want to streamline the check process at some point. Not necessary now
+    Inputs:
+    data_dir: parent directory for volcanoes (string)
+    volcano: name of specific volcano (string) None by default
+    vlist_file: name of file with list of volcanoes (string) None by default
+            Written fo ruse with green_list.txt, yellow_list.txt
+    If volcano and vlist_file are both None, pc_corrected files are written 
+    for all availabe files.
+    verbose: boolean 
+    Outputs:
+    Parallax files are generated for specified volcano, or vlist_file, or all volcanoes 
+    Depending on inputs.
+    """
     # Make list of available directories
     dirlist = list_dirs(data_dir)
     if volcano != None:
@@ -799,6 +811,7 @@ def make_pc_files(data_dir, volcano=None, verbose=False):
             correct_pc(file_dir, verbose=verbose)
         if verbose:
             print('Parallax corrected files available in '+volcano+' directory')
+    if vlist != None:
     else:
         for direct in dirlist:
             file_dir = os.path.join(data_dir, direct, '')
