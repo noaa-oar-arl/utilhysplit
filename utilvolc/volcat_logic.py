@@ -1020,7 +1020,7 @@ def update_vaac_files():
     volcanoes = tree.xpath('//span[@id="quicklinks"]/text()')
 
 
-def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=False):
+def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=False,clip=True):
     """Writes emitimes file from the volcat netcdf file provided. Still in progress!
     Will eventually use an input dictionary
     Inputs:
@@ -1084,7 +1084,7 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
             volcemit = we.InsertVolcat(emit_dir, volc_dir, date_time, fname=fname)
             if verbose:
                 print('Emitimes file with '+volcemit.make_match()+' created for '+volcemit.fname)
-            volcemit.write_emit(area_file=False)
+            volcemit.write_emit(area_file=False,clip=clip,verbose=verbose)
         #    i += 1
         return None
 
