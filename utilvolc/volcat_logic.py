@@ -1,13 +1,17 @@
+import logging
 import json
 import pandas as pd
+import numpy as np
 import os
 from glob import glob
+
+logger = logging.getLogger(__name__)
 
 # ISSUES
 # Error when creating pc_corrected files - e.g. The Quill - fix later?
 # ERROR with emittimes file - possibly related to small files / no data.
 #
-#
+                #
 
 
 def workflow():
@@ -164,11 +168,14 @@ def file_progression():
     # In this step, control and setup files are generated for data insertion runs.
     # IN PROGRESS
 
-
-def generate_report():
+def generate_report(**kwargs):
     import matplotlib.pyplot as plt
     # get_files()
-    data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+    if 'VOLCAT_DIR' in kwargs.keys():
+       data_dir = kwargs['VOLCAT_DIR']
+    else:
+       data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+
     vnames = os.listdir(data_dir)
     print(vnames)
     for volc in vnames:
@@ -184,8 +191,9 @@ def generate_report():
         plt.show()
 
 
-def get_files(vaac=None, verbose=False):
-    """ Use various functions to get all available netcdf files from json event log files
+def get_files(inp={'JPSS_DIR':'/pub/jpsss_upload'},vaac=None, verbose=False):
+    """ 
+    Use various functions to get all available netcdf files from json event log files
     Uses the different functions within volcat_logic.py
     Sorts through the ftp directory to find json event summary files
     Loops through them, and downloads the corresponding json event log files
@@ -193,11 +201,30 @@ def get_files(vaac=None, verbose=False):
     Lists event log files, finds the correspondind event file urls for download
     Downloads the event netcdf files
     Keeps track of the downloaded netcdf files
-    vaac: vaac region (string) can specify region. If None, pulls all available files"""
 
-    jdir = '/pub/jpsss_upload/'
-    ddir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
-    logdir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+    Parameters
+    ----------
+    vaac : string 
+          vaac region can specify region. If None, pulls all available files
+    verbose : boolean    
+    inp : dictionary 
+         JPSS_DIR :        string
+         VOLCAT_DIR :      string
+         VOLCAT_LOGFILES : string
+    """
+    if 'JPSS_DIR' in inp.keys():
+       jdir = inp['JPSS_DIR']
+    else:
+       jdir = '/pub/jpsss_upload/'
+    if 'VOLCAT_DIR' in inp.keys():
+       ddir = inp['VOLCAT_DIR']
+    else:
+       ddir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+    if 'VOLCAT_LOGFILES' in inp.keys():
+       logdir = inp['VOLCAT_LOGFILES']
+    else:
+       logdir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+
 
     # Delete files from jpsss_uploads folder that is older than 7 days
     # Files are only available for 7 days on the ftp
@@ -205,38 +232,41 @@ def get_files(vaac=None, verbose=False):
     # delete_old(jdir, verbose=verbose)
 
     # Finds json files added to ftp folder
-    added = new_json(jdir, logdir)
-    added = sorted(added)
-    i = 0
-    while i < len(added):
-        data = open_dataframe(jdir+added[i], varname='VOLCANOES')
-        log_url = get_log_list(data)
-        # Downloads json event log files
-        get_log(log_url, verbose=verbose)
-        i += 1
-    # Logs event summary json files
-    record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
+    status = check_dirs(jdir,logdir,verbose=True)
+    if np.all(status):
+        added = new_json(jdir, logdir)
+        added = sorted(added)
+        i = 0
+        while i < len(added):
+            data = open_dataframe(jdir+added[i], varname='VOLCANOES')
+            log_url = get_log_list(data)
+            # Downloads json event log files
+            get_log(log_url, verbose=verbose,VOLCAT_LOGFILES=log_dir)
+            i += 1
+        # Logs event summary json files
+        record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
 
-    # Delete files from json event log folder that are older than 7 days
-    # Netcdf files are only available for 7 days on the ftp
-    delete_old(logdir, verbose=verbose)
+    status = check_dirs(logdir,ddir,verbose=True)
+        # Delete files from json event log folder that are older than 7 days
+        # Netcdf files are only available for 7 days on the ftp
+    if np.all(status):
+        delete_old(logdir, verbose=verbose)
+        # Opens json event files
+        # Finds event file urls for download
+        # Downloads netcdf files
+        # Creates list of downloaded netcdf files for reference
+        log_list = sorted(list(f for f in os.listdir(logdir) if f.endswith('.json')))
+        x = 0
+        while x < len(log_list):
+            if verbose:
+                print(logdir+log_list[x])
+            get_nc(logdir+log_list[x], vaac=vaac, mkdir=True, verbose=verbose,VOLCAT_DIR=ddir)
 
-    # Opens json event files
-    # Finds event file urls for download
-    # Downloads netcdf files
-    # Creates list of downloaded netcdf files for reference
-    log_list = sorted(list(f for f in os.listdir(logdir) if f.endswith('.json')))
-    x = 0
-    while x < len(log_list):
-        if verbose:
-            print(logdir+log_list[x])
-        get_nc(logdir+log_list[x], vaac=vaac, mkdir=True, verbose=verbose)
+            x += 1
 
-        x += 1
-
-    # TO DO:
-    # Could create a function that moves already downloaded netcdf files to new location
-    # Some sort of filing system if desired
+        # TO DO:
+        # Could create a function that moves already downloaded netcdf files to new location
+        # Some sort of filing system if desired
 
 
 def new_json(jdir, logdir, logfile='json_log.txt'):
@@ -323,7 +353,6 @@ def delete_old(directory, verbose=False):
     else:
         return None
 
-
 def get_log_list(data):
     """Pulls the log url from the pandas dataframe
     Inputs:
@@ -348,16 +377,28 @@ def get_log_list(data):
     return log_url
 
 
-def get_log(log_url, verbose=False):
-    """ Downloads desired json event log files from ftp.
-    Inputs:
-    log_url: list of urls to the log files
-    Outputs:
+def get_log(log_url, verbose=False,**kwargs):
+    """ 
+    Downloads desired json event log files from ftp.
     Log files are downloaded to specified location
+ 
+   Inputs:
+    log_url: list of strings 
+             list of urls to the log files
+
+    verbose : boolean
+
+    VOLCAT_LOGFILES : string
+             location to download logfiles to.
+    Returns:
+    None
     """
     import os
     # Log_dir should be changed to something more generic (/pub/volcat_logs/ ?)
-    log_dir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+    if 'VOLCAT_LOGFILES' in kwargs.keys():
+       log_dir = kwargs['VOLCAT_LOGFILES']
+    else:
+       log_dir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
     i = 0
     while i < len(log_url):
         # wget -N: timestamping - retrieve files only if newer than local
@@ -378,10 +419,12 @@ def open_log(logdir, logfile=None):
     original: list of files already downloaded to our server (list)
     """
     import json
-    with open(logdir+logfile, 'r') as f:
-        original = json.loads(f.read())
-    return original
-
+    if os.path.isfile(os.path.join(logdir,logfile)):
+        with open(os.path.join(logdir,logfile), 'r') as f:
+            original = json.loads(f.read())
+        return original
+    else:
+        return []
 
 def check_file(fname, directory, suffix='.nc', verbose=False):
     """ Checks if file in fname exists on our servers
@@ -403,9 +446,29 @@ def check_file(fname, directory, suffix='.nc', verbose=False):
     else:
         return True
 
+def check_dirs(*args, verbose=False):
+    status = []
+    for direc in args:
+        if not os.path.isdir(direc):
+           status.append(False)
+           if verbose: print('{} NOT FOUND'.format(direc))
+           logger.warning('{} directory not found'.format(direc))
+        else:
+           status.append(True)
+    return status
 
 def determine_change(ddir, logdir, logfile, suffix):
-    """Determines which files were original, which are current, which were added, which were removed"""
+    """Determines which files were original, which are current, which were added, which were removed
+    
+
+    Returns
+    original : list
+    current  : list
+    added    : list
+    removed  : list
+    """
+    status = check_dirs(ddir,logdir,verbose=True)
+    if not np.all(status): return None, None, None, None
     # Files downloaded during previous check
     original = open_log(logdir, logfile=logfile)
     # Includes files just downloaded (if any)
@@ -505,18 +568,32 @@ def make_volcdir(data_dir, fname, verbose=False):
     return volcname
 
 
-def get_nc(fname, vaac=None, mkdir=True, verbose=False):
-    """ Finds and downloads netcdf files in json event log files from ftp.
+def get_nc(fname, vaac=None, mkdir=True, verbose=False,**kwargs):
+    """ 
+    Finds and downloads netcdf files in json event log files from ftp.
+    Netcdf event files are download to specified location 
+ 
     Inputs:
-    fname: filename of json event log file
-    vaac: vaac region for file downloads (string) Default: None, all files are downloaded
-    mkdir: make directory of volcano name, download files to that directory (boolean)
-    verbose: (boolean)
-    Outputs:
-    Netcdf event files are download to specified location
+    fname : string 
+            filename of json event log file
+    vaac : string
+           vaac region for file downloads Default: None, all files are downloaded
+    mkdir: boolean 
+           make directory of volcano name, download files to that directory 
+    verbose: boolean
+    kwargs : dictionary
+             'VOLCAT_DIR' : string : netcdf files will be downloaded to subfolder 
+                                     with volcano name under this directory.
+
+    Returns:
+    None
     """
-    # This should be changed, a specified data file location
-    data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+
+    if 'VOLCAT_DIR' in kwargs.keys():
+       data_dir = kwargs['VOLCAT_DIR']
+    else:
+       data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+
     volcname = make_volcdir(data_dir, fname, verbose=verbose)
     if vaac is not None:
         # checking that file is for specified vaac region
