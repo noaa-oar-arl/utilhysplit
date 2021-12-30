@@ -4,7 +4,8 @@ import pandas as pd
 import numpy as np
 import os
 from glob import glob
-from utilvolc import runhelper
+from utilvolc.ashapp.runhelper import Helper
+from utilvolc.ashapp.runhelper import list_dirs
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +265,7 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
             data = open_dataframe(os.path.join(jdir, afiles), varname='VOLCANOES')
             log_url = get_log_list(data)
             # Downloads json event log files
-            get_log(log_url, verbose=verbose, VOLCAT_LOGFILES=log_dir)
+            get_log(log_url, verbose=verbose, VOLCAT_LOGFILES=logdir)
         # Logs event summary json files
         # writes names of files in jpsss directory which we have already read and pulled the
         # relevant files from.
@@ -351,7 +352,6 @@ def delete_old(directory, days=7, verbose=False):
     """
     import time
     import shutil
-    import glob
     # import
     now = time.time()  # current time
     deletetime = now - (days * 86400)  # delete time
@@ -381,16 +381,24 @@ def get_log_list(data):
     Outputs:
     logurl: list of urls for the event log files
     """
-    events = data['EVENTS']
     log_url = []
+    if 'EVENTS' in data.keys(): 
+       events = data['EVENTS']
+    else:
+       logger.warning('no EVENTS found in dictionary')
+       return log_url
     for eve in events:
         if isinstance(eve, dict):
-            tmp = pd.DataFrame(eve)
-            log_url.append(tmp['LOG_URL'].values[0])
+            if 'LOG_URL' in eve.keys():
+                log_url.append(eve['LOG_URL'])
+            else:
+                logger.warning('no LOG_URL found in dictionary')
         elif isinstance(eve, list):
             for subeve in eve:
-                tmp = pd.DataFrame(subeve)
-                log_url.append(tmp['LOG_URL'].values[0])
+                if 'LOG_URL' in subeve.keys():
+                    log_url.append(subeve['LOG_URL'])
+                else:
+                    logger.warning('no LOG_URL found in dictionary')
     return log_url
 
 
@@ -410,7 +418,6 @@ def get_log(log_url, verbose=False, **kwargs):
     Returns:
     None
     """
-    import os
     # Log_dir should be changed to something more generic (/pub/volcat_logs/ ?)
     if 'VOLCAT_LOGFILES' in kwargs.keys():
         log_dir = kwargs['VOLCAT_LOGFILES']
@@ -421,7 +428,7 @@ def get_log(log_url, verbose=False, **kwargs):
         # wget -P: designates location for file download
         os.system('wget -N -P '+log_dir+' '+gurl)
         if verbose:
-            print('File '+gurl+' downloaded to '+log_dir)
+           logger.info('File {} downloaded to {}'.format(gurl,log_dir))
     return None
 
 
@@ -526,7 +533,7 @@ def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=Fa
     if added or removed:
         with open(logdir+'tmp_file2.txt', 'w') as fis:
             fis.write(json.dumps(original))
-        runhelper.Helper.move(os.path.join(logdir, 'tmp_file2.txt'), os.path.join(logdir, logfile))
+        Helper.move(os.path.join(logdir, 'tmp_file2.txt'), os.path.join(logdir, logfile))
         #os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
         #os.chmod(logdir+logfile, 0o666)
         if verbose:
@@ -675,16 +682,15 @@ def make_dir(data_dir, newdir='pc_corrected', verbose=False):
     newdir: name of new directory (string)
     """
     # Make sure data_dir ends with '/'
-    data_dir = os.path.join(data_dir, '')
+    new_data_dir = os.path.join(data_dir,newdir)
     # Go in to given directory, create create new directory if not already there
-    if not os.path.exists(data_dir+newdir):
+    if not os.path.exists(new_data_dir):
         orig_umask = os.umask(0)
-        os.mkdir(data_dir+newdir, mode=0o775)
+        os.mkdir(new_data_dir, mode=0o775)
         os.umask(orig_umask)
         if verbose:
-            return print('Directory '+data_dir+newdir+' created')
-        else:
-            return None
+            logger.info('Directory created {}'.format(new_data_dir))
+    return None
 
 
 def correct_pc(data_dir, newdir='pc_corrected', verbose=False):
@@ -692,12 +698,12 @@ def correct_pc(data_dir, newdir='pc_corrected', verbose=False):
     Create pc_corrected netcdf file in pc_corrected folder if not already there
     """
     # May want to streamline this more so all files are not checked each time!
-    from glob import glob
     from utilvolc import volcat
     # Create pc_corrected netcdf files if not already created, put in pc_corrected folder
     # Make sure data_dir ends with '/'
     data_dir = os.path.join(data_dir, '')
     # Create pc_corrected folder if not already there
+    print('DAT DIRECTORY', data_dir)
     make_dir(data_dir, verbose=verbose)
     pc_dir = os.path.join(data_dir, newdir, '')
     # Create list of files original directory
@@ -719,16 +725,17 @@ def correct_pc(data_dir, newdir='pc_corrected', verbose=False):
     return None
 
 
-def list_dirs(data_dir):
-    """ Lists subdirectories within give directory
-    Inputs:
-    data_dir: directory path of parent directory (string)
-    Outputs:
-    dirlist: list of subdirectories within data_dir
-    """
-    dirlist = sorted(os.listdir(data_dir))
-    newlist = [volc for volc in dirlist if not volc.endswith('.txt')]
-    return newlist
+#def list_dirs(data_dir):
+#    """ Lists subdirectories within give directory
+#    Inputs:
+#    data_dir: directory path of parent directory (string)
+#    Outputs:
+#    dirlist: list of subdirectories within data_dir
+#    """
+#    # scan directory works with python 3.5 and later.
+#    dirlist = os.scandir(data_dir)
+#    newlist = [volc.path for volc in dirlist if volc.is_dir()]
+#    return sorted(newlist)
 
 
 def red_list(data_dir):
@@ -813,7 +820,7 @@ def make_pc_files(data_dir, volcano=None, vlist_file=None, verbose=False):
     data_dir: parent directory for volcanoes (string)
     volcano: name of specific volcano (string) None by default
     vlist_file: name of file with list of volcanoes (string) None by default
-            Written fo ruse with green_list.txt, yellow_list.txt
+            Written fo use with green_list.txt, yellow_list.txt
     If volcano and vlist_file are both None, pc_corrected files are written 
     for all availabe files.
     verbose: boolean 
@@ -829,7 +836,7 @@ def make_pc_files(data_dir, volcano=None, vlist_file=None, verbose=False):
             correct_pc(file_dir, verbose=verbose)
         if verbose:
             print('Parallax corrected files available in '+volcano+' directory')
-    if vlist_file != None:
+    elif vlist_file != None:
         with open(vlist_file) as file:
             volclist = file.readlines()
             volclist = [line.rstrip() for line in volclist]
@@ -918,8 +925,9 @@ def list_times(data_dir, volcano=None, pc=True):
     Used to determine which time to create images.
     Inputs:
     data_dir: data directory (string)
-    volcano: volcano name (string)
+    volcano:  volcano name (string)
     pc: using pc files - default True (boolean)
+        assumes pc corrected file in subdirectory called pc_corrected.
     Outputs:
     events: pandas dataframe of available times, number files for each time
     """
@@ -934,6 +942,8 @@ def list_times(data_dir, volcano=None, pc=True):
         volc_dir = os.path.join(volc_dir, 'pc_corrected', '')
     # Creating dataframe of filename information
     dataf = volcat.get_volcat_name_df(volc_dir, include_last=True)
+    if dataf.empty:
+       return dataf
     event_dates = dataf['idate'].unique()
     eventd = pd.DataFrame(event_dates, columns=['Event_Dates'])
     lens = []
@@ -1132,4 +1142,3 @@ def setup_runs():
     from utilhysplit import emitimes
     from utilhysplit import metdata
     from datetime import datetime, timedelta
-    import os

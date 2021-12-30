@@ -50,6 +50,18 @@ class ConcplotColors:
     def get(self, color):
         return self.colorhash[color]
 
+def list_dirs(data_dir):
+    """ Lists subdirectories within give directory
+    Inputs:
+    data_dir: directory path of parent directory (string)
+    Outputs:
+    dirlist: list of subdirectories within data_dir
+    """
+    # scan directory works with python 3.5 and later.
+    dirlist = os.scandir(data_dir)
+    newlist = [volc.path.split('/')[-1] for volc in dirlist if volc.is_dir()]
+    return sorted(newlist)
+
 
 class Helper:
     def execute_with_shell(cmd, **kwargs):

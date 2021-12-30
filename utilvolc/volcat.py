@@ -106,7 +106,6 @@ def open_dataset(
         dset = _get_latlon(dset, "latitude", "longitude")
         dset = _get_time(dset)
     if "pc_latitude" in dset.data_vars and correct_parallax:
-        print("correcting pc")
         if not gridspace:
             dset = correct_pc(dset)
         else:
@@ -505,11 +504,11 @@ def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=Fa
         temp = temp[temp["volcano id"] == vid]
     if fid:
         temp = temp[temp["fid"] == fid]
-
-    if "fid" in temp.columns:
-        temp = temp.sort_values(["volcano id", "fid", "edate"], axis=0)
-    else:
-        temp = temp.sort_values(["volcano id", "edate"], axis=0)
+    if 'volcano id' in temp.columns and 'edate' in temp.columns:
+        if "fid" in temp.columns:
+            temp = temp.sort_values(["volcano id", "fid", "edate"], axis=0)
+        else:
+            temp = temp.sort_values(["volcano id", "edate"], axis=0)
     return temp
 
 
