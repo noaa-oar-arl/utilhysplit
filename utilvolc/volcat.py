@@ -492,6 +492,7 @@ def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=Fa
     dictionary of the VolcatName class. This is all the information collected from the filename.
     """
     tlist = find_volcat(tdir, vid=None, daterange=None, return_val=2)
+    # vlist is a list of dictionaries with information from the name.
     vlist = [x.vhash for x in tlist]
     temp = pd.DataFrame(vlist)
     if isinstance(daterange, (list, np.ndarray)):
@@ -794,9 +795,22 @@ class VolcatName:
             self.fname = fname
         self.vhash = {}
         self.date = None
-        self.dtfmt = "s%Y%j_%H%M%S"
-        self.image_dtfmt = "b%Y%j_%H%M%S"
+        self.image_dtfmt = "s%Y%j_%H%M%S"
+        self.event_dtfmt = "b%Y%j_%H%M%S"
 
+        self.make_keylist()
+        self.make_datekeys()
+
+        self.pc_corrected = False
+        # parse only if a string is given.
+        if isinstance(fname,str):
+            self.parse(self.fname)
+        self.vhash["filename"] = fname
+
+    def make_datekeys(self):
+        self.datekeys = [3,4,10,11]
+
+    def make_keylist(self):
         self.keylist = ["algorithm name"]
         self.keylist.append("satellite platform")
         self.keylist.append("event scanning strategy")
@@ -811,15 +825,12 @@ class VolcatName:
         self.keylist.append("event time")
         self.keylist.append("feature id")
 
-        self.pc_corrected = False
-        self.parse(self.fname)
-        self.vhash["filename"] = fname
-
     def __lt__(self, other):
         """
         sort by
         volcano id first.
-        date
+        event date
+        image date
         feature id if it exists.
         """
         if self.vhash["volcano id"] < other.vhash["volcano id"]:
@@ -827,7 +838,7 @@ class VolcatName:
         if "fid" in self.vhash.keys() and "fid" in other.vhash.keys():
             if self.vhash["fid"] < other.vhash["fid"]:
                 return True
-        if self.date < other.date:
+        if self.event_date < other.event_date:
             return True
         if self.image_date < other.image_date:
             return True
@@ -881,19 +892,19 @@ class VolcatName:
                     continue
             self.vhash[key] = val
             jjj += 1
-        # Event date marks date of the data collection
-        dstr = "{}_{}".format(self.vhash[self.keylist[3]], self.vhash[self.keylist[4]])
-        self.date = datetime.datetime.strptime(dstr, self.dtfmt)
-        # Image date is ?
-        dstr = "{}_{}".format(
-            self.vhash[self.keylist[10]], self.vhash[self.keylist[11]]
-        )
+        # Image date marks date of the data collection
+        dk = self.datekeys
+        dstr = "{}_{}".format(self.vhash[self.keylist[dk[0]]], self.vhash[self.keylist[dk[1]]])
         self.image_date = datetime.datetime.strptime(dstr, self.image_dtfmt)
-        self.vhash[self.keylist[11]] = self.vhash[self.keylist[11]].replace(".nc", "")
+        # Event date is start of event
+        dstr = "{}_{}".format(
+            self.vhash[self.keylist[dk[2]]], self.vhash[self.keylist[dk[3]]]
+        )
+        self.event_date = datetime.datetime.strptime(dstr, self.event_dtfmt)
+        self.vhash[self.keylist[dk[3]]] = self.vhash[self.keylist[dk[3]]].replace(".nc", "")
 
         self.vhash["idate"] = self.image_date
-        self.vhash["edate"] = self.date
-
+        self.vhash["edate"] = self.event_date
         return self.vhash
 
     def create_name(self):
