@@ -2,6 +2,8 @@
 # Writes a HYSPLIT EMITIMES.txt file for a cylindrical volcanic source
 # and for inserting volcat data into hysplit
 # from utilhysplit import cylsource
+import os
+import pandas as pd
 from utilhysplit import emitimes
 from datetime import datetime
 from glob import glob
@@ -9,6 +11,7 @@ import xarray as xr
 import numpy as np
 import numpy.ma as ma
 from utilvolc import volcat
+from utilvolc.volcat import VolcatName
 from math import pi
 
 """
@@ -30,6 +33,64 @@ Class: InsertVolcat
 --------------
 """
 
+class EmitName(VolcatName):
+    """
+    class for names of Emit times files written from VOLCAT files
+    """
+    def __init__(self,fname):
+        super().__init__(fname)
+
+    def make_datekeys(self):
+        self.datekeys = [1,2,4,5]
+
+    def make_keylist(self):
+        self.keylist = ["algorithm name"]
+        #self.keylist.append("satellite platform")
+        #self.keylist.append("event scanning strategy")
+        self.keylist.append("image date") # should be image date (check)
+        self.keylist.append("image time")
+        #self.keylist.append("fid")
+        self.keylist.append("volcano id")
+        #self.keylist.append("description")
+        #self.keylist.append("WMO satellite id")
+        #self.keylist.append("image scanning strategy")
+        self.keylist.append("event date") # should be event date (check)
+        self.keylist.append("event time")
+        self.keylist.append("layer")
+        self.keylist.append("particles")
+        #self.keylist.append("feature id")
+
+def find_emit(tdir):
+    """
+    tdir : string
+    Finds files in directory indicated by tdir which conform
+    to the naming convention specified in EmitName class
+    Return:
+    vnlist : list of EmitName objects
+
+    """
+    vnlist = []
+    if not os.path.isdir(tdir):
+       return vnlist
+    for fln in os.listdir(tdir):
+       try:
+          vn = EmitName(fln)
+       except:
+          continue
+       vnlist.append(vn)
+    return vnlist
+
+def get_emit_name_df(tdir):
+    """
+    tdir : string
+    Return:
+    vdf : pandas dataframe with information found in names of Emit-times files.
+    """
+    tlist = find_emit(tdir)
+    vlist = [x.vhash for x in tlist]
+    vdf = pd.DataFrame(vlist)
+    return vdf
+
 def make_filename(volcat_fname,prefix,suffix):
     """Makes unique string for various filenames from volcat filename
     Inputs:
@@ -37,8 +98,13 @@ def make_filename(volcat_fname,prefix,suffix):
     Outputs:
     match: (string) of important identifiying information"""
     # Parse filename for image datetime, event datetime, and volcano id
-    parsedf = volcat_fname.split('_')
-    match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
+    vname = VolcatName(volcat_fname)
+    pid1 = vname.vhash['idate'].strftime(vname.image_dtfmt)
+    pid2 = vname.vhash['volcano id']
+    pid3 = vname.vhash['edate'].strftime(vname.event_dtfmt)
+    match = '{}_{}_{}'.format(pid1, pid2, pid3)
+    #parsedf = volcat_fname.split('_')
+    #match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
     filename = '{}_{}_{}'.format(prefix, match, suffix)
     return filename
 
@@ -362,11 +428,15 @@ class InsertVolcat:
         correct_parallax=True,
         decode_times=False,
         clip=True,
-        verbose=False
+        verbose=False,
+        min_line_number=0,
+        min_mass=0  #todo allow for only writing areas with mass above min value.
     ):
         """Writes emitimes file from volcat data.
         Inputs are created using self.make_1D()
         Uses instance variables: date_time, duration, par,
+        emitimes file written to wdir
+
         Inputs:
         lat: 1D array of latitude
         lon: 1D array of longitude
@@ -378,14 +448,24 @@ class InsertVolcat:
         centered: (boolean) center ash layer on volcat height
         correct_parallax: (boolean) use parallax corrected lat lon values
         areafile: (boolean) uses area file if True, calculates area if False
-        Output:
-        emitimes file located in wdir
+        min_line_number: integer. If number of lines below this number then 
+                         emit-times file not written and False is returned.
+
+        Returns:
+        True if file written
+        False if file not written
+ 
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
         #try:
         lat, lon, hgt, mass, area = self.make_1D(
                 correct_parallax=correct_parallax, area_file=area_file, decode_times=decode_times, clip=clip)
-        if verbose: print('{} number of lines'.format(len(mass)))
+        if verbose: 
+           print('{} number of lines'.format(len(mass)))
+           if len(mass) > 0:
+              print('{:2e} max mass'.format(np.max(mass)))
+              print('{:2e} min mass'.format(np.min(mass)))
+        if len(mass) < min_line_number: return False
         #except:
         #    print('error in make_1d')
         # Calculating constants for mass rate (g/hr) determination
@@ -491,6 +571,5 @@ class InsertVolcat:
             h += 1
         f.close()
         if verbose:
-            return "Emitimes file written: " + self.wdir + filename
-        else:
-            return None
+            print("Emitimes file written: " + self.wdir + filename)
+        return True
