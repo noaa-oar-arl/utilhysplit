@@ -19,7 +19,8 @@ from ashbase import AshRun
 import ensemble_tools
 from cdump2xml import HysplitKml
 from emitimes import EmiTimes
-
+from utilvolc import write_emitimes as vwe
+from utilvolc.ashapp.runhelper import AshDINameComposer
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,20 @@ The following environment variables must be set prior to calling this script:
     )
 
 
-def find_emit_file(wdir):
-    elist = glob(os.path.join(wdir,'EMIT_*'))
+def find_emit_file(wdir,daterange):
+    print('wdir',wdir)
+    edf = vwe.get_emit_name_df(wdir)
+    edf = edf[edf['algorithm name'] == 'EMIT']
+    edf = edf[edf['idate'] >= daterange[0]]
+    print(daterange[0], '----------------')
+    print(edf['idate'])
+   
+    edf = edf[edf['idate'] <= daterange[1]]
+    print(daterange[1], '----------------')
+    print(edf['idate'])
+    #elist = glob(os.path.join(wdir,'EMIT_*'))
+    elist = edf['filename'].values
+    print('elist', elist)
     return elist[0]
 
 class DataInsertionRun(AshRun):
@@ -53,6 +66,10 @@ class DataInsertionRun(AshRun):
                                             'emitimes/')
         logger.info('Working directory set {}'.format(inp["WORK_DIR"]))
         super().add_inputs(inp)
+        self.filelocator = AshDINameComposer(self.inp['WORK_DIR'],
+                                 self.JOBID, 
+                                 self.inp['jobname'])
+    
 
     def get_maptext_info(self):
         maptexthash = {}
@@ -94,7 +111,7 @@ class DataInsertionRun(AshRun):
         self.inp['top'] = 0
 
     def setup_setup(self,stage):
-        setup = super().setup_setup(stage)
+        setup = super().setup_setup(stage=self.emitfile)
         # add the emit times file
         eloc = self.inp['emitfile'].split('/')
         eloc = eloc[-1]
@@ -102,9 +119,11 @@ class DataInsertionRun(AshRun):
         return setup
 
     def setup_basic_control(self,stage=0,rtype='dispersion'):
-        emitfile = find_emit_file(self.inp['WORK_DIR'])
+        edate = self.inp['start_date'] + datetime.timedelta(hours=self.inp['durationOfSimulation'])
+        emitfile = find_emit_file(self.inp['WORK_DIR'], [self.inp['start_date'],edate])
+        self.emitfile = emitfile
         self.read_emittimes(emitfile)
-        control = super().setup_basic_control(stage=stage,rtype=rtype)
+        control = super().setup_basic_control(stage=emitfile,rtype=rtype)
         return control
 
     def additional_control_setup(self, control, stage=0):
@@ -119,6 +138,17 @@ class DataInsertionRun(AshRun):
         rate = self.inp['rate']
         for loc in np.arange(0,nlocs):
             control.add_location((lat,lon),vent,rate=rate,area=area) 
+
+    def run_model(self):
+        # make control and setup files
+        self.compose_control(stage=0, rtype="dispersion")
+        self.compose_setup(stage=0)
+        run_suffix = self.filelocator.get_control_suffix(stage=self.emitfile)
+        # start run and wait for it to finish..
+        c = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), str(run_suffix)]
+        logger.info("Running {} with job id {}".format("hycs_std", c[1]))
+        Helper.execute(c)
+
 
     def file_not_found_error(self, fln, message=False):
         if not os.path.exists(fln):

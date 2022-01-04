@@ -180,7 +180,7 @@ class AshRun:
             self.inp["WORK_DIR"], self.JOBID, self.inp["jobname"]
         )
         # TO DO -  currently will only find forecast files.
-        self.metfilefinder = metfile.MetFileFinder(inp["meteorologicalData"])
+        self.metfilefinder = metfile.MetFileFinder(self.inp["meteorologicalData"])
         self.metfilefinder.set_forecast_directory(self.inp["forecastDirectory"])
         self.metfilefinder.set_archives_directory(self.inp["archivesDirectory"])
         self.maptexthash = self.get_maptext_info()
@@ -208,6 +208,7 @@ class AshRun:
         #logger.debug("Setting up control stage {}".format(stage))
         duration = self.inp["durationOfSimulation"]
         stime = self.inp["start_date"]
+        print('STIME-------------', stime)
         # c.jobid_str = self.JOBID
         # work_dir = self.WORK_DIR
 
@@ -264,15 +265,14 @@ class AshRun:
 
     def additional_control_setup(self, control, stage=0):
         # for dispersion control file
-
         # if setting levels here then need to use the set_levels
         # function and also adjust the labeling for the levels.
+
         lat = self.inp["latitude"]
         lon = self.inp["longitude"]
         vent = self.inp["bottom"]
         height = self.inp["top"]
         emission = self.inp["emissionHours"]
-
         rate = self.inp['rate']
         area = self.inp['area']
 
@@ -284,6 +284,7 @@ class AshRun:
         # rename cdump file
         control.concgrids[0].outdir = self.inp["WORK_DIR"]
         control.concgrids[0].outfile = self.filelocator.get_cdump_filename(stage)
+        logger.info('{}'.format(control.concgrids[0].outfile))
         # center concentration grid at the volcano
         control.concgrids[0].centerlat = lat
         control.concgrids[0].centerlon = lon
@@ -351,7 +352,7 @@ class AshRun:
     def debug_message(self):
         # debug messages
         logger.debug("HYSPLIT_DIR     = {}".format(self.inp["HYSPLIT_DIR"]))
-        logger.debug("MAP_DIR         = {}".format(self.inp["MAP_DIR"]))
+        #logger.debug("MAP_DIR         = {}".format(self.inp["MAP_DIR"]))
         logger.debug("WORK_DIR        = {}".format(self.inp["WORK_DIR"]))
         logger.debug("CONVERT_EXE     = {}".format(self.inp["CONVERT_EXE"]))
         logger.debug("GHOSTSCRIPT_EXE = {}".format(self.inp["GHOSTSCRIPT_EXE"]))
@@ -385,7 +386,7 @@ class AshRun:
             # self.postprocessing()
             redraw=False
         else:
-            logger.info("REDRAW for run {}".format(self.JOBID))
+            logger.info("REDRAW for run {} {}".format(self.JOBID,self.inp["WORK_DIR"]))
             redraw = True
         self.write_cxra()
       #  if self.after_run_check(update=True):
@@ -404,11 +405,11 @@ class AshRun:
         self.update_run_status(self.JOBID, "COMPLETED")
         self.cleanup()
 
-    def after_run_check(self, update=False):
+    def after_run_check(self, stage=0,update=False):
         # Check for the tdump/cdump file
         rval = True
-        fn = self.filelocator.get_cdump_filename(stage=0)
-        logger.debug("Looking for cdump file " + fn)
+        fn = self.filelocator.get_cdump_filename(stage=stage)
+        logger.info("Looking for cdump file " + fn)
         if not os.path.exists(fn):
             rval = False
             if update:

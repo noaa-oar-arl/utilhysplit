@@ -632,3 +632,21 @@ class JobFileNameComposer:
         files = [x for x in files if x]
 
         return files
+
+class AshDINameComposer(JobFileNameComposer):
+
+    def get_cdump_filename(self, stage='EMIT_0'):
+        stage = str(stage)
+        cdumpfilename = stage.replace('EMIT','cdump')
+        return cdumpfilename
+
+    def get_control_filename(self, stage='EMIT_0'):
+        stage = str(stage)
+        controlfilename = stage.replace('EMIT_','CONTROL.')
+        return controlfilename
+
+
+    def get_setup_filename(self, stage=0):
+        stage = str(stage)
+        filename = stage.replace('EMIT_','SETUP.')
+        return filename
