@@ -35,22 +35,21 @@ The following environment variables must be set prior to calling this script:
     RUN_URL             - URL to the Locusts web application."""
     )
 
+def find_emit_file(wdir,daterange,retype='fname'):
+    return find_di_file(wdir,daterange,'EMIT')
 
-def find_emit_file(wdir,daterange):
-    print('wdir',wdir)
+def find_cdump_df(wdir,daterange):
+    return find_di_file(wdir,daterange,'cdump',rtype='dataframe')
+
+def find_di_file(wdir,daterange,ftype,rtype='fname'):
     edf = vwe.get_emit_name_df(wdir)
-    edf = edf[edf['algorithm name'] == 'EMIT']
+    edf = edf[edf['algorithm name'] == ftype]
     edf = edf[edf['idate'] >= daterange[0]]
-    print(daterange[0], '----------------')
-    print(edf['idate'])
-   
     edf = edf[edf['idate'] <= daterange[1]]
-    print(daterange[1], '----------------')
-    print(edf['idate'])
     #elist = glob(os.path.join(wdir,'EMIT_*'))
     elist = edf['filename'].values
-    print('elist', elist)
-    return elist[0]
+    if rtype=='fname': return elist
+    elif rtype=='dataframe': return edf
 
 class DataInsertionRun(AshRun):
 
@@ -78,11 +77,29 @@ class DataInsertionRun(AshRun):
         maptexthash["infoc"] = ""
         return maptexthash
 
+    def get_cdump_xra(self):
+        edate = self.inp['start_date'] + datetime.timedelta(hours=self.inp['durationOfSimulation'])
+        cdf =  find_cdump_df(self.inp['WORK_DIR'], [self.inp['start_date'],edate])
+        blist = cdf['filename'].values
+        alist = []
+        for fname in blist:
+            alist.append((fname, fname, self.inp['meteorologicalData'])) 
+        century = 100 * (int(self.inp['start_date'].year/100))
+        cdumpxra = hysplit.combine_dataset(alist,century=century, sample_time_stamp='start')  
+        cdumpxra.attrs['Volcano ID'] = cdf['volcano id'].unique()[0]
+        cdumpxra.attrs['Volcano Name'] = self.inp['VolcanoName']
+        cdumpxra.attrs['layer'] = cdf['layer'].unique()[0]
+        cdumpxra.attrs['mult'] = 1
+        return cdumpxra
+
+
     def read_emittimes(self, emitfile):
         """
         get information from emit-times file including
         start date, number of locations, latitude, longitude
-        
+       
+        set rate, area, top and bottom to 0 since these values 
+        will be from the emit-times file. 
         """
         self.file_not_found_error(emitfile, message=True)
         etf = EmiTimes(filename=emitfile)
@@ -101,8 +118,8 @@ class DataInsertionRun(AshRun):
 
         # get first line locations
         erecord = ecycle.recordra[0]
-        self.inp['latitude'] = erecord.lat
-        self.inp['longitude'] = erecord.lon
+        #self.inp['latitude'] = erecord.lat
+        #self.inp['longitude'] = erecord.lon
 
         # set to 0 since these will be from emit-times
         self.inp['rate'] = 0
@@ -111,19 +128,16 @@ class DataInsertionRun(AshRun):
         self.inp['top'] = 0
 
     def setup_setup(self,stage):
-        setup = super().setup_setup(stage=self.emitfile)
+        setup = super().setup_setup(stage=stage)
         # add the emit times file
         eloc = self.inp['emitfile'].split('/')
         eloc = eloc[-1]
         setup.add("efile",eloc)
         return setup
 
-    def setup_basic_control(self,stage=0,rtype='dispersion'):
-        edate = self.inp['start_date'] + datetime.timedelta(hours=self.inp['durationOfSimulation'])
-        emitfile = find_emit_file(self.inp['WORK_DIR'], [self.inp['start_date'],edate])
-        self.emitfile = emitfile
-        self.read_emittimes(emitfile)
-        control = super().setup_basic_control(stage=emitfile,rtype=rtype)
+    def setup_basic_control(self,stage='emitfile',rtype='dispersion'):
+        self.read_emittimes(stage)
+        control = super().setup_basic_control(stage=stage,rtype=rtype)
         return control
 
     def additional_control_setup(self, control, stage=0):
@@ -139,15 +153,44 @@ class DataInsertionRun(AshRun):
         for loc in np.arange(0,nlocs):
             control.add_location((lat,lon),vent,rate=rate,area=area) 
 
+    def get_conc_multiplier(self):
+        return 1
+
     def run_model(self):
+        edate = self.inp['start_date'] + datetime.timedelta(hours=self.inp['durationOfSimulation'])
+        processhandler = ProcessList()
+        processhandler.pipe_stdout()
+        processhandler.pipe_stderr()
+        for emitfile in find_emit_file(self.inp['WORK_DIR'], [self.inp['start_date'],edate]):
         # make control and setup files
-        self.compose_control(stage=0, rtype="dispersion")
-        self.compose_setup(stage=0)
-        run_suffix = self.filelocator.get_control_suffix(stage=self.emitfile)
+            self.compose_control(stage=emitfile, rtype="dispersion")
+            self.compose_setup(stage=emitfile)
+            run_suffix = self.filelocator.get_control_suffix(emitfile)
         # start run and wait for it to finish..
-        c = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), str(run_suffix)]
-        logger.info("Running {} with job id {}".format("hycs_std", c[1]))
-        Helper.execute(c)
+            cproc = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), str(run_suffix)]
+            logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
+            processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=run_suffix)
+            # wait 5 seconds between run starts to avoid
+            # runs trying to access ASCDATA.CFG at the same time.
+            time.sleep(5)
+        # wait for runs to finish
+        done = False
+        seconds_to_wait = 30
+        total_time = 0
+        # 60 minutes.
+        max_time = 60 * 60
+        # max_time = 0.5*60
+        while not done:
+            num_proces = processhandler.checkprocs()
+            if num_proces == 0:
+                done = True
+            time.sleep(seconds_to_wait)
+            total_time += seconds_to_wait
+            if total_time > max_time:
+                processhandler.checkprocs()
+                processhandler.killall()
+                logger.warning("HYSPLIT run Timed out")
+            #Helper.execute(c)
 
 
     def file_not_found_error(self, fln, message=False):
