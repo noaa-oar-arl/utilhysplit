@@ -693,7 +693,7 @@ def make_dir(data_dir, newdir='pc_corrected', verbose=False):
     return None
 
 
-def correct_pc(data_dir, newdir='pc_corrected', verbose=False):
+def correct_pc(data_dir, newdir='pc_corrected', daterange=None,verbose=False):
     """Create pc_corrected folder if not already there.
     Create pc_corrected netcdf file in pc_corrected folder if not already there
     """
@@ -707,7 +707,9 @@ def correct_pc(data_dir, newdir='pc_corrected', verbose=False):
     make_dir(data_dir, verbose=verbose)
     pc_dir = os.path.join(data_dir, newdir, '')
     # Create list of files original directory
-    dfile_list = sorted(glob(data_dir+'*.nc'))
+    dfile_list = volcat.find_volcat(data_dir,vid=None,daterange=daterange,
+                                    include_last=True,return_val=3)
+    #dfile_list = sorted(glob(data_dir+'*.nc'))
     # Create hypothetical list of pc corrected files
     file_list = []
     pcfile_list = []
@@ -813,7 +815,7 @@ def get_latlon(data_dir):
     return volcdf
 
 
-def make_pc_files(data_dir, volcano=None, vlist_file=None, verbose=False):
+def make_pc_files(data_dir, volcano=None, vlist_file=None, daterange=None,verbose=False):
     """ Makes corrected pc files.
     Might want to streamline the check process at some point. Not necessary now
     Inputs:
@@ -832,27 +834,31 @@ def make_pc_files(data_dir, volcano=None, vlist_file=None, verbose=False):
     dirlist = list_dirs(data_dir)
     if volcano != None:
         if volcano in dirlist:
-            file_dir = os.path.join(data_dir, volcano, '')
-            correct_pc(file_dir, verbose=verbose)
-        if verbose:
-            print('Parallax corrected files available in '+volcano+' directory')
+            dirlist = [volcano]
+            #file_dir = os.path.join(data_dir, volcano, '')
+            #correct_pc(file_dir, verbose=verbose)
+        #if verbose:
+        #    print('Parallax corrected files available in '+volcano+' directory')
     elif vlist_file != None:
-        with open(vlist_file) as file:
-            volclist = file.readlines()
+        with open(vlist_file) as vfile:
+            volclist = vfile.readlines()
             volclist = [line.rstrip() for line in volclist]
             file.close()
         for volcano in volclist:
+            newlist = []
             if volcano in dirlist:
-                file_dir = os.path.join(data_dir, volcano, '')
-                correct_pc(file_dir, verbose=verbose)
-                if verbose:
-                    print('Parallax corrected files available in '+volcano+' directory!')
-    else:
-        for direct in dirlist:
-            file_dir = os.path.join(data_dir, direct, '')
-            correct_pc(file_dir, verbose=verbose)
-        if verbose:
-            print('Parallax corrected files available in these directories: '+str(dirlist))
+                newlist.append(volcano)
+            dirlist = newlist
+                #file_dir = os.path.join(data_dir, volcano, '')
+                #correct_pc(file_dir, verbose=verbose)
+                #if verbose:
+                #    print('Parallax corrected files available in '+volcano+' directory!')
+    #else:
+    for direct in dirlist:
+        file_dir = os.path.join(data_dir, direct, '')
+        correct_pc(file_dir, verbose=verbose, daterange=daterange)
+    if verbose:
+       print('Parallax corrected files available in these directories: '+str(dirlist))
     return None
 
 

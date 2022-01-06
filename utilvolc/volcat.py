@@ -494,13 +494,14 @@ def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=Fa
     tlist = find_volcat(tdir, vid=None, daterange=None, return_val=2)
     # vlist is a list of dictionaries with information from the name.
     vlist = [x.vhash for x in tlist]
+    if not vlist: return pd.DataFrame()
     temp = pd.DataFrame(vlist)
     if isinstance(daterange, (list, np.ndarray)):
-        temp = temp[temp["edate"] >= daterange[0]]
+        temp = temp[temp["idate"] >= daterange[0]]
         if include_last:
-            temp = temp[temp["edate"] <= daterange[1]]
+            temp = temp[temp["idate"] <= daterange[1]]
         else:
-            temp = temp[temp["edate"] < daterange[1]]
+            temp = temp[temp["idate"] < daterange[1]]
     if vid:
         temp = temp[temp["volcano id"] == vid]
     if fid:
@@ -729,23 +730,23 @@ def find_volcat(
                 print("Not VOLCAT filename {}".format(fln))
             continue
         if daterange and include_last:
-            if vn.date < daterange[0] or vn.date > daterange[1]:
+            if vn.image_date < daterange[0] or vn.image_date > daterange[1]:
                 if verbose:
-                    print("date not in range", vn.date, daterange[0], daterange[1])
+                    print("date not in range", vn.image_date, daterange[0], daterange[1])
                 continue
         elif daterange and not include_last:
-            if vn.date < daterange[0] or vn.date >= daterange[1]:
+            if vn.image_date < daterange[0] or vn.image_date >= daterange[1]:
                 if verbose:
-                    print("date not in range", vn.date, daterange[0], daterange[1])
+                    print("date not in range", vn.image_date, daterange[0], daterange[1])
                 continue
         if vid and vn.vhash["volcano id"] != vid:
             continue
         if return_val == 1:
-            if vn.date not in vhash.keys():
-                vhash[vn.date] = vn
+            if vn.image_date not in vhash.keys():
+                vhash[vn.image_date] = vn
             else:
                 print("two files with same date")
-                print(vhash[vn.date].compare(vn))
+                print(vhash[vn.image_date].compare(vn))
         elif return_val == 2:
             vnlist.append(vn)
         elif return_val == 3:
@@ -795,6 +796,8 @@ class VolcatName:
             self.fname = fname
         self.vhash = {}
         self.date = None
+        self.image_date = None
+        self.event_date = None
         self.image_dtfmt = "s%Y%j_%H%M%S"
         self.event_dtfmt = "b%Y%j_%H%M%S"
 
@@ -905,6 +908,7 @@ class VolcatName:
 
         self.vhash["idate"] = self.image_date
         self.vhash["edate"] = self.event_date
+        self.date = self.image_date
         return self.vhash
 
     def create_name(self):
