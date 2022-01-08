@@ -33,32 +33,35 @@ Class: InsertVolcat
 --------------
 """
 
+
 class EmitName(VolcatName):
     """
     class for names of Emit times files written from VOLCAT files
     """
-    def __init__(self,fname):
+
+    def __init__(self, fname):
         super().__init__(fname)
 
     def make_datekeys(self):
-        self.datekeys = [1,2,4,5]
+        self.datekeys = [1, 2, 4, 5]
 
     def make_keylist(self):
         self.keylist = ["algorithm name"]
-        #self.keylist.append("satellite platform")
-        #self.keylist.append("event scanning strategy")
-        self.keylist.append("image date") # should be image date (check)
+        # self.keylist.append("satellite platform")
+        # self.keylist.append("event scanning strategy")
+        self.keylist.append("image date")  # should be image date (check)
         self.keylist.append("image time")
-        #self.keylist.append("fid")
+        # self.keylist.append("fid")
         self.keylist.append("volcano id")
-        #self.keylist.append("description")
-        #self.keylist.append("WMO satellite id")
-        #self.keylist.append("image scanning strategy")
-        self.keylist.append("event date") # should be event date (check)
+        # self.keylist.append("description")
+        # self.keylist.append("WMO satellite id")
+        # self.keylist.append("image scanning strategy")
+        self.keylist.append("event date")  # should be event date (check)
         self.keylist.append("event time")
         self.keylist.append("layer")
         self.keylist.append("particles")
-        #self.keylist.append("feature id")
+        # self.keylist.append("feature id")
+
 
 def find_emit(tdir):
     """
@@ -71,14 +74,15 @@ def find_emit(tdir):
     """
     vnlist = []
     if not os.path.isdir(tdir):
-       return vnlist
+        return vnlist
     for fln in os.listdir(tdir):
-       try:
-          vn = EmitName(fln)
-       except:
-          continue
-       vnlist.append(vn)
+        try:
+            vn = EmitName(fln)
+        except:
+            continue
+        vnlist.append(vn)
     return vnlist
+
 
 def get_emit_name_df(tdir):
     """
@@ -91,7 +95,8 @@ def get_emit_name_df(tdir):
     vdf = pd.DataFrame(vlist)
     return vdf
 
-def make_filename(volcat_fname,prefix,suffix):
+
+def make_filename(volcat_fname, prefix, suffix):
     """Makes unique string for various filenames from volcat filename
     Inputs:
     fname: name of volcat file - just volcat file, not full path (string)
@@ -99,34 +104,38 @@ def make_filename(volcat_fname,prefix,suffix):
     match: (string) of important identifiying information"""
     # Parse filename for image datetime, event datetime, and volcano id
     vname = VolcatName(volcat_fname)
-    pid1 = vname.vhash['idate'].strftime(vname.image_dtfmt)
-    pid2 = vname.vhash['volcano id']
-    pid3 = vname.vhash['edate'].strftime(vname.event_dtfmt)
-    match = '{}_{}_{}'.format(pid1, pid2, pid3)
-    #parsedf = volcat_fname.split('_')
-    #match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
-    filename = '{}_{}_{}'.format(prefix, match, suffix)
+    pid1 = vname.vhash["idate"].strftime(vname.image_dtfmt)
+    pid2 = vname.vhash["volcano id"]
+    pid3 = vname.vhash["edate"].strftime(vname.event_dtfmt)
+    match = "{}_{}_{}".format(pid1, pid2, pid3)
+    # parsedf = volcat_fname.split('_')
+    # match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
+    filename = "{}_{}_{}".format(prefix, match, suffix)
     return filename
+
 
 # species tag could be p006p001p002p003 for multiple particle sizes
 def make_cdump_filename(volcat_fname, speciestag, layertag):
-    suffix = '{}_{}'.format(layertag, speciestag)
-    return make_filename(volcat_fname, prefix='CDUMP', suffix = suffix)
+    suffix = "{}_{}".format(layertag, speciestag)
+    return make_filename(volcat_fname, prefix="CDUMP", suffix=suffix)
+
 
 def make_emit_filename(volcat_fname, speciestag, layertag):
-    suffix = '{}_{}'.format(layertag, speciestag)
-    return make_filename(volcat_fname, prefix='EMIT', suffix = suffix)
+    suffix = "{}_{}".format(layertag, speciestag)
+    return make_filename(volcat_fname, prefix="EMIT", suffix=suffix)
+
 
 def parse_filename(ename):
     ehash = {}
-    temp = ename.split('_')
-    ehash['imagedate'] = temp[1]
-    ehash['imagetime'] = temp[2]
-    ehash['vid'] = temp[3] 
-    ehash['eventdate'] = temp[1]
-    ehash['eventime'] = temp[2]
-    ehash['layertag'] = temp[4]
-    ehash['speciestag'] = temp[5]
+    temp = ename.split("_")
+    ehash["imagedate"] = temp[1]
+    ehash["imagetime"] = temp[2]
+    ehash["vid"] = temp[3]
+    ehash["eventdate"] = temp[1]
+    ehash["eventime"] = temp[2]
+    ehash["layertag"] = temp[4]
+    ehash["speciestag"] = temp[5]
+
 
 def write_cyl_file(
     wdir,
@@ -197,7 +206,31 @@ def write_cyl_file(
 
 
 class InsertVolcat:
-    def __init__(self, wdir, vdir, date_time, stradd="", duration="0010", pollnum=1, pollpercents=[1], vname=None, vid=None, fname=None):
+    """
+        Methods:
+        add_vname: adds volcano name
+        find_fnames: finds volcat filename, returns list of possible filenames
+        make_match: makes a string containing event datetime, image datetime, and
+        volcano id which is used for generating emitimes filenames and area filenames
+        get_area: calculates the domain area, gridded
+        make_1D: makes 1D array of lat, lon, ash height, ash mass, area
+        write_emit: writes emitimes files
+    """
+    def __init__(
+        self,
+        wdir,
+        vdir,
+        date_time,
+        stradd="",
+        duration="0010",
+        pollnum=1,
+        pollpercents=[1],
+        layer = 0.0,
+        centered=False,
+        vname=None,
+        vid=None,
+        fname=None,
+    ):
         """
         Class of tools for inserting volcat data into hysplit
         -------------
@@ -215,14 +248,6 @@ class InsertVolcat:
         fname: name of volcat file (string) default is None
         Outputs:
         --------------
-        Functions:
-        add_vname: adds volcano name
-        find_fnames: finds volcat filename, returns list of possible filenames 
-        make_match: makes a string containing event datetime, image datetime, and 
-        volcano id which is used for generating emitimes filenames and area filenames
-        get_area: calculates the domain area, gridded
-        make_1D: makes 1D array of lat, lon, ash height, ash mass, area
-        write_emit: writes emitimes files
         """
 
         if wdir[-1] != "/":
@@ -234,16 +259,17 @@ class InsertVolcat:
         self.date_time = date_time
         self.stradd = stradd
         self.set_pollnum(pollnum, pollpercents)
-        # self.pollnum = pollnum
-        # self.pollpercents = pollpercents
         self.duration = duration
         self.vname = vname
         self.vid = vid
+        self.layer = layer
+        self.centered = centered
         if fname == None:
             self.volclist = find_fnames()
         else:
             self.fname = fname
         self.emit_name = None
+       
 
     def set_duration(self, duration):
         self.duration = duration
@@ -263,13 +289,17 @@ class InsertVolcat:
 
     def find_fnames(self):
         """Determines filename for volcat file based on vdir, date_time and vid"""
-        #vfiles = "*.nc"
+        # vfiles = "*.nc"
         volcframe = volcat.get_volcat_name_df(volc_dir)
-        volcframe1 = volcframe.loc[(volcframe['event date'] == "s{}".format(self.date_time.strftime("%Y%j"))) & (
-            volcframe['event time'] == self.date_time.strftime("%H%M%S"))]
-        volclist = volcframe1['filename'].tolist()
+        volcframe1 = volcframe.loc[
+            (volcframe["event date"] == "s{}".format(self.date_time.strftime("%Y%j")))
+            & (volcframe["event time"] == self.date_time.strftime("%H%M%S"))
+        ]
+        volclist = volcframe1["filename"].tolist()
         if self.vid != None:
-            volclist = volcframe1.loc[volcframe1['volcano id'] == "v{}".format(self.vid), 'filename'].tolist()
+            volclist = volcframe1.loc[
+                volcframe1["volcano id"] == "v{}".format(self.vid), "filename"
+            ].tolist()
         return volclist
 
     def make_match(self):
@@ -279,8 +309,18 @@ class InsertVolcat:
         Outputs:
         match: (string) of important identifiying information"""
         # Parse filename for image datetime, event datetime, and volcano id
-        parsedf = self.fname.split('_')
-        match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
+        parsedf = self.fname.split("_")
+        match = (
+            parsedf[4]
+            + "_"
+            + parsedf[5]
+            + "_"
+            + parsedf[7]
+            + "_"
+            + parsedf[12]
+            + "_"
+            + parsedf[13]
+        )
         return match
 
     def get_area(
@@ -301,14 +341,17 @@ class InsertVolcat:
 
         if self.fname:
             dset = volcat.open_dataset(
-                self.vdir+self.fname, correct_parallax=correct_parallax, decode_times=decode_times)
+                self.vdir + self.fname,
+                correct_parallax=correct_parallax,
+                decode_times=decode_times,
+            )
         else:
             print("ERROR: Need volcat filename!")
         # Extracts ash mass array (two methods - one is smaller domain around feature)
         # Removes time dimension
         if clip == True:
             mass = volcat.get_mass(dset)[0, :, :]
-            #mass = volcat.get_mass(dset)
+            # mass = volcat.get_mass(dset)
         else:
             mass = dset.ash_mass_loading[0, :, :]
         lat = mass.latitude
@@ -335,17 +378,20 @@ class InsertVolcat:
         # Reformatting array attributes
         if write == True:
             directory = self.wdir + "area/"
-            match = self.make_match()
+            match=''
+            #match = self.make_match()
             if correct_parallax == True:
                 areafname = "area_" + match + "_pc.nc"
             else:
                 areafname = "area_" + match + ".nc"
-            print(directory + areafname)
+            #print(directory + areafname)
             area.to_netcdf(directory + areafname)
         dset.close()
         return area
 
-    def make_1D(self, correct_parallax=True, area_file=True, decode_times=False, clip=True):
+    def make_1D(
+        self, correct_parallax=True, area_file=True, decode_times=False, clip=True
+    ):
         """Makes compressed 1D arrays of latitude, longitude, ash height,
         mass emission rate, and area
         For use in writing emitimes files. See self.write_emit()
@@ -362,9 +408,13 @@ class InsertVolcat:
         area: 1D array of area
         """
         import numpy.ma as ma
+
         if self.fname:
             dset = volcat.open_dataset(
-                self.vdir+self.fname, correct_parallax=correct_parallax, decode_times=decode_times)
+                self.vdir + self.fname,
+                correct_parallax=correct_parallax,
+                decode_times=decode_times,
+            )
         else:
             print("ERROR: Need volcat filename!")
         # Extracts ash mass array - Removes time dimension
@@ -382,7 +432,7 @@ class InsertVolcat:
         # Finds and area files. If no file detected, produces warning
         # areadir = self.vdir+'Area/'
         if area_file:
-            areadir = self.wdir + 'area/'
+            areadir = self.wdir + "area/"
             match = self.make_match()
             if correct_parallax == True:
                 arealist = glob(areadir + "*_pc.nc")
@@ -417,20 +467,39 @@ class InsertVolcat:
 
         return lat, lon, hgt, mass, area
 
+    def make_tags(self):
+        speciestag = "par{}".format(self.pollnum)
+        layertag = "nolayer"
+        if self.layer > 0.0:
+            layertag = "mlayer"
+            if self.centered:
+                layertag = "clayer"
+        return speciestag, layertag
 
+    def set_layer(self,layer):
+        self.layer = layer
+
+    def check_for_file(self):
+        if os.path.isfile(self.make_emit_filename()): return True
+        else: return False
+
+    def make_emit_filename(self):
+        speciestag,layertag = self.make_tags()
+        filename = make_emit_filename(self.fname, speciestag, layertag)
+        return filename
 
     def write_emit(
         self,
         heat="0.00e+00",
-        layer=0.0,
+        layer=None,
         area_file=True,
-        centered=False,
+        centered=None,
         correct_parallax=True,
         decode_times=False,
         clip=True,
         verbose=False,
         min_line_number=0,
-        min_mass=0  #todo allow for only writing areas with mass above min value.
+        min_mass=0,  # todo allow for only writing areas with mass above min value.
     ):
         """Writes emitimes file from volcat data.
         Inputs are created using self.make_1D()
@@ -448,25 +517,39 @@ class InsertVolcat:
         centered: (boolean) center ash layer on volcat height
         correct_parallax: (boolean) use parallax corrected lat lon values
         areafile: (boolean) uses area file if True, calculates area if False
-        min_line_number: integer. If number of lines below this number then 
+        min_line_number: integer. If number of lines below this number then
                          emit-times file not written and False is returned.
 
         Returns:
         True if file written
         False if file not written
- 
+
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
-        #try:
+        # try:
         lat, lon, hgt, mass, area = self.make_1D(
-                correct_parallax=correct_parallax, area_file=area_file, decode_times=decode_times, clip=clip)
-        if verbose: 
-           print('{} number of lines'.format(len(mass)))
-           if len(mass) > 0:
-              print('{:2e} max mass'.format(np.max(mass)))
-              print('{:2e} min mass'.format(np.min(mass)))
-        if len(mass) < min_line_number: return False
-        #except:
+            correct_parallax=correct_parallax,
+            area_file=area_file,
+            decode_times=decode_times,
+            clip=clip,
+        )
+        if layer:
+           self.layer = layer
+        else:
+           layer = self.layer
+        if isinstance(centered,bool):
+           self.centered = centered
+        else:
+           centered = self.centered
+
+        if verbose:
+            print("{} number of lines".format(len(mass)))
+            if len(mass) > 0:
+                print("{:2e} max mass".format(np.max(mass)))
+                print("{:2e} min mass".format(np.min(mass)))
+        if len(mass) < min_line_number:
+            return False
+        # except:
         #    print('error in make_1d')
         # Calculating constants for mass rate (g/hr) determination
         # AMR: 8/3/2021 - added code to account for different durations under 1 hour
@@ -476,20 +559,14 @@ class InsertVolcat:
         const = 60.0 / float(self.duration)
         # else:
         # const = 1.
-        #match = self.make_match()
+        # match = self.make_match()
 
-        speciestag = 'par{}'.format(self.pollnum)
-        layertag = 'nolayer'
-        if layer > 0.0:
-           layertag = 'mlayer'
-           if centered:
-              layertag = 'clayer'
-        filename = make_emit_filename(self.fname,speciestag,layertag)
+        filename = self.make_emit_filename()
 
-        #filename = "VOLCAT_" + match + "_par" + str(self.pollnum)
+        # filename = "VOLCAT_" + match + "_par" + str(self.pollnum)
         records = np.shape(hgt)[0] * self.pollnum
         # AMR: 8/3/2021 - added layer flag, and writing layer capability to emitimes file, accounting for ash in a layer for data insertion method.
-        if layer > 0.0:
+        if self.layer > 0.0:
             records = records * 2
         f = open(self.wdir + filename, "w")
         f.write("YYYY MM DD HH DURATION(HHMM) #RECORDS \n")
