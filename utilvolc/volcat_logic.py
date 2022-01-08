@@ -997,12 +997,12 @@ def list_times(data_dir, volcano=None, pc=True):
     dataf = volcat.get_volcat_name_df(volc_dir, include_last=True)
     if dataf.empty:
         return dataf
-    event_dates = dataf["idate"].unique()
+    event_dates = dataf["edate"].unique()
     eventd = pd.DataFrame(event_dates, columns=["Event_Dates"])
     lens = []
     g = 0
     while g < len(event_dates):
-        files = dataf.loc[dataf["idate"] == event_dates[g], "filename"]
+        files = dataf.loc[dataf["edate"] == event_dates[g], "filename"]
         lens.append(len(files))
         g += 1
     lensd = pd.DataFrame(lens, columns=["Num_Files"])
