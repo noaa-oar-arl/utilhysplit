@@ -128,6 +128,7 @@ def workflow():
 
 def file_progression():
     import volcat_logic as vl
+
     # Step 1:
     vl.get_files()
     # In step 1, you can specify the vaac region (vaac='Washington') for files to be
@@ -146,8 +147,8 @@ def file_progression():
     # overlooking any eruptions that may be occuring but havent been active for quite
     # some time.
     # Step 2:
-    data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
-    vl.make_pc_files(data_dir, volcano='volcano name', vlist_file='green_list.txt')
+    data_dir = "/pub/ECMWF/JPSS/VOLCAT/Files/"
+    vl.make_pc_files(data_dir, volcano="volcano name", vlist_file="green_list.txt")
     # In step 2, you MUST specify the data directory, which is the parent directory
     # for all the volcanoes. You can also specify verbose=True if desired
     # You can also specify the volcano if desired - creates pc files for that volcano only
@@ -158,17 +159,28 @@ def file_progression():
     # Then parallax corrected files are written for all netcdf files in within the volcano
     # directory.
     # Step 3:
-    events = vl.list_times(data_dir, volcano='volcano name', pc=True)
-    vl.multi_plots(data_dir, volcano='volcano name', eventdf=events.Event_Dates[i], pc=True, saveas=True)
+    events = vl.list_times(data_dir, volcano="volcano name", pc=True)
+    vl.multi_plots(
+        data_dir,
+        volcano="volcano name",
+        eventdf=events.Event_Dates[i],
+        pc=True,
+        saveas=True,
+    )
     # In this step, figures can be generated for each eruption showing the timeseries
     # of area, maximum height, total mass, etc.
     # This step requires first creating a list of the individual eruption events, then this list
     # is used to determine the individual eruption events for each volcano.
     # This is done using vl.list_times(). The figures are generated for the individual events
     # Step 4:
-    events = vl.list_times(data_dir, volcano='volcano name', pc=True)
-    vl.write_emitimes(data_dir, volcano='volcano name',
-                      event_date=events.Event_Dates[i], pc=True, verbose=False)
+    events = vl.list_times(data_dir, volcano="volcano name", pc=True)
+    vl.write_emitimes(
+        data_dir,
+        volcano="volcano name",
+        event_date=events.Event_Dates[i],
+        pc=True,
+        verbose=False,
+    )
     # In step 4, Emitimes files are generated for the available data. If the volcano is
     # specified, then files are generated for only that volcano. If the eruption event time
     # and volcano are specified, then the files are generated only for the specified
@@ -190,11 +202,12 @@ def file_progression():
 
 def generate_report(vmin=None, vmax=None, **kwargs):
     import matplotlib.pyplot as plt
+
     # get_files()
-    if 'VOLCAT_DIR' in kwargs.keys():
-        data_dir = kwargs['VOLCAT_DIR']
+    if "VOLCAT_DIR" in kwargs.keys():
+        data_dir = kwargs["VOLCAT_DIR"]
     else:
-        data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+        data_dir = "/pub/ECMWF/JPSS/VOLCAT/Files/"
 
     vnames = os.listdir(data_dir)
     print(vnames)
@@ -205,16 +218,16 @@ def generate_report(vmin=None, vmax=None, **kwargs):
         try:
             events = list_times(os.path.join(data_dir, volc))
         except:
-            print('warning in generate report for directory ', volc)
+            print("warning in generate report for directory ", volc)
             continue
-        plt.plot(events['Event_Dates'], events['Num_Files'], 'ko')
+        plt.plot(events["Event_Dates"], events["Num_Files"], "ko")
         plt.title(volc)
         fig.autofmt_xdate()
         plt.show()
 
 
-def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
-    """ 
+def get_files(inp={"JPSS_DIR": "/pub/jpsss_upload"}, vaac=None, verbose=False):
+    """
     Use various functions to get all available netcdf files from json event log files
     Uses the different functions within volcat_logic.py
     Sorts through the ftp directory to find json event summary files
@@ -226,30 +239,30 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
 
     Parameters
     ----------
-    vaac : string 
+    vaac : string
           vaac region can specify region. If None, pulls all available files
-    verbose : boolean    
-    inp : dictionary 
+    verbose : boolean
+    inp : dictionary
          JPSS_DIR :        string
          VOLCAT_DIR :      string
          VOLCAT_LOGFILES : string
     """
-    if 'JPSS_DIR' in inp.keys():
-        jdir = inp['JPSS_DIR']
+    if "JPSS_DIR" in inp.keys():
+        jdir = inp["JPSS_DIR"]
     else:
-        jdir = '/pub/jpsss_upload/'
-    if 'VOLCAT_DIR' in inp.keys():
-        ddir = inp['VOLCAT_DIR']
+        jdir = "/pub/jpsss_upload/"
+    if "VOLCAT_DIR" in inp.keys():
+        ddir = inp["VOLCAT_DIR"]
     else:
-        ddir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
-    if 'VOLCAT_LOGFILES' in inp.keys():
-        logdir = inp['VOLCAT_LOGFILES']
+        ddir = "/pub/ECMWF/JPSS/VOLCAT/Files/"
+    if "VOLCAT_LOGFILES" in inp.keys():
+        logdir = inp["VOLCAT_LOGFILES"]
     else:
         # this is location of the event log files
         # which are pulled according to the summary files which are in the jpsss upload.
         # these contain the netcdf file names and tell us which netcdfs to upload.
         # json_log.txt is just a list of all
-        logdir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+        logdir = "/pub/ECMWF/JPSS/VOLCAT/LogFiles/"
 
     # Delete files from jpsss_uploads folder that is older than 7 days
     # Files are only available for 7 days on the ftp
@@ -264,14 +277,20 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
         i = 0
         for afiles in added:
             # while i < len(added):
-            data = open_dataframe(os.path.join(jdir, afiles), varname='VOLCANOES')
+            data = open_dataframe(os.path.join(jdir, afiles), varname="VOLCANOES")
             log_url = get_log_list(data)
             # Downloads json event log files
             get_log(log_url, verbose=verbose, VOLCAT_LOGFILES=logdir)
         # Logs event summary json files
         # writes names of files in jpsss directory which we have already read and pulled the
         # relevant files from.
-        record_change(ddir=jdir, logdir=logdir, logfile='json_log.txt', suffix='.json', verbose=verbose)
+        record_change(
+            ddir=jdir,
+            logdir=logdir,
+            logfile="json_log.txt",
+            suffix=".json",
+            verbose=verbose,
+        )
 
     status = check_dirs(logdir, ddir, verbose=True)
     # Delete files from json event log folder that are older than 7 days
@@ -284,19 +303,21 @@ def get_files(inp={'JPSS_DIR': '/pub/jpsss_upload'}, vaac=None, verbose=False):
         # Finds event file urls for download
         # Downloads netcdf files
         # Creates list of downloaded netcdf files for reference
-        log_list = sorted(list(f for f in os.listdir(logdir) if f.endswith('.json')))
+        log_list = sorted(list(f for f in os.listdir(logdir) if f.endswith(".json")))
         for log in log_list:
             if verbose:
-                print(logdir+log)
-            num_downloaded = get_nc(logdir+log, vaac=vaac, mkdir=True, verbose=verbose, VOLCAT_DIR=ddir)
+                print(logdir + log)
+            num_downloaded = get_nc(
+                logdir + log, vaac=vaac, mkdir=True, verbose=verbose, VOLCAT_DIR=ddir
+            )
         # TO DO:
         # Could create a function that moves already downloaded netcdf files to new location
         # Some sort of filing system if desired
     return check_dirs(logdir, ddir, jdir, verbose=verbose)
 
 
-def new_json(jdir, logdir, logfile='json_log.txt'):
-    """ 
+def new_json(jdir, logdir, logfile="json_log.txt"):
+    """
     Get list of json files pushed to our system.
     Inputs
     jdir: directory containing json event summary files (string)
@@ -305,7 +326,7 @@ def new_json(jdir, logdir, logfile='json_log.txt'):
     Outputs:
     sum_list: list of summary json files (list)
     """
-    original, current, added, removed = determine_change(jdir, logdir, logfile, '.json')
+    original, current, added, removed = determine_change(jdir, logdir, logfile, ".json")
     return added
 
 
@@ -319,7 +340,7 @@ def open_json(fname):
 
 
 def open_dataframe(fname, varname=None):
-    """ Opens json file, and converts to pandas dataframe
+    """Opens json file, and converts to pandas dataframe
     Inputs:
     fname: full filename (with directory) (string)
     varname: VOLCANOES if opening event summary json file (string)
@@ -342,7 +363,7 @@ def open_dataframe(fname, varname=None):
 
 
 def delete_old(directory, days=7, verbose=False):
-    """ Determines the age of the files in the specified folder.
+    """Determines the age of the files in the specified folder.
     Deletes files older than 7 days, since this is the length of time
     the files exist on the wisconsin ftp site.
     CURRENTLY NOT CREATING A LOG
@@ -354,6 +375,7 @@ def delete_old(directory, days=7, verbose=False):
     """
     import time
     import shutil
+
     # import
     now = time.time()  # current time
     deletetime = now - (days * 86400)  # delete time
@@ -364,14 +386,20 @@ def delete_old(directory, days=7, verbose=False):
             if os.path.isfile(files):
                 deletefiles.append(files)  # Creating list of files to delete
     if verbose:
-        print("Files to be deleted: "+str(deletefiles))
+        print("Files to be deleted: " + str(deletefiles))
     size = 0.0
     count = 0
     for count, deletef in enumerate(deletefiles):
-        size += (os.path.getsize(deletef) / (124*124))
+        size += os.path.getsize(deletef) / (124 * 124)
         os.remove(deletef)
     if verbose:
-        return print('Deleted '+str(count) + ' files, totalling '+str(round(size, 2))+' MB.')
+        return print(
+            "Deleted "
+            + str(count)
+            + " files, totalling "
+            + str(round(size, 2))
+            + " MB."
+        )
     else:
         return None
 
@@ -384,53 +412,53 @@ def get_log_list(data):
     logurl: list of urls for the event log files
     """
     log_url = []
-    if 'EVENTS' in data.keys(): 
-       events = data['EVENTS']
+    if "EVENTS" in data.keys():
+        events = data["EVENTS"]
     else:
-       logger.warning('no EVENTS found in dictionary')
-       return log_url
+        logger.warning("no EVENTS found in dictionary")
+        return log_url
     for eve in events:
         if isinstance(eve, dict):
-            if 'LOG_URL' in eve.keys():
-                log_url.append(eve['LOG_URL'])
+            if "LOG_URL" in eve.keys():
+                log_url.append(eve["LOG_URL"])
             else:
-                logger.warning('no LOG_URL found in dictionary')
+                logger.warning("no LOG_URL found in dictionary")
         elif isinstance(eve, list):
             for subeve in eve:
-                if 'LOG_URL' in subeve.keys():
-                    log_url.append(subeve['LOG_URL'])
+                if "LOG_URL" in subeve.keys():
+                    log_url.append(subeve["LOG_URL"])
                 else:
-                    logger.warning('no LOG_URL found in dictionary')
+                    logger.warning("no LOG_URL found in dictionary")
     return log_url
 
 
 def get_log(log_url, verbose=False, **kwargs):
-    """ 
-    Downloads desired json event log files from ftp.
-    Log files are downloaded to specified location
+    """
+     Downloads desired json event log files from ftp.
+     Log files are downloaded to specified location
 
-   Inputs:
-    log_url: list of strings 
-             list of urls to the log files
+    Inputs:
+     log_url: list of strings
+              list of urls to the log files
 
-    verbose : boolean
+     verbose : boolean
 
-    VOLCAT_LOGFILES : string
-             location to download logfiles to.
-    Returns:
-    None
+     VOLCAT_LOGFILES : string
+              location to download logfiles to.
+     Returns:
+     None
     """
     # Log_dir should be changed to something more generic (/pub/volcat_logs/ ?)
-    if 'VOLCAT_LOGFILES' in kwargs.keys():
-        log_dir = kwargs['VOLCAT_LOGFILES']
+    if "VOLCAT_LOGFILES" in kwargs.keys():
+        log_dir = kwargs["VOLCAT_LOGFILES"]
     else:
-        log_dir = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+        log_dir = "/pub/ECMWF/JPSS/VOLCAT/LogFiles/"
     for gurl in log_url:
         # wget -N: timestamping - retrieve files only if newer than local
         # wget -P: designates location for file download
-        os.system('wget -N -P '+log_dir+' '+gurl)
+        os.system("wget -N -P " + log_dir + " " + gurl)
         if verbose:
-           logger.info('File {} downloaded to {}'.format(gurl,log_dir))
+            logger.info("File {} downloaded to {}".format(gurl, log_dir))
     return None
 
 
@@ -443,16 +471,17 @@ def open_log(logdir, logfile=None):
     original: list of files already downloaded to our server (list)
     """
     import json
+
     if os.path.isfile(os.path.join(logdir, logfile)):
-        with open(os.path.join(logdir, logfile), 'r') as f:
+        with open(os.path.join(logdir, logfile), "r") as f:
             original = json.loads(f.read())
         return original
     else:
         return []
 
 
-def check_file(fname, directory, suffix='.nc', verbose=False):
-    """ Checks if file in fname exists on our servers
+def check_file(fname, directory, suffix=".nc", verbose=False):
+    """Checks if file in fname exists on our servers
     Inputs:
     fname: full path filename of file (string)
     directory: directory of data file list
@@ -462,8 +491,8 @@ def check_file(fname, directory, suffix='.nc', verbose=False):
     """
     # original = open_log(directory)
     original = list(f for f in os.listdir(directory) if f.endswith(suffix))
-    s = fname.rfind('/')
-    current = fname[s+1:]
+    s = fname.rfind("/")
+    current = fname[s + 1 :]
     if current in original:
         # if verbose:
         #    print('File '+current+' already downloaded')
@@ -478,8 +507,8 @@ def check_dirs(*args, verbose=False):
         if not os.path.isdir(direc):
             status.append(False)
             if verbose:
-                print('{} NOT FOUND'.format(direc))
-            logger.warning('{} directory not found'.format(direc))
+                print("{} NOT FOUND".format(direc))
+            logger.warning("{} directory not found".format(direc))
         else:
             status.append(True)
     return status
@@ -491,7 +520,7 @@ def determine_change(ddir, logdir, logfile, suffix):
     Returns
     original : list  : files in log when opened
     current  : list  : all files in the jpsss directory
-    added    : listi : files in jpss directory but not in log 
+    added    : listi : files in jpss directory but not in log
     removed  : list  : files in log but not in jpss directory.
     """
     status = check_dirs(ddir, logdir, verbose=True)
@@ -507,7 +536,7 @@ def determine_change(ddir, logdir, logfile, suffix):
     return original, current, added, removed
 
 
-def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=False):
+def record_change(ddir=None, logdir=None, logfile=None, suffix=".nc", verbose=False):
     """Records file changes in data directory
     Inputs:
     ddir: data directory (string)
@@ -521,34 +550,36 @@ def record_change(ddir=None, logdir=None, logfile=None, suffix='.nc', verbose=Fa
     if added:
         h = 0
         while h < len(added):
-            original.append(''.join(added[h]))
+            original.append("".join(added[h]))
             h += 1
         if verbose:
-            print('Added '+str(len(added))+' files')
+            print("Added " + str(len(added)) + " files")
     if removed:
         g = 0
         while g < len(removed):
-            original.remove(''.join(removed[g]))
+            original.remove("".join(removed[g]))
             g += 1
         if verbose:
-            print('Removed '+str(len(removed))+' files')
+            print("Removed " + str(len(removed)) + " files")
     if added or removed:
-        with open(logdir+'tmp_file2.txt', 'w') as fis:
+        with open(logdir + "tmp_file2.txt", "w") as fis:
             fis.write(json.dumps(original))
-        Helper.move(os.path.join(logdir, 'tmp_file2.txt'), os.path.join(logdir, logfile))
-        #os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
-        #os.chmod(logdir+logfile, 0o666)
+        Helper.move(
+            os.path.join(logdir, "tmp_file2.txt"), os.path.join(logdir, logfile)
+        )
+        # os.system('mv '+logdir+'tmp_file2.txt '+logdir+logfile)
+        # os.chmod(logdir+logfile, 0o666)
         if verbose:
-            print('Updates recorded to file!\n')
+            print("Updates recorded to file!\n")
         return None
     else:
         if verbose:
-            print('No updates to '+ddir+' folder\n')
+            print("No updates to " + ddir + " folder\n")
         return None
 
 
-def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
-    """ Records files that are not downloaded.
+def record_missing(mlist, mdir, mfile="missing_files.txt", verbose=False):
+    """Records files that are not downloaded.
     Inputs:
     mlist: list of missing files (list)
     mdir: directory to write missing file (string)
@@ -556,34 +587,34 @@ def record_missing(mlist, mdir, mfile='missing_files.txt', verbose=False):
     Outputs:
     text file with list of missing files
     """
-    #os.chmod(mdir+mfile, 0o666)
-    if os.path.exists(mdir+mfile):
-        txtfile = open(mdir+mfile, 'a')
+    # os.chmod(mdir+mfile, 0o666)
+    if os.path.exists(mdir + mfile):
+        txtfile = open(mdir + mfile, "a")
     else:
-        txtfile = open(mdir+mfile, 'w')
+        txtfile = open(mdir + mfile, "w")
     for element in mlist:
-        txtfile.write(element + '\n')
+        txtfile.write(element + "\n")
     txtfile.close()
-    #os.chmod(mdir+mfile, 0o666)
+    # os.chmod(mdir+mfile, 0o666)
     if verbose:
-        print('Missing files added to {}'.format(os.path.join(mdir, mfile)))
+        print("Missing files added to {}".format(os.path.join(mdir, mfile)))
     return None
 
 
 def fix_volc_name(volcname):
-    """ Fixes the volcano name if a comma, or space appear in the name"""
-    if ',' in volcname:
-        s = volcname.find(',')
+    """Fixes the volcano name if a comma, or space appear in the name"""
+    if "," in volcname:
+        s = volcname.find(",")
         tmp = volcname[:s]
-        tmp2 = volcname[s+2:]
-        volcname = tmp2+'_'+tmp
-    if ' ' in volcname:
-        volcname = volcname.replace(' ', '_')
+        tmp2 = volcname[s + 2 :]
+        volcname = tmp2 + "_" + tmp
+    if " " in volcname:
+        volcname = volcname.replace(" ", "_")
     return volcname
 
 
 def make_volcdir(data_dir, fname, verbose=False):
-    """ Finds volcano name from json event log file.
+    """Finds volcano name from json event log file.
     If name has ',' or spaces, the name is modified.
     Example: Tigre, Isla el --> Isla_el_Tigre
     Checks if a folder by that name already exists. If it does not, the folder is generated.
@@ -594,27 +625,27 @@ def make_volcdir(data_dir, fname, verbose=False):
     volcname: string
     New directory is created if it didn't exist
     """
-    volc = open_dataframe(fname)['VOLCANO_NAME'].values[0]
+    volc = open_dataframe(fname)["VOLCANO_NAME"].values[0]
     volcname = fix_volc_name(volc)
     make_dir(data_dir, newdir=volcname, verbose=verbose)
     return volcname
 
 
 def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
-    """ 
+    """
     Finds and downloads netcdf files in json event log files from ftp.
-    Netcdf event files are download to specified location 
+    Netcdf event files are download to specified location
 
     Inputs:
-    fname : string 
+    fname : string
             filename of json event log file
     vaac : string
            vaac region for file downloads Default: None, all files are downloaded
-    mkdir: boolean 
-           make directory of volcano name, download files to that directory 
+    mkdir: boolean
+           make directory of volcano name, download files to that directory
     verbose: boolean
     kwargs : dictionary
-             'VOLCAT_DIR' : string : netcdf files will be downloaded to subfolder 
+             'VOLCAT_DIR' : string : netcdf files will be downloaded to subfolder
                                      with volcano name under this directory.
 
     Returns:
@@ -622,22 +653,22 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
     """
     num_missing = 0
     num_downloaded = 0
-    if 'VOLCAT_DIR' in kwargs.keys():
-        data_dir = kwargs['VOLCAT_DIR']
+    if "VOLCAT_DIR" in kwargs.keys():
+        data_dir = kwargs["VOLCAT_DIR"]
     else:
-        data_dir = '/pub/ECMWF/JPSS/VOLCAT/Files/'
+        data_dir = "/pub/ECMWF/JPSS/VOLCAT/Files/"
 
     volcname = make_volcdir(data_dir, fname, verbose=verbose)
     if vaac is not None:
         # checking that file is for specified vaac region
-        vaac2 = open_dataframe(fname, varname='VAAC_REGION')
+        vaac2 = open_dataframe(fname, varname="VAAC_REGION")
         if vaac != vaac2:
             # if the regions do not agree, then files are not downloaded
             if verbose:
-                print('Files in '+fname+' are not for '+vaac+' VAAC region')
+                print("Files in " + fname + " are not for " + vaac + " VAAC region")
             return None
-    dfiles = open_dataframe(fname, varname='FILES')
-    dfile_list = dfiles['EVENT_URL'].values
+    dfiles = open_dataframe(fname, varname="FILES")
+    dfile_list = dfiles["EVENT_URL"].values
     missing = []
     # Checking for type - if only one file in json event log, then event_url will be string
     # Need a list type
@@ -648,17 +679,17 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
         # Check if file exists or has already been downloaded
         # If it has not, the download file from event_url
 
-        file_download = check_file(dfile_list[i], data_dir+volcname, verbose=verbose)
+        file_download = check_file(dfile_list[i], data_dir + volcname, verbose=verbose)
         if file_download:
             # Might want to add a check for complete download of files
             # Need to figure out a good way to do this
             # os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
-            os.system('wget -P'+data_dir+volcname+'/ '+dfile_list[i])
-            s = dfile_list[i].rfind('/')
-            dfile = dfile_list[i][s+1:]
-            if os.path.isfile(data_dir+volcname+'/'+dfile):
+            os.system("wget -P" + data_dir + volcname + "/ " + dfile_list[i])
+            s = dfile_list[i].rfind("/")
+            dfile = dfile_list[i][s + 1 :]
+            if os.path.isfile(data_dir + volcname + "/" + dfile):
                 if verbose:
-                    print('File '+dfile+' downloaded to '+data_dir+volcname)
+                    print("File " + dfile + " downloaded to " + data_dir + volcname)
                 num_downloaded += 1
             else:
                 missing.append(dfile_list[i])
@@ -669,47 +700,53 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
         i += 1
     # record_change(ddir=data_dir, logdir=data_dir, logfile='data_logfile.txt')
     if len(missing) > 0:
-        record_missing(missing, data_dir, mfile='missing_netcdfs.txt')
+        record_missing(missing, data_dir, mfile="missing_netcdfs.txt")
         if verbose:
-            print('File downloads complete. {} Missing files located in missing_netcdfs.txt'.format(num_missing))
+            print(
+                "File downloads complete. {} Missing files located in missing_netcdfs.txt".format(
+                    num_missing
+                )
+            )
     if verbose:
-        print('File downloads complete. {} files downloaded'.format(num_downloaded))
+        print("File downloads complete. {} files downloaded".format(num_downloaded))
     return num_downloaded
 
-def correct_pc(data_dir, newdir='pc_corrected', daterange=None,verbose=False):
+
+def correct_pc(data_dir, newdir="pc_corrected", daterange=None, verbose=False):
     """Create pc_corrected folder if not already there.
     Create pc_corrected netcdf file in pc_corrected folder if not already there
     """
     # May want to streamline this more so all files are not checked each time!
     # Create pc_corrected netcdf files if not already created, put in pc_corrected folder
     # Make sure data_dir ends with '/'
-    data_dir = os.path.join(data_dir, '')
+    data_dir = os.path.join(data_dir, "")
     # Create pc_corrected folder if not already there
-    print('DAT DIRECTORY', data_dir)
+    print("DAT DIRECTORY", data_dir)
     make_dir(data_dir, verbose=verbose)
-    pc_dir = os.path.join(data_dir, newdir, '')
+    pc_dir = os.path.join(data_dir, newdir, "")
     # Create list of files original directory
-    dfile_list = volcat.find_volcat(data_dir,vid=None,daterange=daterange,
-                                    include_last=True,return_val=3)
-    #dfile_list = sorted(glob(data_dir+'*.nc'))
+    dfile_list = volcat.find_volcat(
+        data_dir, vid=None, daterange=daterange, include_last=True, return_val=3
+    )
+    # dfile_list = sorted(glob(data_dir+'*.nc'))
     # Create hypothetical list of pc corrected files
     file_list = []
     pcfile_list = []
     for element in dfile_list:
-        s = element.rfind('/')
-        fname = element[s+1:]
-        pcfname = os.path.splitext(fname)[0]+'_pc.nc'
+        s = element.rfind("/")
+        fname = element[s + 1 :]
+        pcfname = os.path.splitext(fname)[0] + "_pc.nc"
         make_pcfile = check_file(pcfname, pc_dir, verbose=verbose)
         if make_pcfile:
             # Create pc_corrected file if not in pc directory
             flist = [fname]
             if verbose:
-                print(data_dir+fname)
+                print(data_dir + fname)
             volcat.write_parallax_corrected_files(data_dir, pc_dir, flist=flist)
     return None
 
 
-#def list_dirs(data_dir):
+# def list_dirs(data_dir):
 #    """ Lists subdirectories within give directory
 #    Inputs:
 #    data_dir: directory path of parent directory (string)
@@ -723,9 +760,9 @@ def correct_pc(data_dir, newdir='pc_corrected', daterange=None,verbose=False):
 
 
 def make_red_list(data_dir):
-    """Makes list of volcanoes not expected to be active - left over from green and 
-    yellow list. If on the red list, parallax files will not be written, emitimes files will not 
-    be generated, further processing will not occur. 
+    """Makes list of volcanoes not expected to be active - left over from green and
+    yellow list. If on the red list, parallax files will not be written, emitimes files will not
+    be generated, further processing will not occur.
     Could change this to not even download netcdf files, but this will take some further
     logic generation.
     Inputs:
@@ -740,26 +777,26 @@ def make_red_list(data_dir):
     yellow = []
     green = []
     # Read green list
-    gname = os.path.join(data_dir, 'green_list.txt')
+    gname = os.path.join(data_dir, "green_list.txt")
     if os.path.isfile(gname):
-        with open(gname,'r') as fid:
+        with open(gname, "r") as fid:
             green = fid.readlines()
             green = [line.rstrip() for line in green]
     else:
-        logger.warning('green list file not found {}'.format(gname))
+        logger.warning("green list file not found {}".format(gname))
     # Read yellow list
-    yname = os.path.join(data_dir, 'yellow_list.txt')
+    yname = os.path.join(data_dir, "yellow_list.txt")
     if os.path.isfile(yname):
-        with open(yname, 'r') as fid:
+        with open(yname, "r") as fid:
             yellow = fid.readlines()
             yellow = [line.rstrip() for line in yellow]
     else:
-        logger.warning('yellow list file not found {}'.format(yname))
+        logger.warning("yellow list file not found {}".format(yname))
     # Compare dirlist to green and yellow lists
     # Read yellow list
-    rname = os.path.join(data_dir, 'red_list.txt')
+    rname = os.path.join(data_dir, "red_list.txt")
     if os.path.isfile(rname):
-        with open(rname, 'r') as fid:
+        with open(rname, "r") as fid:
             redold = fid.readlines()
             redold = [line.rstrip() for line in redold]
     for volc in dirlist:
@@ -768,18 +805,18 @@ def make_red_list(data_dir):
                 red.append(volc)
                 if volc not in redold:
                     rednew.append(volc)
-    
-    logger.warning('New volcanoes added to red list: {}'.format(', '.join(rednew)))
+
+    logger.warning("New volcanoes added to red list: {}".format(", ".join(rednew)))
     # Write red_list.txt file - will overwrite previous file
-    with open(os.path.join(data_dir,'red_list.txt'), 'w') as fid:
+    with open(os.path.join(data_dir, "red_list.txt"), "w") as fid:
         for volc in red:
-            fid.write(volc+'\n')
-    os.chmod(data_dir+'red_list.txt', 0o666)
+            fid.write(volc + "\n")
+    os.chmod(data_dir + "red_list.txt", 0o666)
     return None
 
 
 def num_files(data_dir, verbose=False):
-    """ Lists the subdirectories within the given directory
+    """Lists the subdirectories within the given directory
     and the number of files within the subdirectories.
     Inputs:
     data_dir: directory path of parent string()
@@ -788,47 +825,51 @@ def num_files(data_dir, verbose=False):
     """
     from glob import glob
     import pandas as pd
+
     vdirlist = list_dirs(data_dir)
     volcname = []
     numfiles = []
     for fdir in vdirlist:
-        tdir = data_dir+'{}/'.format(fdir)
-        fnames = glob(tdir+'*.nc')
+        tdir = data_dir + "{}/".format(fdir)
+        fnames = glob(tdir + "*.nc")
         volcname.append(fdir)
         numfiles.append(len(fnames))
         if verbose:
             print(fdir, len(fnames))
-    vdf = pd.DataFrame(volcname, columns=['Volcano Name'])
-    numdf = pd.DataFrame(numfiles, columns=['Num Files'])
+    vdf = pd.DataFrame(volcname, columns=["Volcano Name"])
+    numdf = pd.DataFrame(numfiles, columns=["Num Files"])
     dirs_num = pd.concat([vdf, numdf], axis=1)
     return dirs_num
 
 
 def get_latlon(data_dir):
-    """ Read csv file containing volcano name, latitude, longitude
+    """Read csv file containing volcano name, latitude, longitude
     Inputs:
     data_dir: directory where Volcanoes.csv is located
     Outputs:
     volcdf: pandas dataframe of volcanos, latitude, longitude
     """
     import pandas as pd
-    volcdf = pd.read_csv(data_dir+'Volcanoes.csv', sep=',')
+
+    volcdf = pd.read_csv(data_dir + "Volcanoes.csv", sep=",")
     return volcdf
 
 
-def make_pc_files(data_dir, volcano=None, vlist_file=None, daterange=None,verbose=False):
-    """ Makes corrected pc files.
+def make_pc_files(
+    data_dir, volcano=None, vlist_file=None, daterange=None, verbose=False
+):
+    """Makes corrected pc files.
     Might want to streamline the check process at some point. Not necessary now
     Inputs:
     data_dir: parent directory for volcanoes (string)
     volcano: name of specific volcano (string) None by default
     vlist_file: name of file with list of volcanoes (string) None by default
             Written fo use with green_list.txt, yellow_list.txt
-    If volcano and vlist_file are both None, pc_corrected files are written 
+    If volcano and vlist_file are both None, pc_corrected files are written
     for all availabe files.
-    verbose: boolean 
+    verbose: boolean
     Outputs:
-    Parallax files are generated for specified volcano, or vlist_file, or all volcanoes 
+    Parallax files are generated for specified volcano, or vlist_file, or all volcanoes
     Depending on inputs.
     """
     # Make list of available directories
@@ -836,9 +877,9 @@ def make_pc_files(data_dir, volcano=None, vlist_file=None, daterange=None,verbos
     if volcano != None:
         if volcano in dirlist:
             dirlist = [volcano]
-            #file_dir = os.path.join(data_dir, volcano, '')
-            #correct_pc(file_dir, verbose=verbose)
-        #if verbose:
+            # file_dir = os.path.join(data_dir, volcano, '')
+            # correct_pc(file_dir, verbose=verbose)
+        # if verbose:
         #    print('Parallax corrected files available in '+volcano+' directory')
     elif vlist_file != None:
         with open(vlist_file) as vfile:
@@ -850,16 +891,18 @@ def make_pc_files(data_dir, volcano=None, vlist_file=None, daterange=None,verbos
             if volcano in dirlist:
                 newlist.append(volcano)
             dirlist = newlist
-                #file_dir = os.path.join(data_dir, volcano, '')
-                #correct_pc(file_dir, verbose=verbose)
-                #if verbose:
-                #    print('Parallax corrected files available in '+volcano+' directory!')
-    #else:
+            # file_dir = os.path.join(data_dir, volcano, '')
+            # correct_pc(file_dir, verbose=verbose)
+            # if verbose:
+            #    print('Parallax corrected files available in '+volcano+' directory!')
+    # else:
     for direct in dirlist:
-        file_dir = os.path.join(data_dir, direct, '')
+        file_dir = os.path.join(data_dir, direct, "")
         correct_pc(file_dir, verbose=verbose, daterange=daterange)
     if verbose:
-       print('Parallax corrected files available in these directories: '+str(dirlist))
+        print(
+            "Parallax corrected files available in these directories: " + str(dirlist)
+        )
     return None
 
 
@@ -875,33 +918,36 @@ def volcplots(das_list, img_dir, pc=True, saveas=True):
     """
     from utilvolc import volcat_plots as vp
     import matplotlib.pyplot as plt
+
     # Initalize VolcatPlots class
     vplot = vp.VolcatPlots(das_list)
     vplot.make_arrays()
     vplot.set_plot_settings()
-    fig1 = vplot.plot_multiA(fignum=1, smooth=0.08, yscale='linear')
+    fig1 = vplot.plot_multiA(fignum=1, smooth=0.08, yscale="linear")
     fig1.autofmt_xdate()
-    volcname = das_list[0].attrs['volcano_name']
+    volcname = das_list[0].attrs["volcano_name"]
     volcano = fix_volc_name(volcname)
-    dset_name = das_list[0].attrs['dataset_name']
-    s = dset_name.find('b')
-    e = dset_name.rfind('_')
-    begin_time = dset_name[s+1:e]
+    dset_name = das_list[0].attrs["dataset_name"]
+    s = dset_name.find("b")
+    e = dset_name.rfind("_")
+    begin_time = dset_name[s + 1 : e]
     # TO DO: Use volcat.get_volcat_name_df to get begin_time value
     if saveas:
         if pc:
-            figname = volcano+'_'+begin_time+'_mass_area_kgs_maxhgt_pc_corrected.png'
+            figname = (
+                volcano + "_" + begin_time + "_mass_area_kgs_maxhgt_pc_corrected.png"
+            )
         else:
-            figname = volcano+'_'+begin_time+'mass_area_kgs_maxhgt.png'
-        fig1.savefig(img_dir+figname)
+            figname = volcano + "_" + begin_time + "mass_area_kgs_maxhgt.png"
+        fig1.savefig(img_dir + figname)
         plt.close()
-        return print('Figure saved: '+img_dir+figname)
+        return print("Figure saved: " + img_dir + figname)
     else:
         return fig1.show()
 
 
 def check_volcano(data_dir, volcano=None, verbose=False):
-    """ Checks to see if specified volcano is in data directory
+    """Checks to see if specified volcano is in data directory
     Inputs:
     data_dir: data_directory (string)
     volcano: volcano name (string)
@@ -916,18 +962,18 @@ def check_volcano(data_dir, volcano=None, verbose=False):
             return True
         else:
             if verbose:
-                return print(volcano+' not in '+str(dirlist))
+                return print(volcano + " not in " + str(dirlist))
             else:
                 return False
     else:
         if verbose:
-            return print('Need to specify volcano name.')
+            return print("Need to specify volcano name.")
         else:
             return False
 
 
 def list_times(data_dir, volcano=None, pc=True):
-    """ Lists all available volcanic beginning event times in given data directory
+    """Lists all available volcanic beginning event times in given data directory
     Provides number of files attributed to the given beginning event time.
     Used to determine which time to create images.
     Inputs:
@@ -939,31 +985,34 @@ def list_times(data_dir, volcano=None, pc=True):
     events: pandas dataframe of available times, number files for each time
     """
     import pandas as pd
+
     volc_check = check_volcano(data_dir, volcano=volcano)
     if volc_check:
-        volc_dir = os.path.join(data_dir, volcano, '')
+        volc_dir = os.path.join(data_dir, volcano, "")
     else:
         volc_dir = data_dir
     if pc:
-        volc_dir = os.path.join(volc_dir, 'pc_corrected', '')
+        volc_dir = os.path.join(volc_dir, "pc_corrected", "")
     # Creating dataframe of filename information
     dataf = volcat.get_volcat_name_df(volc_dir, include_last=True)
     if dataf.empty:
-       return dataf
-    event_dates = dataf['idate'].unique()
-    eventd = pd.DataFrame(event_dates, columns=['Event_Dates'])
+        return dataf
+    event_dates = dataf["idate"].unique()
+    eventd = pd.DataFrame(event_dates, columns=["Event_Dates"])
     lens = []
     g = 0
     while g < len(event_dates):
-        files = dataf.loc[dataf['idate'] == event_dates[g], 'filename']
+        files = dataf.loc[dataf["idate"] == event_dates[g], "filename"]
         lens.append(len(files))
         g += 1
-    lensd = pd.DataFrame(lens, columns=['Num_Files'])
+    lensd = pd.DataFrame(lens, columns=["Num_Files"])
     events = pd.concat([eventd, lensd], axis=1)
     return events
 
 
-def make_volcat_plots(data_dir, volcano=None, event_date=None, pc=True, saveas=True, verbose=False):
+def make_volcat_plots(
+    data_dir, volcano=None, event_date=None, pc=True, saveas=True, verbose=False
+):
     """Calls functions to create plots of volcat files within designated data directory.
     To add: Make flag for calling different plotting funtions with this function?
     Inputs:
@@ -978,34 +1027,37 @@ def make_volcat_plots(data_dir, volcano=None, event_date=None, pc=True, saveas=T
     Figures generated in image directory
     """
     from datetime import datetime
+
     # List directories in data_dir
     dirlist = list_dirs(data_dir)
     datadirs = []
     # Check to see if given volcano is within list of directories (if not None)
     # Generate list of volcano directories
     if volcano:
-        if (volcano in dirlist):
-            datadirs.append(os.path.join(data_dir, volcano, ''))
+        if volcano in dirlist:
+            datadirs.append(os.path.join(data_dir, volcano, ""))
         else:
-            return print(volcano+' not in '+str(dirlist))
+            return print(volcano + " not in " + str(dirlist))
     else:
         for volcano in dirlist:
-            datadirs.append(os.path.join(data_dir, volcano, ''))
+            datadirs.append(os.path.join(data_dir, volcano, ""))
     # Create image directory within volcano directory if it doesnt exist
     img_dirs = []
     for directory in datadirs:
-        newdir = 'Images'
+        newdir = "Images"
         make_dir(directory, newdir=newdir, verbose=verbose)
-        image_dir = os.path.join(directory, newdir, '')
+        image_dir = os.path.join(directory, newdir, "")
         img_dirs.append(image_dir)
         # Generate list of files
         if pc:
             # Check if pc_corrected directory exists
-            pcdir = 'pc_corrected'
-            if not os.path.exists(directory+pcdir):
-                return print('pc_corrected directory does not exist! Make '+directory+pcdir)
+            pcdir = "pc_corrected"
+            if not os.path.exists(directory + pcdir):
+                return print(
+                    "pc_corrected directory does not exist! Make " + directory + pcdir
+                )
             else:
-                volc_dir = (directory+pcdir)
+                volc_dir = directory + pcdir
         else:
             # Using non-parallax corrected files
             volc_dir = directory
@@ -1017,10 +1069,12 @@ def make_volcat_plots(data_dir, volcano=None, event_date=None, pc=True, saveas=T
             das_list = volcat.get_volcat_list(volc_dir)
         # Generate plots
         volcplots(das_list, image_dir, pc=pc, saveas=saveas)
-    return print('Figures generated in '+str(img_dirs))
+    return print("Figures generated in " + str(img_dirs))
 
 
-def multi_plots(data_dir, volcano=None, eventdf=None, pc=True, saveas=True, verbose=False):
+def multi_plots(
+    data_dir, volcano=None, eventdf=None, pc=True, saveas=True, verbose=False
+):
     """Creates multiple plots in a volcano directory based on event
     dataframe from vl.list_times().
     Inputs:
@@ -1034,11 +1088,17 @@ def multi_plots(data_dir, volcano=None, eventdf=None, pc=True, saveas=True, verb
     if eventdf is not None:
         a = 0
         while a < len(eventdf):
-            event = eventdf['Event_Dates'][a]
-            numfiles = eventdf['Num_Files'][a]
+            event = eventdf["Event_Dates"][a]
+            numfiles = eventdf["Num_Files"][a]
             if numfiles > 4:
-                make_volcat_plots(data_dir, volcano=volcano, event_date=event,
-                                  pc=pc, saveas=saveas, verbose=verbose)
+                make_volcat_plots(
+                    data_dir,
+                    volcano=volcano,
+                    event_date=event,
+                    pc=pc,
+                    saveas=saveas,
+                    verbose=verbose,
+                )
             a += 1
         if verbose:
             return "Image files created for events with more than 4 observation files"
@@ -1049,18 +1109,27 @@ def multi_plots(data_dir, volcano=None, eventdf=None, pc=True, saveas=True, verb
 
 
 def update_vaac_files():
-    """ Writes three files based on data from Washington vaac webpage.
+    """Writes three files based on data from Washington vaac webpage.
     This is tabled for now.
     Lists can be generated by hand from the Washington VAAC webpage."""
     from lxml import html
     from bs4 import BeautifulSoup
     import requests
-    page = requests.get('https://www.ssd.noaa.gov/VAAC/ARCH21/archive.html')
+
+    page = requests.get("https://www.ssd.noaa.gov/VAAC/ARCH21/archive.html")
     tree = html.fromstring(page.content)
     volcanoes = tree.xpath('//span[@id="quicklinks"]/text()')
 
 
-def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=False,clip=True):
+def write_emitimes(
+    data_dir,
+    volcano=None,
+    event_date=None,
+    pc=True,
+    verbose=False,
+    clip=True,
+    overwrite=False,
+):
     """Writes emitimes file from the volcat netcdf file provided. Still in progress!
     Will eventually use an input dictionary
     Inputs:
@@ -1073,6 +1142,7 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
     emitimes files written to designated directory
     """
     from utilvolc import write_emitimes as we
+
     # List directories in data_dir
     dirlist = list_dirs(data_dir)
     datadirs = []
@@ -1080,37 +1150,37 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
     if volcano != None:
         volc_check = check_volcano(data_dir, volcano=volcano, verbose=verbose)
         if volc_check:
-            datadirs.append(os.path.join(data_dir, volcano, ''))
+            datadirs.append(os.path.join(data_dir, volcano, ""))
     else:
         if verbose:
-            return 'Must specify volcano'
+            return "Must specify volcano"
         else:
             return None
             # Create emitimes directory within volcano directory if it doesnt exist
     emit_dirs = []
     for directory in datadirs:
-        newdir = 'emitimes'
+        newdir = "emitimes"
         make_dir(directory, newdir=newdir, verbose=verbose)
-        emit_dir = os.path.join(directory, newdir, '')
+        emit_dir = os.path.join(directory, newdir, "")
         emit_dirs.append(emit_dir)
         # Generate list of files
         if pc:
             # Check if pc_corrected directory exists
-            pcdir = 'pc_corrected'
-            if not os.path.exists(directory+pcdir):
-                return print('pc_corrected directory does not exist!')
+            pcdir = "pc_corrected"
+            if not os.path.exists(directory + pcdir):
+                return print("pc_corrected directory does not exist!")
             else:
-                volc_dir = (directory+pcdir)
+                volc_dir = directory + pcdir
         else:
             # Using non-parallax corrected files
             volc_dir = directory
         # Dataframe of files in directory
         dframe = volcat.get_volcat_name_df(volc_dir)
-        dframe = dframe.sort_values(by='edate')
+        dframe = dframe.sort_values(by="edate")
         if event_date:
             eventd = pd.to_datetime(event_date).to_datetime64()
-            imgdates = dframe.loc[dframe['idate'] == eventd, 'edate'].tolist()
-            filenames = dframe.loc[dframe['idate'] == eventd, 'filename'].tolist()
+            imgdates = dframe.loc[dframe["idate"] == eventd, "edate"].tolist()
+            filenames = dframe.loc[dframe["idate"] == eventd, "filename"].tolist()
         else:
             imgdates = dframe.edate.values
             filenames = dframe.filename.values.tolist()
@@ -1120,20 +1190,38 @@ def write_emitimes(data_dir, volcano=None, event_date=None, pc=True, verbose=Fal
             # Convert date to datetime object
             date_time = pd.to_datetime(imgdates[iii]).to_pydatetime()
             # Initialize write_emitimes function
-            volcemit = we.InsertVolcat(emit_dir, volc_dir, date_time, fname=fname)
-            if verbose:
-                print('Emitimes file with '+volcemit.make_match()+' created for '+volcemit.fname)
-            volcemit.write_emit(area_file=False,clip=clip,verbose=verbose)
+            pollnum = 1
+            pollpercents = [1]
+            volcemit = we.InsertVolcat(
+                emit_dir,
+                volc_dir,
+                date_time,
+                fname=fname,
+                layer=0.0,
+                pollnum=pollnum,
+                pollpercents=pollpercents,
+            )
+            if not volcemit.check_for_file() or overwrite:
+                # if verbose:
+                #    print('Emitimes file with '+volcemit.make_match()+' created for '+volcemit.fname)
+                volcemit.write_emit(area_file=False, clip=clip, verbose=verbose)
+                logger.info(
+                    "Emit-times file written {}".format(volcemit.make_emit_filename())
+                )
+            else:
+                logger.info(
+                    "Emit-times file exists {}".format(volcemit.make_emit_filename())
+                )
         #    i += 1
         return None
 
 
 def setup_runs():
-    """ Sets up the control and setup files for data insertion runs. 
+    """Sets up the control and setup files for data insertion runs.
     Quite a few inputs are needed here, not all information is available in netcdfs or
     emitimes files. Need to figure out a good way to get this info.
     IN PROGRESS
-    Inputs:  
+    Inputs:
           need latitude and longitude of volcano.
           Start time - from emit-times file.
           For determining the concentration grid
