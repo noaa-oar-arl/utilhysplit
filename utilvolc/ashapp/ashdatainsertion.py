@@ -11,14 +11,14 @@ from glob import glob
 # from hysplitplot import timezone
 
 # import hysplit
-import metfiles as metfile
+import utilvolc.ashapp.metfiles as metfile
 from monetio.models import hysplit
-from runhelper import Helper
-from runhandler import ProcessList
-from ashbase import AshRun
-import ensemble_tools
-from cdump2xml import HysplitKml
-from emitimes import EmiTimes
+from utilvolc.ashapp.runhelper import Helper
+from utilvolc.ashapp.runhandler import ProcessList
+from utilvolc.ashapp.ashbase import AshRun
+import utilvolc.ensemble_tools as ensemble_tools
+from utilvolc.ashapp.cdump2xml import HysplitKml
+from utilvolc.ashapp.emitimes import EmiTimes
 from utilvolc import write_emitimes as vwe
 from utilvolc.ashapp.runhelper import AshDINameComposer
 
@@ -82,6 +82,9 @@ class DataInsertionRun(AshRun):
         cdf =  find_cdump_df(self.inp['WORK_DIR'], [self.inp['start_date'],edate])
         blist = cdf['filename'].values
         alist = []
+        if len(blist) == 0:
+           logger.warning('No cdump files found')
+           return xr.DataSet()
         for fname in blist:
             alist.append((fname, fname, self.inp['meteorologicalData'])) 
         century = 100 * (int(self.inp['start_date'].year/100))
@@ -110,14 +113,15 @@ class DataInsertionRun(AshRun):
         #print('ecycle', ecycle)
         # number of locations that need to be in CONTROL file.
         self.inp['nlocs'] = ecycle.nrecs
+         
         # starting date of this cycle      
         sdate = ecycle.sdate
         self.inp['start_date'] = sdate
         # duration of this cycle
         #cduration = ecycle.duration
-
+        
         # get first line locations
-        erecord = ecycle.recordra[0]
+        #erecord = ecycle.recordra[0]
         #self.inp['latitude'] = erecord.lat
         #self.inp['longitude'] = erecord.lon
 
@@ -145,8 +149,8 @@ class DataInsertionRun(AshRun):
         super().additional_control_setup(control,stage=stage)
         # add as many dummy locations as in emit-times file
         control.remove_locations()
-        lat = self.inp['latitude']
-        lon = self.inp['longitude']
+        lat = np.floor(self.inp['latitude'])
+        lon = np.floor(self.inp['longitude'])
         vent = self.inp['bottom']
         area = self.inp['area']
         rate = self.inp['rate']
@@ -155,6 +159,15 @@ class DataInsertionRun(AshRun):
 
     def get_conc_multiplier(self):
         return 1
+
+    def after_run_check(self,update):
+        edate = self.inp['start_date'] + datetime.timedelta(hours=self.inp['durationOfSimulation'])
+        rlist = []
+        rval=True
+        for emitfile in find_emit_file(self.inp['WORK_DIR'], [self.inp['start_date'],edate]):
+            rval = super().after_run_check(stage=emitfile,update=update)
+            rlist.append(rval)
+        return np.any(rlist)
 
     def run_model(self):
         edate = self.inp['start_date'] + datetime.timedelta(hours=self.inp['durationOfSimulation'])
