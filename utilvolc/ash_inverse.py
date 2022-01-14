@@ -15,15 +15,25 @@ from monetio.models import hysplit
 from utilhysplit import hcontrol
 from utilhysplit.evaluation import plume_stat
 from utilhysplit.evaluation import ensemble_tools
-from utilhysplit.hysplit_gridutil import compare_grids
-from utilhysplit.hysplit_gridutil import align_grids
+import utilhysplit.hysplit_gridutil as hgu
+#from utilhysplit.hysplit_gridutil import compare_grids
+#from utilhysplit.hysplit_gridutil import compare_grids
+#from utilhysplit.hysplit_gridutil import convert_lon
+#from utilhysplit.hysplit_gridutil import align_grids
 #from utilvolc.basic_checks import calc_grids
 from utilvolc.runhelper import Helper
 from utilvolc.ashapp.metfiles import MetFileFinder
 from utilhysplit.plotutils import colormaker
 
-def automate():
-    return -1 
+
+#def save_emis_gefs(inverse):
+#    tlist = 'gec00'
+#    inverse.save_emis(eii=0, savename = 'gec00')
+#    for nlist in np.arange(1,30):
+#        ttt = 'gep{:2d}'.format(nlist)
+#        inverse.save_emis(eii=nlist
+
+
 
 def check_type_basic(check):
     if isinstance(check,int): return True
@@ -433,6 +443,10 @@ class InverseAshEns:
         self.tcm_names = [] # list of names of tcm files written.
         self.n_ctrl_list = [] # list of numbers for Parameter_in.dat      
 
+    def get_mean_tcm(self):
+        for hrun in zip(self.invlist,self.taglist): 
+            temp = 1
+
     def write_tcm(self,tcm_name,reset=True,verbose=False):
         if reset: self.reset_tcm()
         for hrun in zip(self.invlist,self.taglist): 
@@ -517,7 +531,7 @@ class InverseAshEns:
         done=False
         seconds_to_wait = 30
         total_time = 0
-        max_time = 60*60
+        max_time = 60*6000
         while not done:
            num_procs = processhandler.checkprocs()
            print('in loop {}s procs {}'.format(total_time,num_procs))
@@ -588,7 +602,7 @@ class InverseAshEns:
             eii  = [eii]
         for iii, outdat in enumerate(zip(name1,name2)):
             if not eii or (iii in eii):  
-                if eii: print(outdat)
+                if eii: print('read outdat', outdat)
                 #print(self.subdir, outdat[0])
                 io = InverseOutDat(self.subdir,outdat[0],outdat[1])
                 ilist.append(io)
@@ -608,6 +622,7 @@ class InverseAshEns:
         self.emitname = 'emit.txt'
         ilist = self.read_outdat(eii)
         for iii, io in enumerate(ilist):
+            print('working on ', iii, len(ilist))
             tag = self.taglist[iii]
             emit_name = self.make_emit_name(self.subdir,tag)
             df = io.get_emis()
@@ -622,10 +637,9 @@ class InverseAshEns:
                        emis_threshold = emis_threshold, 
                        name = emit_name,
                        phash=self.phash)
-            inp = self.invlist[0].inp
-            print(inp['meteorologicalData'])
+            inp = self.invlist[0].inp.copy()
             if 'gefs' in inp['meteorologicalData'].lower():
-                inp['forecastDirectory'] = os.path.join(self.datadir,'GEFS') 
+                #inp['forecastDirectory'] = os.path.join(self.datadir,'gefsnew') 
                 print('Forecast directory', inp['forecastDirectory'])
                 inp['archivesDirectory'] = os.path.join(self.datadir,'wrong') 
                 metstr=inp['meteorologicalData']
@@ -639,15 +653,19 @@ class InverseAshEns:
                          metstr=metstr)
             make_setup(self.wdir,'SETUP.default',self.subdir,suffix=tag)
             Helper.copy(os.path.join(self.wdir,'ASCDATA.CFG'), os.path.join(self.subdir,'ASCDATA.CFG')) 
-            return efile  
+            #return efile  
 
     def save_emis(self,savename,eii=None,name=None):
-        print('saving emissions')
         ilist = self.read_outdat(eii)
+        basename = savename
+        print(len(ilist))
         for iii,io in enumerate(ilist):
+            sname = io.fname
+            sname = sname.replace('_out.dat','')
+            savename = '{}{}'.format(sname,basename)
             df = io.get_emis(name=name)
             savename = os.path.join(self.subdir, savename)
-            print('saving emissions ', savename)
+            print('saving emissions in ', savename)
             self.invlist[0].make_outdat_df(df,savename=savename,part='condense')
         
     def plot_outdat_ts(self, eii=None,unit='kg/s',clr=None, profile=False, ax=None,name=None):
@@ -782,6 +800,8 @@ class InverseAsh:
         self.original_volcat_ht_hash = {}
         self.original_cdump_hash = {}
 
+        self.set_bias_correction(slope=None,intercept=None)
+
     def close_arrays(self):
         self.cdump.close()
         #self.massload.close()
@@ -900,7 +920,7 @@ class InverseAsh:
         try:
            iii = timelist.index(time)
         except:
-           print('timelist', timelist)
+           #print('timelist', timelist)
            iii = None
         return iii 
 
@@ -1096,12 +1116,12 @@ class InverseAsh:
         astr = ''
         sep = ' '
         hstr = '' # header string
-        print(self.tcm.shape)\
+        #print(self.tcm.shape)\
         # this is number of columns minus 1.
         # and needs to be input into Parameters.in.dat
         self.n_ctrl = self.tcm.shape[1]-1
-        print('N_ctrl {}'.format(self.tcm.shape[1]-1))
-        print('output file {}'.format(name))
+        #print('N_ctrl {}'.format(self.tcm.shape[1]-1))
+        #print('output file {}'.format(name))
         for iii, line in enumerate(self.tcm):
             for jjj, val in enumerate(line):
                 if iii==0:
@@ -1223,7 +1243,9 @@ class InverseAsh:
                             fignum=1,
                             unit='kg',
                             ax=None,
-                            clr='--ko'):
+                            clr='--ko',
+                            alpha=1,
+                            lw=1):
         if not ax:
             sns.set()
             sns.set_style('whitegrid')
@@ -1235,7 +1257,7 @@ class InverseAsh:
         sns.set()
         # the one represents one hour time period.
         yval = ts.values * 1 / 1e12
-        ax.plot(yval, ts.index.values/1000.0,  clr)
+        ax.plot(yval, ts.index.values/1000.0,  clr, alpha=alpha, linewidth=lw)
         ax.set_xlabel('Tg of mass emitted',fontsize=15)
         ax.set_ylabel('Height (km)',fontsize=15)
         totalmass = yval.sum()
@@ -1412,8 +1434,12 @@ class InverseAsh:
             volcat = self.volcat_avg_hash[iii] 
             cdump = self.cdump_hash[iii]*self.concmult
             yield volcat, cdump 
-                   
-    def get_pair(self,tii,coarsen=None):
+    
+    def set_bias_correction(self,slope,intercept):
+        self.slope = slope
+        self.intercept = intercept           
+  
+    def get_pair(self,tii,coarsen=None, slope=None, intercept=None):
         if isinstance(tii,int):
            iii = tii 
         elif isinstance(tii,datetime.datetime):
@@ -1426,7 +1452,19 @@ class InverseAsh:
            volcat = volcat.coarsen(y=coarsen,boundary='trim').mean()
            cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
            cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
-
+        if not slope and self.slope: slope = self.slope
+        if slope:
+           #print('multiplying cdump by {}'.format(1-slope))
+           cdump = cdump * (1-slope)
+        if not intercept and self.intercept: intercept = self.intercept
+        if intercept:
+           #print('shifting cdump by {}'.format(-1*intercept))
+           cdump = cdump - intercept
+           # if slope is positive then remove negative values.
+           f2 = xr.where(cdump>0,cdump,0) 
+           # if slope is negative then do not add to values that were previously 0.
+           f2 = xr.where(cdump<0.0001,0,f2) 
+           cdump = f2
         return volcat, cdump 
     
     def match_volcat(self,forecast):
@@ -1659,13 +1697,19 @@ class InverseAsh:
             if htoptions==1: cdump_b = cdump_b[:,a1:a2,b1:b2]
 
         # align the grids.
-        if compare_grids(cdump_a, vra):
-            dummy, vhra = align_grids(cdump_a, vhra)
-            cdump_a, vra = align_grids(cdump_a, vra)
+        if not hgu.compare_grids(cdump_a, vra,verbose=False):
+           vra.attrs.update(hgu.find_grid_specs(vra))
+           cdump_a.attrs.update(hgu.find_grid_specs(cdump_a))
+           vra = hgu.convert_lon(vra)
+           vhra = hgu.convert_lon(vhra)
+           #cdump_a = hgu.convert_lon(cdump_a)
+        if hgu.compare_grids(cdump_a, vra,verbose=False):
+           dummy, vhra = hgu.align_grids(cdump_a, vhra)
+           cdump_a, vra = hgu.align_grids(cdump_a, vra)
         else:
-            compare_grids(cdump_a,vra,verbose=True)
-            print('prepare_one_time: grids cannot be aligned')
-            return False
+           hgu.compare_grids(cdump_a,vra,verbose=True)
+           print('prepare_one_time: grids cannot be aligned')
+           return False
 
 
         avra = vra.fillna(0).mean(dim='time')
@@ -1723,6 +1767,7 @@ def make_control(efile,
     metfilefinder = MetFileFinder(metstr.lower())
     print('making control file ', metstr)
     print(archive_directory)
+    print(forecast_directory)
     metfilefinder.set_forecast_directory(forecast_directory)
     metfilefinder.set_archives_directory(archive_directory)
     if 'gefs' in metstr.lower():
@@ -1768,6 +1813,7 @@ def make_setup( tdir = './',
                 efilename = 'emit.txt',
                 suffix='emit'
                ):
+    print('making setup')
     setup = hcontrol.NameList(sname,tdir)
     setup.read()
     if suffix == 'emit':
@@ -1931,7 +1977,7 @@ def plot_outdat_ts_psize_function(dfdat,log=False,fignum=1,unit='kg/s',
 
 
 def plot_outdat_ts_function(dfdat,log=False,fignum=1,unit='kg/s',
-                   ax=None,clr='--ko'):
+                   ax=None,clr='--ko',alpha=1,lw=1):
     # plots time series of MER. summed along column.
     #dfdat : pandas dataframe output by InverseOutDat class get_emis method.
     if not ax:
@@ -1952,7 +1998,7 @@ def plot_outdat_ts_function(dfdat,log=False,fignum=1,unit='kg/s',
        yval = ts.values
     xval = [pd.to_datetime(x) for x in ts.index.values]
     #ax.plot([x[0] for x in ts.index.values], yval, clr)
-    ax.plot(xval, yval, clr)
+    ax.plot(xval, yval, clr,alpha=alpha, linewidth=lw)
     #fig.autofmt_xdate()
     ax.set_ylabel('MER {}'.format(unit),fontsize=15)
     return ax, df
@@ -1962,12 +2008,16 @@ def plot_outdat_profile_function(dfdat,
                         unit='kg',
                         ax=None,
                         clr='--ko',
-                        label=None):
+                        label=None,
+                        alpha=1,
+                        lw=1):
     if not ax:
         sns.set()
         sns.set_style('whitegrid')
         fig = plt.figure(fignum, figsize=(10,5))
         ax = fig.add_subplot(1,1,1)
+
+   
 
     if isinstance(dfdat,str):
        df = pd.read_csv(dfdat,index_col=0,header=1)
@@ -1983,7 +2033,7 @@ def plot_outdat_profile_function(dfdat,
     except:
        yval = list(map(float,list(ts.index.values)))
        yval = np.array(yval) / 1000.0
-    ax.plot(xval, yval,  clr,label=label)
+    ax.plot(xval, yval,  clr,label=label,alpha=alpha, linewidth=lw)
     ax.set_xlabel('Tg of mass emitted',fontsize=15)
     ax.set_ylabel('Height (km)',fontsize=15)
     totalmass = xval.sum()
