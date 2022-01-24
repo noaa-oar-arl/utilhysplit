@@ -793,7 +793,8 @@ def calc_weights(scores, types='BS'):
 
     Inputs:
         scores: scores for each ensemble member(xarray) from statistics netcdf
-        types: 9string) 'BS' for Brier Score or 'PC' for Pattern Correlation
+        types: 9string) 'BS' for Brier Score or 'PC' for Pattern Correlation, 'time' is
+        for time weighting
     Output:
         wgtscore: normalized list of weights to apply to hysplit ensemble
     """
@@ -805,10 +806,40 @@ def calc_weights(scores, types='BS'):
     if types == 'PC':
         # For PC, higher values are better
         ranklist = np.argsort(scores.values)
+    if types == 'time':
+        ranklist = np.arange(len(scores.values))
     ranklist = ranklist + 1  # Removes 0 from ranklist
     ranks = ranklist * tmp
     wgtscore = ranks / sum(ranks)
     return wgtscore
+
+
+def calc_weightsT(xra, dim='source'):
+    """
+    Calculating the weighting scheme based on initialization time.
+    Members initialized more recently are weighted higher than
+    members initialized much earlier.
+    Inputs:
+        xra: binary array of ensemble members
+        dim: dimension to determine time weighting along
+    """
+    ranklist = np.arange(len(xra[dim].values))
+    ranklist = ranklist + 1  # Removes 0 from ranklist
+    tmp = 1/len(xra[dim].values)
+    ranks = ranklist * tmp
+    wgtscore = ranks / sum(ranks)  # Normalize weights
+    tmp = []
+    if len(xra[dim]) == len(wgtscore):
+        a = 0
+        while a < len(xra[dim]):
+            t = xra.isel({dim: [a]}) * wgtscore[a]
+            tmp.append(t)
+            a += 1
+        xra2 = xr.concat(tmp, dim=dim)
+        xraprob = xra2.sum(dim=dim)
+    else:
+        print('xarray and weights are not the same size')
+    return xraprob
 
 
 def calc_weightsBS(xra, scores, dim='source'):
@@ -819,7 +850,7 @@ def calc_weightsBS(xra, scores, dim='source'):
     Inputs:
         xra: binary xarray of ensemble members(source, x, y)
         scores: scores for each ensemble member(xarray) from statistics netcdf
-        dim: ensemble dimension
+        dim: ensemble dimension 'ens' or 'source' (string)
     Output:
         xraprob: ensemble relative frequency(xarray DataArray)
     """
@@ -832,24 +863,13 @@ def calc_weightsBS(xra, scores, dim='source'):
             tmp.append(t)
             a += 1
         xra2 = xr.concat(tmp, dim=dim)
-        xraprob = xra2.sum(dim=dim) / sum(wgtscore)
+        xraprob = xra2.sum(dim=dim)  # / sum(wgtscore)
     else:
         print('xarray and scores are not the same size')
-
-    #a = 0
-    #W = []
-    #xra2 = xra
-    # while a < len(xra.source):
-    #    weight = 1-scores.values[a]
-    #    W.append(weight)
-    #    xra2[a, :, :] = xra[a, :, :] * weight
-    #    a += 1
-
-    #xraprob = xra2.sum(dim='source') / sum(W)
     return xraprob
 
 
-def calc_weightsPC(xra, scores):
+def calc_weightsPC(xra, scores, dim='source'):
     """
     Calculating the weighting scheme based on pattern correlation values.
     Note, xra and scores should have the same source dimension.
@@ -857,19 +877,22 @@ def calc_weightsPC(xra, scores):
     Inputs:
         xra: binary xarray of ensemble members(source, x, y)
         scores: scores for each ensemble member(xarray DataArray) from statistics netcdf
+        dim: dimension of ensemble 'ens' or 'source' (string)
     Output:
         xraprob: ensemble relative frequency(xarray DataArray)
     """
-    a = 0
-    W = []
-    xra2 = xra
-    while a < len(xra.source):
-        weight = scores.values[a]
-        W.append(weight)
-        xra2[a, :, :] = xra[a, :, :] * weight
-        a += 1
-
-    xraprob = xra2.sum(dim='source') / sum(W)
+    tmp = []
+    if len(xra[dim]) == len(scores):
+        wgtscore = calc_weights(scores, types='PC')
+        a = 0
+        while a < len(xra[dim]):
+            t = xra.isel({dim: [a]}) * wgtscore[a]
+            tmp.append(t)
+            a += 1
+        xra2 = xr.concat(tmp, dim=dim)
+        xraprob = xra2.sum(dim=dim) / sum(wgtscore)
+    else:
+        print('xarray and scores are not the same size')
     return xraprob
 
 
