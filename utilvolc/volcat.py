@@ -494,7 +494,8 @@ def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=Fa
     tlist = find_volcat(tdir, vid=None, daterange=None, return_val=2)
     # vlist is a list of dictionaries with information from the name.
     vlist = [x.vhash for x in tlist]
-    if not vlist: return pd.DataFrame()
+    if not vlist:
+        return pd.DataFrame()
     temp = pd.DataFrame(vlist)
     if isinstance(daterange, (list, np.ndarray)):
         temp = temp[temp["idate"] >= daterange[0]]
@@ -541,10 +542,10 @@ def choose_files(volcat_event_df, vid, frequency=10):
     return -1
 
 
-def get_volcat_list(tdir, daterange=None, vid=None, fid=None, 
-                    fdate=None, flist=None, return_val=2, 
-                    correct_parallax=True, mask_and_scale=True, 
-                    decode_times=True, verbose=False, 
+def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
+                    fdate=None, flist=None, return_val=2,
+                    correct_parallax=True, mask_and_scale=True,
+                    decode_times=True, verbose=False,
                     include_last=True,):
     """
     returns list of data-arrays with volcat data.
@@ -553,7 +554,7 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
     daterange: datetime object -  [datetime0, datetime1] or none
     vid: string - volcano ID
     fid: feature ID
-    fdate: Feature datetime - idate (datetime object or datetime64)
+    fdate: Feature datetime - edate in tframe (datetime object or datetime64)
     flist: list of filenames
     return_val: integer (1,2,3) - see find_volcat() for explanation
     correct_parallax: boolean
@@ -572,12 +573,13 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
         )
         if fdate:
             eventd = pd.to_datetime(fdate).to_datetime64()
-            filenames = tframe.loc[tframe['idate'] == eventd, 'filename'].tolist()
+            filenames = tframe.loc[tframe['edate'] == eventd, 'filename'].tolist()
         else:
             filenames = tframe.filename.values
     das = []
     for nnn, iii in enumerate(filenames):
-        if verbose: print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
+        if verbose:
+            print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
         # opens volcat files using volcat.open_dataset
         if not "_pc" in iii:
             das.append(
@@ -806,25 +808,25 @@ class VolcatName:
 
         self.pc_corrected = False
         # parse only if a string is given.
-        if isinstance(fname,str):
+        if isinstance(fname, str):
             self.parse(self.fname)
         self.vhash["filename"] = fname
 
     def make_datekeys(self):
-        self.datekeys = [3,4,10,11]
+        self.datekeys = [3, 4, 10, 11]
 
     def make_keylist(self):
         self.keylist = ["algorithm name"]
         self.keylist.append("satellite platform")
         self.keylist.append("event scanning strategy")
-        self.keylist.append("image date") # should be image date (check)
+        self.keylist.append("image date")  # should be image date (check)
         self.keylist.append("image time")
         self.keylist.append("fid")
         self.keylist.append("volcano id")
         self.keylist.append("description")
         self.keylist.append("WMO satellite id")
         self.keylist.append("image scanning strategy")
-        self.keylist.append("event date") # should be event date (check)
+        self.keylist.append("event date")  # should be event date (check)
         self.keylist.append("event time")
         self.keylist.append("feature id")
 
@@ -1010,12 +1012,12 @@ def get_data(dset, vname, clip=True):
         gen = gen.where(gen != fillvalue)
         fillvalue = None
     if clip:
-        status=True
+        status = True
         try:
             box = bbox(gen, fillvalue)
         except:
             print('volcat get_data bbox for clipping failed')
-            status=False
+            status = False
         if status:
             gen = gen[:, box[0][0]: box[1][0], box[0][1]: box[1][1]]
             if "_FillValue" in gen.attrs:

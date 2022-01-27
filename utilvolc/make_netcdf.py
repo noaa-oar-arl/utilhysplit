@@ -389,9 +389,9 @@ class MakeNetcdf:
                 # Creating binary field of hysplit output
                 hxr3 = xr.where(hxr2.isel(source=a) >= threshold[t], 1., 0.)
                # Calculating the BS values of each ensemble member
-                BS = ps.calc_bs(hxr3, ashmass)
+                BS = ps.calc_bs(ashmass, hxr3)
                 BSlist.append(BS.values)
-                BSavg = ps.calc_bs(hxr3, ashmassavg)
+                BSavg = ps.calc_bs(ashmassavg, hxr3)
                 BSlistavg.append(BSavg.values)
                 a += 1
             # Adding Brier Scores to the netcdf, with dimension source
