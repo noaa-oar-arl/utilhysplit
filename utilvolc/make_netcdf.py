@@ -38,7 +38,7 @@ class MakeNetcdf:
 
     def DI_combine(self, all_files, start=None, end=None, tdelta=10, verbose=False):
         """ Creates xarray dataset of Data Insertion hysplit simulations
-        all_files: list of all cdump files from Data Insertion runs
+        all_files: list of all cdump file names from Data Insertion runs
         start: datetime object(first time to be included in ensemble (default: d1 - 24 hours))
         end: datetime object (last time to be included in ensemble (default: d1 - tdelta))
         tdelta: time interval of files to include in minutes (default: 10)
@@ -126,7 +126,7 @@ class MakeNetcdf:
                                     century=2000, sample_time_stamp=self.sample_time_stamp, verbose=False)
 
         unitmass, mass63 = hysp_func.calc_MER(hxrl)
-
+        # TODO separate into a different method.
         hxrline.attrs['Volcano Latitude'] = hxrl.attrs['Starting Latitudes'][0]
         hxrline.attrs['Volcano Longitude'] = hxrl.attrs['Starting Longitudes'][0]
         hxrline.attrs['Volcano Vent (m)'] = hxrl.attrs['Starting Heights'][0]
@@ -138,6 +138,8 @@ class MakeNetcdf:
         hxrline.attrs['MER Units'] = 'g/hr'
         del(hxrline.attrs['Coordinate time description'])
         return hxrline
+
+#    def create_ens(self, hlist, netdir, MER=None, write=False):
 
     def create_ens(self, hxrd, hxrc, hxrl, netdir, MER=None, write=False):
         """ Creates netcdf file of merged dataarrays
@@ -397,24 +399,34 @@ class MakeNetcdf:
             # Adding Brier Scores to the netcdf, with dimension source
             thresh = str(threshold[t])
             threshattr.append(thresh)
+            
+            # xaray with Briar scores
             BSxr = xr.DataArray(BSlist, dims='source').load().rename('BS'+thresh)
             BSxr.attrs['long name'] = 'Brier Score compared to volcat'
             BSxr.attrs['threshold'] = thresh+' g/m^s'
+            # xaray with average Briar scores
             BSavgxr = xr.DataArray(BSlistavg, dims='source').load().rename('BSavg'+thresh)
             BSavgxr.attrs['long name'] = 'Brier Score compared to 1hr avg volcat'
             BSavgxr.attrs['threshold'] = thresh+' g/m^s'
+            # xaray
             PCxr = xr.DataArray(PClistcent, dims='source').load().rename('PC'+thresh)
             PCxr.attrs['long name'] = 'Pattern Correlation (centered) compared to volcat'
             PCxr.attrs['threshold'] = thresh+' g/m^s'
+            # xaray
             PCxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCuc'+thresh)
             PCxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to volcat'
             PCxruc.attrs['threshold'] = thresh+' g/m^s'
+            # xaray
             PCavgxr = xr.DataArray(PClistcent, dims='source').load().rename('PCavg'+thresh)
             PCavgxr.attrs['long name'] = 'Pattern Correlation (centered) compared to 1hr avg volcat'
             PCavgxr.attrs['threshold'] = thresh+' g/m^s'
+            # xaray
             PCavgxruc = xr.DataArray(PClistuncent, dims='source').load().rename('PCucavg'+thresh)
             PCavgxruc.attrs['long name'] = 'Pattern Correlation (uncentered) compared to 1hr avg volcat'
             PCavgxruc.attrs['threshold'] = thresh+' g/m^s'
+
+            # one dimension which is number of ensemble members
+            # and each of the statistics is a data variable. 
             statsxr = xr.merge([statsxr, BSxr, BSavgxr, PCxr, PCxruc, PCavgxr,
                                 PCavgxruc], combine_attrs='drop_conflicts')
             t += 1
@@ -447,6 +459,7 @@ def ens_merge(hxrd, hxrc, hxrl, MER=None):
     if MER == None:
         MER = hxrl.attrs['Fine Ash MER - Mastin']
 
+#   DO THIS Somewhere else.
     hxrcyl = hxrc * MER
     hxrline = hxrl * MER
 
