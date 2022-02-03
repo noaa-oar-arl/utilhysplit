@@ -1121,6 +1121,7 @@ def update_vaac_files():
     volcanoes = tree.xpath('//span[@id="quicklinks"]/text()')
 
 
+
 def write_emitimes(
     data_dir,
     volcano=None,
@@ -1130,18 +1131,21 @@ def write_emitimes(
     clip=True,
     overwrite=False,
 ):
-    """Writes emitimes file from the volcat netcdf file provided. Still in progress!
-    Will eventually use an input dictionary
+    """
+    Writes emitimes file from volcat netcdf file(s).
     Inputs:
     data_dir: path for data directory (string)
     volcano: name of specific volcano (string)
-    event_date: date/time of volcanic eruption (datetime object,datetime64, or timestamp)
+    event_date: event date (datetime object,datetime64, or timestamp)
     pc: (boolean) default=True - use parallax corrected files
     verbose: (boolean)
-    Output:
-    emitimes files written to designated directory
+    Return:
+    None
     """
     from utilvolc import write_emitimes as we
+    pollnum = 1
+    pollpercents = [1]
+    layer = 0.0
 
     # List directories in data_dir
     dirlist = list_dirs(data_dir)
@@ -1176,34 +1180,33 @@ def write_emitimes(
             volc_dir = directory
         # Dataframe of files in directory
         dframe = volcat.get_volcat_name_df(volc_dir)
-        dframe = dframe.sort_values(by="edate")
-        if event_date:
-            eventd = pd.to_datetime(event_date).to_datetime64()
-            imgdates = dframe.loc[dframe["idate"] == eventd, "edate"].tolist()
-            filenames = dframe.loc[dframe["idate"] == eventd, "filename"].tolist()
-        else:
-            imgdates = dframe.edate.values
-            filenames = dframe.filename.values.tolist()
 
-        for iii, fname in enumerate(filenames):
-            # while i < len(filenames):
-            # Convert date to datetime object
-            date_time = pd.to_datetime(imgdates[iii]).to_pydatetime()
+        # sort by image date
+        #dframe = dframe.sort_values(by="idate")
+
+        # pick by event date if indicated
+        if event_date:
+            dframe = dframe[dframe['edate'] == event_date]
+         
+        imgdates = dframe['idate'].unique()
+        # loop through image dates
+        # write one emit-times file per image date.
+        # sometimes this will utilize more than one volcat file.
+        for iii, idate in enumerate(imgdates):
+            # get all files with that image date
+            filenames = dframe.loc[dframe["idate"] == idate, "filename"].tolist()
+            date_time = pd.to_datetime(idate)
             # Initialize write_emitimes function
-            pollnum = 1
-            pollpercents = [1]
             volcemit = we.InsertVolcat(
                 emit_dir,
                 volc_dir,
                 date_time,
-                fname=fname,
-                layer=0.0,
+                fname=filenames,
+                layer=layer,
                 pollnum=pollnum,
                 pollpercents=pollpercents,
             )
             if not volcemit.check_for_file() or overwrite:
-                # if verbose:
-                #    print('Emitimes file with '+volcemit.make_match()+' created for '+volcemit.fname)
                 volcemit.write_emit(area_file=False, clip=clip, verbose=verbose)
                 logger.info(
                     "Emit-times file written {}".format(volcemit.make_emit_filename())
@@ -1212,25 +1215,6 @@ def write_emitimes(
                 logger.info(
                     "Emit-times file exists {}".format(volcemit.make_emit_filename())
                 )
-        #    i += 1
         return None
 
 
-def setup_runs():
-    """Sets up the control and setup files for data insertion runs.
-    Quite a few inputs are needed here, not all information is available in netcdfs or
-    emitimes files. Need to figure out a good way to get this info.
-    IN PROGRESS
-    Inputs:
-          need latitude and longitude of volcano.
-          Start time - from emit-times file.
-          For determining the concentration grid
-              sample start time (make sure they output all at the same time).
-          customize vertical levels?  probably prescribed by ICAO.
-    Outputs:
-    """
-    # AMC - use the ashapp for this. What information is needed?
-    from utilhysplit import hcontrol
-    from utilhysplit import emitimes
-    from utilhysplit import metdata
-    from datetime import datetime, timedelta
