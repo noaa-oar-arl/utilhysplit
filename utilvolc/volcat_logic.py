@@ -6,7 +6,7 @@ import os
 from glob import glob
 from utilvolc.ashapp.runhelper import Helper
 from utilvolc.ashapp.runhelper import list_dirs
-from utilvolc.ashapp.runhelper import make_dir
+#from utilvolc.ashapp.runhelper import make_dir
 from utilvolc import volcat
 
 logger = logging.getLogger(__name__)
@@ -492,7 +492,7 @@ def check_file(fname, directory, suffix=".nc", verbose=False):
     # original = open_log(directory)
     original = list(f for f in os.listdir(directory) if f.endswith(suffix))
     s = fname.rfind("/")
-    current = fname[s + 1 :]
+    current = fname[s + 1:]
     if current in original:
         # if verbose:
         #    print('File '+current+' already downloaded')
@@ -606,7 +606,7 @@ def fix_volc_name(volcname):
     if "," in volcname:
         s = volcname.find(",")
         tmp = volcname[:s]
-        tmp2 = volcname[s + 2 :]
+        tmp2 = volcname[s + 2:]
         volcname = tmp2 + "_" + tmp
     if " " in volcname:
         volcname = volcname.replace(" ", "_")
@@ -686,7 +686,7 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
             # os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
             os.system("wget -P" + data_dir + volcname + "/ " + dfile_list[i])
             s = dfile_list[i].rfind("/")
-            dfile = dfile_list[i][s + 1 :]
+            dfile = dfile_list[i][s + 1:]
             if os.path.isfile(data_dir + volcname + "/" + dfile):
                 if verbose:
                     print("File " + dfile + " downloaded to " + data_dir + volcname)
@@ -734,7 +734,7 @@ def correct_pc(data_dir, newdir="pc_corrected", daterange=None, verbose=False):
     pcfile_list = []
     for element in dfile_list:
         s = element.rfind("/")
-        fname = element[s + 1 :]
+        fname = element[s + 1:]
         pcfname = os.path.splitext(fname)[0] + "_pc.nc"
         make_pcfile = check_file(pcfname, pc_dir, verbose=verbose)
         if make_pcfile:
@@ -906,11 +906,11 @@ def make_pc_files(
     return None
 
 
-def volcplots(das_list, img_dir, pc=True, saveas=True):
+def volcplots(das_list, img_dir, saveas=True):
     """Makes time series plots of total mass, total area, MER, max height.
     Inputs:
     dfile_list: list of volcat xarray (list)
-    imd_dir: filepath of image directory (string)
+    img_dir: filepath of image directory (string)
     saveas: (boolean) default=True
     Outputs:
     Shows 4-panel figure
@@ -930,7 +930,7 @@ def volcplots(das_list, img_dir, pc=True, saveas=True):
     dset_name = das_list[0].attrs["dataset_name"]
     s = dset_name.find("b")
     e = dset_name.rfind("_")
-    begin_time = dset_name[s + 1 : e]
+    begin_time = dset_name[s + 1: e]
     # TO DO: Use volcat.get_volcat_name_df to get begin_time value
     if saveas:
         if pc:

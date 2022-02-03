@@ -20,11 +20,12 @@ Class:
          calc_basics:
          calc_roc: calculates the relative operating characteristics
          get_contingency_table: puts contingency table together for further calculations
-         table2csi: 
-         calc_csi (critical success index, aka figure of merit in space)
+         table2csi:
+         calc_csi (critical success index, aka figure of merit in space or Threat Score)
+         calc_heidke (heidke skill score)
          calc_fss (fraction skill score)
          calc_pcorr (pattern correlation coefficient)
-   
+
 Functions:
     calc_bs (brier score)
     calc_bss (brier skill score)
@@ -40,6 +41,8 @@ Functions:
 
 # 2021 Jul 2 amr added calc_weights to calculate a normalized list of weights for use with ensemble_tools.ATL function
 # 2021 Jul 28 amc added calculation of bias and fractional bias to calc_accuracy_measures method.
+# 2021 September 21 added function to calculate heidke skill score
+
 
 def test_fssA():
     """
@@ -133,10 +136,10 @@ class CalcScores:
         ----------------------------
         Functions:
         calc_accuracy_measures: calculates the scalar accuracy measures for continuous predictands
-        calc_basics:
+        calc_basics: calculates the match, arr1, arr2, arr3, and total points
         calc_roc: calculates the relative operating characteristics
         get_contingency_table: puts contingency table together for further calculations
-        table2csi: 
+        table2csi:
         calc_csi: calculates the critical success index (gilbert score), probability of detection, false alarm rate, etc.
         calc_fss: calculates the fractions skill score
         calc_pcorr: calculates pattern correlation coefficient (Pearson correlation coefficient)
@@ -145,16 +148,17 @@ class CalcScores:
         # 2021 Jun 9 amc add pixel matching option for threshold.
         # 2021 Jun 9 amc add new function calc_basics
         # 2021 Jun 9 amc add new function calc_roc
-        # 2021 Jun 9 amc add new function get_contingency_table. similar to calc_csi.
+        # 2021 Jun 9 amc add new function get_cocntingency_table. similar to calc_csi.
         # 2021 Jun 9 amc add self.arr3 which shows correctly forecast 0 values.
         # 2021 Jun 9 amc add 'd' to the csihash
         # 2021 Jun 17 amr added if statement to calculate binxra1/binxra2 if threshold == 0.
         # 2021 Jun 21 amr made get_contingency_table produce values for each ensemble member and total ensemble.
         # 2021 Jun 21 amr Added capability of calc_csi to use get_contingency_table pandas dataframe rather than dictionary.
         # 2021 Aug 9 amc  fixed bug in how self.arr3 calculated in calc_basics.py
-        #                 added  convolve method  
+        #                 added  convolve method
         #                 added  prob2det method
         #                 added sz argument to calc_roc, get_contingency_table, calc_basics
+        # 2021 Sept 21 AMR added calc_heidke function
 
         self.xra1 = xra1
         self.xra2 = xra2
@@ -162,7 +166,6 @@ class CalcScores:
         self.szra = szra
         self.area = area
         self.verbose = verbose
-
 
         self.pm_threshold = None  # threshold from pixel matching, if any.
 
@@ -212,8 +215,8 @@ class CalcScores:
         """
         scalar accuracy measures for continuous predictands.
 
-        Computes statistics over the domain where either the model or the 
-        observations is above the threshold. Does not use points where both are below threshold. 
+        Computes statistics over the domain where either the model or the
+        observations is above the threshold. Does not use points where both are below threshold.
         """
         # set below threshold values to zero.
         if threshold == 0:
@@ -240,9 +243,9 @@ class CalcScores:
         # Bias
         bias = (xra1-xra2)
         bias = bias.sum()/num
-        # See Stohl 1998 Stohl, A.; Hittenberger, M.; Wotawa, G. 
-        # Validation of the Lagrangian particle dispersion model 
-        # FLEXPART against large-scale tracer experiment data. 
+        # See Stohl 1998 Stohl, A.; Hittenberger, M.; Wotawa, G.
+        # Validation of the Lagrangian particle dispersion model
+        # FLEXPART against large-scale tracer experiment data.
         # Atmos. Environ. 1998, 32, 4245–4264.
         fracbias = 2*bias / (mean1+mean2)
 
@@ -265,8 +268,7 @@ class CalcScores:
         tframe = pd.DataFrame.from_dict(thash)
         return tframe
 
-
-    def calc_basics(self, probthresh=None, clip=False,sz=1, obsprob=False):
+    def calc_basics(self, probthresh=None, clip=False, sz=1, obsprob=False):
         """
         probthresh : int or float
         sz : int. neighborhood size to use for convolution. If 1 then no convolution.
@@ -276,21 +278,21 @@ class CalcScores:
         This can be used for creating things like ROC diagrams.
         """
 
-
         if sz == 1:
-           binxra1 = self.binxra1
-           binxra2 = self.binxra2
+            binxra1 = self.binxra1
+            binxra2 = self.binxra2
         else:
-           binxra1, binxra2 = self.convolve(sz)
-           # need observations to be 1 or 0 ?
-           # result from 1 pixel in the neighborhood being
-           # above threshold.
-           #obs_probthresh = 1/(sz*sz)
-           #if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
-           #binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
-           # use original observation array.
-           if not obsprob: binxra1 = self.binxra1
-           #   print('Setting probthresh) {}'.format(probthresh))
+            binxra1, binxra2 = self.convolve(sz)
+            # need observations to be 1 or 0 ?
+            # result from 1 pixel in the neighborhood being
+            # above threshold.
+            # obs_probthresh = 1/(sz*sz)
+            # if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
+            # binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
+            # use original observation array.
+            if not obsprob:
+                binxra1 = self.binxra1
+            #   print('Setting probthresh) {}'.format(probthresh))
 
         if clip:
             # remove all x or y rows that are all 0's.
@@ -300,14 +302,14 @@ class CalcScores:
             temp = temp.dropna(dim='y', how='all')
             binxra2 = temp.isel(temp=1).fillna(0)
             binxra1 = temp.isel(temp=0).fillna(0)
-        #else:
+        # else:
         #    binxra1 = self.binxra1
         if isinstance(probthresh, (int, float)):
             # convert probabilistic forecast to deterministic using threshold.
             binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
-            #binxra1 = xr.where(binxra1 >= probthresh, 1.0, 0)
-        #else:
-        #else:
+            # binxra1 = xr.where(binxra1 >= probthresh, 1.0, 0)
+        # else:
+        # else:
         #    binxra2 = self.binxra2
         # both have above threshold pixels.
         self.match = binxra1 * binxra2
@@ -318,12 +320,12 @@ class CalcScores:
         # correct no forecasts.
         # add the matched, obs only, model only.
         # 1's where these are 0.
-        # 
+        #
         allra = self.arr1+self.match+self.arr2
-        self.arr3 = xr.where(allra>0, 1-allra, 1)
+        self.arr3 = xr.where(allra > 0, 1-allra, 1)
         self.totalpts = binxra1.shape[0] * binxra1.shape[1]
 
-    def prob2det(self, sz=1, clip=True, multi=False, problist = np.arange(0.05,1,0.10)):
+    def prob2det(self, sz=1, clip=True, multi=False, problist=np.arange(0.05, 1, 0.10)):
         # See figure 8.2 in Wilks.
         # calculate 2x2 contingency table statistics using various
         # probability thresholds.
@@ -333,25 +335,27 @@ class CalcScores:
         rval : pandas DataFrame
         """
         for iii, prob in enumerate(problist):
-            #self.calc_basics(prob, clip=clip)
-            tframe0 = self.get_contingency_table(sz=sz,probthresh=prob, clip=clip, multi=False)
-            tframe =  self.table2csi(tframe0)
+            # self.calc_basics(prob, clip=clip)
+            tframe0 = self.get_contingency_table(sz=sz, probthresh=prob, clip=clip, multi=False)
+            tframe = self.table2csi(tframe0)
             tframe['prob'] = prob
-            if iii==0: rval = tframe
-            else: rval = pd.concat([rval,tframe], axis=0)
-        tframe0 = self.get_contingency_table(sz=sz,probthresh=None, clip=clip, multi=False)
-        tframe =  self.table2csi(tframe0)
+            if iii == 0:
+                rval = tframe
+            else:
+                rval = pd.concat([rval, tframe], axis=0)
+        tframe0 = self.get_contingency_table(sz=sz, probthresh=None, clip=clip, multi=False)
+        tframe = self.table2csi(tframe0)
         tframe['prob'] = 0
-        rval = pd.concat([rval,tframe], axis=0)
+        rval = pd.concat([rval, tframe], axis=0)
         return rval
 
-    def calc_precision_recall(self, clip=True, multi=False, problist = np.arange(0,1.05,0.05),sz=1):
+    def calc_precision_recall(self, clip=True, multi=False, problist=np.arange(0, 1.05, 0.05), sz=1):
         xlist = []
         ylist = []
         for prob in problist:
-            #self.calc_basics(prob, clip=clip)
-            tframe0 = self.get_contingency_table(sz=sz,probthresh=prob, clip=clip, multi=False)
-            tframe =  self.table2csi(tframe0)
+            # self.calc_basics(prob, clip=clip)
+            tframe0 = self.get_contingency_table(sz=sz, probthresh=prob, clip=clip, multi=False)
+            tframe = self.table2csi(tframe0)
             ylist.append(tframe['precision'].values[0])
             xlist.append(tframe['POD'].values[0])
         baseline = tframe['baseline']
@@ -360,9 +364,9 @@ class CalcScores:
         ylist2.reverse()
         xlist2.reverse()
         area = scipy.integrate.trapz(y=ylist2, x=xlist2)
-        return xlist, ylist, baseline,area
+        return xlist, ylist, baseline, area
 
-    def calc_roc(self, clip=True, multi=False, problist = np.arange(0.05,1,0.10),sz=1):
+    def calc_roc(self, clip=True, multi=False, problist=np.arange(0.05, 1, 0.10), sz=1):
         """
         For probabilistic forecasts.
         calculate the ROC (relative operating characteristic)
@@ -393,13 +397,13 @@ class CalcScores:
         # calculate False Alarm Rate (x axis) and
         # Hit Rate (y axis) for each probability threshold.
         for prob in problist:
-            #self.calc_basics(prob, clip=clip)
-            tframe0 = self.get_contingency_table(sz=sz,probthresh=prob, clip=clip, multi=False)
-            tframe =  self.table2csi(tframe0)
+            # self.calc_basics(prob, clip=clip)
+            tframe0 = self.get_contingency_table(sz=sz, probthresh=prob, clip=clip, multi=False)
+            tframe = self.table2csi(tframe0)
         # bias. comparison of average forecast with average observation.
-            #tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
-            #tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
-            #csihash = self.calc_csi()
+            # tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
+            # tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
+            # csihash = self.calc_csi()
             # xlist.append(csihash['F'])
             # ylist.append(csihash['POD'])
             xlist.append(tframe['F'].values)
@@ -411,7 +415,7 @@ class CalcScores:
         area = scipy.integrate.trapz(y=ylist, x=xlist)
         return xlist, ylist, area[0]
 
-    def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False,sz=1):
+    def get_contingency_table(self, probthresh=None, clip=False, multi=False, verbose=False, sz=1):
         """
         sz : int. neighborhood size to use for convolution. If 1 then no convolution.
         """
@@ -425,8 +429,8 @@ class CalcScores:
         total = aval+cval+bval+dval
         total2 = self.arr3.shape[0]*self.arr3.shape[1]
         if np.abs(total - total2) > 0.0001:
-           print('WARNING: error in get_contingency_table check {} {} {}'.format(total,total2,total-total2))
-           print('a:{} b:{} c:{} d:{}'.format(aval,bval,cval,dval))
+            print('WARNING: error in get_contingency_table check {} {} {}'.format(total, total2, total-total2))
+            print('a:{} b:{} c:{} d:{}'.format(aval, bval, cval, dval))
 
         if verbose:
             print('a(hits) forecast yes, obs yes : {}'.format(aval))
@@ -449,7 +453,7 @@ class CalcScores:
                     arr3 = self.arr3.transpose(tval, 'y', 'x')
                     for i in range(num):
                         element = str(self.binxra2[tval][i].values)
-                        aval = float(match[i, :, :].sum().values)
+                        aval = float(match.sum().values)
                         cval = float(arr1[i, :, :].sum().values)
                         bval = float(arr2[i, :, :].sum().values)
                         dval = float(arr3[i, :, :].sum().values)
@@ -467,31 +471,29 @@ class CalcScores:
             tframe['pm_threshold'] = self.pm_threshold
         return tframe
 
-
     def table2csi(self, tframe):
         def precision(row):
-            if row['a'] == 0 and row['b'] ==0:
-               return 0
+            if row['a'] == 0 and row['b'] == 0:
+                return 0
             else:
-               return row['a']/(row['a']+row['b'])
-
+                return row['a']/(row['a']+row['b'])
 
         def pod(row):
-            if row['a'] == 0 and row['c'] ==0:
-               return 0
+            if row['a'] == 0 and row['c'] == 0:
+                return 0
             else:
-               return row['a']/(row['a']+row['c'])
+                return row['a']/(row['a']+row['c'])
 
         def far(row):
             # if probability threshold is high then no model data
             # may meet the criteria (e.g. 80% may never all agree).
             # then 'b' will be 0.
-            # Then 'a' will also be 0. 
+            # Then 'a' will also be 0.
             # FAR should be 0 in this case.
-            if row['a'] == 0 and row['b'] ==0:
-               return 0
+            if row['a'] == 0 and row['b'] == 0:
+                return 0
             else:
-               return row['b']/(row['a']+row['b'])
+                return row['b']/(row['a']+row['b'])
 
         def calcB(row):
             if row['a'] + row['c'] == 0:
@@ -528,10 +530,10 @@ class CalcScores:
         #tframe['B'] = tframe.apply(lambda row: (row['a']+row['b']) / (row['a'] + row['c']), axis=1)
         # false alarm ratio (p 310 Wilks) b/(a+b)
         # proportion of positive forecasts which were wrong.
-        tframe['FAR'] = tframe.apply(lambda row: far(row),axis=1)
-        tframe['POD'] = tframe.apply(lambda row: pod(row),axis=1)
+        tframe['FAR'] = tframe.apply(lambda row: far(row), axis=1)
+        tframe['POD'] = tframe.apply(lambda row: pod(row), axis=1)
         tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
-        #tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
+        # tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
         tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'], axis=1)
        
         tframe['aref'] = tframe.apply(lambda row: calcaref(row), axis=1)
@@ -542,13 +544,15 @@ class CalcScores:
         tframe['area_obs'] = tframe.apply(lambda row: row['a'] + row['c'], axis=1)
         tframe['area_clear_obs'] = tframe.apply(lambda row: row['b'] + row['d'], axis=1)
         tframe['area_clear_fc'] = tframe.apply(lambda row: row['c'] + row['d'], axis=1)
-        tframe['precision'] = tframe.apply(lambda row: precision(row),axis=1)
+        tframe['precision'] = tframe.apply(lambda row: precision(row), axis=1)
         # this is baseline value for the precision-recall curve.
-        tframe['baseline'] = tframe.apply(lambda row: (row['a'] + row['c'])/(row['a']+row['c']+row['b']+row['d']), axis=1)
+        tframe['baseline'] = tframe.apply(lambda row: (row['a'] + row['c']) /
+                                          (row['a']+row['c']+row['b']+row['d']), axis=1)
         return tframe
 
     def calc_csi(self, verbose=False):
         """ CSI equation: hits / (hits + misses + false alarms) - aka Gilbert Score
+        or Threat Score
         Inputs:
         match: hits
         arr1: misses
@@ -562,9 +566,9 @@ class CalcScores:
         csihash: Dictionary of values pertaining to Critical Success Index calculation - can output dataframe if desired
         contains: hits, misses, false_alarms, CSI, POD, FAR
         """
-        area = np.array(self.area,dtype='object')
+        area = np.array(self.area, dtype='object')
         # Getting contingency table from get_contingency_table()
-        #tframe = self.get_contingency_table(multi=multi)
+        # tframe = self.get_contingency_table(multi=multi)
         csihash = {}
         # Assigning a, b, and c arrays to csihash dictionary
         # Made these single values, rather than arrays - AMR 6/4/2021
@@ -624,38 +628,44 @@ class CalcScores:
                       'GSS  : {:.3f}'.format(csihash['GSS']))
         return csihash
 
-    def convolve(self,sz):
-        #filter_array = np.ones((sz, sz))
-        #filter_array = filter_array * (1/np.sum(filter_array))
-        #conv_array = np.shape(filter_array)
+    def calc_heidke(self):
+        """ Calculates the Heidke Skill Score from the 2x2 contingency table
+        HSS = [2(ad-bc)] / [(a+c)(c+d)+(a+b)(b+d)]
+
+        """
+
+    def convolve(self, sz):
+        # filter_array = np.ones((sz, sz))
+        # filter_array = filter_array * (1/np.sum(filter_array))
+        # conv_array = np.shape(filter_array)
         mp = int(np.floor(sz/2.0)+1)
-        #arr1 = convolve2d(self.binxra1, filter_array, mode='same', fillvalue=0, boundary='fill')
-        #arr2 = convolve2d(self.binxra2, filter_array, mode='same', fillvalue=0, boundary='fill')
-        arr1 = self.binxra1.rolling(y=sz,center=True,min_periods=mp).mean()
-        arr1 = arr1.rolling(x=sz,center=True,min_periods=mp).mean()
+        # arr1 = convolve2d(self.binxra1, filter_array, mode='same', fillvalue=0, boundary='fill')
+        # arr2 = convolve2d(self.binxra2, filter_array, mode='same', fillvalue=0, boundary='fill')
+        arr1 = self.binxra1.rolling(y=sz, center=True, min_periods=mp).mean()
+        arr1 = arr1.rolling(x=sz, center=True, min_periods=mp).mean()
 
-        arr2 = self.binxra2.rolling(y=sz,center=True,min_periods=mp).mean()
-        arr2 = arr2.rolling(x=sz,center=True,min_periods=mp).mean()
+        arr2 = self.binxra2.rolling(y=sz, center=True, min_periods=mp).mean()
+        arr2 = arr2.rolling(x=sz, center=True, min_periods=mp).mean()
 
-        return arr1, arr2  
- 
+        return arr1, arr2
+
     def calc_fss(self, szra=None, makeplots=False):
-        """Calculates the fraction skill score (fss)
-        See Robers and Lean (2008) Monthly Weather Review
-        and Schwartz et al (2010) Weather and Forecasting
+        """Calculates the fraction skill score(fss)
+        See Robers and Lean(2008) Monthly Weather Review
+        and Schwartz et al(2010) Weather and Forecasting
         for more information.
 
-        Can plot fractions if desired (double check calculations)
-        szra: a list of the number of pixels (neightborhood length) to use
+        Can plot fractions if desired(double check calculations)
+        szra: a list of the number of pixels(neightborhood length) to use
         in fractions calculation default is to use 1, 3, 5, 7 pixels size squares
         makeplots: boolean
 
-        Note: according to Roberts 2008, the FSS should appproach AFSS as n-> 2N-1 where N is
-        the domain size. It does. However the FSS at n=N can be larger than this value
+        Note: according to Roberts 2008, the FSS should appproach AFSS as n -> 2N-1 where N is
+        the domain size. It does. However the FSS at n = N can be larger than this value
         because of the inclusion of the zero padding at the edges. See the test_fssA function for an example.
 
         Return
-        df : pandas dataframe """
+        df: pandas dataframe """
         # 2021 Jun 3 amc added random, uniform and afss to dataframe.
 
         # Creating FSS dictionary
@@ -745,10 +755,10 @@ class CalcScores:
         """ Calculates Pattern Correlation between two arrays
         binxra1 and binxra2 need to be on the same grid.
         See monetio.remap_nearest or monetio.remap_xesmf to remap arrays.
-        Pattern Correlation (uncentered) = (binxra1 * binxra2) / sqrt((binxra1^2)*(binxra2^2))
-        Pattern Correlation (centered) = ((binxra1 - arr1)(binxra2 - arr2)) / sqrt(((binxra1-arr1)^2) * ((binxra2 - arr2)^2))
+        Pattern Correlation(uncentered) = (binxra1 * binxra2) / sqrt((binxra1 ^ 2)*(binxra2 ^ 2))
+        Pattern Correlation(centered) = ((binxra1 - arr1)(binxra2 - arr2)) / sqrt(((binxra1-arr1) ^ 2) * ((binxra2 - arr2) ^ 2))
         Outputs:
-        pcorr, pcorruncent: pattern correlation (centered), pattern correlation (uncentered) """
+        pcorr, pcorruncent: pattern correlation(centered), pattern correlation(uncentered) """
 
         # Space averaged values
         arr1avg = (self.arr1.sum() + self.match.sum()) / float(self.totalpts)
@@ -776,12 +786,12 @@ class CalcScores:
 def calc_bs(xra1, xra2):
     """
     Calculating the Brier Score
-    BS = 1/N (sum of (probability - reference)^2)
+    BS = 1/N(sum of(probability - reference) ^ 2)
     Inputs:
-    xra1: binary reference or observation array (xarray.DataArray)
-    xra2: probability (or binary) forecast array (values from 0 to 1) (xarray.DataArray)
+    xra1: binary reference or observation array(xarray.DataArray)
+    xra2: probability ( or binary) forecast array (values from 0 to 1) (xarray.DataArray)
     Outputs:
-    BS: Brier score (float)
+    BS: Brier score(float)
     """
     # tmp = probability - actual
     tmp = xra2 - xra1
@@ -798,10 +808,10 @@ def calc_bss(BS, BSref):
     Calculating the Brier Skill Score
     BSS = 1 - BS/BSref
     Inputs:
-         BS: Brier Score of the probabilistic forecast compared to observations (float)
-         BSref: Brier Score of probabilistic forecast compared to reference forecast (float)
+         BS: Brier Score of the probabilistic forecast compared to observations(float)
+         BSref: Brier Score of probabilistic forecast compared to reference forecast(float)
     Outputs:
-         BSS: Brier Skill Score of probabilistic forecast (float)
+         BSS: Brier Skill Score of probabilistic forecast(float)
     """
     BSS = 1 - (BS / BSref)
     return BSS
@@ -812,108 +822,150 @@ def calc_weights(scores, types='BS'):
     Calculating the weighting scheme based on brier score or pattern correlation values.
     The scores xarray should be 1 dimension, either 'ens' or 'source' and
     should be for the desired applied threshold level.
+
+    **Need to create weight values between 0 and 1 for all members based on rank
+
     Inputs:
-        scores: scores for each ensemble member (xarray) from statistics netcdf
-        types: 9string) 'BS' for Brier Score or 'PC' for Pattern Correlation
+        scores: scores for each ensemble member(xarray) from statistics netcdf
+        types: 9string) 'BS' for Brier Score or 'PC' for Pattern Correlation, 'time' is
+        for time weighting
     Output:
         wgtscore: normalized list of weights to apply to hysplit ensemble
     """
-    a = 0
-    scorelist = []
-    while a < len(scores):
-        if types == 'BS':
-            weight = 1-scores.values[a]
-        if types == 'PC':
-            weight = scores.values[a]
-        scorelist.append(weight)
-        a += 1
-    wgtscore = scorelist / sum(scorelist)
+    tmp = 1/len(scores.values)
+    if types == 'BS':
+        # For BS, lower values are better
+        wgts = 1-scores.values
+        ranklist = np.argsort(wgts)
+    if types == 'PC':
+        # For PC, higher values are better
+        ranklist = np.argsort(scores.values)
+    if types == 'time':
+        ranklist = np.arange(len(scores.values))
+    ranklist = ranklist + 1  # Removes 0 from ranklist
+    ranks = ranklist * tmp
+    wgtscore = ranks / sum(ranks)
     return wgtscore
 
 
-def calc_weightsBS(xra, scores):
+def calc_weightsT(xra, dim='source'):
+    """
+    Calculating the weighting scheme based on initialization time.
+    Members initialized more recently are weighted higher than
+    members initialized much earlier.
+    Inputs:
+        xra: binary array of ensemble members
+        dim: dimension to determine time weighting along
+    """
+    ranklist = np.arange(len(xra[dim].values))
+    ranklist = ranklist + 1  # Removes 0 from ranklist
+    tmp = 1/len(xra[dim].values)
+    ranks = ranklist * tmp
+    wgtscore = ranks / sum(ranks)  # Normalize weights
+    tmp = []
+    if len(xra[dim]) == len(wgtscore):
+        a = 0
+        while a < len(xra[dim]):
+            t = xra.isel({dim: [a]}) * wgtscore[a]
+            tmp.append(t)
+            a += 1
+        xra2 = xr.concat(tmp, dim=dim)
+        xraprob = xra2.sum(dim=dim)
+    else:
+        print('xarray and weights are not the same size')
+    return xraprob
+
+
+def calc_weightsBS(xra, scores, dim='source'):
     """
     Calculating the weighting scheme based on brier score values.
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
     Inputs:
-        xra: binary xarray of ensemble members (source, x, y)
-        scores: scores for each ensemble member (xarray) from statistics netcdf
+        xra: binary xarray of ensemble members(source, x, y)
+        scores: scores for each ensemble member(xarray) from statistics netcdf
+        dim: ensemble dimension 'ens' or 'source' (string)
     Output:
-        xraprob: ensemble relative frequency (xarray DataArray)
+        xraprob: ensemble relative frequency(xarray DataArray)
     """
-    a = 0
-    W = []
-    xra2 = xra
-    while a < len(xra.source):
-        weight = 1-scores.values[a]
-        W.append(weight)
-        xra2[a, :, :] = xra[a, :, :] * weight
-        a += 1
-
-    xraprob = xra2.sum(dim='source') / sum(W)
+    tmp = []
+    if len(xra[dim]) == len(scores):
+        wgtscore = calc_weights(scores, types='BS')
+        a = 0
+        while a < len(xra[dim]):
+            t = xra.isel({dim: [a]}) * wgtscore[a]
+            tmp.append(t)
+            a += 1
+        xra2 = xr.concat(tmp, dim=dim)
+        xraprob = xra2.sum(dim=dim)  # / sum(wgtscore)
+    else:
+        print('xarray and scores are not the same size')
     return xraprob
 
 
-def calc_weightsPC(xra, scores):
+def calc_weightsPC(xra, scores, dim='source'):
     """
     Calculating the weighting scheme based on pattern correlation values.
     Note, xra and scores should have the same source dimension.
     The scores should be for the correct applied threshold level.
     Inputs:
-        xra: binary xarray of ensemble members (source, x, y)
-        scores: scores for each ensemble member (xarray DataArray) from statistics netcdf
+        xra: binary xarray of ensemble members(source, x, y)
+        scores: scores for each ensemble member(xarray DataArray) from statistics netcdf
+        dim: dimension of ensemble 'ens' or 'source' (string)
     Output:
-        xraprob: ensemble relative frequency (xarray DataArray)
+        xraprob: ensemble relative frequency(xarray DataArray)
     """
-    a = 0
-    W = []
-    xra2 = xra
-    while a < len(xra.source):
-        weight = scores.values[a]
-        W.append(weight)
-        xra2[a, :, :] = xra[a, :, :] * weight
-        a += 1
-
-    xraprob = xra2.sum(dim='source') / sum(W)
+    tmp = []
+    if len(xra[dim]) == len(scores):
+        wgtscore = calc_weights(scores, types='PC')
+        a = 0
+        while a < len(xra[dim]):
+            t = xra.isel({dim: [a]}) * wgtscore[a]
+            tmp.append(t)
+            a += 1
+        xra2 = xr.concat(tmp, dim=dim)
+        xraprob = xra2.sum(dim=dim) / sum(wgtscore)
+    else:
+        print('xarray and scores are not the same size')
     return xraprob
 
-def plot_probthresh(tframe, ax=None,clr='--ko',label='',plotprob=False):
-     
+
+def plot_probthresh(tframe, ax=None, clr='--ko', label='', plotprob=False):
     if not ax:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
     ax2 = ax.twinx()
     xval = tframe['probthresh']
-    clrs = ['-r.','-k.','-g.','-b.','-c.']
-    for iii, yval in enumerate(['POD','FAR','CSI','F']):
-        ax.plot(xval,tframe[yval],clrs[iii],label=yval)
-    ax2.plot(xval,tframe['B'],'-c.',label='Bias')
-    #ax.plot(xlist, ylist, clr, label=label)
-    #ax.plot([0, 1], [0, 1], '-b')
+    clrs = ['-r.', '-k.', '-g.', '-b.', '-c.']
+    for iii, yval in enumerate(['POD', 'FAR', 'CSI', 'F']):
+        ax.plot(xval, tframe[yval], clrs[iii], label=yval)
+    ax2.plot(xval, tframe['B'], '-c.', label='Bias')
+    # ax.plot(xlist, ylist, clr, label=label)
+    # ax.plot([0, 1], [0, 1], '-b')
     ax.set_xlabel('Probability threshold')
     handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles,labels)
+    ax.legend(handles, labels)
     handles, labels = ax2.get_legend_handles_labels()
-    ax2.legend(handles,labels,loc='upper center')
-    #ax.set_ylabel('Hit Rate')
+    ax2.legend(handles, labels, loc='upper center')
+    # ax.set_ylabel('Hit Rate')
     ax.set_ylabel('POD, FAR, CSI')
     ax2.set_ylabel('Bias')
-    ax2.plot([0,1],[1,1],'-k',LineWidth=4,alpha=0.3)
+    ax2.plot([0, 1], [1, 1], '-k', LineWidth=4, alpha=0.3)
     prob = tframe[tframe['probthresh'].isnull()].reset_index()
 
     # Not sure what the interpretation of this should be?
     if not prob.empty and plotprob:
-        for iii, yval in enumerate(['POD','FAR','CSI']):
-            yvv = [prob[yval],prob[yval]]
+        for iii, yval in enumerate(['POD', 'FAR', 'CSI']):
+            yvv = [prob[yval], prob[yval]]
             xvv = [xval.values[0], xval.values[-2]]
-            ax.plot(xvv,yvv,clrs[iii].replace('.','').replace('-','--'),label=yval)
-        yvv = [prob['B'],prob['B']]
-        ax2.plot(xvv,yvv,'--c',label='Bias')
-           
+            ax.plot(xvv, yvv, clrs[iii].replace('.', '').replace('-', '--'), label=yval)
+        yvv = [prob['B'], prob['B']]
+        ax2.plot(xvv, yvv, '--c', label='Bias')
+
     return ax
 
-def plot_roc(xlist, ylist, ax=None,clr='--ko',label=''):
+
+def plot_roc(xlist, ylist, ax=None, clr='--ko', label=''):
     if not ax:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
@@ -922,13 +974,13 @@ def plot_roc(xlist, ylist, ax=None,clr='--ko',label=''):
     ax.set_xlabel('False Alarm Rate')
     ax.set_ylabel('Hit Rate')
 
-def plot_precision_recall(xlist, ylist, baseline, ax=None,clr='--ko',label=''):
+
+def plot_precision_recall(xlist, ylist, baseline, ax=None, clr='--ko', label=''):
     if not ax:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
     ax.plot(xlist, ylist, clr, label=label)
     if baseline:
         ax.plot(xlist[0],xlist[-1], [baseline,baseline], clr.replace('o',''), LineWidth=3, alpha=0.5)
-    #ax.plot([0, 1], [0, 1], '-b')
     ax.set_ylabel('Precision $p(o_1|y_1)$')
     ax.set_xlabel('POD $p(y_1|o_1)$')
