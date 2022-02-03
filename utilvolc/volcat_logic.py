@@ -6,7 +6,7 @@ import os
 from glob import glob
 from utilvolc.ashapp.runhelper import Helper
 from utilvolc.ashapp.runhelper import list_dirs
-#from utilvolc.ashapp.runhelper import make_dir
+from utilvolc.ashapp.runhelper import make_dir
 from utilvolc import volcat
 
 logger = logging.getLogger(__name__)
