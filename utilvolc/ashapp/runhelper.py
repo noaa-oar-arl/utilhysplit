@@ -50,8 +50,26 @@ class ConcplotColors:
     def get(self, color):
         return self.colorhash[color]
 
+
+def make_dir(data_dir, newdir="pc_corrected", verbose=False):
+    """Create new directory if it does not exist.
+    Inputs:
+    datadir: Directory in which to create new directory (string)
+    newdir: name of new directory (string)
+    """
+    # Make sure data_dir ends with '/'
+    new_data_dir = os.path.join(data_dir, newdir)
+    # Go in to given directory, create create new directory if not already there
+    if not os.path.exists(new_data_dir):
+        orig_umask = os.umask(0)
+        os.mkdir(new_data_dir, mode=0o775)
+        os.umask(orig_umask)
+        if verbose:
+            logger.info("Directory created {}".format(new_data_dir))
+
+
 def list_dirs(data_dir):
-    """ Lists subdirectories within give directory
+    """Lists subdirectories within give directory
     Inputs:
     data_dir: directory path of parent directory (string)
     Outputs:
@@ -59,7 +77,7 @@ def list_dirs(data_dir):
     """
     # scan directory works with python 3.5 and later.
     dirlist = os.scandir(data_dir)
-    newlist = [volc.path.split('/')[-1] for volc in dirlist if volc.is_dir()]
+    newlist = [volc.path.split("/")[-1] for volc in dirlist if volc.is_dir()]
     return sorted(newlist)
 
 
@@ -83,7 +101,7 @@ class Helper:
         """
         cmd : string
         """
-        #p = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
+        # p = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
         p = subprocess.Popen(cmd)
         stdoutdata, stderrdata = p.communicate()
         if stdoutdata is not None:
@@ -94,7 +112,7 @@ class Helper:
     def remove(f):
         """
         f : list of strings or string.
-        remove file or files in list. 
+        remove file or files in list.
         """
         if isinstance(f, list):
             for g in f:
@@ -108,7 +126,7 @@ class Helper:
         """
         a : string.
         b : string.
-        move file a to b. 
+        move file a to b.
         """
         if os.path.exists(a):
             shutil.move(a, b)
@@ -117,7 +135,7 @@ class Helper:
         """
         a : string.
         b : string.
-        move file a to b. 
+        move file a to b.
         """
         if os.path.exists(a):
             shutil.copy(a, b)
@@ -128,31 +146,33 @@ class Helper:
         else:
             pathlib.Path(b).touch()
 
-def make_inputs_from_file(wdir, config_file='ash_config.txt'):
+
+def make_inputs_from_file(wdir, config_file="ash_config.txt"):
     jobsetup = JobSetUp()
     # NameList class reads files with configuration key=value
     # into a dictionary.
-    config = NameList(fname=config_file,working_directory=wdir)
+    config = NameList(fname=config_file, working_directory=wdir)
     config.read()
-  
+
     # convert dates to datetime objects.
-    temp = list(map(int,config.nlist['start_date'].split(":")))
-    config.nlist['start_date'] = datetime.datetime(temp[0],temp[1],temp[2], temp[3])
+    temp = list(map(int, config.nlist["start_date"].split(":")))
+    config.nlist["start_date"] = datetime.datetime(temp[0], temp[1], temp[2], temp[3])
 
     # convert values to floats where possible.
     for key in config.nlist.keys():
         try:
-           val = float(config.nlist[key])
+            val = float(config.nlist[key])
         except:
-           val = config.nlist[key]
+            val = config.nlist[key]
         # get rid of any white spaces in strings
         config.nlist[key] = val
 
     jobsetup.inp = config.nlist
     jobsetup.add_plotting_options(config.nlist)
     # puts in defaults if not in the config.nlist
-    jobsetup.add_optional_params(config.nlist) 
+    jobsetup.add_optional_params(config.nlist)
     return jobsetup
+
 
 class JobSetUp:
     def __init__(self):
@@ -171,7 +191,7 @@ class JobSetUp:
         default : value to use if key not found in inp.
         """
         if astr in inp.keys():
-            self.inp[astr] = inp[astr] 
+            self.inp[astr] = inp[astr]
         else:
             self.inp[astr] = default
 
@@ -189,23 +209,24 @@ class JobSetUp:
         # self.inp['eflag'] = inp['eruptionSize']
         self.inp["polygon"] = None  # input polygon points to start from.
 
-    def add_optional_params(self,inp=None):
+    def add_optional_params(self, inp=None):
         # area emission is used for inverse modeling.
-        self.add_input(inp,'area',default=1)
-        #self.add_input(inp,'rate',default=1)
+        self.add_input(inp, "area", default=1)
+        # self.add_input(inp,'rate',default=1)
 
-    def add_inverse_params(self,inp=None):
+    def add_inverse_params(self, inp=None):
         # time resolution for each inverse modeling run.
         # in hours. default 1 hour.
-        if not inp: inp={}
-        #self.add_input(inp,'timeres',0.5)
-        #self.add_input(inp,'rate',default=2)
-        self.add_input(inp,'timeres',1)
-        self.add_input(inp,'rate',default=1)
+        if not inp:
+            inp = {}
+        # self.add_input(inp,'timeres',0.5)
+        # self.add_input(inp,'rate',default=2)
+        self.add_input(inp, "timeres", 1)
+        self.add_input(inp, "rate", default=1)
         # vertical resolution for each inverse modeling run.
         # in m. default 1000m.
-        self.add_input(inp,'inv_vertical_resolution',1000)
-        #self.add_input(inp,'inv_vertical_resolution',500)
+        self.add_input(inp, "inv_vertical_resolution", 1000)
+        # self.add_input(inp,'inv_vertical_resolution',500)
 
     def add_run_params(self, inp):
         # inputs from web form.
@@ -282,7 +303,7 @@ class JobSetUp:
         self.inp["zip_compression_level"] = 3
 
     def make_test_inputs(self):
-        #vname = "Kilauea"
+        # vname = "Kilauea"
         vname = "bezy"
         self.inp["owner"] = "A. Person"
         self.inp["top"] = 20000
@@ -293,42 +314,42 @@ class JobSetUp:
         self.inp["start_date"] = datetime.datetime(
             testdate.year, testdate.month, testdate.day, testdate.hour, testminutes
         )
-        if vname == 'inverse':
-           self.inp["durationOfSimulation"] = 12
-           self.inp["top"] = 10000
-           testminutes = 0
-           self.inp["start_date"] = datetime.datetime(
-               testdate.year, testdate.month, testdate.day, testdate.hour, testminutes
-           )
-           vname='douglas'
-           
+        if vname == "inverse":
+            self.inp["durationOfSimulation"] = 12
+            self.inp["top"] = 10000
+            testminutes = 0
+            self.inp["start_date"] = datetime.datetime(
+                testdate.year, testdate.month, testdate.day, testdate.hour, testminutes
+            )
+            vname = "douglas"
+
         self.inp["emissionHours"] = 4
         self.inp["meteorologicalData"] = "GFS0p25"
         self.inp["EruptionSize"] = 0
-        if vname.lower()=='bezy':
+        if vname.lower() == "bezy":
             # bezy data starts at 10/21 at 20:40
             #      ends at 10/22 at 21:10
             self.inp["meteorologicalData"] = "GFS0p25"
             self.inp["VolcanoName"] = "Bezymianny"
-            self.inp['start_date'] = datetime.datetime(2020,10,21,19)
+            self.inp["start_date"] = datetime.datetime(2020, 10, 21, 19)
             self.inp["durationOfSimulation"] = 36
             self.inp["emissionHours"] = 24
             self.inp["top"] = 15000
             self.inp["bottom"] = 9455
             self.inp["latitude"] = 55.978
             self.inp["longitude"] = 160.587
-              
-        if vname.lower()=='raikoke':
+
+        if vname.lower() == "raikoke":
             self.inp["meteorologicalData"] = "GFS0p25"
             self.inp["VolcanoName"] = "Raikoke"
-            self.inp['start_date'] = datetime.datetime(2019,6,21,18)
+            self.inp["start_date"] = datetime.datetime(2019, 6, 21, 18)
             self.inp["durationOfSimulation"] = 24
             self.inp["emissionHours"] = 12
             self.inp["top"] = 15000
             self.inp["bottom"] = 1000
             self.inp["latitude"] = 48.292
             self.inp["longitude"] = 153.25
-              
+
         if vname.lower() == "douglas":
             self.inp["meteorologicalData"] = "NAMHAK"
             self.inp["VolcanoName"] = "Douglas"
@@ -435,9 +456,9 @@ class JobFileNameComposer:
 
     def get_cdump_filename(self, stage=0):
         if stage != 0:
-            if isinstance(stage,int):
+            if isinstance(stage, int):
                 return "{0!s}_cdump.{1:03d}".format(self.job, stage)
-            elif isinstance(stage,str):
+            elif isinstance(stage, str):
                 return "{}_cdump.{}".format(self.job, stage)
             else:
                 return "{}_cdump.{}".format(self.job, stage)
@@ -633,20 +654,19 @@ class JobFileNameComposer:
 
         return files
 
-class AshDINameComposer(JobFileNameComposer):
 
-    def get_cdump_filename(self, stage='EMIT_0'):
+class AshDINameComposer(JobFileNameComposer):
+    def get_cdump_filename(self, stage="EMIT_0"):
         stage = str(stage)
-        cdumpfilename = stage.replace('EMIT','cdump')
+        cdumpfilename = stage.replace("EMIT", "cdump")
         return cdumpfilename
 
-    def get_control_filename(self, stage='EMIT_0'):
+    def get_control_filename(self, stage="EMIT_0"):
         stage = str(stage)
-        controlfilename = stage.replace('EMIT_','CONTROL.')
+        controlfilename = stage.replace("EMIT_", "CONTROL.")
         return controlfilename
-
 
     def get_setup_filename(self, stage=0):
         stage = str(stage)
-        filename = stage.replace('EMIT_','SETUP.')
+        filename = stage.replace("EMIT_", "SETUP.")
         return filename
