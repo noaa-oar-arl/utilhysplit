@@ -493,10 +493,39 @@ class CalcScores:
             else:
                return row['b']/(row['a']+row['b'])
 
+        def calcB(row):
+            if row['a'] + row['c'] == 0:
+               return np.nan
+            else:
+               return (row['a']+row['b'])/(row['a']+row['c'])
+
+        def calcCSI(row):
+            if row['a'] + row['b'] + row['c'] == 0:
+               return np.nan
+            else:
+               return (row['a'])/(row['a']+row['b']+row['c'])
+
+        def calcaref(row):
+            if row['N'] == 0:
+               return np.nan
+            else:
+               return (row['a'] + row['b'])*(row['a']+row['c'])/row['N']
+        
+        def calcGSS(row):
+            if np.isnan(row['aref']): 
+               return np.nan
+            elif (row['a'] - row['aref'] + row['b'] + row['c']) == 0:
+               return np.nan
+            else:
+               return (row['a'] - row['aref']) / \
+                      (row['a'] - row['aref'] + row['b'] + row['c'])
+
         # bias. comparison of average forecast with average observation.
         # same as frequency of forecast / frequency of observation.
-        tframe['B'] = tframe.apply(lambda row: (row['a']+row['b']) / (row['a'] + row['c']), axis=1)
-        tframe['CSI'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['b'] + row['c']), axis=1)
+        
+        tframe['B'] = tframe.apply(lambda row: calcB(row), axis=1)
+        tframe['CSI'] = tframe.apply(lambda row: calcCSI(row), axis=1)
+        #tframe['B'] = tframe.apply(lambda row: (row['a']+row['b']) / (row['a'] + row['c']), axis=1)
         # false alarm ratio (p 310 Wilks) b/(a+b)
         # proportion of positive forecasts which were wrong.
         tframe['FAR'] = tframe.apply(lambda row: far(row),axis=1)
@@ -504,9 +533,11 @@ class CalcScores:
         tframe['F'] = tframe.apply(lambda row: row['b'] / (row['b'] + row['d']), axis=1)
         #tframe['POD'] = tframe.apply(lambda row: row['a'] / (row['a'] + row['c']), axis=1)
         tframe['N'] = tframe.apply(lambda row: row['a'] + row['b'] + row['c'] + row['d'], axis=1)
-        tframe['aref'] = tframe.apply(lambda row: (row['a'] + row['b'])*(row['a']+row['c'])/row['N'], axis=1)
-        tframe['GSS'] = tframe.apply(lambda row: (row['a'] - row['aref']) /
-                                     (row['a'] - row['aref'] + row['b'] + row['c']), axis=1)
+       
+        tframe['aref'] = tframe.apply(lambda row: calcaref(row), axis=1)
+        tframe['GSS'] = tframe.apply(lambda row: calcGSS(row), axis=1)
+        #tframe['GSS'] = tframe.apply(lambda row: (row['a'] - row['aref']) /
+        #                             (row['a'] - row['aref'] + row['b'] + row['c']), axis=1)
         tframe['area_fc'] = tframe.apply(lambda row: row['a'] + row['b'], axis=1)
         tframe['area_obs'] = tframe.apply(lambda row: row['a'] + row['c'], axis=1)
         tframe['area_clear_obs'] = tframe.apply(lambda row: row['b'] + row['d'], axis=1)
@@ -646,11 +677,14 @@ class CalcScores:
         # measure of frequency bias
         # fss will asymptote at this value as neighborhood size
         # approaches domain size.
+        if fobs == 0 and fmod == 0:
+            return pd.DataFrame()
         try:
             afss = 2*fobs*fmod/(fobs**2+fmod**2)
         except:
             print('afss failed', fobs, fmod)
             afss = 0
+            return pd.DataFrame()
         # loop for the convolutions
         for sz in self.szra:
             if sz == 1:
@@ -845,6 +879,7 @@ def calc_weightsPC(xra, scores):
     return xraprob
 
 def plot_probthresh(tframe, ax=None,clr='--ko',label='',plotprob=False):
+     
     if not ax:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
@@ -892,7 +927,8 @@ def plot_precision_recall(xlist, ylist, baseline, ax=None,clr='--ko',label=''):
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
     ax.plot(xlist, ylist, clr, label=label)
-    ax.plot(xlist[0],xlist[-1], [baseline,baseline], clr.replace('o',''), LineWidth=3, alpha=0.5)
+    if baseline:
+        ax.plot(xlist[0],xlist[-1], [baseline,baseline], clr.replace('o',''), LineWidth=3, alpha=0.5)
     #ax.plot([0, 1], [0, 1], '-b')
     ax.set_ylabel('Precision $p(o_1|y_1)$')
     ax.set_xlabel('POD $p(y_1|o_1)$')
