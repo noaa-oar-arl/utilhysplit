@@ -393,11 +393,22 @@ class InverseAshEns:
         except:
             print('InverseAshEns string not in expected form {}'.format(fnamelist[0]))
             self.taglist = list(map(str,np.arange(0,len(fnamelist))))
-        for hruns in zip(tdirlist, fnamelist):
+
+        self.add_invlist(tdirlist,vdir,vid,configdir,configfile,ensdim,verbose)
+        #for hruns in zip(tdirlist, fnamelist):
+        #    self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,
+        #                                   configdir,configfile,
+        #                                   ensdim=ensdim,
+        #                                   verbose=verbose))
+
+
+    def add_invlist(self,tdirlist,vdir,vid,configdir,configfile,ensdim,verbose):
+        for hruns in zip(tdirlist, self.fnamelist):
             self.invlist.append(InverseAsh(hruns[0],hruns[1],vdir,vid,
                                            configdir,configfile,
                                            ensdim=ensdim,
                                            verbose=verbose))
+
 
     #def add_phash(self,phash=None):
     #    self.phash=phash
@@ -671,6 +682,7 @@ class InverseAshEns:
     def plot_outdat_ts(self, eii=None,unit='kg/s',clr=None, profile=False, ax=None,name=None):
         # Ensemble.
         sns.set_style('whitegrid')
+        sns.set_context('notebook')
         if not ax:
             fig = plt.figure(1)
             ax = fig.add_subplot(1,1,1)
@@ -687,6 +699,7 @@ class InverseAshEns:
             else: ax, df = self.invlist[0].plot_outdat_ts(df,ax=ax,clr=clrlist[jjj],unit=unit)
             jjj+=1
             if jjj >= len(clrlist): jjj=0
+        
         return ax
 
     def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
@@ -1261,7 +1274,7 @@ class InverseAsh:
         ax.set_xlabel('Tg of mass emitted',fontsize=15)
         ax.set_ylabel('Height (km)',fontsize=15)
         totalmass = yval.sum()
-        print('total {} Tg'.format(totalmass))
+        #print('total {} Tg'.format(totalmass))
         return ax, df
 
 
@@ -1438,18 +1451,16 @@ class InverseAsh:
     def set_bias_correction(self,slope,intercept):
         self.slope = slope
         self.intercept = intercept           
-  
-    def get_pair(self,tii,coarsen=None, slope=None, intercept=None):
+
+ 
+    def get_cdump(self,tii,coarsen=None,slope=None,intercept=None):
         if isinstance(tii,int):
            iii = tii 
         elif isinstance(tii,datetime.datetime):
            iii = self.time_index(tii)
-        volcat = self.volcat_avg_hash[iii] 
         cdump = self.cdump_hash[iii]*self.concmult
 
         if coarsen:
-           volcat = volcat.coarsen(x=coarsen,boundary='trim').mean()
-           volcat = volcat.coarsen(y=coarsen,boundary='trim').mean()
            cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
            cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
         if not slope and self.slope: slope = self.slope
@@ -1465,6 +1476,34 @@ class InverseAsh:
            # if slope is negative then do not add to values that were previously 0.
            f2 = xr.where(cdump<0.0001,0,f2) 
            cdump = f2
+        return  cdump 
+ 
+    def get_pair(self,tii,coarsen=None, slope=None, intercept=None):
+        if isinstance(tii,int):
+           iii = tii 
+        elif isinstance(tii,datetime.datetime):
+           iii = self.time_index(tii)
+        volcat = self.volcat_avg_hash[iii] 
+        cdump = self.cdump_hash[iii]*self.concmult
+
+        if not slope and self.slope: slope = self.slope
+        if slope:
+           #print('multiplying cdump by {}'.format(1-slope))
+           cdump = cdump * (1-slope)
+        if not intercept and self.intercept: intercept = self.intercept
+        if intercept:
+           #print('shifting cdump by {}'.format(-1*intercept))
+           cdump = cdump - intercept
+           # if slope is positive then remove negative values.
+           f2 = xr.where(cdump>0,cdump,0) 
+           # if slope is negative then do not add to values that were previously 0.
+           f2 = xr.where(cdump<0.0001,0,f2) 
+           cdump = f2
+        if coarsen:
+           volcat = volcat.coarsen(x=coarsen,boundary='trim').mean()
+           volcat = volcat.coarsen(y=coarsen,boundary='trim').mean()
+           cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
+           cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
         return volcat, cdump 
     
     def match_volcat(self,forecast):
@@ -2037,8 +2076,14 @@ def plot_outdat_profile_function(dfdat,
     ax.set_xlabel('Tg of mass emitted',fontsize=15)
     ax.set_ylabel('Height (km)',fontsize=15)
     totalmass = xval.sum()
-    print('total {} Tg'.format(totalmass))
+    #print('total {} Tg'.format(totalmass))
     return ax, totalmass
+
+class InverseSO2(InverseAsh):
+
+    def prepare_one_time(self, daterange, das=None, htoptions=0, 
+                         st='start',zvals=None):
+        return -1
 
 class InverseAshPart(InverseAsh):
 

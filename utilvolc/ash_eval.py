@@ -20,15 +20,101 @@ import utilvolc.ash_inverse as ainv
 from utilhysplit.evaluation import statmain
 from utilhysplit.plotutils import colormaker
 from utilhysplit.evaluation import hysplit_boxplots
+from utilhysplit.evaluation import cdf_matching
 
-class ScoreCard:
-    def __init__(self, tag, time):
-        self.tag = tag
-        self.time = time
-        self.ksval = None
-        self.fss = None
-        self.obs_area = None
-        self.forecast_area = None
+
+class matchplots:
+    """
+    create plots using pandas DataFrame output from cdf_match
+    """
+
+    def __init__(self, df,fignum=1):
+        self.df = df
+        self.fignum=1
+        self.set_axis(fignum)
+
+    def set_axis(self,fignum=1):
+        sns.set_style('whitegrid')
+        sns.set_context('paper')
+        self.fig =  plt.figure(fignum) 
+        self.ax = self.fig.add_subplot(1,1,1)
+
+    def plot_residual(self):
+        df2 = pd.pivot_table(self.df, values='residual',index='time',columns='ens')
+        df2.plot(ax=self.ax, legend=False)
+        self.ax.set_ylabel('Residual')
+        self.fig.autofmt_xdate()
+
+    def plot_intercept(self):
+        df2 = pd.pivot_table(self.df, values='intercept',index='time',columns='ens')
+        df2.plot(ax=self.ax, legend=False)
+        self.ax.set_ylabel('Intercept')
+        self.fig.autofmt_xdate()
+         
+    def plot_slope(self):
+        df2 = pd.pivot_table(self.df, values='slope',index='time',columns='ens')
+        df2.plot(ax=self.ax,legend=False)
+        self.ax.set_ylabel('Slope')
+        self.fig.autofmt_xdate()
+         
+
+
+def cdf_match(aeval,tiilist,enslist,pfit=1):
+    """
+    aeval :  instance of AshEval class
+    tiilist : list of times to use
+    enslist : list of ensemble indices to use
+    pfit : 1
+
+    RETURNS
+    dfcdf : pandas DataFrame with columns of slope, intercept, time, ens, pmthresh, residual.
+    """
+
+    elist = []
+    slopes = []
+    slopes2 = []
+    intercepts = []
+    pmthresh = []
+    polyhash= {}
+    residuals = []
+    tlist = []
+    makeplots=False
+
+    for ens in enslist:
+        for tii in tiilist:
+            volcat,forecast = aeval.get_pair(tii)
+            forecast = forecast.fillna(0)
+            thresh2, poly, fc, res = cdf_matching.cdf_match_volcat(forecast,volcat,thresh=0.1,
+                                                                   ens=ens,scale=1,pfit=pfit,
+                                                                   makeplots=makeplots)
+            residuals.append(res['residuals'][0])
+            tlist.append(aeval.get_time(tii))
+            ensname = forecast.ens.values[ens]
+            elist.append(ensname)
+            slopes.append(poly[0])
+            slopes2.append(poly[-1])
+            intercepts.append(poly[1])
+            pmthresh.append(float(thresh2))
+
+    polyhash['slope'] = slopes
+    polyhash['slope2'] = slopes2
+    polyhash['intercept'] = intercepts
+    polyhash['time'] = tlist
+    polyhash['ens'] = elist
+    polyhash['pmthresh'] = pmthresh
+    polyhash['residual'] = residuals
+    dfcdf = pd.DataFrame.from_dict(polyhash)
+    return dfcdf
+
+
+#class ScoreCard:
+#    def __init__(self, tag, time):
+#        self.tag = tag
+#        self.time = time
+#        self.ksval = None
+#        self.fss = None
+#        self.obs_area = None
+#        self.forecast_area = None
 
 
 class AshEval(InverseAsh):
@@ -96,15 +182,16 @@ class AshEval(InverseAsh):
         
         for jjj, iii in enumerate(self.cdump_hash.keys()):
             # print(self.cdump.time.values[iii])
-            print(self.cdump.time.values[iii])
+            cdump = self.get_cdump(iii,slope=self.slope,intercept=self.intercept)
+            #print(self.cdump.time.values[iii])
+            #try:
+            #    volcat = self.cdump_hash[iii].sel(ens=ens) * self.concmult
+            #except:
+            #    volcat = self.cdump_hash[iii].isel(ens=ens) * self.concmult
+            cdump = cdump.values.flatten()
+            cdump = [x for x in cdump if x > threshold]
             try:
-                volcat = self.cdump_hash[iii].sel(ens=ens) * self.concmult
-            except:
-                volcat = self.cdump_hash[iii].isel(ens=ens) * self.concmult
-            volcat = volcat.values.flatten()
-            volcat = [x for x in volcat if x > threshold]
-            try:
-                sdata, y = statmain.cdf(volcat)
+                sdata, y = statmain.cdf(cdump)
             except:
                 print("cannot calculate cdf for {}".format(iii))
                 continue
@@ -204,12 +291,13 @@ class AshEval(InverseAsh):
         colors=None,
         plotvolcat = True
     ):
-        mass = self.massload
+        #mass = self.massload
         ilist = [self.time_index(time) for time in timelist]
         kshash = {}
         cdfhash = {}
         print('running mass_cdf_plot', ilist,timelist)
         for ttt, iii in enumerate(ilist):
+            volcat, mass = self.get_pair(iii)
             if plotvolcat:
                 if iii not in self.volcat_avg_hash.keys():
                     continue
@@ -220,7 +308,7 @@ class AshEval(InverseAsh):
                 volcat = [x for x in volcat if x > threshold]
                 # CDF of volcat data
                 sdata, y = statmain.cdf(volcat)
-
+             
 
             # CDF of model data
             if not use_pixel_match:
@@ -385,6 +473,9 @@ class AshEval(InverseAsh):
                          vloc=None,
                          include='all',
                          thresh=0.001, 
+                         prob = False,
+                         cmap_prob = 'cool',
+                         overlay=False,
                          **kwargs):
         """
         possible kwargs:
@@ -397,12 +488,12 @@ class AshEval(InverseAsh):
         sns.set()
         sns.set_style("whitegrid")
         if include=='all':
-            fig = plt.figure(figsize=[15, 5])
+            fig = plt.figure(figsize=[15, 4])
             ax1 = fig.add_subplot(1, 3, 1)
             ax2 = fig.add_subplot(1, 3, 2)
             ax3 = fig.add_subplot(1, 3, 3)
         else:
-            fig = plt.figure(figsize=[10, 5])
+            fig = plt.figure(figsize=[10, 3])
             ax2 = fig.add_subplot(1, 2, 1)
             ax3 = fig.add_subplot(1, 2, 2)
 
@@ -424,10 +515,17 @@ class AshEval(InverseAsh):
         vvals = volcat.values
         vpi = vvals < 0.001
         vvals[vpi] = np.nan
+        if 'clevels' in kwargs.keys():
+            clevels = kwargs['clevels']
+        else:
+            clevels = [0.02, 0.2,  2, 5, 10,50]
         #clevels = [0.01, 0.1, 0.2, 2, 5, 10]
-        clevels = [0.001,0.1, 0.2, 1, 2, 10]
-        clevels = [0.1, 0.2, 1, 2, 10]
-        cm = colormaker.ColorMaker("hot",len(clevels),ctype='rgb')
+        #clevels = [0.02, 0.2,  2, 5, 10,100]
+        cm = colormaker.ColorMaker(cmap,len(clevels),ctype='rgb')
+        if prob:
+            cm2 = colormaker.ColorMaker(cmap_prob,len(clevels),ctype='rgb')
+        else:
+            cm2 = colormaker.ColorMaker(cmap,len(clevels),ctype='rgb')
         if ptype == "pcolormesh":
             if include=='all': cb = ax1.pcolormesh(
                 volcat.longitude,
@@ -437,13 +535,25 @@ class AshEval(InverseAsh):
                 cmap=cmap,
                 shading="nearest",
             )
-            cb2 = ax2.pcolormesh(
+            #cb2 = ax2.pcolormesh(
+            #    forecast.longitude,
+            #    forecast.latitude,
+            #    evals,
+                #norm=norm,
+            #    cmap=cmap,
+            #    shading="nearest",
+            #)
+            if 'plevels' in kwargs.keys():
+                plevels = kwargs['plevels']
+            else:
+                plevels=clevels
+            cb2 = ax2.contourf(
                 forecast.longitude,
                 forecast.latitude,
                 evals,
-                norm=norm,
-                cmap=cmap,
-                shading="nearest",
+                #norm=norm,
+                levels=plevels,
+                colors=cm2(),
             )
             # cb2 = ax3.pcolormesh(forecast.longitude, forecast.latitude,evals,norm=norm, cmap=cmap,shading='nearest')
             cb3 = ax3.contourf(
@@ -453,16 +563,17 @@ class AshEval(InverseAsh):
                 levels=clevels,
                 colors=cm(),
             )
-            if 'plevels' in kwargs.keys():
-                clevels = kwargs['plevels']
-            cb4 = ax3.contour(
-                forecast.longitude,
-                forecast.latitude,
-                evals,
-                levels=clevels,
-                cmap="tab20b",
-            )
-        plt.title(time.strftime("%Y %m/%d %H:%M UTC"))
+            if overlay:
+                if 'plevels' in kwargs.keys():
+                    plevels = kwargs['plevels']
+                cb4 = ax3.contour(
+                    forecast.longitude,
+                    forecast.latitude,
+                    evals,
+                    levels=plevels,
+                    colors = cm2()
+                )
+        #plt.title(time.strftime("%Y %m/%d %H:%M UTC"))
         if include=='all': plt.colorbar(cb, ax=ax1)
         if np.max(evals) > vmax:
             plt.colorbar(cb2, ax=ax2,extend='max')
@@ -470,12 +581,12 @@ class AshEval(InverseAsh):
             plt.colorbar(cb2, ax=ax2)
         cb33 = plt.colorbar(cb3, ax=ax3)
         # sets the linewidths of contour lines in the plot.
-        plt.setp(cb4.collections,linewidth=1)
-        cb44=plt.colorbar(cb4, ax=ax3)
-        cb44.ax.tick_params(labelsize=8)
+        #plt.setp(cb4.collections,linewidth=1)
+        #cb44=plt.colorbar(cb4, ax=ax3)
+        #cb44.ax.tick_params(labelsize=8)
         # sets linewidths in the colorbar.
-        cb44.ax.get_children()[0].set_linewidths(10)
-        if not 'plevels' in kwargs.keys(): cb44.set_ticks([])
+        #cb44.ax.get_children()[0].set_linewidths(10)
+        #if not 'plevels' in kwargs.keys(): cb44.set_ticks([])
         if 'xlim' in kwargs.keys():
            if include=='all': ax1.set_xlim(kwargs['xlim'])
            ax2.set_xlim(kwargs['xlim'])
@@ -520,6 +631,34 @@ class AshEval(InverseAsh):
         plt.tight_layout()
         return ax1, ax2
 
+    def get_cdump(self,tii,dfcdf=pd.DataFrame(),cii=None,coarsen=None):
+        print('here')
+        if isinstance(tii,int):
+           iii = tii 
+        elif isinstance(tii,datetime.datetime):
+           iii = self.time_index(tii)
+
+        if not cii: cii = tii
+        cdump = self.cdump_hash[iii]*self.concmult
+        if not dfcdf.empty:
+        # create xarray with slope and intercept with coordinate of ens. 
+            temp = dfcdf[dfcdf['time']==cii]
+            temp = temp[['slope','intercept','ens']]
+            temp = temp.set_index('ens')
+            xrt = temp.to_xarray()
+            # apply slope and intercept correction
+            cdump = cdump * (1-xrt.slope)
+            cdump = cdump - xrt.intercept
+            f2 = xr.where(cdump>0,cdump,0)
+            f2 = xr.where(cdump<0.0001,0,f2)
+            cdump = f2 
+
+        if coarsen:
+           cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
+           cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
+
+        return  xrt, cdump 
+ 
 
 def calc_stats_function(hxr, ashmass, threshold):
     from utilhysplit.evaluation import plume_stat
