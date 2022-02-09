@@ -107,16 +107,6 @@ def cdf_match(aeval,tiilist,enslist,pfit=1):
     return dfcdf
 
 
-#class ScoreCard:
-#    def __init__(self, tag, time):
-#        self.tag = tag
-#        self.time = time
-#        self.ksval = None
-#        self.fss = None
-#        self.obs_area = None
-#        self.forecast_area = None
-
-
 class AshEval(InverseAsh):
     def __init__(self, tdir, fname, vdir, vid, configdir=None, configfile=None,verbose=False,ensdim='ens'):
         super().__init__(tdir, fname, vdir, vid, configdir, configfile,verbose,ensdim)
@@ -176,13 +166,20 @@ class AshEval(InverseAsh):
         self.dfstats = dfout
         return dfout
 
-    def model_cdf_plot(self, ens=0,threshold=0):
+    def model_cdf_plot(self, ens=0,threshold=0,cii=None):
         step = 5
         clr = ["-m", "-r", "-b", "-c", "-g"]
-        
+       
+       
         for jjj, iii in enumerate(self.cdump_hash.keys()):
             # print(self.cdump.time.values[iii])
-            cdump = self.get_cdump(iii,slope=self.slope,intercept=self.intercept)
+            cdump = self.manage_cdump(iii,cii=cii)
+
+            if isinstance(ens,str):
+                cdump = cdump.sel(ens=ens)
+            elif isinstance(ens,int):
+                cdump = cdump.isel(ens=ens)
+            #cdump = cdump.isel(ens=ens)
             #print(self.cdump.time.values[iii])
             #try:
             #    volcat = self.cdump_hash[iii].sel(ens=ens) * self.concmult
@@ -198,7 +195,6 @@ class AshEval(InverseAsh):
             ax = plt.gca()
             if jjj % 5 == 0:
                 lw = 3
-                # print('here')
             else:
                 lw = 1
             ax.step(sdata, y, clr[jjj % len(clr)], LineWidth=lw)
@@ -631,33 +627,33 @@ class AshEval(InverseAsh):
         plt.tight_layout()
         return ax1, ax2
 
-    def get_cdump(self,tii,dfcdf=pd.DataFrame(),cii=None,coarsen=None):
-        print('here')
-        if isinstance(tii,int):
-           iii = tii 
-        elif isinstance(tii,datetime.datetime):
-           iii = self.time_index(tii)
-
-        if not cii: cii = tii
-        cdump = self.cdump_hash[iii]*self.concmult
-        if not dfcdf.empty:
-        # create xarray with slope and intercept with coordinate of ens. 
-            temp = dfcdf[dfcdf['time']==cii]
-            temp = temp[['slope','intercept','ens']]
-            temp = temp.set_index('ens')
-            xrt = temp.to_xarray()
-            # apply slope and intercept correction
-            cdump = cdump * (1-xrt.slope)
-            cdump = cdump - xrt.intercept
-            f2 = xr.where(cdump>0,cdump,0)
-            f2 = xr.where(cdump<0.0001,0,f2)
-            cdump = f2 
-
-        if coarsen:
-           cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
-           cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
-
-        return  xrt, cdump 
+    #def get_cdump(self,tii,dfcdf=pd.DataFrame(),cii=None,coarsen=None):
+    #    print('here')
+    #    if isinstance(tii,int):
+    #       iii = tii 
+    #    elif isinstance(tii,datetime.datetime):
+    ##       iii = self.time_index(tii)
+#
+#        cdump = self.cdump_hash[iii]*self.concmult
+#        if not cii: cii = tii
+#        if not dfcdf.empty:
+#        # create xarray with slope and intercept with coordinate of ens. 
+#            temp = dfcdf[dfcdf['time']==cii]
+#            temp = temp[['slope','intercept','ens']]
+#            temp = temp.set_index('ens')
+#            xrt = temp.to_xarray()
+#            # apply slope and intercept correction
+#            cdump = cdump * (1-xrt.slope)
+#            cdump = cdump - xrt.intercept
+#            f2 = xr.where(cdump>0,cdump,0)
+#            f2 = xr.where(cdump<0.0001,0,f2)
+#            cdump = f2 
+#
+#        if coarsen:
+#           cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
+#           cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
+#
+#        return  xrt, cdump 
  
 
 def calc_stats_function(hxr, ashmass, threshold):

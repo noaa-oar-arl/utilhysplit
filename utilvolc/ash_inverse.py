@@ -1431,7 +1431,6 @@ class InverseAsh:
         #return csum.copy()
         return csum.copy()
 
-
     def get_norm(self,model,r2):
         m_max = np.nanmax(model)
         v_max = np.nanmax(r2.values)
@@ -1442,40 +1441,68 @@ class InverseAsh:
         norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max) 
         return norm
 
-    def generate_pairs(self):
-        for tii in self.volcat_avg_hash.keys():
-            volcat = self.volcat_avg_hash[iii] 
-            cdump = self.cdump_hash[iii]*self.concmult
-            yield volcat, cdump 
+    #def generate_pairs(self):
+    #    for tii in self.volcat_avg_hash.keys():
+    #        volcat = self.volcat_avg_hash[iii] 
+    #        cdump = self.cdump_hash[iii]*self.concmult
+    #        yield volcat, cdump 
     
-    def set_bias_correction(self,slope,intercept):
+    def set_bias_correction(self,slope,intercept,dfcdf=pd.DataFrame()):
         self.slope = slope
         self.intercept = intercept           
-
+        self.dfcdf = dfcdf
  
-    def get_cdump(self,tii,coarsen=None,slope=None,intercept=None):
+    def manage_cdump(self,tii,coarsen=None,slope=None,intercept=None,
+                  dfcdf=pd.DataFrame(),cii=None):
+
+        # make sure that tii is datime and iii is integer - index for tii.
         if isinstance(tii,int):
            iii = tii 
+           tii = self.get_time(iii)
         elif isinstance(tii,datetime.datetime):
            iii = self.time_index(tii)
+                   
+ 
         cdump = self.cdump_hash[iii]*self.concmult
 
+        if not cii: cii = tii
+
+        #cii = tii-datetime.timedelta(hours=2)
+        # if pandas dataframe available use that.
+        if dfcdf.empty and not self.dfcdf.empty: dfcdf = self.dfcdf
+        if not dfcdf.empty:
+        # create xarray with slope and intercept with coordinate of ens. 
+            temp = dfcdf[dfcdf['time']==cii]
+            temp = temp[['slope','intercept','ens']]
+            temp = temp.set_index('ens')
+            xrt = temp.to_xarray()
+            # apply slope and intercept correction
+            cdump = cdump * (1-xrt.slope)
+            cdump = cdump - xrt.intercept
+            f2 = xr.where(cdump>0,cdump,0)
+            f2 = xr.where(cdump<0.0001,0,f2)
+            cdump = f2
+        # otherwise use slope and intercept if those are specified.
+        else:
+            if not slope and self.slope: slope = self.slope
+            if slope:
+               #print('multiplying cdump by {}'.format(1-slope))
+               cdump = cdump * (1-slope)
+            if not intercept and self.intercept: intercept = self.intercept
+            if intercept:
+               #print('shifting cdump by {}'.format(-1*intercept))
+               cdump = cdump - intercept
+               # if slope is positive then remove negative values.
+               f2 = xr.where(cdump>0,cdump,0) 
+               # if slope is negative then do not add to values that were previously 0.
+               f2 = xr.where(cdump<0.0001,0,f2) 
+               cdump = f2
+
+        # coarsen comes last.
         if coarsen:
            cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
            cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
-        if not slope and self.slope: slope = self.slope
-        if slope:
-           #print('multiplying cdump by {}'.format(1-slope))
-           cdump = cdump * (1-slope)
-        if not intercept and self.intercept: intercept = self.intercept
-        if intercept:
-           #print('shifting cdump by {}'.format(-1*intercept))
-           cdump = cdump - intercept
-           # if slope is positive then remove negative values.
-           f2 = xr.where(cdump>0,cdump,0) 
-           # if slope is negative then do not add to values that were previously 0.
-           f2 = xr.where(cdump<0.0001,0,f2) 
-           cdump = f2
+
         return  cdump 
  
     def get_pair(self,tii,coarsen=None, slope=None, intercept=None):
@@ -1484,26 +1511,10 @@ class InverseAsh:
         elif isinstance(tii,datetime.datetime):
            iii = self.time_index(tii)
         volcat = self.volcat_avg_hash[iii] 
-        cdump = self.cdump_hash[iii]*self.concmult
-
-        if not slope and self.slope: slope = self.slope
-        if slope:
-           #print('multiplying cdump by {}'.format(1-slope))
-           cdump = cdump * (1-slope)
-        if not intercept and self.intercept: intercept = self.intercept
-        if intercept:
-           #print('shifting cdump by {}'.format(-1*intercept))
-           cdump = cdump - intercept
-           # if slope is positive then remove negative values.
-           f2 = xr.where(cdump>0,cdump,0) 
-           # if slope is negative then do not add to values that were previously 0.
-           f2 = xr.where(cdump<0.0001,0,f2) 
-           cdump = f2
+        cdump = self.manage_cdump(tii,coarsen,slope,intercept)
         if coarsen:
            volcat = volcat.coarsen(x=coarsen,boundary='trim').mean()
            volcat = volcat.coarsen(y=coarsen,boundary='trim').mean()
-           cdump = cdump.coarsen(x=coarsen,boundary='trim').mean()
-           cdump = cdump.coarsen(y=coarsen,boundary='trim').mean()
         return volcat, cdump 
     
     def match_volcat(self,forecast):
