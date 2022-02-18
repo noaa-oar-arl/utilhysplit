@@ -7,6 +7,7 @@ from utilhysplit.evaluation.statmain import cdf
 from utilhysplit.evaluation.statmain import pixel_matched_cdf
 from utilhysplit.evaluation.statmain import get_pixel_matching_threshold
 from utilhysplit.evaluation import plume_stat
+from utilhysplit.evaluation import hysplit_boxplots
 
 """
 FUNCTIONS
@@ -319,13 +320,14 @@ def ens_fss(
     dfall2: pandas dataframe with columns
     MSE, MAE, threshold, exclude_zeros, N, ens
  
-   dfall3: pandas dataframe with columns
+    dfall3: pandas dataframe with columns
     contingency table./dft2
     """
     dra, dim = preprocess(indra, enslist, sourcelist)
     dflist = []
     df2list = []
     df3list = []
+    iii = 0
     # calculate fss for each ensemble member.
     for ens in dra[dim].values:
         if dim == "ens":
@@ -342,13 +344,15 @@ def ens_fss(
         dflist.append(df1)
         df2list.append(df2)
         df3list.append(df3)
+        iii+=1
 
     # calculate fss for ensemble mean
     meanra = dra.mean(dim=dim)
     mean_scores = plume_stat.CalcScores(obsra, meanra,threshold=threshold,pixel_match=pixel_match)
-    if plot: mean_scores.binxra2.plot.pcolormesh()
+    if plot: 
+       mean_scores.binxra2.plot.pcolormesh()
     #print('Mean sum', mean_scores.binxra2.sum())
-    plt.show()
+       plt.show()
     df1 = mean_scores.calc_fss(makeplots=False,szra=neighborhoods)
     df2 = mean_scores.calc_accuracy_measures(threshold=0)
     df3 = mean_scores.table2csi(mean_scores.get_contingency_table())
@@ -361,8 +365,9 @@ def ens_fss(
 
     # calculate fss for probabilistic output
     prob_scores = plume_stat.CalcScores(obsra, dra,threshold=threshold,probabilistic=True,pixel_match=pixel_match)
-    if plot: prob_scores.binxra2.plot.pcolormesh()
-    plt.show()
+    if plot: 
+       prob_scores.binxra2.plot.pcolormesh()
+       plt.show()
     #print('Prob sum', prob_scores.binxra2.sum())
     df1 = prob_scores.calc_fss(makeplots=False,szra=neighborhoods)
     df1['ens'] = 'prob'
@@ -381,31 +386,72 @@ def ens_fss(
     dfall4 = dfall3.merge(dfall2,how='outer', on=['time','ens'])
     return dfall, dfall4
 
-def plot_ens_accuracy(ensdf,cname='MAE'):
+def plot_ens_area(ensdfin,ax=None,plotmean=False,legend=False,clrlist=None,enslist=None):
+    sns.set()
+    sns.set_style("whitegrid")
+    if not ax:
+        fig, ax = plt.subplots(1,1)
+    sns.set_style('whitegrid')
+    ensdf = ensdfin.copy() 
+    if 'time' in ensdf.columns:
+        val = ensdf.pivot(columns='ens',values='area_fc',index='time')
+        if isinstance(enslist,list): val = val[enslist]
+        obs = ensdf.pivot(columns='ens',values='area_obs',index='time')
+        obs = obs[obs.columns[0]]
+        ax.plot(obs.index.values,obs.values, LineStyle='--', LineWidth=10,alpha=0.5,label='obs')
+        if not clrlist:
+            val.plot(ax=ax,legend=None,colormap='tab20') 
+        else:
+            val.plot(ax=ax,legend=None,color=clrlist,alpha=0.5) 
+        #if 'mean' in val.columns and plotmean: 
+        #    val.plot(ax=ax, y='mean', legend=None, LineWidth=5,colormap='winter')
+    else:
+        val = ensdf.pivot(columns='ens',values=cname,index='time')
+        val = ensdf.pivot(columns='ens',values=cname,index='time')
+    ax.set_ylabel('Area (number of pixels)')
+    if legend:
+       handles, labels = ax.get_legend_handles_labels()
+       ax.legend(handles,labels)
+    return ax
+
+def plot_ens_accuracy(ensdfin,cname='MAE',
+                      plotmean=True,
+                      legend=False,
+                      clrlist=None,
+                      enslist=None):
     if cname == 'RMSE':
        rvalue = 'RMSE'
        cname = 'MSE'
     else:
        rvalue = cname
+    ensdf = ensdfin.copy()
     sns.set()
     sns.set_style("whitegrid")
     fig, ax = plt.subplots(1,1)
     sns.set_style('whitegrid')
     if 'time' in ensdf.columns:
-        print('plotting') 
         val = ensdf.pivot(columns='ens',values=cname,index='time')
+        # this is for re-ordering the columns.
+        if isinstance(enslist,list): val = val[enslist]
         if rvalue == 'RMSE':
            val = val**0.5
-
-        val.plot(ax=ax,legend=None,colormap='tab20') 
-        if 'mean' in val.columns: 
-            val.plot(ax=ax, y='mean', legend=None, LineWidth=5,colormap='winter')
+        if clrlist:
+            val.plot(ax=ax,legend=None,color=clrlist) 
+        else:
+            val.plot(ax=ax,legend=None,colormap='tab20') 
+        #if 'mean' in val.columns and plotmean: 
+        #    val.plot(ax=ax, y='mean', legend=None, LineWidth=5,colormap='winter')
+         
     else:
         val = ensdf.pivot(columns='ens',values=cname,index='time')
         val = ensdf.pivot(columns='ens',values=cname,index='time')
     ax.set_ylabel(rvalue)
+    if legend:
+       handles, labels = ax.get_legend_handles_labels()
+       ax.legend(handles,labels)
+    return ax
 
-def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
+def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None,clrs=None):
     """
     Plot FSS on y and time on x.
     ensdf : pandas DataFrame output from  ens_time_fss
@@ -422,7 +468,10 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     fig, ax = plt.subplots(1,1)
     ensfss = tempdf.pivot(columns='ens',values='FSS',index='time')
     uniform = tempdf.pivot(columns='ens',values='uniform',index='time')
-    ensfss.plot(ax=ax, legend=None,colormap='tab20')
+    if not clrs:
+        ensfss.plot(ax=ax, legend=None,colormap='tab20')
+    else:
+        ensfss.plot(ax=ax, legend=None,color=clrs)
     colA = uniform.columns[0] 
     uniform.plot(ax=ax, y=colA, LineStyle='--',legend=None,colormap='winter')
     if 'mean' in ensfss.columns:
@@ -432,12 +481,13 @@ def plot_ens_fss_ts(ensdf, nval=5, sizemult=1, enslist=None):
     ax.set_ylabel('FSS')
 
 
-def plot_afss_ts(ensdf):
+def plot_afss_ts(ensdf,clrs=None):
     fig, ax = plt.subplots(1,1)
     afss = ensdf[['ens','afss','time']]
     afss = afss.drop_duplicates()
     afss = afss.pivot(index='time',columns='ens',values='afss')
-    afss.plot(ax=ax, legend=None)
+    if not clrs: afss.plot(ax=ax, legend=None)
+    else: afss.plot(ax=ax, legend=None,color=clrs)
     if 'mean' in afss.columns:
         afss.plot(ax=ax, y='mean',LineWidth=5,colormap="winter",legend=None)
     if 'prob' in afss.columns:
@@ -455,7 +505,7 @@ def plot_afss(ensdf):
 
 def plot_ens_fss(ensdf, sizemult=1, 
                  timelist=None, enslist=None, nlist=None,
-                 plot_afss=False):
+                 plot_afss=False,clrs=None):
     """
     Plot FSS on y and Neighborhood length on x.
 
@@ -468,7 +518,8 @@ def plot_ens_fss(ensdf, sizemult=1,
        ensfss = ensdf.pivot(columns='ens',values='FSS',index='length (degrees)')
     else:
        ensfss = ensdf.pivot(columns='ens',values='FSS',index='Nlen')
-    ensfss.plot(ax=ax, legend=None,colormap='spring')
+    if not clrs: ensfss.plot(ax=ax, legend=None,colormap='spring')
+    else: ensfss.plot(ax=ax, legend=None,color=clrs)
     random = ensdf['random'].unique()
     nmin = float(np.min(ensdf['Nlen']))* sizemult
     nmax = float(np.max(ensdf['Nlen']))* sizemult
@@ -488,7 +539,53 @@ def plot_ens_fss(ensdf, sizemult=1,
         for afssval in afss:
             plt.plot([nmin,nmax],[afssval, afssval], '--k', alpha=0.5)
        
-     
+    
+def ens_boxplot(
+    indra,
+    enslist=None,
+    sourcelist=None,
+    timelist=None,
+    threshold=0,
+    #plot=True,
+    pixel_match=None,
+    clist=None
+    #xscale='log',
+    #colors=None,
+    #label='time'
+):
+    if "source" in indra.dims:
+        sourcekey = True
+    else:
+        sourcekey = False
+    dra, dim = preprocess(indra, enslist, sourcelist)
+
+    for ens in dra[dim].values:
+        vdata = []
+        print(ens)
+        if dim == "ens":
+            subdra = dra.sel(ens=ens)
+        elif dim == "source":
+            subdra = dra.sel(source=ens)
+        # check if time is a dimension.
+        if not isinstance(timelist, (list, np.ndarray)) and 'time' in subdra.dims:
+            timelist = subdra.time.values
+        elif 'time' not in subdra.dims:
+            timelist = [0]
+        # loop through times. If no time, then just go through once.
+        for tm in timelist:
+            # check if time is a dimension.
+            if 'time' in subdra.dims:
+                tvals = subdra.sel(time=tm)
+            else:
+                tvals = subdra 
+            # create list of above threshold values.
+            vdata.append([x for x in listvals(tvals) if x > threshold])
+            # create cdf from highest pixel_match values.
+            #else:
+            #    sdata, y = pixel_matched_cdf(listvals(tvals), pixel_match)
+        print('boxplot', len(vdata), len(timelist))
+        dj = hysplit_boxplots.prepare_boxplotdata(timelist,vdata) 
+        hysplit_boxplots.make_boxplot(dj,cols=clist)
 
 def ens_cdf(
     indra,
@@ -498,6 +595,9 @@ def ens_cdf(
     threshold=0,
     plot=True,
     pixel_match=None,
+    xscale='log',
+    colors=None,
+    label='time'
 ):
     """
     produces plots of cumulative distribution functions.
@@ -555,20 +655,25 @@ def ens_cdf(
                 key = (tm, ens)
             cdfhash[key] = (sdata, y)
     if plot:
-        plot_cdf(ax, cdfhash)
+        plot_cdf(ax, cdfhash,xscale,clrs=colors,label=label)
     return cdfhash
 
 
-def plot_cdf(ax1, cdfhash):
+def plot_cdf(ax1, cdfhash,xscale='log',clrs=None, label='time'):
     """
     Plots output from ens_cdf
     """
-    clrs = ["r", "y", "g", "c", "b", "k"]
+    if isinstance(clrs,list):
+        clrs = clrs
+    else:
+        clrs = ["r", "y", "g", "c", "b", "k"]
     for iii, key in enumerate(cdfhash.keys()):
         if iii > len(clrs) - 1:
             clrs.extend(clrs)
-        ax1.step(cdfhash[key][0], cdfhash[key][1], "-" + clrs[iii])
-    ax1.set_xscale("log")
+        if label=='time': lname = key[0]
+        elif label=='ens': lname = key[1]
+        ax1.step(cdfhash[key][0], cdfhash[key][1], ls='-',color=clrs[iii],label=lname)
+    ax1.set_xscale(xscale)
     return ax1
 
 

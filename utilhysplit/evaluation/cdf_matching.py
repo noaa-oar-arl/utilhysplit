@@ -156,30 +156,43 @@ def cdf_match_volcat(forecast, volcat,
     try:
         fc = forecast.isel(ens=ens)
     except:
-        print('ens {}'.format(ens))
-        print(forecast.ens.values)
-        return 0, [0,0], [0]
+        fc = forecast.sel(ens=ens)
+        #print('ens {}'.format(ens))
+        #print(forecast.ens.values)
+        #return 0, [0,0], [0]
     thresh2, match = ensemble_tools.get_pixel_match(fc,volcat,thresh) 
+    #print(thresh2)
     if np.isnan(thresh2):
        thresh2=0
     if 'ens' in match.dims:
         rfc = match.isel(ens=ens).values.flatten()
     else:      
         rfc = match.values.flatten()
+    #print('pixel match threshold', thresh2)
     robs = volcat.values.flatten()
-    rfc2 = [x for x in rfc if x >=thresh]
+    #if thresh2 == 0:
+    #    rfc2 = [x for x in rfc if x >0]
+    #else:
+    if thresh2!=0: rfc2 = [x for x in rfc if x >=thresh2]
+    else: rfc2 = rfc
     robs2 = [x for x in robs if x >=thresh]
     # make sure arrays are the same shape. Two methods.
  
     # pixel matching should take care of making sure
     # the arrays are same length unless there are more
     # obs than forecasts.
-
+    #print(ens, len(rfc2), len(robs2), thresh2)
     # This block chops the longer arrays.
     # If the forecast has less pixels then chop the observations.
     if len(rfc2) < len(robs2):
+       print('chop the obs', ens, thresh, thresh2)
        robs2 = np.sort(robs2)
        robs2 = robs2[len(robs2)-len(rfc2):]
+
+    if len(rfc2) > len(robs2):
+       print('chop the forecast', ens, thresh, thresh2)
+       rfc2 = np.sort(rfc2)
+       rfc2 = rfc2[len(rfc2)-len(robs2):]
 
 
     # This block adds zeros to shorter arrays.
@@ -187,6 +200,7 @@ def cdf_match_volcat(forecast, volcat,
     #      robs2.append(0)
     #while len(rfc2) < len(robs2):
     #      rfc2.append(0)
+
     outputs = cdf_match(rfc2, robs2,scale=scale,pfit=pfit,
                         makeplots=makeplots,figname=figname,
                         figsize=figsize)
@@ -203,9 +217,9 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
    pfit : int (0,1,2,3) determines order of polynomial to use
           -1 linear fit that must go through 0.
    # RETURNS
-   poly : polynomial to use for scaling.
-   fc : the scaled values.
-
+   poly :  polynomial to use for scaling.
+   fc :    the scaled values.
+   rhash : dictionary
    """
    #obs = robs
    #fc  = rfc
@@ -224,7 +238,7 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
    poly, covmatrix = np.polyfit(fco, diff, deg=np.abs(pfit),rcond=None,cov=True)
    poly, rhash['residuals'], rank, svs, rcond = np.polyfit(fco, diff, deg=np.abs(pfit),rcond=None,full=True)
    if pfit==0:
-      y2 = poly[0]
+      y2 = poly[0]*np.ones_like(fco)
    elif pfit==1 or pfit==-1:
       y2 = poly[0]*fco + poly[1]
       if pfit==-1:
@@ -250,7 +264,10 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
        xpos=0.1
        ypos=0.8
 
-       if len(poly)== 2 or pfit==-1:
+       if len(poly) == 1:
+           dstr = "y = {:0.1f}".format(poly[0])
+
+       elif len(poly)== 2 or pfit==-1:
            dstr = "y = {:0.2f}x + ({:0.1f})".format(poly[0],poly[1])
            xpos=0.1
            ypos=0.6
