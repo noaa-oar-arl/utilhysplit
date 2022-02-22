@@ -503,16 +503,20 @@ def plot_afss(ensdf):
     afss.plot(ax=ax, LineStyle='',Marker='o',legend=None)
     ax.set_ylabel('AFSS')
 
-def plot_ens_fss(ensdf, sizemult=1, 
+def plot_ens_fss(ensdfin, sizemult=1,xmult=1,
                  timelist=None, enslist=None, nlist=None,
-                 plot_afss=False,clrs=None):
+                 plot_afss=False,clrs=None,ax=None):
     """
     Plot FSS on y and Neighborhood length on x.
 
     ensdf : pandas DataFrame output from ens_fss function
     sizemult : set to value other than one to convert to degrees.
     """
-    fig, ax = plt.subplots(1,1)
+    if not ax:
+    #if not isinstance(ax, matplotlib.axes._subplots.AxesSubplot): 
+       fig, ax = plt.subplots(1,1)
+    ensdf = ensdfin.copy()
+    ensdf['Nlen'] = ensdf['Nlen']*xmult
     if sizemult != 1:
        ensdf['length (degrees)'] = ensdf['Nlen']*sizemult
        ensfss = ensdf.pivot(columns='ens',values='FSS',index='length (degrees)')
@@ -529,15 +533,15 @@ def plot_ens_fss(ensdf, sizemult=1,
         ensfss.plot(ax=ax, y='prob',LineWidth=3,colormap="gist_gray",legend=None)
     # plot random forecast
     for randomval in random:
-        plt.plot([nmin,nmax],[randomval, randomval], '--k')
+        ax.plot([nmin,nmax],[randomval, randomval], '--k')
     uniform = ensdf['uniform'].unique()
     # plot uniform forecast
     for uniformval in uniform:
-        plt.plot([nmin,nmax],[uniformval, uniformval], '--r')
+        ax.plot([nmin,nmax],[uniformval, uniformval], '--r')
     if plot_afss:
         afss  = ensdf['afss'].unique()
         for afssval in afss:
-            plt.plot([nmin,nmax],[afssval, afssval], '--k', alpha=0.5)
+            ax.plot([nmin,nmax],[afssval, afssval], '--k', alpha=0.5)
        
     
 def ens_boxplot(
