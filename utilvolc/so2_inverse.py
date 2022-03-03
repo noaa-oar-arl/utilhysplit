@@ -25,13 +25,42 @@ from utilvolc.runhelper import Helper
 from utilvolc.ashapp.metfiles import MetFileFinder
 from utilhysplit.plotutils import colormaker
 from utilvolc.ash_inverse import InverseAsh
+from utilvolc.ash_inverse import InverseAshEns
 
+class InverseEns(InverseAshEns):
+
+
+    def placeholder(self):
+        return -1
+
+    def add_invlist(self,tdirlist,vdir,vid,configdir,configfile,ensdim,verbose):
+        for hruns in zip(tdirlist, self.fnamelist):
+            self.invlist.append(InverseSO2(hruns[0],hruns[1],vdir,vid,
+                                           configdir,configfile,
+                                           ensdim=ensdim,
+                                           verbose=verbose))
+
+    def add_phash(self):
+        self.invlist[0].add_phash()
+        self.phash = self.invlist[0].phash
+
+    def add_obs(self,obslist):
+        for iii, hruns in enumerate(self.invlist):
+            hruns.add_obs(obslist[iii])
+
+    def make_tcm_mult(self,remove_cols=True,remove_rows=True,
+                      remove_sources=None, remove_ncs=0):
+        for hrun in self.invlist: 
+            tcm = hrun.make_tcm(remove_cols,remove_rows,
+                                        remove_sources,
+                                        remove_ncs)
+        
 
 class InverseSO2(InverseAsh):
 
     def __init__(self, tdir, fname,vdir,vname,
-                 configdir='./',configfile=None,
-                 verbose=False,ensdim='ens'):
+                 configdir='./',configfile=None,ensdim='ens',
+                 verbose=False):
         """
         configfile : full path to configuration file.
         """
@@ -59,17 +88,13 @@ class InverseSO2(InverseAsh):
         #
         self.get_cdump(tdir,fname,verbose,ensdim)
         self.add_config_info(configdir,configfile)
+        self.add_phash()
 
-        # These values are for if spatial coarsening is used.
-        #self.coarsen = None
-        #self.original_volcat_avg_hash = {}
-        #self.original_volcat_ht_hash = {}
-        #self.original_cdump_hash = {}
 
-        #self.set_bias_correction(slope=None,intercept=None)
- 
-        #self.massload =  hysplit.hysp_massload(self.cdump.sel(time=daterange[model_tii]),
-        #                                zvals=zvals) 
+    def add_phash(self,phash=None):
+        psizelist = ['pSO2','pSO4']
+        spnum = np.arange(1,len(psizelist)+1)
+        self.phash = dict(zip(psizelist,spnum))
 
     def close_arrays(self):
         self.cdump.close()
@@ -112,21 +137,6 @@ class InverseSO2(InverseAsh):
            cdump = cdump.rename({'source':'ens'})
         self.cdump = cdump.fillna(0)
 
-    def add_config_info(self,configdir, configfile):
-        # the ens dimension holds is key to what emission source was used.
-        # the sourcehash is a dictionary
-        # key is the ensemble number
-        # values is another dictionary with
-        # sdate: begin emission
-        # edate: end emission
-        # bottom : lower height of emission
-        # top : upper height of emission.
-        if configfile:
-            self.sourcehash = get_sourcehash(configdir, configfile)
-            self.inp = get_inp_hash(configdir, configfile)
-        else:
-            self.sourcehash = {}
-            self.inp = {}
 
     def add_inp(self,configdir, configfile):
         self.inp = get_inp_hash(configdir, configfile)
@@ -155,25 +165,7 @@ class InverseSO2(InverseAsh):
         return vset
 
     def clip(self,dummy, buf=0):
-        # clip ra according to where dummy has 0's.
-        aaa = np.where(dummy > 0)
-        a1 = np.min(aaa[0])
-        a2 = np.max(aaa[0])
-        b1 = np.min(aaa[1])
-        b2 = np.max(aaa[1])
-
-        if a2+buf < dummy.y.values[-1]:
-           a2 = a2+buf
-
-        if b2+buf < dummy.x.values[-1]:
-           b2 = b2+buf
-
-        a1 = a1 - buf
-        b1 = b1 - buf
-        if a1<0: a1=0
-        if b1<0: b1=0
-
-        return a1,a2,b1,b2
+        return None
 
     def print_times(self):
         timelist = [pd.to_datetime(x) for x in self.cdump.time.values]
@@ -193,27 +185,6 @@ class InverseSO2(InverseAsh):
            iii = None
         return iii 
 
-    def make_tcm_mult(self,tiilist,remove_cols=True,remove_rows=True,
-                      remove_sources=None,remove_ncs=0):
-        return None, None, None
-
-    def remove_near_clear_sky(self, avg, window):
-       # this creates rolling average so nearby 0 pixels will have above zero values.
-       avg2 = avg.rolling(x=window,center=True).max()
-       avg2 = avg2.rolling(y=window,center=True).max()
-       # areas above 0 in the smeared obs are set to True
-       test1 = xr.where(avg2 >0, True, False)
-       # areas above 0 in the original obs are set to True
-       test2 = xr.where(avg >0, True, False)
-       # areas from the original array set back to original value.
-       # above 0 areas from smeared array are set to 0.
-       # zero values are set to -1.
-       test3 = xr.where(np.any([test1,test2],axis=0),avg,-1)
-       # Returns xarray with
-       # original above zero observations.
-       # value of 0 in areas near to the above zero observations
-       # value of -1 in areas far from the observations.
-       return test3 
 
     def get_massload(self,vdata,cdump):
         # compute mass loading only for times which have matching observations.
@@ -227,8 +198,6 @@ class InverseSO2(InverseAsh):
         massload = hysplit.hysp_massload(cdump)
         return massload   
 
-
-
     def make_tcm(self, remove_cols=False,remove_rows=False,remove_sources=None, 
                  remove_ncs=0):
 
@@ -236,8 +205,11 @@ class InverseSO2(InverseAsh):
         mass = self.get_massload(self.vdata,self.cdump) # mass loading xarray from HYSPLIT
         tcm = []
         iii=0
+        # dictionary with key being index of cdump and value being tcm row.
+        thash = {}
         for iindex, vrow in vdata.iterrows():
             if(iii%1000==0): print('working on ', iii, len(vdata), vrow)
+
             # get concentrations valid for observation time.
             tlist = [x for x in mass.time.values if x < vrow.time]
             tlist.sort(reverse=True)
@@ -245,7 +217,26 @@ class InverseSO2(InverseAsh):
             mtemp = mass.sel(time=tii)
                            
             # get concentrations valid at lat-lon point
-            xii,yii = mtemp.monet.nearest_ij(lon=vrow.lon,lat=vrow.lat)
+            try:
+                xii,yii = mtemp.monet.nearest_ij(lon=vrow.lon,lat=vrow.lat)
+            # if error is returned trying changing longitude to negative or positive value.
+            except:
+                fixed=True
+                if vrow.lon < 0:
+                   lon = 360+vrow.lon
+                   try:
+                       xii,yii = mtemp.monet.nearest_ij(lon=lon,lat=vrow.lat)
+                   except: 
+                       print('ERROR longitude not within grid ', vrow.lon, lon)
+                       fixed=False
+                if vrow.lon > 0:
+                   lon = vrow.lon - 360
+                   try:
+                       xii,yii = mtemp.monet.nearest_ij(lon=lon,lat=vrow.lat)
+                   except: 
+                       print('ERROR longitude not within grid ', vrow.lon, lon)
+                       fixed=False
+                if not fixed: continue
             trow = mtemp.isel(x=xii,y=yii)
 
             # append observation onto end of row.
