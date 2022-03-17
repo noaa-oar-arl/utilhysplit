@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import numpy as np
 import os
+import datetime
 from glob import glob
 from utilvolc.ashapp.runhelper import Helper
 from utilvolc.ashapp.runhelper import list_dirs
@@ -125,6 +126,125 @@ def workflow():
     # Evaluation against observations.
     return 0
 
+def get_summary_file_df(fdir,verbose=False,hours=48):
+    vlist = [] 
+    if hours: dt = datetime.datetime.now() - datetime.timedelta(hours=hours)
+    for fln in os.scandir(fdir):
+        if fln.name[-4:] == 'json':
+           if hours:
+              info = fln.stat()
+              if datetime.datetime.fromtimestamp(info.st_mtime) > dt:
+                  try:
+                      sfn = SummaryFile(fln.name,fdir)
+                  except:
+                      if verbose: print('Not summary file', fln)
+                      continue
+              else:
+                  continue
+           else:
+               continue
+        else:
+           continue
+        vlist.append(sfn.open_dataframe())
+    return pd.concat(vlist)
+
+class VFile:
+
+    def __init__(self,fname,fdir='./'):
+        self.fname = fname
+        self.fdir = fdir
+        self.dtfmt = "s%Y%j_%H%M%S"
+        self.vhash = {'FileName':fname}
+        temp = self.parse(fname)
+
+    def parse(self,fname):
+        fname = fname.replace('Full_Disk','FullDisk')
+        fname = fname.replace('FULL_DISK','FullDisk')
+        temp = fname.split('_')
+        dstr = '{}_{}'.format(temp[self.dii], temp[self.djj].replace('.json',''))
+        try:
+            self.date = datetime.datetime.strptime(dstr,self.dtfmt)
+        except:
+            print('date not in correct format {} {}'.format(dstr,fname))
+            print(temp)
+            self.date = datetime.datetime.now()
+        self.vhash['date'] = self.date
+        return temp        
+   
+class SummaryFile(VFile):
+
+    def __init__(self,fname,fdir='./'):
+        self.dii = -2
+        self.djj = -1
+        super().__init__(fname,fdir)
+
+    def open_dataframe(self):
+        jsonf = open_json(os.path.join(self.fdir,self.fname))
+        dataf = jsonf['VOLCANOES']
+        datra = []
+        if type(dataf) == list:
+            for volc in dataf:
+                if 'EVENTS' in volc.keys():
+                    aaa = volc['EVENTS']
+                    if isinstance(aaa, dict):
+                       volc.update(aaa)
+                       volc.pop('EVENTS') 
+                       volc.update(self.add_event_file_info(aaa['LOG']))
+                       volc.update(self.add_file_name_atts())
+                       datra.append(volc)
+                    elif isinstance(aaa, list):
+                       for event in aaa:
+                           volc2 = volc.copy()
+                           volc2.update(event)
+                           volc2.pop('EVENTS') 
+                           volc2.update(self.add_event_file_info(event['LOG']))
+                           volc2.update(self.add_file_name_atts())
+                           datra.append(volc2)
+            data = pd.DataFrame.from_dict(datra)
+        if type(dataf) == dict:
+            data = pd.DataFrame.from_dict([dataf])
+        if type(dataf) == str:
+            data = dataf
+        return data
+
+    def add_file_name_atts(self):
+        aaa = {'summary date':self.date}
+        aaa['summary file'] = self.fname
+        aaa['satellite'] = self.sat
+        return aaa
+
+    def add_event_file_info(self,ename):
+        efile = EventFile(ename)
+        ehash = {}
+        ehash['event date'] = efile.date
+        ehash['event instrument'] = efile.instrument
+        ehash['event vid'] = efile.vid
+        ehash['event gid'] = efile.gid
+        return ehash
+
+    def parse(self,fname):
+        temp = super().parse(fname)
+        self.sat = temp[1]
+
+
+    def open(self):
+        fname = os.path.join(self.fdir, self.fname)
+        df = open_dataframe(fname,varname='VOLCANOES')
+        self.df = df
+
+
+class EventFile(VFile):
+ 
+    def __init__(self,fname,fdir='./'):
+        self.dii = -5
+        self.djj = -4
+        super().__init__(fname,fdir)
+
+    def parse(self,fname):
+        temp = super().parse(fname)
+        self.vid = temp[5]
+        self.instrument = temp[1] 
+        self.gid = temp[-1].replace('.json','')
 
 def file_progression():
     import volcat_logic as vl
@@ -229,12 +349,17 @@ def generate_report(vmin=None, vmax=None, **kwargs):
 def get_files(inp={"JPSS_DIR": "/pub/jpsss_upload"}, vaac=None, verbose=False):
     """
     Use various functions to get all available netcdf files from json event log files
-    Uses the different functions within volcat_logic.py
+ 
     Sorts through the ftp directory to find json event summary files
+
     Loops through them, and downloads the corresponding json event log files
+
     Keeps track of the json event summary files that have already been downloaded
+
     Lists event log files, finds the correspondind event file urls for download
+
     Downloads the event netcdf files
+
     Keeps track of the downloaded netcdf files
 
     Parameters
@@ -343,10 +468,10 @@ def open_dataframe(fname, varname=None):
     """Opens json file, and converts to pandas dataframe
     Inputs:
     fname: full filename (with directory) (string)
-    varname: VOLCANOES if opening event summary json file (string)
-                    Not needed for event log json files.
-                    FILES if looking for event netcdf files from event log files (string)
-                    VAAC_REGION is looking for the vaac region of the events
+    varname: VOLCANOES if opening event summary json file (strin
+             Not needed for event log json files.
+             FILES if looking for event netcdf files from event log files (string)
+             VAAC_REGION is looking for the vaac region of the events
     Output: pandas dataframe (or string depending on varname)"""
     jsonf = open_json(fname)
     if varname:
@@ -454,6 +579,7 @@ def get_log(log_url, verbose=False, **kwargs):
     else:
         log_dir = "/pub/ECMWF/JPSS/VOLCAT/LogFiles/"
     for gurl in log_url:
+        # wget -r -l1 -A.nc  : retrieve all nc files
         # wget -N: timestamping - retrieve files only if newer than local
         # wget -P: designates location for file download
         os.system("wget -N -P " + log_dir + " " + gurl)
@@ -517,6 +643,12 @@ def check_dirs(*args, verbose=False):
 def determine_change(ddir, logdir, logfile, suffix):
     """Determines which files were original, which are current, which were added, which were removed
 
+    Inputs:
+    ddir:    data directory (string)
+    logdir:  location of event file download log file (string)
+    logfile: name of log file (string)
+    suffix:  file suffix for list criteria (string)
+
     Returns
     original : list  : files in log when opened
     current  : list  : all files in the jpsss directory
@@ -539,10 +671,10 @@ def determine_change(ddir, logdir, logfile, suffix):
 def record_change(ddir=None, logdir=None, logfile=None, suffix=".nc", verbose=False):
     """Records file changes in data directory
     Inputs:
-    ddir: data directory (string)
-    logdir: location of event file download log file (string)
+    ddir:    data directory (string)
+    logdir:  location of event file download log file (string)
     logfile: name of log file (string)
-    suffix: file suffix for list criteria (string)
+    suffix:  file suffix for list criteria (string)
     Outputs:
     """
     original, current, added, removed = determine_change(ddir, logdir, logfile, suffix)
