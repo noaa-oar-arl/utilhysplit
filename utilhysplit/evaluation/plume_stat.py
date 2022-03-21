@@ -87,7 +87,8 @@ def test_fssB():
     sz = (51, 51)
     mean = sz[0]/2.0
     f0 = 0.5  # frequency of obs
-    fm = 0.1  # frequency of model
+#    f0 = 0.1  # frequency of obs
+    fm = 0.5  # frequency of model
     a = np.zeros(sz)
     b = np.zeros(sz)
     n0 = int(f0 * sz[0]*sz[1])
@@ -99,6 +100,7 @@ def test_fssB():
             a[int(val[0]), int(val[1])] = 1
         except:
             pass
+    mean = mean+10
     yval2 = np.random.normal(mean, mean/4.0, nm)
     xval2 = np.random.normal(mean, mean/4.0, nm)
     for val in zip(xval2, yval2):
@@ -172,19 +174,22 @@ class CalcScores:
         # TO DO: Depends on input array
         # might need to specify which dimensions to use. Not a problem if using regridded volcat netcdf
         self.allpts = (self.xra1.shape[0] * self.xra1.shape[1])
+         
+        # create self.binxra1 array
+        self.process_xra1()
+        # create self.binxra2 array
+        self.process_xra2(pixel_match,probabilistic)
+        # self.calc_basics()
 
-        # process the  observational data
-        if 'ens' in xra1.dims and probabilistic:
-            self.binxra1 = ensemble_tools.ATL(xra1, thresh=threshold, norm=True)
-        elif 'source' in xra1.dims and probabilistic:
-            self.binxra1 = ensemble_tools.ATL(xra1, thresh=threshold, norm=True)
-        else:
-            if threshold == 0.:
-                self.binxra1 = xr.where(self.xra1 > self.threshold, 1., 0.)
-            else:
-                self.binxra1 = xr.where(self.xra1 >= self.threshold, 1., 0.)
 
-        # process the model data if pixel matching is desired
+    def process_xra2(self,pixel_match,probabilistic):
+        """
+        creates the self.binxra2 array.
+        
+        """
+        threshold = self.threshold
+        xra2 = self.xra2.copy()
+        xra1 = self.xra1.copy()
         if pixel_match:
             # if input is ensemble. Here assume probablistic output is wanted.
             if 'ens' in xra2.dims or 'source' in xra2.dims:
@@ -197,6 +202,7 @@ class CalcScores:
                 self.binxra2 = xr.where(self.xra2 >= self.pm_threshold, 1., 0.)
 
         # process the model data with same threshold as observed.
+        # gives probability of exceeding
         else:
             # if input is ensemble
             if 'ens' in xra2.dims and probabilistic:
@@ -206,10 +212,23 @@ class CalcScores:
             # if input is deterministic
             else:
                 if threshold == 0.:
-                    self.binxra2 = xr.where(self.xra2 > self.threshold, 1., 0.)
+                    self.binxra2 = xr.where(xra2 > threshold, 1., 0.)
                 else:
-                    self.binxra2 = xr.where(self.xra2 >= self.threshold, 1., 0.)
-        self.calc_basics()
+                    self.binxra2 = xr.where(xra2 >=threshold, 1., 0.)
+
+
+    def process_xra1(self):
+        """
+        sets above threshold pixels to 1 and below threshold pixels to 0.
+        If 0 is the threshold then do not include.
+        """
+        threshold = self.threshold
+        xra1 = self.xra1.copy()
+        if threshold == 0.:
+            self.binxra1 = xr.where(xra1 > threshold, 1., 0.)
+        else:
+            self.binxra1 = xr.where(xra1 >= threshold, 1., 0.)
+
 
     def calc_accuracy_measures(self, threshold=0, exclude_zeros=True):
         """
@@ -271,12 +290,25 @@ class CalcScores:
     def calc_basics(self, probthresh=None, clip=False, sz=1, obsprob=False):
         """
         probthresh : int or float
+        clip : boolean. If True then remove 
+
         sz : int. neighborhood size to use for convolution. If 1 then no convolution.
 
         The probthresh can be used to convert probabilistic forecasts back to
         deterministic forecasts.
         This can be used for creating things like ROC diagrams.
+
+        self.binxra1 input
+        self.binxra2 input
+
+        self.match   output both model and obs
+        self.arr1    output only observations
+        self.arr2    output only model
+        self.arr3    output no model or obs
+        self.total_points
+
         """
+        #print('calc basics zzzzzzzzzzzzzzzzzzzzzzzzzzzz', sz)
 
         if sz == 1:
             binxra1 = self.binxra1
@@ -290,7 +322,9 @@ class CalcScores:
             # if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
             # binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
             # use original observation array.
+
             if not obsprob:
+                print('plume stat calc_basics obsprob set zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
                 binxra1 = self.binxra1
             #   print('Setting probthresh) {}'.format(probthresh))
 
@@ -311,16 +345,19 @@ class CalcScores:
         # else:
         # else:
         #    binxra2 = self.binxra2
+
         # both have above threshold pixels.
         self.match = binxra1 * binxra2
+
         # subtract match from observations
         self.arr1 = binxra1 - self.match
+
         # subtract model from observations
         self.arr2 = binxra2 - self.match
+
         # correct no forecasts.
         # add the matched, obs only, model only.
         # 1's where these are 0.
-        #
         allra = self.arr1+self.match+self.arr2
         self.arr3 = xr.where(allra > 0, 1-allra, 1)
         self.totalpts = binxra1.shape[0] * binxra1.shape[1]
@@ -353,6 +390,7 @@ class CalcScores:
         xlist = []
         ylist = []
         for prob in problist:
+            #print('calc PRC, get contingency table', sz, prob)
             # self.calc_basics(prob, clip=clip)
             tframe0 = self.get_contingency_table(sz=sz, probthresh=prob, clip=clip, multi=False)
             tframe = self.table2csi(tframe0)
@@ -361,6 +399,9 @@ class CalcScores:
         baseline = tframe['baseline']
         ylist2 = ylist.copy()
         xlist2 = xlist.copy()
+        # add the point at x=0, y=point at last y value for integration.
+        xlist2.append(0)
+        ylist2.append(ylist2[-1])
         ylist2.reverse()
         xlist2.reverse()
         area = scipy.integrate.trapz(y=ylist2, x=xlist2)
@@ -420,6 +461,7 @@ class CalcScores:
         sz : int. neighborhood size to use for convolution. If 1 then no convolution.
         """
         thash = []
+        #print('get_contingency_table')
         self.calc_basics(sz=sz, probthresh=probthresh, clip=clip)
         aval = self.match.sum().values
         cval = self.arr1.sum().values
@@ -453,7 +495,8 @@ class CalcScores:
                     arr3 = self.arr3.transpose(tval, 'y', 'x')
                     for i in range(num):
                         element = str(self.binxra2[tval][i].values)
-                        aval = float(match.sum().values)
+                        #aval = float(match.sum().values)
+                        aval = float(match[i,:, :].sum().values)
                         cval = float(arr1[i, :, :].sum().values)
                         bval = float(arr2[i, :, :].sum().values)
                         dval = float(arr3[i, :, :].sum().values)
@@ -635,6 +678,9 @@ class CalcScores:
         """
 
     def convolve(self, sz):
+        """
+        Utilizes xarray rolling method instead of scipy convolve2d
+        """
         # filter_array = np.ones((sz, sz))
         # filter_array = filter_array * (1/np.sum(filter_array))
         # conv_array = np.shape(filter_array)
@@ -780,7 +826,7 @@ class CalcScores:
 
         return pcorr, pcorruncent
 
-#FUNCTIONS#
+
 
 
 def calc_bs(xra1, xra2):
