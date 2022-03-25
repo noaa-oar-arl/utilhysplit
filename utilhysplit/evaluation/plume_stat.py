@@ -219,6 +219,7 @@ class CalcScores:
 
     def process_xra1(self):
         """
+        This is for the observations.
         sets above threshold pixels to 1 and below threshold pixels to 0.
         If 0 is the threshold then do not include.
         """
@@ -287,7 +288,8 @@ class CalcScores:
         tframe = pd.DataFrame.from_dict(thash)
         return tframe
 
-    def calc_basics(self, probthresh=None, clip=False, sz=1, obsprob=False):
+
+    def calc_basics_orig(self, probthresh=None, clip=False, sz=1, obsprob=False):
         """
         probthresh : int or float
         clip : boolean. If True then remove 
@@ -361,6 +363,109 @@ class CalcScores:
         allra = self.arr1+self.match+self.arr2
         self.arr3 = xr.where(allra > 0, 1-allra, 1)
         self.totalpts = binxra1.shape[0] * binxra1.shape[1]
+
+
+    def calc_basics(self, probthresh=None, clip=False, sz=1, obsprob=False):
+        """
+        probthresh : int or float
+        clip : boolean. If True then remove 
+
+        sz : int. neighborhood size to use for convolution. If 1 then no convolution.
+
+        The probthresh can be used to convert probabilistic forecasts back to
+        deterministic forecasts.
+        This can be used for creating things like ROC diagrams.
+
+        self.binxra1 input
+        self.binxra2 input
+
+        self.match   output both model and obs
+        self.arr1    output only observations
+        self.arr2    output only model
+        self.arr3    output no model or obs
+        self.total_points
+
+        """
+
+        # For probabilistic values how to utilize the convolution?
+
+
+        savebinxra2 = self.binxra2.copy()
+        binxra2 = self.binxra2
+        if isinstance(probthresh, (int, float)):
+            # convert probabilistic forecast to deterministic using threshold.
+            #savebinxra2 = self.binxra2.copy()
+            #binxra2 = self.binxra2
+            binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
+
+        if sz == 1:
+            binxra1 = self.binxra1
+            #binxra2 = self.binxra2
+            #binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
+        else:
+            self.binxra2 = binxra2
+            binxra1, binxra2 = self.convolve(sz)
+            # need observations to be 1 or 0 ?
+            # result from 1 pixel in the neighborhood being
+            # above threshold.
+            obs_probthresh = 1/(sz*sz) 
+            # if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
+            #binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
+            #binxra2 = xr.where(binxra2 >= obs_probthresh, 1.0, 0)
+            # use original observation array.
+
+            #if not obsprob:
+            #    print('plume stat calc_basics obsprob set zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
+            #    binxra1 = self.binxra1
+            #   print('Setting probthresh) {}'.format(probthresh))
+        if clip:
+            # remove all x or y rows that are all 0's.
+            temp = xr.concat([binxra1, binxra2], dim='temp')
+            temp = xr.where(temp == 0, np.nan, temp)
+            temp = temp.dropna(dim='x', how='all')
+            temp = temp.dropna(dim='y', how='all')
+            binxra2 = temp.isel(temp=1).fillna(0)
+            binxra1 = temp.isel(temp=0).fillna(0)
+        # else:
+        #    binxra1 = self.binxra1
+        #if isinstance(probthresh, (int, float)):
+            # convert probabilistic forecast to deterministic using threshold.
+        #   binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
+            # binxra1 = xr.where(binxra1 >= probthresh, 1.0, 0)
+        # else:
+        # else:
+        #    binxra2 = self.binxra2
+
+        # both have above threshold pixels.
+        self.obsra = binxra1
+        self.simra = binxra2
+        #self.binxra2 = savebinxra2 
+        match1 = binxra1 * binxra2
+        match2 = 1-np.abs(binxra1-binxra2)
+        self.match = xr.where(match1>1e-10,match2,0)
+        #self.match = match2
+
+        # subtract match from observations
+        #self.arr1 = binxra1 - self.match
+     
+        # only obs - want places where obs are larger.
+        arr1 = binxra1 - binxra2 
+        self.arr1 = xr.where(arr1>0,arr1,0) 
+
+        # only model - want places where model is larger
+        arr2 = binxra2 - binxra1 
+        self.arr2 = xr.where(arr2>0,arr2,0) 
+
+        # subtract model from observations
+        #self.arr2 = binxra2 - self.match
+
+        # correct no forecasts.
+        # add the matched, obs only, model only.
+        # 1's where these are 0.
+        allra = self.arr1+self.match+self.arr2
+        self.arr3 = xr.where(allra > 0, 1-allra, 1)
+        self.totalpts = binxra1.shape[0] * binxra1.shape[1]
+        self.binxra2 = savebinxra2 
 
     def prob2det(self, sz=1, clip=True, multi=False, problist=np.arange(0.05, 1, 0.10)):
         # See figure 8.2 in Wilks.
@@ -461,7 +566,6 @@ class CalcScores:
         sz : int. neighborhood size to use for convolution. If 1 then no convolution.
         """
         thash = []
-        #print('get_contingency_table')
         self.calc_basics(sz=sz, probthresh=probthresh, clip=clip)
         aval = self.match.sum().values
         cval = self.arr1.sum().values
