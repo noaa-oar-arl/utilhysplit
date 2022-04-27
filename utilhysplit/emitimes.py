@@ -189,14 +189,16 @@ class EmiTimes(object):
         """
         print('HERE')
         # make sure all cycles have same number of species.
-        self.splist = list(range(1, self.findmaxsp() + 1))
+        print('species before ', self.splist)
+        #self.splist = list(range(1, self.findmaxsp() + 1))
+        print('species', self.splist)
         # make sure that there is a name for each species.
         #self.set_species(self.sphash)
         print('HERE')
         for ecycle in self.cycle_list:
             ecycle.splist = self.splist
-            if len(self.splist) > 1:
-                ecycle.fill_species()
+            #if len(self.splist) > 1:
+            #    ecycle.fill_species()
         print('HERE')
         # make sure all cycles have same number of records
         maxrec = self.findmaxrec()
@@ -574,7 +576,7 @@ class EmitCycle(object):
         lon = rc.lon + np.random.rand(1)[0] * 10
         #lat = rc.lat 
         #lon = rc.lon 
-        ht = rc.ht 
+        ht = rc.height
         eline = EmitLine(rc.date, rc.duration, lat, lon, ht, 0, 0, rc.spnum, self.nanvalue)
         self.dummy_recordra.append(eline)
         self.drecs += 1
