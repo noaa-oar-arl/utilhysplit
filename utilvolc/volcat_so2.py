@@ -2,12 +2,70 @@
 # Reads and plots CrIS SO2
 # From Dave Hyman (dhyman2@wisc.edu)
 # Modified by Allison Ring (allison.ring@noaa.gov)
-
 import numpy as np
 import xarray as xr
+import pandas as pd
 from scipy import integrate
-
+import matplotlib.pyplot as plt
+from utilhysplit.par2conc import fixlondf
 # Opens the dataset
+
+    
+
+class volcatSO2L3:
+
+    def __init__(self,fname):
+        self.fname = fname
+        # use to convert from DU to  g/m^2 
+        self.conv = (2.6867E20) * (64.066) * (1/(6.022E23))
+
+    def open_dataset(self):
+        self.dset = xr.open_dataset(self.fname, decode_times=True)
+        return self.dset 
+
+
+    def plotscatter(self,interp=False):
+        lon = self.pframe.lon.values
+        lat = self.pframe.lat.values
+        mass = self.pframe.mass.values
+        plt.scatter(lon,lat,mass)
+       
+
+    def plotmass(self,interp=True):
+        if interp:
+           vals = self.mass_interp
+        else:
+           vals = self.mass
+        cb = plt.pcolormesh(vals)
+        plt.colorbar(cb)
+
+    def get_points(self):
+        self.mass = self.dset.so2_column_loading_fov
+        self.height = self.dset.so2_height_fov
+        self.mass_interp = self.dset.so2_column_loading_interp
+        self.height_interp = self.dset.so2_height_interp
+        self.time = self.dset.time_so2
+        lon = self.dset.lon.values
+        lat = self.dset.lat.values
+        self.lon, self.lat = np.meshgrid(lon,lat)
+
+    def points2frame(self):
+        mass = self.mass.values.flatten()
+        height = self.height.values.flatten()
+        time = self.time.values.flatten()
+        lon = self.lon.flatten()
+        lat = self.lat.flatten()
+        rlist = []
+        for iii in np.arange(0,len(mass)):
+            if not np.isnan(mass[iii]):
+               rvalue = (self.conv*mass[iii], lon[iii], lat[iii], height[iii], time[iii])
+               rlist.append(rvalue)
+        pframe = pd.DataFrame(rlist)
+        pframe.columns = ['mass', 'lon', 'lat','height','time']
+        pframe = pframe.sort_values(['lon','lat','time'],ascending=True)
+        #pframe = fixlondf(pframe,neg=False)  
+        self.pframe = pframe
+        return pframe
 
 
 def open_dataset(fname):
