@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import os
 import datetime
+import seaborn as sns
+import matplotlib.pyplot as plt
 from glob import glob
 from utilvolc.ashapp.runhelper import Helper
 from utilvolc.ashapp.runhelper import list_dirs
@@ -146,6 +148,7 @@ def get_summary_file_df(fdir,verbose=False,hours=48):
         else:
            continue
         vlist.append(sfn.open_dataframe())
+        #df = sfn.open_dataframe()
     return pd.concat(vlist)
 
 class VFile:
@@ -158,6 +161,9 @@ class VFile:
         temp = self.parse(fname)
 
     def parse(self,fname):
+        """
+        Parses information from filename
+        """
         fname = fname.replace('Full_Disk','FullDisk')
         fname = fname.replace('FULL_DISK','FullDisk')
         temp = fname.split('_')
@@ -179,12 +185,39 @@ class SummaryFile(VFile):
         super().__init__(fname,fdir)
 
     def open_dataframe(self):
+        """
+        Returns dataframe with information from
+        1. summary file filename
+        2. summary file (json format) contents
+        2. event log file filename(s) event log filenames and URLS 
+           are contained in the summary file
+
+        1. summary date : date in filename of summary file
+        1. summary file : filename of summary file
+        1. satellite : indicated in filename of summary file
+        VOLCANO_NAME
+        VOLCANO_GVP_ID
+        VOLCANO_LAT
+        VOLCANO_LON
+        VOLCANO_COUNTRY
+        VOLCANO_REGION
+        VOLCANO_SUBREGION
+        VAAC_REGION
+        VOLCANO_TIMEFRAME
+        VOLCANO_ELEVATION
+        EVENT_TYPE
+        LOG_URL
+
+        """
         jsonf = open_json(os.path.join(self.fdir,self.fname))
         dataf = jsonf['VOLCANOES']
-        datra = []
-        if type(dataf) == list:
+        datra = []  # list of dictionaries
+        if isinstance(dataf,dict):
+           dataf = [dataf] 
+        if isinstance(dataf,list):
             for volc in dataf:
                 if 'EVENTS' in volc.keys():
+                # if there is only one event, then it will be dictionary
                     aaa = volc['EVENTS']
                     if isinstance(aaa, dict):
                        volc.update(aaa)
@@ -192,6 +225,7 @@ class SummaryFile(VFile):
                        volc.update(self.add_event_file_info(aaa['LOG']))
                        volc.update(self.add_file_name_atts())
                        datra.append(volc)
+                # if there is more than one event, it will be a list
                     elif isinstance(aaa, list):
                        for event in aaa:
                            volc2 = volc.copy()
@@ -201,10 +235,10 @@ class SummaryFile(VFile):
                            volc2.update(self.add_file_name_atts())
                            datra.append(volc2)
             data = pd.DataFrame.from_dict(datra)
-        if type(dataf) == dict:
-            data = pd.DataFrame.from_dict([dataf])
-        if type(dataf) == str:
-            data = dataf
+        #if isinstance(dataf,dict):
+        #    data = pd.DataFrame.from_dict([dataf])
+        #elif isinstance(dataf,str):
+        #    data = dataf
         return data
 
     def add_file_name_atts(self):
@@ -223,31 +257,141 @@ class SummaryFile(VFile):
         return ehash
 
     def parse(self,fname):
+        """
+        Parses information from filename
+        """
         temp = super().parse(fname)
         self.sat = temp[1]
-
 
     def open(self):
         fname = os.path.join(self.fdir, self.fname)
         df = open_dataframe(fname,varname='VOLCANOES')
         self.df = df
 
+class Events:
+    """
+    combines information from multiple Event Files.
+    """
+
+    def __init__(self):
+        self.df = pd.DataFrame()
+
+    def add_events(self,elist):
+        """
+        elist: list of dataframes from EventFile class.
+        """
+        if self.df.empty:
+           if isinstance(elist, list):
+                self.df = pd.concat(elist)
+           elif isinstance(elist, pandas.core.frame.DataFrame):
+                self.df = elist
+        else:
+           if isinstance(elist, list):
+              df = pd.concat(elist)
+              self.df = pd.concat([self.df,df])
+           elif isinstance(elist, pandas.core.frame.DataFrame):
+              self.df = pd.concat([self.df,elist])
+
+    def check_feature_id(self):
+        dtemp = self.df
+        sns.set()
+        for fid in dtemp['FEATURE_ID'].unique():
+            dtemp2 = dtemp[dtemp['FEATURE_ID']==fid]
+            plt.plot(dtemp2['observation_date'], dtemp2['FEATURE_ID'],'.')
+        fig = plt.gcf()
+        fig.autofmt_xdate()
+        ax = plt.gca()
+        ax.set_ylabel('feature id') 
+
+
+
 
 class EventFile(VFile):
+    """
+    methods
+         __init__
+         parse
+         open 
+
+
+
+    attributes
+
+    df : pandas DataFrame
+         colums are 
+         SENSOR_NAME
+         SENSOR_MODE
+         SENSOR_WMO_ID
+         START_COVERAGE_TIME
+         OBSERVATION_TIME
+         OBSERVATION_EPOCH
+         FEATURE_ID
+         EVENT_FILE
+         EVENT_URL
+
+    attrs : dicionary
+         keys are
+         PROCESSING_SYSTEM
+         VOLCANO_NAME
+         VOLCANO_GVP_ID
+         VOLCANO_LAT
+         VOLCANO_LON
+         VAAC_REGION
+         EVENT_TYPE
+         EVENT_STATUS
+         FEATURE_ID_INITIAL
+         FEATURE_ID_LATEST
+    """
+
  
     def __init__(self,fname,fdir='./'):
         self.dii = -5
         self.djj = -4
+        self.df = pd.DataFrame()
+        self.attrs = {}
         super().__init__(fname,fdir)
 
     def parse(self,fname):
+        """
+        Parses information from filename
+        """
         temp = super().parse(fname)
         self.vid = temp[5]
         self.instrument = temp[1] 
         self.gid = temp[-1].replace('.json','')
 
+    def open(self):
+        fname = os.path.join(self.fdir, self.fname)
+        jsonf = open_json(os.path.join(self.fdir,self.fname))
+        fdict = jsonf['FILES']
+        jsonf.pop('FILES')
+        df = pd.DataFrame(fdict)
+        dtfmt = "%Y-%m-%dT%H:%M:%S.0Z"
+        dftemp2 = df.apply(lambda row: datetime.datetime.strptime(row['OBSERVATION_TIME'],dtfmt),axis=1)
+        df.insert(1,'observation_date',dftemp2)
+        self.df = df
+        self.attrs = jsonf
+
+    def check_feature_id(self):
+        dtemp = self.df
+        sns.set()
+        for fid in dtemp['FEATURE_ID'].unique():
+            dtemp2 = dtemp[dtemp['FEATURE_ID']==fid]
+            plt.plot(dtemp2['observation_date'], dtemp2['FEATURE_ID'],'.')
+        fig = plt.gcf()
+        fig.autofmt_xdate()
+        ax = plt.gca()
+        ax.set_ylabel('feature id') 
+
+
+
 def file_progression():
     import volcat_logic as vl
+
+    # Step 0:
+    vl.get_summary_file_df(fdir,hours=x)
+    # creates a dataframe which contains information from the summary files that have
+    # been pushed to fdir over the last x hours.
 
     # Step 1:
     vl.get_files()
@@ -578,13 +722,21 @@ def get_log(log_url, verbose=False, **kwargs):
         log_dir = kwargs["VOLCAT_LOGFILES"]
     else:
         log_dir = "/pub/ECMWF/JPSS/VOLCAT/LogFiles/"
+    if isinstance(log_url,str):
+       log_url = [log_url]
     for gurl in log_url:
+        fname = gurl.split('/')[-1]
         # wget -r -l1 -A.nc  : retrieve all nc files
         # wget -N: timestamping - retrieve files only if newer than local
         # wget -P: designates location for file download
         os.system("wget -N -P " + log_dir + " " + gurl)
+        if os.path.isfile(os.path.join(log_dir,fname)):
+           print('DONE ', fname)
+        else:
+           print('FAILED ', fname)
         if verbose:
             logger.info("File {} downloaded to {}".format(gurl, log_dir))
+            print("File {} downloaded to {}".format(gurl, log_dir))
     return None
 
 
