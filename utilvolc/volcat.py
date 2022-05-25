@@ -565,7 +565,7 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
     Outputs:
     das: list of datasets
     """
-    if flist:
+    if isinstance(flist,(list,np.ndarray)):
         filenames = flist
     else:
         tframe = get_volcat_name_df(
@@ -667,10 +667,11 @@ def write_parallax_corrected_files(
     already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
-    if not flist:
-        vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
-    else:
+    if isinstance(flist,list):
         vlist = flist
+    else:
+        vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
+
     for iii, val in enumerate(vlist):
         if isinstance(val, str):
             fname = val
@@ -1296,6 +1297,12 @@ def correct_pc(dset, gridspace=None):
         newmass = xr.zeros_like(mass.isel(time=0))
         newhgt = xr.zeros_like(height.isel(time=0))
         newrad = xr.zeros_like(effrad.isel(time=0))
+        #newmass = newmass.drop("longitude")
+        #newhgt = newhgt.drop("longitude")
+        #newrad = newrad.drop("longitude") 
+        #newmass = newmass.drop("latitude")
+        #newhgt = newhgt.drop("latitude")
+        #newrad = newrad.drop("latitude") 
     # newashdet = xr.zeros_like(ashdet.isel(time=0))
     else:
         # AMR: Making regular grid for parallax correction
@@ -1322,12 +1329,12 @@ def correct_pc(dset, gridspace=None):
             ),
         )
         newmass = das
-        newmass.attrs = mass.attrs
         newhgt = das
-        newhgt.attrs = height.attrs
         newrad = das
-        newrad.attrs = effrad.attrs
         # END of Additional code - AMR
+    newmass.attrs = mass.attrs
+    newhgt.attrs = height.attrs
+    newrad.attrs = effrad.attrs
 
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
@@ -1373,6 +1380,7 @@ def correct_pc(dset, gridspace=None):
         # keeps track of new indices of lat lon points.
         indexlist.append(iii)
         prev_point = point
+
     # check if any points are mapped to the same point.
     if len(indexlist) != len(list(set(indexlist))):
         print("WARNING: correct_pc function: some values mapped to same point")
@@ -1391,6 +1399,15 @@ def correct_pc(dset, gridspace=None):
     newhgt = newhgt.transpose("time", "y", "x", transpose_coords=True)
     newrad = newrad.transpose("time", "y", "x", transpose_coords=True)
     # keep original names for mass and height.
+  
+    # getting some odd error messages here 
+    newmass = newmass.drop("longitude")
+    newhgt = newhgt.drop("longitude")
+    newrad = newrad.drop("longitude") 
+    newmass = newmass.drop("latitude")
+    newhgt = newhgt.drop("latitude")
+    newrad = newrad.drop("latitude") 
+
     dnew = xr.Dataset(
         {
             "ash_mass_loading": newmass,
@@ -1402,11 +1419,17 @@ def correct_pc(dset, gridspace=None):
             "feature_id": dset.feature_id,
         }
     )
+
+    dnew.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
+    dnew.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
+    #dnew.ash_mass_loading.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
+    #dnew.ash_mass_loading.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
+
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.effective_radius_of_ash.attrs.update(dset.effective_radius_of_ash.attrs)
     dnew.time.attrs.update({"standard_name": "time"})
-    dnew.latitude.attrs.update({"standard_name": "latitude"})
-    dnew.longitude.attrs.update({"standard_name": "longitude"})
+    #dnew.latitude.attrs.update({"standard_name": "latitude"})
+    #dnew.longitude.attrs.update({"standard_name": "longitude"})
     dnew = dnew.assign_attrs(dset.attrs)
     return dnew
