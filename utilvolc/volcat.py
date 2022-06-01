@@ -667,11 +667,10 @@ def write_parallax_corrected_files(
     already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
-    if isinstance(flist,list):
+    if isinstance(flist,(list,np.ndarray)):
         vlist = flist
     else:
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
-
     for iii, val in enumerate(vlist):
         if isinstance(val, str):
             fname = val
@@ -1401,12 +1400,19 @@ def correct_pc(dset, gridspace=None):
     # keep original names for mass and height.
   
     # getting some odd error messages here 
-    newmass = newmass.drop("longitude")
-    newhgt = newhgt.drop("longitude")
-    newrad = newrad.drop("longitude") 
-    newmass = newmass.drop("latitude")
-    newhgt = newhgt.drop("latitude")
-    newrad = newrad.drop("latitude") 
+    #newmass = newmass.drop("longitude")
+    #newhgt = newhgt.drop("longitude")
+    #newrad = newrad.drop("longitude") 
+    #newmass = newmass.drop("latitude")
+    #newhgt = newhgt.drop("latitude")
+    #newrad = newrad.drop("latitude") 
+
+    #newmass = newmass.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
+    #newmass = newmass.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
+    #newhgt = newhgt.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
+    #newhgt = newhgt.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
+    #newrad = newrad.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
+    #newrad = newrad.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
 
     dnew = xr.Dataset(
         {
@@ -1419,11 +1425,10 @@ def correct_pc(dset, gridspace=None):
             "feature_id": dset.feature_id,
         }
     )
-
-    dnew.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
-    dnew.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
-    #dnew.ash_mass_loading.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
-    #dnew.ash_mass_loading.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
+    #dnew = dnew.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
+    #dnew = dnew.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
+    #dnew.ash_mass_loading.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude),inplace=True)
+    #dnew.ash_mass_loading.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude),inplace=True)
 
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
@@ -1431,5 +1436,5 @@ def correct_pc(dset, gridspace=None):
     dnew.time.attrs.update({"standard_name": "time"})
     #dnew.latitude.attrs.update({"standard_name": "latitude"})
     #dnew.longitude.attrs.update({"standard_name": "longitude"})
-    dnew = dnew.assign_attrs(dset.attrs)
+    #dnew = dnew.assign_attrs(dset.attrs)
     return dnew
