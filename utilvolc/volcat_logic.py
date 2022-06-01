@@ -128,68 +128,74 @@ def workflow():
     # Evaluation against observations.
     return 0
 
-def get_summary_file_df(fdir,verbose=False,hours=48):
-    vlist = [] 
-    if hours: dt = datetime.datetime.now() - datetime.timedelta(hours=hours)
+
+def get_summary_file_df(fdir, verbose=False, hours=48):
+    vlist = []
+    if not hours:
+        logger.warning("get_summary_file_df input hours None, setting hours to 100")
+        hours = 100
+    if hours:
+        dt = datetime.datetime.now() - datetime.timedelta(hours=hours)
     for fln in os.scandir(fdir):
-        if fln.name[-4:] == 'json':
-           if hours:
-              info = fln.stat()
-              if datetime.datetime.fromtimestamp(info.st_mtime) > dt:
-                  try:
-                      sfn = SummaryFile(fln.name,fdir)
-                  except:
-                      if verbose: print('Not summary file', fln)
-                      continue
-              else:
-                  continue
-           else:
-               continue
+        if fln.name[-4:] == "json":
+            if hours:
+                info = fln.stat()
+                if datetime.datetime.fromtimestamp(info.st_mtime) > dt:
+                    try:
+                        sfn = SummaryFile(fln.name, fdir)
+                    except:
+                        if verbose:
+                            print("Not summary file", fln)
+                        continue
+                else:
+                    continue
+            else:
+                continue
         else:
-           continue
+            continue
         vlist.append(sfn.open_dataframe())
-        #df = sfn.open_dataframe()
+        # df = sfn.open_dataframe()
     return pd.concat(vlist)
 
-class VFile:
 
-    def __init__(self,fname,fdir='./'):
+class VFile:
+    def __init__(self, fname, fdir="./"):
         self.fname = fname
         self.fdir = fdir
         self.dtfmt = "s%Y%j_%H%M%S"
-        self.vhash = {'FileName':fname}
+        self.vhash = {"FileName": fname}
         temp = self.parse(fname)
 
-    def parse(self,fname):
+    def parse(self, fname):
         """
         Parses information from filename
         """
-        fname = fname.replace('Full_Disk','FullDisk')
-        fname = fname.replace('FULL_DISK','FullDisk')
-        temp = fname.split('_')
-        dstr = '{}_{}'.format(temp[self.dii], temp[self.djj].replace('.json',''))
+        fname = fname.replace("Full_Disk", "FullDisk")
+        fname = fname.replace("FULL_DISK", "FullDisk")
+        temp = fname.split("_")
+        dstr = "{}_{}".format(temp[self.dii], temp[self.djj].replace(".json", ""))
         try:
-            self.date = datetime.datetime.strptime(dstr,self.dtfmt)
+            self.date = datetime.datetime.strptime(dstr, self.dtfmt)
         except:
-            print('date not in correct format {} {}'.format(dstr,fname))
+            print("date not in correct format {} {}".format(dstr, fname))
             print(temp)
             self.date = datetime.datetime.now()
-        self.vhash['date'] = self.date
-        return temp        
-   
-class SummaryFile(VFile):
+        self.vhash["date"] = self.date
+        return temp
 
-    def __init__(self,fname,fdir='./'):
+
+class SummaryFile(VFile):
+    def __init__(self, fname, fdir="./"):
         self.dii = -2
         self.djj = -1
-        super().__init__(fname,fdir)
+        super().__init__(fname, fdir)
 
     def open_dataframe(self):
         """
         Returns dataframe with information from
         1. summary file filename
         2. summary file (json format) contents
-        2. event log file filename(s) event log filenames and URLS 
+        2. event log file filename(s) event log filenames and URLS
            are contained in the summary file
 
         1. summary date : date in filename of summary file
@@ -209,54 +215,54 @@ class SummaryFile(VFile):
         LOG_URL
 
         """
-        jsonf = open_json(os.path.join(self.fdir,self.fname))
-        dataf = jsonf['VOLCANOES']
+        jsonf = open_json(os.path.join(self.fdir, self.fname))
+        dataf = jsonf["VOLCANOES"]
         datra = []  # list of dictionaries
-        if isinstance(dataf,dict):
-           dataf = [dataf] 
-        if isinstance(dataf,list):
+        if isinstance(dataf, dict):
+            dataf = [dataf]
+        if isinstance(dataf, list):
             for volc in dataf:
-                if 'EVENTS' in volc.keys():
-                # if there is only one event, then it will be dictionary
-                    aaa = volc['EVENTS']
+                if "EVENTS" in volc.keys():
+                    # if there is only one event, then it will be dictionary
+                    aaa = volc["EVENTS"]
                     if isinstance(aaa, dict):
-                       volc.update(aaa)
-                       volc.pop('EVENTS') 
-                       volc.update(self.add_event_file_info(aaa['LOG']))
-                       volc.update(self.add_file_name_atts())
-                       datra.append(volc)
-                # if there is more than one event, it will be a list
+                        volc.update(aaa)
+                        volc.pop("EVENTS")
+                        volc.update(self.add_event_file_info(aaa["LOG"]))
+                        volc.update(self.add_file_name_atts())
+                        datra.append(volc)
+                    # if there is more than one event, it will be a list
                     elif isinstance(aaa, list):
-                       for event in aaa:
-                           volc2 = volc.copy()
-                           volc2.update(event)
-                           volc2.pop('EVENTS') 
-                           volc2.update(self.add_event_file_info(event['LOG']))
-                           volc2.update(self.add_file_name_atts())
-                           datra.append(volc2)
+                        for event in aaa:
+                            volc2 = volc.copy()
+                            volc2.update(event)
+                            volc2.pop("EVENTS")
+                            volc2.update(self.add_event_file_info(event["LOG"]))
+                            volc2.update(self.add_file_name_atts())
+                            datra.append(volc2)
             data = pd.DataFrame.from_dict(datra)
-        #if isinstance(dataf,dict):
+        # if isinstance(dataf,dict):
         #    data = pd.DataFrame.from_dict([dataf])
-        #elif isinstance(dataf,str):
+        # elif isinstance(dataf,str):
         #    data = dataf
         return data
 
     def add_file_name_atts(self):
-        aaa = {'summary date':self.date}
-        aaa['summary file'] = self.fname
-        aaa['satellite'] = self.sat
+        aaa = {"summary date": self.date}
+        aaa["summary file"] = self.fname
+        aaa["satellite"] = self.sat
         return aaa
 
-    def add_event_file_info(self,ename):
+    def add_event_file_info(self, ename):
         efile = EventFile(ename)
         ehash = {}
-        ehash['event date'] = efile.date
-        ehash['event instrument'] = efile.instrument
-        ehash['event vid'] = efile.vid
-        ehash['event gid'] = efile.gid
+        ehash["event date"] = efile.date
+        ehash["event instrument"] = efile.instrument
+        ehash["event vid"] = efile.vid
+        ehash["event gid"] = efile.gid
         return ehash
 
-    def parse(self,fname):
+    def parse(self, fname):
         """
         Parses information from filename
         """
@@ -265,45 +271,310 @@ class SummaryFile(VFile):
 
     def open(self):
         fname = os.path.join(self.fdir, self.fname)
-        df = open_dataframe(fname,varname='VOLCANOES')
+        df = open_dataframe(fname, varname="VOLCANOES")
         self.df = df
+
 
 class Events:
     """
     combines information from multiple Event Files.
+
+
+
     """
 
     def __init__(self):
         self.df = pd.DataFrame()
+        self.ndir = None
 
-    def add_events(self,elist):
+        self.events = []
+        self.pcevents = []
+
+    def save_csv(self, inp=None):
         """
-        elist: list of dataframes from EventFile class.
+        save dataframe as csv file
         """
+        if not self.ndir:
+            self.get_dir(inp)
+        fname = os.path.join(self.ndir, "Events.csv")
+        self.df.to_csv(fname, float_format="%.1f", index=False)
+
+    def read_csv(self, cname=None):
+        """
+        reads csv file that was previously saved
+        """
+        if not self.ndir:
+            self.get_dir(inp)
+        if not cname:
+            cname = os.path.join(self.ndir, "Events.csv")
+        else:
+            cname = os.path.join(self.ndir, cname)
+        dtp = {"observation_date": "datetime64[ns]"}
+        df = pd.read_csv(cname, sep=",", parse_dates=["observation_date"])
+        return df
+
+    def add_csv(self, cname=None):
+        """
+        reads csv file that was previously saved and adds it to dataframe.
+        """
+        dftemp = self.read_csv(cname)
+        if not self.df.empty:
+            dftemp = pd.concat(self.df, dftemp)
+        dftemp.drop_duplicates()
+        self.df = dftemp
+
+    def add_events(self, eventlist):
+        """
+        elist: list of EventFile objects.
+        """
+        elist = []
+        for eve in eventlist:
+            df = eve.df.copy()
+            for key in eve.attrs:
+                df[key] = eve.attrs[key]
+            elist.append(df)
+
         if self.df.empty:
-           if isinstance(elist, list):
+            if isinstance(elist, list):
                 self.df = pd.concat(elist)
-           elif isinstance(elist, pandas.core.frame.DataFrame):
+            elif isinstance(elist, pandas.core.frame.DataFrame):
                 self.df = elist
         else:
-           if isinstance(elist, list):
-              df = pd.concat(elist)
-              self.df = pd.concat([self.df,df])
-           elif isinstance(elist, pandas.core.frame.DataFrame):
-              self.df = pd.concat([self.df,elist])
+            if isinstance(elist, list):
+                df = pd.concat(elist)
+                self.df = pd.concat([self.df, df])
+            elif isinstance(elist, pandas.core.frame.DataFrame):
+                self.df = pd.concat([self.df, elist])
 
-    def check_feature_id(self):
+    def check_val(self,val):
+        """
+        plots val vs. observation date.
+        """
         dtemp = self.df
         sns.set()
-        for fid in dtemp['FEATURE_ID'].unique():
-            dtemp2 = dtemp[dtemp['FEATURE_ID']==fid]
-            plt.plot(dtemp2['observation_date'], dtemp2['FEATURE_ID'],'.')
+        for fid in dtemp[val].unique():
+            dtemp2 = dtemp[dtemp[val] == fid]
+            plt.plot(dtemp2["observation_date"], dtemp2[val], ".")
         fig = plt.gcf()
         fig.autofmt_xdate()
         ax = plt.gca()
-        ax.set_ylabel('feature id') 
+        ax.set_ylabel(val)
+
+    def check_sensor(self):
+        self.check_val('SENSOR_NAME')
+
+    def check_feature_id(self):
+        self.check_val('FEATURE_ID')
+        #dtemp = self.df
+        #sns.set()
+        #for fid in dtemp["FEATURE_ID"].unique():
+        #    dtemp2 = dtemp[dtemp["FEATURE_ID"] == fid]
+        #    plt.plot(dtemp2["observation_date"], dtemp2["FEATURE_ID"], ".")
+        #fig = plt.gcf()
+        #fig.autofmt_xdate()
+        #ax = plt.gca()
+        #ax.set_ylabel("feature id")
+
+    def get_dir(self, inp, verbose=False):
+        tdir = inp["VOLCAT_DIR"]
+        volcnames = self.df["VOLCANO_NAME"].unique()
+        if len(volcnames) > 1:
+            print("WARNING: not setup for multiple volcano in same Event class")
+        volcname = fix_volc_name(self.df["VOLCANO_NAME"].unique()[0])
+        directory = os.path.join(inp["VOLCAT_DIR"], volcname)
+        make_dir(tdir, newdir=volcname, verbose=True)
+        ndir = os.path.join(tdir, volcname)
+        if verbose:
+            print("Downloading to {}".format(ndir))
+        self.ndir = ndir
+        return ndir
+
+    def download(self, inp, verbose=False):
+        ndir = self.get_dir(inp)
+        if verbose:
+            print("Downloading to {}".format(ndir))
+        for eurl in self.df["EVENT_URL"]:
+            file_download = check_file(eurl, ndir, verbose=True)
+            if file_download:
+                os.system("wget -P" + ndir + " " + eurl)
+                file_download = check_file(eurl, ndir, verbose=True)
+                if file_download:
+                    print("FAILED", eurl)
+                else:
+                    if verbose:
+                        print("Downloaded", eurl)
+            else:
+                if verbose:
+                    print("Already Downloaded", eurl)
+
+    def write_parallax_corrected(
+        self, inp=None, gridspace=None, daterange=None, verbose=False
+    ):
+        if not self.ndir:
+            self.get_dir(inp)
+        wdir = os.path.join(self.ndir, "pc_corrected")
+        flist = self.df["EVENT_FILE"].unique()
+        #flist = [flist[0]]
+        print("Number of parallax files to write {}".format(len(flist)))
+        volcat.write_parallax_corrected_files(
+            self.ndir,
+            wdir,
+            flist=flist,
+            verbose=verbose,
+            daterange=daterange,
+            gridspace=gridspace,
+        )
+
+    def get_flist(self):
+        """
+        returns list of files sorted by date and feature id.
+        """
+        slist = ['SENSOR_NAME', 'observation_date','FEATURE_ID']
+        alist = slist.copy()
+        alist.append('EVENT_FILE')
+        df2 = self.df[alist].sort_values(by=slist,ascending=False)
+        #flist = df2['EVENT_FILE'].values
+        return df2
+   
+    def check_fid(self):
+        jtemp = self.get_flist()
+        jdt = jtemp['observation_date'].unique()
+        for jjj in jdt:
+            atemp = jtemp[jtemp['observation_date']==jjj]
+            if len(atemp)>1:
+               print(atemp[['observation_date','FEATURE_ID']])
+               print('------------')
+        print('done checking fid')
 
 
+    def get_volcat_events(self):
+        # close any open files first.
+          
+        for event in self.events:
+            event.close()
+        flist = self.get_flist()['EVENT_FILE'].values
+        das = volcat.get_volcat_list(
+            self.ndir, flist=flist, correct_parallax=False, verbose=False
+        )
+        self.events = das
+        self.maxi = len(das)
+
+    def get_volcat_events_pc(self):
+        for event in self.pcevents:
+            event.close()
+        flist = self.get_flist()['EVENT_FILE'].values
+        wdir = os.path.join(self.ndir, "pc_corrected")
+        flist = [x.replace(".nc", "_pc.nc") for x in flist]
+        #flist = [flist[0]]
+        das = volcat.get_volcat_list(
+            wdir, flist=flist, correct_parallax=False, verbose=False
+        )
+        self.pcevents = das
+
+    def get_vloc(self):
+        vloc = [self.df.VOLCANO_LAT.unique()[0], self.df.VOLCANO_LON.unique()[0]]
+        return vloc
+
+    def boxplot(self, bstep=10):
+        self.vplot.make_boxplot(np.arange(0, self.maxi - 1, bstep))
+
+    def vplots(self):
+        from utilvolc import volcat_plots as vp
+
+        self.vplot = vp.VolcatPlots(self.events)
+        self.vplot.make_arrays()
+        self.vplot.volcat_describe_plot()
+        fig1 = self.vplot.plot_multiA(fignum=1, smooth=0.08, yscale="linear")
+        fig2 = self.vplot.plot_multiB(fignum=2)
+
+    def compare_pc(self, pstep):
+        vloc = self.get_vloc()
+        das = self.events
+        pcdas = self.pcevents
+        vlist = list(np.arange(0, self.maxi, pstep))
+        jtemp = self.get_flist()
+        for iii in vlist:
+            fig = plt.figure(1, figsize=(10, 5))
+            ax = fig.add_subplot(1, 2, 1)
+            ax2 = fig.add_subplot(1, 2, 2)
+            vmass = volcat.get_mass(das[iii], clip=True)
+            pcmass = volcat.get_mass(pcdas[iii], clip=True)
+            sns.set()
+            print('sensor', jtemp['SENSOR_NAME'].values[iii])
+            print('feature id', jtemp['FEATURE_ID'].values[iii])
+            print(vmass.time.values, pcmass.time.values)
+            temp = vmass.isel(time=0)
+            plt.sca(ax)
+            cb = plt.pcolormesh(
+                temp.longitude.values,
+                temp.latitude.values,
+                np.log10(temp.values),
+            )
+            plt.colorbar(cb)
+            plt.plot(vloc[1], vloc[0], "m^", MarkerSize=5)
+            temp = pcmass.isel(time=0)
+            plt.sca(ax2)
+            cb = plt.pcolormesh(
+                temp.longitude.values,
+                temp.latitude.values,
+                np.log10(temp.values),
+            )
+            plt.colorbar(cb)
+            plt.plot(vloc[1], vloc[0], "m^", MarkerSize=5)
+            ax = plt.gca()
+            plt.tight_layout()
+            plt.show()
+            plt.close()
+
+    def plots(self, pstep):
+
+        vloc = self.get_vloc()
+        das = self.events
+        vlist = list(np.arange(0, self.maxi, pstep))
+        for iii in vlist:
+            fig = plt.figure(1, figsize=(10, 5))
+            ax = fig.add_subplot(1, 2, 1)
+            ax2 = fig.add_subplot(1, 2, 2)
+            vht = volcat.get_height(das[iii], clip=True)
+            sns.set()
+            print("total mass", das[iii].ash_mass_loading_total_mass.values[0])
+            print("area", das[iii].feature_area.values[0])
+            vht.isel(time=0).plot.pcolormesh(
+                ax=ax, x="longitude", y="latitude", cmap="Reds"
+            )
+            ax = plt.gca()
+            # ax.set_xlim(xmin,xmax)
+            # ax.set_ylim(ymin,ymax)
+            # plt.tight_layout()
+            # plt.show()
+            # plt.savefig('./animations/bezy_volcat_mass{:03d}.png'.format(iii))
+            # plt.close()
+
+            # plt.savefig('bezy_volcat_2040_ht.png')
+            # print(np.max(vht))
+            # plt.show()
+
+            vht = volcat.get_mass(das[iii], clip=True)
+            # sns.set()
+            # vht.isel(time=0).plot.pcolormesh(ax=ax2, x='longitude',y='latitude',cmap='Reds')
+            temp = vht.isel(time=0)
+            cb = plt.pcolormesh(
+                temp.longitude.values, temp.latitude.values, np.log10(temp.values)
+            )
+            plt.colorbar(cb)
+            plt.plot(vloc[1], vloc[0], "m^", MarkerSize=5)
+            # plt.savefig('./animations/bezy_volcat_mass{:03d}.png'.format(iii))
+            # print(np.max(vht))
+            ax = plt.gca()
+            plt.tight_layout()
+            plt.show()
+            plt.close()
+
+    # def plots(self):
+    #    flist = self.df['EVENT_FILE'].values
+    #    das = volcat.get_volcat_list(self.ndir, flist=flist, correct_parallax=False, verbose=False)
+    #    self.das = das
+    #    maxi = len(das)
 
 
 class EventFile(VFile):
@@ -311,14 +582,14 @@ class EventFile(VFile):
     methods
          __init__
          parse
-         open 
+         open
 
 
 
     attributes
 
     df : pandas DataFrame
-         colums are 
+         colums are
          SENSOR_NAME
          SENSOR_MODE
          SENSOR_WMO_ID
@@ -343,55 +614,131 @@ class EventFile(VFile):
          FEATURE_ID_LATEST
     """
 
- 
-    def __init__(self,fname,fdir='./'):
+    def __init__(self, fname, fdir="./"):
         self.dii = -5
         self.djj = -4
         self.df = pd.DataFrame()
         self.attrs = {}
-        super().__init__(fname,fdir)
+        super().__init__(fname, fdir)
 
-    def parse(self,fname):
+    def parse(self, fname):
         """
         Parses information from filename
         """
         temp = super().parse(fname)
         self.vid = temp[5]
-        self.instrument = temp[1] 
-        self.gid = temp[-1].replace('.json','')
+        self.instrument = temp[1]
+        self.gid = temp[-1].replace(".json", "")
 
     def open(self):
         fname = os.path.join(self.fdir, self.fname)
-        jsonf = open_json(os.path.join(self.fdir,self.fname))
-        fdict = jsonf['FILES']
-        jsonf.pop('FILES')
+        jsonf = open_json(os.path.join(self.fdir, self.fname))
+
+        fdict = jsonf["FILES"]
+        if isinstance(fdict, dict):
+            fdict = [fdict]
         df = pd.DataFrame(fdict)
         dtfmt = "%Y-%m-%dT%H:%M:%S.0Z"
-        dftemp2 = df.apply(lambda row: datetime.datetime.strptime(row['OBSERVATION_TIME'],dtfmt),axis=1)
-        df.insert(1,'observation_date',dftemp2)
+        dftemp2 = df.apply(
+            lambda row: datetime.datetime.strptime(row["OBSERVATION_TIME"], dtfmt),
+            axis=1,
+        )
+        df.insert(1, "observation_date", dftemp2)
         self.df = df
+
+        jsonf.pop("FILES")
         self.attrs = jsonf
+
+
 
     def check_feature_id(self):
         dtemp = self.df
         sns.set()
-        for fid in dtemp['FEATURE_ID'].unique():
-            dtemp2 = dtemp[dtemp['FEATURE_ID']==fid]
-            plt.plot(dtemp2['observation_date'], dtemp2['FEATURE_ID'],'.')
+        for fid in dtemp["FEATURE_ID"].unique():
+            dtemp2 = dtemp[dtemp["FEATURE_ID"] == fid]
+            plt.plot(dtemp2["observation_date"], dtemp2["FEATURE_ID"], ".")
         fig = plt.gcf()
         fig.autofmt_xdate()
         ax = plt.gca()
-        ax.set_ylabel('feature id') 
+        ax.set_ylabel("feature id")
 
+
+class WorkFlow:
+    def __init__(self, inp, hours=24, verbose=False):
+        # set directories
+        self.dirhash = self.set_directories(inp)
+        # get list of volcanoes to process data for
+        self.greenlist = self.get_greenlist()
+
+        # initialize attributes.
+        # DataFrame with info from summary files
+        self.sumdf = pd.DataFrame()
+        # DataFrame with info from log files
+        self.logdf = pd.DataFrame()
+        # dictionary. key is volcano name. value is Event bject
+        self.ehash = {}
+
+    def reset_greenlist(self, hours=24):
+        # get pandas dataframe with summary file.
+        self.sumdf = get_summary_file_df(self.dirhash["JPSS_DIR"], hours=hours)
+        self.greenlist = self.sumdf["VOLCANO_NAME"].unique()
+
+    def get_volcat(self, hours=24, verbose=False):
+        """
+        inp : dictionary with file locations
+        hours : integer indicating how many hours back to find files.
+        """
+        # get pandas dataframe with summary file.
+        self.sumdf = get_summary_file_df(self.dirhash["JPSS_DIR"], hours=hours)
+
+        # download log files for volcanoes in greenlist
+        khash = {}
+        khash["VOLCANO_NAME"] = self.greenlist
+        self.logdf = get_log_files(
+            self.sumdf, inp=self.dirhash, khash=khash, verbose=verbose
+        )
+
+        # download netcdf files
+        self.ehash = create_event(self.sumdf, self.dirhash, vlist=self.greenlist)
+        for volc in self.ehash.keys():
+            print("download {} netcdf files".format(volc))
+            self.ehash[volc].download(self.dirhash)
+
+    def check_fid(self):
+        for volc in self.ehash.keys():
+            print(volc)
+            self.ehash[volc].check_fid()
+          
+
+
+    def set_directories(self, inp):
+        """
+        keys should be
+        JPSS_DIR - location of xml files that are pushed to our system
+        VOLCAT_LOGFILES - location to download the log files
+        VOLCAT_DIR - location for netcdf files to be downloaded.
+        """
+        return inp
+
+    def get_greenlist(self):
+        gfile = os.path.join(self.dirhash["VOLCAT_DIR"], "green_list.txt")
+        with open(gfile, "r") as fid:
+            greenlist = fid.readlines()
+        greenlist = [x.strip() for x in greenlist]
+        return greenlist
 
 
 def file_progression():
     import volcat_logic as vl
 
     # Step 0:
-    vl.get_summary_file_df(fdir,hours=x)
+    df = vl.get_summary_file_df(fdir, hours=x)
     # creates a dataframe which contains information from the summary files that have
     # been pushed to fdir over the last x hours.
+
+    # Step 1:
+
+    # get event log files.
 
     # Step 1:
     vl.get_files()
@@ -490,10 +837,66 @@ def generate_report(vmin=None, vmax=None, **kwargs):
         plt.show()
 
 
+def create_event(sumdf, fdir, vlist=None, verbose=False):
+    """
+    sumdf : DataFrame with information from summary files
+    fdir  : location of log files
+    vlist : list of volcanoes to create  Events objects for
+    verbose : boolean
+
+    output
+
+    eventhash : dictionary
+                key is volcano name. value is Events object.
+    """
+    if isinstance(fdir, dict):
+        fdir = fdir["VOLCAT_LOGFILES"]
+
+    eventhash = {}  # key is volcano name. value is Event class instance
+    if not isinstance(vlist, (list, np.ndarray)):
+        vlist = sumdf["VOLCANO_NAME"].unique()
+    for volc in vlist:
+        eventlist = []
+        df2 = sumdf[sumdf["VOLCANO_NAME"] == volc]
+        efile = df2["LOG"].unique()
+        for efl in efile:
+            evo = EventFile(efl, fdir)
+            evo.open()
+            eventlist.append(evo)
+        if eventlist:
+            eve = Events()
+            eve.add_events(eventlist)
+            eventhash[volc] = eve
+    return eventhash
+
+
+def get_log_files(sumdf, verbose=False, inp={"VOLCAT_LOGFILES": "./"}, khash={}):
+    """
+    kwargs : dictionary where key is a column name and value is list of values to keep for that column.
+
+    Return:
+       list of
+
+    """
+    df2 = sumdf.copy()
+    ccc = sumdf.columns
+    for kwargkey in khash.keys():
+        if kwargkey in ccc:
+            # print(kwargkey, khash[kwargkey])
+            if isinstance(khash[kwargkey], (list, np.ndarray)):
+                df2 = df2[df2[kwargkey].isin(khash[kwargkey])]
+            else:
+                df2 = df2[df2[kwargkey] == khash[kwargkey]]
+    eurl = df2["LOG_URL"].unique()
+    for logfile in eurl:
+        get_log(logfile, verbose=verbose, VOLCAT_LOGFILES=inp["VOLCAT_LOGFILES"])
+    return df2
+
+
 def get_files(inp={"JPSS_DIR": "/pub/jpsss_upload"}, vaac=None, verbose=False):
     """
     Use various functions to get all available netcdf files from json event log files
- 
+
     Sorts through the ftp directory to find json event summary files
 
     Loops through them, and downloads the corresponding json event log files
@@ -674,6 +1077,7 @@ def delete_old(directory, days=7, verbose=False):
 
 
 def get_log_list(data):
+    ## 5/25/2022 now this is done somewhere else.
     """Pulls the log url from the pandas dataframe
     Inputs:
     data: pandas dataframe
@@ -722,21 +1126,21 @@ def get_log(log_url, verbose=False, **kwargs):
         log_dir = kwargs["VOLCAT_LOGFILES"]
     else:
         log_dir = "/pub/ECMWF/JPSS/VOLCAT/LogFiles/"
-    if isinstance(log_url,str):
-       log_url = [log_url]
+    if isinstance(log_url, str):
+        log_url = [log_url]
     for gurl in log_url:
-        fname = gurl.split('/')[-1]
+        fname = gurl.split("/")[-1]
         # wget -r -l1 -A.nc  : retrieve all nc files
         # wget -N: timestamping - retrieve files only if newer than local
         # wget -P: designates location for file download
         os.system("wget -N -P " + log_dir + " " + gurl)
-        if os.path.isfile(os.path.join(log_dir,fname)):
-           print('DONE ', fname)
-        else:
-           print('FAILED ', fname)
-        if verbose:
+        if os.path.isfile(os.path.join(log_dir, fname)):
             logger.info("File {} downloaded to {}".format(gurl, log_dir))
-            print("File {} downloaded to {}".format(gurl, log_dir))
+        else:
+            logger.warning("FAILED to download File {} ".format(gurl, log_dir))
+        # if verbose:
+        #    logger.info("File {} downloaded to {}".format(gurl, log_dir))
+        #    print("File {} downloaded to {}".format(gurl, log_dir))
     return None
 
 
@@ -770,7 +1174,7 @@ def check_file(fname, directory, suffix=".nc", verbose=False):
     # original = open_log(directory)
     original = list(f for f in os.listdir(directory) if f.endswith(suffix))
     s = fname.rfind("/")
-    current = fname[s + 1:]
+    current = fname[s + 1 :]
     if current in original:
         # if verbose:
         #    print('File '+current+' already downloaded')
@@ -890,7 +1294,7 @@ def fix_volc_name(volcname):
     if "," in volcname:
         s = volcname.find(",")
         tmp = volcname[:s]
-        tmp2 = volcname[s + 2:]
+        tmp2 = volcname[s + 2 :]
         volcname = tmp2 + "_" + tmp
     if " " in volcname:
         volcname = volcname.replace(" ", "_")
@@ -909,7 +1313,6 @@ def make_volcdir(data_dir, fname, verbose=False):
     volcname: string
     New directory is created if it didn't exist
     """
-    volc = open_dataframe(fname)["VOLCANO_NAME"].values[0]
     volcname = fix_volc_name(volc)
     make_dir(data_dir, newdir=volcname, verbose=verbose)
     return volcname
@@ -942,7 +1345,9 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
     else:
         data_dir = "/pub/ECMWF/JPSS/VOLCAT/Files/"
 
-    volcname = make_volcdir(data_dir, fname, verbose=verbose)
+    volcname = fix_volc_name(open_dataframe(fname)["VOLCANO_NAME"].values[0])
+    make_dir(data_dir, newdir=volcname, verbose=verbose)
+    # volcname = make_volcdir(data_dir, volc, verbose=verbose)
     if vaac is not None:
         # checking that file is for specified vaac region
         vaac2 = open_dataframe(fname, varname="VAAC_REGION")
@@ -970,7 +1375,7 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
             # os.system('wget -a '+data_dir+'data_logfile.txt --rejected-log=' +data_dir+'nodata_logfile.txt -P'+data_dir+' '+dfile_list[i])
             os.system("wget -P" + data_dir + volcname + "/ " + dfile_list[i])
             s = dfile_list[i].rfind("/")
-            dfile = dfile_list[i][s + 1:]
+            dfile = dfile_list[i][s + 1 :]
             if os.path.isfile(data_dir + volcname + "/" + dfile):
                 if verbose:
                     print("File " + dfile + " downloaded to " + data_dir + volcname)
@@ -1003,7 +1408,7 @@ def correct_pc(data_dir, newdir="pc_corrected", daterange=None, verbose=False):
     # May want to streamline this more so all files are not checked each time!
     # Create pc_corrected netcdf files if not already created, put in pc_corrected folder
     # Make sure data_dir ends with '/'
-    data_dir = os.path.join(data_dir, "")
+    # data_dir = os.path.join(data_dir, "")
     # Create pc_corrected folder if not already there
     print("DAT DIRECTORY", data_dir)
     make_dir(data_dir, verbose=verbose)
@@ -1014,18 +1419,23 @@ def correct_pc(data_dir, newdir="pc_corrected", daterange=None, verbose=False):
     )
     # dfile_list = sorted(glob(data_dir+'*.nc'))
     # Create hypothetical list of pc corrected files
+
     file_list = []
     pcfile_list = []
+
+    print("volcat files", dfile_list)
     for element in dfile_list:
+        print("element ", element)
+        print("--------------")
         s = element.rfind("/")
-        fname = element[s + 1:]
+        fname = element[s + 1 :]
         pcfname = os.path.splitext(fname)[0] + "_pc.nc"
         make_pcfile = check_file(pcfname, pc_dir, verbose=verbose)
         if make_pcfile:
             # Create pc_corrected file if not in pc directory
             flist = [fname]
             if verbose:
-                print(data_dir + fname)
+                print(os.path.join(data_dir, fname))
             volcat.write_parallax_corrected_files(data_dir, pc_dir, flist=flist)
     return None
 
@@ -1182,7 +1592,6 @@ def make_pc_files(
     # else:
     for direct in dirlist:
         file_dir = os.path.join(data_dir, direct, "")
-        correct_pc(file_dir, verbose=verbose, daterange=daterange)
     if verbose:
         print(
             "Parallax corrected files available in these directories: " + str(dirlist)
@@ -1214,7 +1623,7 @@ def volcplots(das_list, img_dir, saveas=True):
     dset_name = das_list[0].attrs["dataset_name"]
     s = dset_name.find("b")
     e = dset_name.rfind("_")
-    begin_time = dset_name[s + 1: e]
+    begin_time = dset_name[s + 1 : e]
     # TO DO: Use volcat.get_volcat_name_df to get begin_time value
     if saveas:
         if pc:
@@ -1405,7 +1814,6 @@ def update_vaac_files():
     volcanoes = tree.xpath('//span[@id="quicklinks"]/text()')
 
 
-
 def write_emitimes(
     data_dir,
     volcano=None,
@@ -1427,6 +1835,7 @@ def write_emitimes(
     None
     """
     from utilvolc import write_emitimes as we
+
     pollnum = 1
     pollpercents = [1]
     layer = 0.0
@@ -1466,13 +1875,13 @@ def write_emitimes(
         dframe = volcat.get_volcat_name_df(volc_dir)
 
         # sort by image date
-        #dframe = dframe.sort_values(by="idate")
+        # dframe = dframe.sort_values(by="idate")
 
         # pick by event date if indicated
         if event_date:
-            dframe = dframe[dframe['edate'] == event_date]
-         
-        imgdates = dframe['idate'].unique()
+            dframe = dframe[dframe["edate"] == event_date]
+
+        imgdates = dframe["idate"].unique()
         # loop through image dates
         # write one emit-times file per image date.
         # sometimes this will utilize more than one volcat file.
@@ -1500,5 +1909,3 @@ def write_emitimes(
                     "Emit-times file exists {}".format(volcemit.make_emit_filename())
                 )
         return None
-
-
