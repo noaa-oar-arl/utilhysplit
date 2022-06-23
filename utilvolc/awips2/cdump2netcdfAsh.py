@@ -10,9 +10,6 @@ from netCDF4 import Dataset
 import hysplit
 
 # 01/28/2020 AMC cdump2awips created to make a netcdf file appropriate for input into AWIPS
-# hysplit.py was modified in the forked version of MONET to make this work.
-
-# combine_cdump creates a 6 dimensional xarray dataarray object from cdump files.
 #
 # Notes 
 # global attribute time_origin=2020-02-04 16:20:47
@@ -73,6 +70,7 @@ class Cdump2Awips:
         self.fileformat = fileformat
         self.jobid = jobid
         # self.coordlist = ('time', 'ensid', 'longitude', 'latitude')
+
         self.coordlist = ("time", "ensid", "latitude", "longitude")
 
         self.globalhash = globalhash
@@ -128,9 +126,9 @@ class Cdump2Awips:
         if "MER_unit" in self.globalhash.keys():
             fid.MER_unit = self.globalhash["MER_unit"]
         if "source_latitude" in self.globalhash.keys():
-            fid.soure_latitude = self.globalhash["source_latitude"]
+            fid.source_latitude = self.globalhash["source_latitude"]
         if "source_longitude" in self.globalhash.keys():
-            fid.soure_longitude = self.globalhash["source_longitude"]
+            fid.source_longitude = self.globalhash["source_longitude"]
         if "source_name" in self.globalhash.keys():
             fid.source_name = self.globalhash["source_name"]
         if "emission_start" in self.globalhash.keys():
@@ -326,31 +324,3 @@ def makeconc(xrash, date1, level, mult=1, dotranspose=False, verbose=False):
         print(c1.shape)
     return c1
 
-def maketestblist(dname='./'):
-    # Need list of tuples. (filename, sourcetag, mettag)
-    blist = []
-    dname = dname
-    fname = "cdump.Aegec00"
-    blist.append((os.path.join(dname, fname), "S1", "gec00"))
-    fname = "cdump.Aegep01"
-    blist.append((os.path.join(dname, fname), "S1", "gep01"))
-    return blist
-
-def maketestncfile():
-    blist = maketestblist()
-    # base name of the netcdf file.
-    oname = "out.nc"
-    # xarray dataset produced by hysplit.combine_dataset.
-    xrash = maketestra()
-    # 
-    c2n = Cdump2Awips(xrash, oname)
-    fnames = c2n.create_all_files()
-    return fnames
-
-
-def maketestra():
-    blist = maketestblist()
-    # xrash is an xarray dataset which can be input into
-    # Cdump2Awips class initialization.
-    xrash = hysplit.combine_dataset(blist)
-    return xrash

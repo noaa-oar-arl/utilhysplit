@@ -157,7 +157,7 @@ class EmitCyl(object):
         print('open file', self.filename)
         # Writing first line of data
         dtstr = sdate.strftime('%Y %m %d %H')
-        emitfile.write(dtstr+'  '+str(duration)+' ' + str(nrecords)+'\n')
+        emitfile.write(dtstr+' '+str(duration)+' ' + str(nrecords)+'\n')
         datestr = sdate.strftime('%Y %m %d %H %M')
         # Writing records
         for ilat in range(len(latlist)):

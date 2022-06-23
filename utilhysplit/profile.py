@@ -5,6 +5,7 @@ from math import *
 #from scipy.io import netcdf
 #from pylab import *
 import numpy as np
+import pandas as pd
 #import numpy.ma as ma
 #import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -83,7 +84,7 @@ def callprofile(hdir, mdir, meteo, lat, lon, dt, mfname='', nstop=24, offset=0):
     subprocess.call([callstr, p1, p2, p3, p4, p5, p6, p7])
     if mfname !='':
         subprocess.call(["mv", "profile.txt", mfname])
-
+  
 
 
 class MeteoProfile(object):
@@ -100,7 +101,7 @@ class MeteoProfile(object):
         #fname="/pub/Scratch/alicec/KASATOCHI/meteo/wrf.profile.txt"
         #fname="/pub/Scratch/alicec/KASATOCHI/meteo/narr.profile.txt"
         #fname="/pub/Scratch/alicec/KASATOCHI/meteo/gdas1.profile.txt"
-
+        self.pdir = pdir
         self.fname=pdir + fname
         self.valra = {}
         self.valra2d = {}
@@ -122,17 +123,18 @@ class MeteoProfile(object):
        
         height_rat=[] 
 
-        count=0
+        self.var3d = []
+        self.var2d = [] 
+
+        #count=0
         #time_index=0
-        firstday=[]
-        txtfile= open(self.fname, "r")
-        dvalid=0
-        self.readnew(datesvalid)
-
-
-    def readnew(self, datesvalid=[]):
-        print('reading')
-        txtfile = open(self.fname, "r")
+        #firstday=[]
+        #txtfile= open(self.fname, "r")
+        #dvalid=0
+        self.readnew(os.path.join(pdir,fname), datesvalid)
+     
+    def readnew(self, fname, datesvalid=[]):
+        txtfile = open(fname, "r")
         cnt=0
         dvalid = True
         iii = 0
@@ -150,7 +152,7 @@ class MeteoProfile(object):
                self.dunits2 = line
                cnt = 3
             elif cnt == 1:
-               self.var2d = self.columnnames(line)
+               self.var2d = self.columnnames2d(line)
                cnt = 2
             elif cnt == 5:
                self.dunits3 = line
@@ -175,10 +177,47 @@ class MeteoProfile(object):
                break
         txtfile.close()
         #print self.date_ra
+
+    def columnnames2d(self, line):
+        temp = line.split()
+        return temp
+
           
     def columnnames(self, line):
-        return(line.split())
-     
+        temp = line.split()
+        # profile always outputs two UWND and VWND.
+        temp[-1] = 'VWND_rot'
+        temp[-2] = 'UWND_rot'
+        return temp
+
+    def get_3dvar_df(self):
+        """
+        retunrs pandas dataframe with 3d variables in it.
+        """
+        varra = []
+        dates = self.date_ra
+        for tm in dates:
+           for line in self.valra[tm]:
+               temp2 = line.split()
+               temp2 = list(map(float,temp2))
+               # TO DO. 
+               # skip lines which contain missing values.
+               # need to implement fixed column width reader
+               # cannot assume spaces are delimiters.
+               if len(temp2) != len(self.var3d)+1: 
+                  #print('warning: line contains missing values ', line)
+                  continue
+               temp = [tm] 
+               temp.extend(temp2)
+               #print(temp)
+               try:
+                   varra.append(temp)
+               except:
+                   pass
+        cols = ['time','PRES1']
+        cols.extend(self.var3d)
+        df = pd.DataFrame(varra,columns=cols)
+        return df
 
     def get_var(self, var, dates=[], hts=[]):
         varra = []
@@ -186,10 +225,10 @@ class MeteoProfile(object):
            dates = self.date_ra
         if var in  self.var3d:
            iii = self.var3d.index(var) + 1
-           print(var, iii)
            for tm in dates:
                for line in self.valra[tm]:
                    temp = line.split()
+                   print(tm)
                    try:
                        varra.append(float(temp[iii]))
                    except:
@@ -197,17 +236,11 @@ class MeteoProfile(object):
         elif var in self.var2d:
            iii = self.var2d.index(var) + 1
            for tm in dates:
-               print(tm)
                temp = self.valra2d[tm][0].split()
                varra.append(float(temp[iii]))
         else:
-           print(var, ' not in 3d variables', self.var3d)
-           print(var, ' not in 2d variables', self.var2d)
            return -1
         return varra     
-
-    
-
 
     def testdate(self, time, datesvalid, verbose=False):
         if datesvalid == []:
@@ -255,7 +288,7 @@ class MeteoProfile(object):
     def wind_direction(self, vwind, uwind):
             #vwind is magnitude of wind going from south to north
             #uwind is magnitude of wind going from West to East
-            print(len(vwind), len(uwind))
+            #print(len(vwind), len(uwind))
             uwind = np.array(uwind)
             vwind = np.array(vwind)
             wind_dir = np.arctan(vwind/uwind)*180/pi
@@ -263,9 +296,9 @@ class MeteoProfile(object):
             wind_dir[upos]= 270 - wind_dir[upos] 
             uneg = np.where(uwind < 0)
             wind_dir[uneg] = 90 - wind_dir[uneg] 
-            print(wind_dir.shape , wind_dir[2])
-            print('U' , uwind.shape, uwind[2])
-            print('V' , vwind.shape, vwind[2])
+            #print(wind_dir.shape , wind_dir[2])
+            #print('U' , uwind.shape, uwind[2])
+            #print('V' , vwind.shape, vwind[2])
             return wind_dir
 
 class Radiosonde(MeteoProfile):
@@ -326,7 +359,7 @@ class Radiosonde(MeteoProfile):
 
            if date <= datesvalid[1] and date >=datesvalid[0]:
                if lintype in ['4','5','6','7','8','9']:       #dataline
-                  print(wl)
+                  #print(wl)
                   pressure.append(float(wl[1]))
                   height.append(float(wl[2]))
                   temp.append(float(wl[3]))

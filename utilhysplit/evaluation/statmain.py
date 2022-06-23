@@ -38,6 +38,17 @@ def autocorr(ts1, nlist=None):
     #ax.plot(nlist, alist2, 'b.', label='fc')
     return alist 
 
+def get_pixel_matching_threshold(obsra, modelra, threshold=0):
+    obsx = np.sort([x for x in obsra.values.flatten() if x > threshold])
+    modelx = np.sort(modelra.values.flatten())
+    numobs = len(obsx)
+    if numobs < len(modelx):
+       modelx = modelx[len(modelx)-numobs:]
+    else:
+       print('Warning Pixel Matching: More observed than modeled values above threshold')
+    return modelx[0] 
+
+
 def degdiff(cc, mm):
     # given two degree measurements, find smallest difference.
     # if moving clockwise gives you the smallest angular difference
@@ -52,16 +63,38 @@ def stepfunction(xstep, ystep, iii):
     f(xstep) = ystep
     where xtep, ystep define a step function 
     (for instance output of cdf)
-
     input iii  (float)
     returns f(iii) (float)
     """
-    zzz = zip(xstep, ystep)
-    jjj=0
-    for val in zzz:
-        if iii >= val[0]: jjj=val[1]
-        if iii < val[0]: break
-    return  jjj 
+    # this way may be faster.
+    zzz=1
+    xxx = np.array(xstep)
+    yyy = np.array(ystep)
+    vpi = np.where(xxx <= iii)
+    try:
+        zzz = vpi[-1][-1]
+    except:
+        #print('stepfunction', vpi)
+        #print(iii, xstep[0], xstep[-1])
+        return yyy[0]
+    try:
+        mmm = yyy[zzz+1]
+    except:
+        return yyy[-1]
+    return  mmm
+
+    # loop is slow
+   
+    # zzz = zip(xstep, ystep)
+    # jjj=0
+    # for val in zzz:
+       # find value of x which is closest to input value iii.
+    #    if iii >= val[0]: jjj=val[1]
+    #    if iii < val[0]: break
+    # test to see if they return the same thing.
+    #if jjj != mmm:
+    #   print('jjj, mmm', jjj, mmm) 
+    #return  jjj 
 
 
 def get_ds(n1, n2):
@@ -79,12 +112,41 @@ def get_ds(n1, n2):
     ds = (-1 * ds) **0.5
     return alpha, ds
 
+def example_ks_test(numpts=100):
+    from utilhysplit.evaluation import statmain
+    # create two Gaussian distributions which are not the same.
+    val1 = np.random.normal(80,10,numpts)
+    val2 = np.random.normal(90,10,numpts)
+    # get CDF of distributions
+    x1,y1 = nancdf(val1,thresh=0) 
+    x2,y2 = nancdf(val2,thresh=0) 
+    # plot CDFS
+    fig = plt.figure()
+    ax = fig.add_subplot(2,1,1)
+    ax2 = fig.add_subplot(2,1,2)
+    ax.step(x1,y1)
+    ax.step(x2,y2)
+   
+    # plot difference between CDF's 
+    xr = kstest_sub(x1,y1,x2,y2)
+    ax2.plot(xr[0],xr[1], '-k.')
+    ax2.set_ylabel('Difference in CDFs')
+    ax.set_ylabel('Probability')
+    print('KSP', kstestnan(val1, val2))
+    print('KSP', kstest(val1, val2))
+
+def kstestnan(data1, data2,thresh=None):
+    print('start kstestnan')
+    cx1, cy1 = nancdf(data1,thresh)  
+    cx2, cy2 = nancdf(data2,thresh) 
+    result =  kstest_sub(cx1,cy1,cx2,cy2)
+    return np.max(np.abs(result[1]))
 
 def kstest(data1, data2):
     """
     Kolmogorov-Smirnov test
     data1 : list of data
-    dtata1 :  list of data
+    daata2 :  list of data
 
     creates cdf for data1 and data2 and finds different
     between them assuming each are a step function.
@@ -106,22 +168,35 @@ def kstest(data1, data2):
 
     cx1, cy1 = cdf(data1)  
     cx2, cy2 = cdf(data2) 
+    result =  kstest_sub(cx1,cy1,cx2,cy2)
+    return np.max(np.abs(result[1]))
 
-    n1 = len(cx1) 
-    n2 = len(cx2) 
+def kstest_sub(cx1,cy1,cx2,cy2):
+    """
+    cx1 : 1D numpy ndarray
+    cy1 : 1D numpy ndarray
+    cx2 : 1D numpy ndarray
+    cy2 : 1D numpy ndarray
 
+    cx1, cy1 can be output from cdf function.
+    cx2, cy2 can be output from cdf function.
+
+    Returns 
+    [xtot, difflist]
+    xtot - value on x axis of CDFS
+    difflist - difference between two cdfs
+
+    xtot and difflist have the same length
+    """
     difflist = []
-    for xxx in cx1:
+    # this is a little slow for functions with
+    # a lot of x values. 
+    xtot = np.sort(np.append(cx1,cx2))
+    for xxx in xtot:
         val1 = stepfunction(cx1, cy1, xxx)
         val2 = stepfunction(cx2, cy2, xxx)
         difflist.append(val2 - val1) 
-
-    difflist2 = []
-    for xxx in cx2:
-        val1 = stepfunction(cx1, cy1, xxx)
-        val2 = stepfunction(cx2, cy2, xxx)
-        difflist2.append(val2 - val1) 
-    return difflist, difflist2
+    return [xtot,difflist]
 
 def probof(data1, probval):
     """
@@ -133,20 +208,53 @@ def probof(data1, probval):
     """
     cx1, cy1 = cdf(data1)  
     return stepfunction(cy1, cx1, probval)
-    
 
 def kstest_answer(data1, data2):
     d1, d2 = kstest(data1, data2)
     return np.max([np.max(d1), np.max(d2)])
 
+def pixel_matched_cdf(modelra,numobs,threshold=0):
+    """
+    modelra : 1d numpy array of values.
+    nans will be removed.
+    numobs : number of observations. The modelra will be
+             sorted and lower values removed so that length
+             matches number of observations.
+    """
+    modelra = modelra[~np.isnan(modelra)]
+    modelx = np.sort(modelra)
+    # remove smaller values so array is same size as obs.
+    if numobs < len(modelx):
+       modelx = modelx[len(modelx)-numobs:]
+    else:
+       print('WARNING pixel matching. More obs values than modeled')
+       print(len(modelx), numobs)
+    modely = 1. * np.arange(modelx.size) / float(modelx.size-1)
+    return modelx, modely
+
+def nancdf(data,thresh=None):
+    """
+    remove nans from data before creating cdf.
+    """
+    data2 = data[~np.isnan(data)]
+    if thresh:
+       data2 = data2[data2>thresh]
+       #vpi = data2 < thresh
+       #data2[vpi] = np.nan
+       #data2 = data2[~np.isnan(data2)]
+    return cdf(data2)
+
 def cdf(data):
     """
     data should be a list of data.
+    sdata : sorted list of the data.
+    yval  : normalized index of data (from 0 to 1). 
+
     """
     sdata = np.sort(data)
     # y axis goes from 0 to 1
-    y = 1. * np.arange(sdata.size) / float(sdata.size-1)
-    return sdata, y
+    yval = 1. * np.arange(sdata.size) / float(sdata.size-1)
+    return sdata, yval
 
 def plot_cdf(sdata, y, ax):
     ax.step(sdata, y, '-r')
@@ -312,14 +420,12 @@ class MatchedData(object):
            alist2.append(ts2.autocorr(lag=nnn))
         ax.plot(nlist, alist1, '-k.', label='obs')
         ax.plot(nlist, alist2, '-b.', label='fc')
-        
 
     def plotscatter(self, ax):
         """
         plot obsra on x and fc array on y
         """
         ax.plot(self.obsra['obs'], self.obsra['fc'],'.')      
-
 
     def apply_thresh(self, thresh1, thresh2):
         if not self.obsra.empty:

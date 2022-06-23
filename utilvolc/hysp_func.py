@@ -11,8 +11,17 @@ hysp_heights: determines ash top height from HYSPLIT
 calc_MER: determines Mass Eruption Rate from HYSPLIT
 calc_aml: determines ash mass loading for each altitude layer  from HYSPLIT
 hysp_thresh: calculates mask array for ash mass loading threshold from HYSPLIT
-
 """
+# AMR: July 2, 2021
+# Made some updates to _add_species,  _delta_multiply
+# Needed to add functionality of isel when selecting appropriate dimensions
+# Needed to add functionality if the attribute Species ID is not a list of strings, and if there is only one species
+# Updated hysp_massload to not require calc_MER if using xarrays from ensemble netcdf
+# Required adding some if statements - MER calculation is already applied when generating ensemble
+# Added some if statements in calc_MER allowing for different attribute names if required
+
+# NOTE: Should fix _alt_multiply as well
+
 from monetio.models import hysplit
 from utilvolc import volcMER
 import xarray as xr
@@ -58,17 +67,26 @@ def getlatlon(dset):
     return lat, lon
 
 
-def hysp_massload(dset, threshold):
+def hysp_massload(dset, threshold=0.0):
     """ Calculate mass loading from HYSPLIT xarray
-    Inputs: xarray, ash mass loading threshold (threshold = xx)
-    Outputs: total ash mass loading (summed over all layers), ash mass loading
-    Units in (unit mass / m^2)"""
+    using Mastin MER equation.
+
+    Inputs: 
+    dset: xarray dataset
+    threshold: (float) ash mass loading threshold (threshold = xx)
+    Returns: 
+    total_aml: xarray dataarray of total ash mass loading (summed over all layers)
+    Units in (g/m^2)"""
+
     aml_alts = calc_aml(dset)
-    total_aml = aml_alts.sum(dim='z')
+    total_aml = aml_alts.sum(dim='z', keep_attrs=True)
     # Calculate conversion factors
-    unitmass, mass63 = calc_MER(dset)
-    # Calculating the ash mass loading
-    total_aml2 = total_aml * mass63
+    if 'Starting Heights' in dset.attrs:
+        unitmass, mass63 = calc_MER(dset)
+        # Calculating the ash mass loading
+        total_aml2 = total_aml * mass63
+    else:
+        total_aml2 = total_aml
     # Calculating total ash mass loading, accounting for the threshold
     # Multiply binary threshold mask to data
     total_aml_thresh = hysp_thresh(dset, threshold)
@@ -96,13 +114,23 @@ def hysp_heights(dset, threshold):
     return top_height
 
 
-def calc_MER(dset, attr='Starting Locations'):
+def calc_MER(dset, attrs='Starting Heights'):
     """ Calculate Mass Eruption Rate (kg/s) using Mastin's 2009 equation
-    Then converting to units of g/hr then g/m^2 
-    attr: name of attribute containing starting location altitude (string)"""
+    Then converting to units of g/hr then g/m^2
+    Inputs:
+    dset: (xarray) 
+    attrs: (string) attribute must include both vent and plume height if specified
+    """
     # Extract starting locations and plume height - plume height needed for Mass calc.
-    stlocs = dset.attrs[attr]
-    plume = (stlocs[-1][-1] - stlocs[0][-1])/1000  # Put height in km
+    if attrs in dset.attrs:
+        ptop = dset.attrs[attrs][-1]
+        vent = dset.attrs[attrs][0]
+    elif ('Plume Height (m)') in dset.attrs:
+        ptop = dset.attrs['Plume Height (m)']
+        vent = dset.attrs['Volcano Vent (m)']
+    else:
+        return('ERROR: Cannot find blume height')
+    plume = (ptop - vent)/1000.  # Put height in km
     # Calculate mass erution rate (Mastin 2009)
     MER = volcMER.mastinMER(plume)
     # Calculating gram equivalent of 1 unit mass
@@ -143,6 +171,8 @@ def hysp_thresh(dset, threshold):
 def _add_species(dset):
     # Calculate sum of particles
     species = dset.attrs["Species ID"]
+    if type(species) != list:
+        species = [species]
     s = 0
     tmp = []
     # Looping through all species in dataset
@@ -150,11 +180,13 @@ def _add_species(dset):
         tmp.append(dset[species[s]].fillna(0))
         s += 1  # End of loop through species
     total_par = tmp[0]
-    p = 1
-    # Adding all species together
-    while p < len(tmp):
-        total_par = total_par + tmp[p]
-        p += 1  # End of loop adding all species
+
+    if len(tmp) > 1:
+        p = 1
+        # Adding all species together
+        while p < len(tmp):
+            total_par = total_par + tmp[p]
+            p += 1  # End of loop adding all species
     return total_par
 
 
@@ -162,6 +194,7 @@ def _delta_multiply(pars, alts):
     # Calculate the delta altitude for each layer
     x = 1
     delta = []
+    das = []
     delta.append(alts[0])
     while x < (len(alts)):
         delta.append(alts[x] - alts[x-1])
@@ -169,9 +202,12 @@ def _delta_multiply(pars, alts):
     # Multiply each level by the delta altitude
     y = 0
     while y < len(delta):
-        pars[:, y, :, :] = pars[:, y, :, :] * delta[y]
-        y += 1  # End of loop calculating heights
-    return pars
+        das.append(pars.isel(z=y) * delta[y])
+        # pars[:, y, :, :] = pars[:, y, :, :] * delta[y]
+        y += 1
+    # Concatenating list along z dimension to form xarray dataarray
+    dset = xr.concat(das, dim='z')
+    return dset
 
 
 def _alt_multiply(pars, alts):

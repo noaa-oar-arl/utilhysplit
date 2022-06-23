@@ -6,57 +6,34 @@ import numpy as np
 import logging
 import pandas as pd
 from netCDF4 import Dataset
-import hysplit
-
-# import matplotlib.pyplot as plt
+from monetio.models import hysplit
+#import hysplit
 
 # 01/28/2020 AMC cdump2awips created to make a netcdf file appropriate for input into AWIPS
 # hysplit.py was modified in the forked version of MONET to make this work.
 
 # combine_cdump creates a 6 dimensional xarray dataarray object from cdump files.
 #
-# TO DO: use the hysp_massload function in hysplit.py rather than the one here.
-
-# Notes from Jorge.
+# Notes 
 # global attribute time_origin=2020-02-04 16:20:47
 # ensid variable is an integer.
 # "ensemble_tag" variable is a string
 # dimension order is time, ensid, latitude, longitude
 # one time period per file.
 
+# AWIPS2 expects netcdf files to have only one time period per file.
+# It can read a zipped file consisting of multiple netcdf files, one for each time period.
 
 logger = logging.getLogger(__name__)
-
 
 def mass_loading(xrash):
     # returns mass loading in each level.
     # return hysplit.calc_aml(xrash)
     return hysplit.hysp_massload(xrash)
 
-
 def meters2FL(meters):
     flight_level = meters * 3.28084 / 100.0
     return int(np.ceil(flight_level / 10.0) * 10)
-
-
-# def get_topbottom(lev):
-#    top = 'FL' + str(meters2FL(lev[-1]))
-#    bottom = 'FL' + str(meters2FL(lev[0]))
-# print('level', lev[0], bottom)
-# print('level', lev[-1], top)
-#    return top, bottom
-
-# def handle_levels(levlist):
-#    nlev = len(levlist)
-# divide into three pieces
-#    piece = int(np.floor(nlev/3.0))
-#    jjj = 0
-#    lev1 = levlist[0:piece]
-#    lev2 = levlist[piece:2 * piece]
-#    lev3 = levlist[2 * piece:]
-# print(piece, lev1, lev2, lev3)
-#    return lev1, lev2, lev3
-
 
 class Cdump2Awips:
     def __init__(
@@ -195,7 +172,6 @@ class Cdump2Awips:
         uses function:
              makeconc
         """
-
         xrash = self.xrash.copy()
         munit = self.munit
         sample_time = self.sample_time
@@ -213,7 +189,8 @@ class Cdump2Awips:
         lon = fid.createDimension("longitude", lon_shape)
         # level = fid.createDimension('levels',len(levelra))
 
-        clevs = [0.2, 2, 4, 10, 100]
+        #clevs = [0.02,0.2, 2, 5, 10, 100]
+        clevs = [0.2, 2, 5, 10, 100]
         clevels = fid.createDimension("contour_levels", len(clevs))
         ens_shape = xrash.coords["ensemble"].shape[0]
         # add ensemble mean, ensemble standard deviation,
@@ -271,11 +248,6 @@ class Cdump2Awips:
         lonid.units = "degrees_east"
         lonid.point_spacing = "even"
 
-        # levelid = fid.createVariable('levels','int',('levels'))
-        # attributes for levels
-        # levelid.long_name = 'Top height of each layer'
-        # levelid.units='m'
-
         timeid = fid.createVariable("time", "f4", ("time"))
         # attributes for time grid.
         timeid.units = "days since 1970-01-01 00:00:00"
@@ -301,17 +273,14 @@ class Cdump2Awips:
 
         mult = 1
         for jjj, concid in enumerate(concid_list):
-            # logger.debug('adding concentration info')
             lev = self.xrash.z.values[jjj]
             concid[:] = makeconc(
                 self.xrash.copy(), date1, lev, dotranspose=True, mult=mult
             )
-        # logger.debug('adding massloading info')
         massid[:] = makeconc(self.mass, date1, dotranspose=True, level=None)
 
         latid[:] = latra
         lonid[:] = lonra
-        # levelid[:] = levelra
         timeid[:] = t1
         time_bnds[:] = [[t1, t2]]
         # these may be duplicated since ensemble and source
@@ -347,19 +316,8 @@ def makeconc(xrash, date1, level, mult=1, dotranspose=False, verbose=False):
         c1 = mult * xrash.sel(time=date1)
     else:
         c1 = mult * xrash.sel(time=date1, z=level)
-    # logger.debug('shape for conc {}'.format(c1.shape))
-    # dhash = thickness_hash(xrash)
-    # tlist = []
-    # total_thickness = 0
-    # for lev in level:
-    #    tlist.append(dhash[lev])
-    #    total_thickness += dhash[lev]
-    # c1 = mult * xrash.sel(time=date1, z=level)
-    # if verbose:
-    # c1 = mass_loading_B(c1, tlist)
-    # c1 = c1 / total_thickness
-    c1 = c1.expand_dims("time")
     # this line is for netcdf awips output
+    c1 = c1.expand_dims('time')
     if dotranspose:
         c1 = c1.transpose("time", "ensemble", "y", "x", transpose_coords=True)
     if verbose:
@@ -368,38 +326,31 @@ def makeconc(xrash, date1, level, mult=1, dotranspose=False, verbose=False):
         print(c1.shape)
     return c1
 
-
-def maketestblist():
+def maketestblist(dname='./'):
     # Need list of tuples. (filename, sourcetag, mettag)
-    d1 = datetime.datetime(2008, 8, 8, 12)
-    d2 = datetime.datetime(2008, 8, 8, 13)
     blist = []
-    dname = "/pub/Scratch/alicec/KASATOCHI/2020/cylens/"
+    dname = dname
     fname = "cdump.Aegec00"
     blist.append((os.path.join(dname, fname), "S1", "gec00"))
     fname = "cdump.Aegep01"
     blist.append((os.path.join(dname, fname), "S1", "gep01"))
     return blist
 
-
 def maketestncfile():
     blist = maketestblist()
+    # base name of the netcdf file.
     oname = "out.nc"
-    d1 = datetime.datetime(2008, 8, 8, 12)
-    d2 = datetime.datetime(2008, 8, 8, 13)
+    # xarray dataset produced by hysplit.combine_dataset.
     xrash = maketestra()
-    cdump2awips(xrash, oname)
+    # 
+    c2n = Cdump2Awips(xrash, oname)
+    fnames = c2n.create_all_files()
+    return fnames
 
 
 def maketestra():
-    d1 = datetime.datetime(2008, 8, 8, 10)
-    d2 = datetime.datetime(2008, 8, 8, 13)
-    # d1 = None
-    # d2 = None
     blist = maketestblist()
-    if d1 and d2:
-        drange = [d1, d2]
-    else:
-        drange = None
-    xrash = hysplit.combine_dataset(blist, drange=drange)
+    # xrash is an xarray dataset which can be input into
+    # Cdump2Awips class initialization.
+    xrash = hysplit.combine_dataset(blist)
     return xrash

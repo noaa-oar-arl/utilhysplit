@@ -18,9 +18,19 @@ import pandas as pd
 from utilvolc import volcat
 #import utilvolc.reventador_volcat as volcat
 
+
+def make_test_file(tdir, daterange=None,verbose=True):
+    vidA = 'v300250'  #Bezy data
+    vnlistA = volcat.find_volcat(tdir, daterange=daterange, vid=vidA)
+    for key in vnlistA.keys():
+        vname = vnlistB[key].fname
+        dset = volcat.open_dataset(os.path.join(tdir,vname),pc_correct=False)
+        return dset 
+
+
 def plot_volcat(tdir, daterange=None, verbose=True):
-    vidB = 'v290260'
-    vidA = 'v300250'
+    vidB = 'v290260'  # other data
+    vidA = 'v300250'  #Bezy data
     vnlistA = volcat.find_volcat(tdir, daterange=daterange, vid=vidA)
     vnlistB = volcat.find_volcat(tdir, daterange=daterange, vid=vidB)
     fignum = 1
