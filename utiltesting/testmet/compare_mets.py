@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from utilhysplit.profile import callprofile
-from utilhysplit.profile import MeteoProfile
+from utilhysplit.hysplit_profile import callprofile
+from utilhysplit.hysplit_profile import MeteoProfile
 from utilhysplit.plotutils import colormaker
 
 def test_wind_direction():
@@ -259,10 +259,10 @@ class CompareMetProfile:
     def set_ref(self,ref):
         self.ref = ref
 
-    def plot_ts(self,yvarname):
+    def plot_ts(self,yvarname,fignum=1):
         sns.set()
         sns.set_style('whitegrid')
-        fig = plt.figure(1)
+        fig = plt.figure(fignum)
         ax1 = fig.add_subplot(1,1,1)
         for prof,label,color in self.generate_prof():
             #print(label, '-----')
@@ -284,15 +284,20 @@ class CompareMetProfile:
             yvar = prof.get_var(yvarname)
             ax1.plot(xvar, yvar, label=label)
             
-    def standard_surface_plots(self,plotall=True):
-        varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M','V10M']
+    def standard_surface_plots(self,plotall=True,varlist=None,fignum=1):
+        print(type(varlist),varlist)
+        if isinstance(varlist,list):
+            varlist = varlist
+        else:
+            varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M','V10M']
+        print(type(varlist))
         #varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M']
         if plotall: varlist = self.twodlist
         varlist.sort()
-        for var in varlist:
+        for iii, var in enumerate(varlist):
             print(var)
-            ax = self.plot_ts(var)
-            plt.show()
+            ax = self.plot_ts(var,fignum=fignum+iii)
+            #plt.show()
         return ax
 
     def create_frame(self,var):
