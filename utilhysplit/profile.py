@@ -20,6 +20,7 @@ from scipy import interpolate
 #from operator import itemgetter
 #import codecs
 import os.path
+
 ##mytools is a module which contains conversions and other useful routines.
 #from mytools import *  
 #import random
@@ -292,14 +293,29 @@ class MeteoProfile(object):
             uwind = np.array(uwind)
             vwind = np.array(vwind)
             wind_dir = np.arctan(vwind/uwind)*180/pi
-            upos = np.where(uwind >= 0)
-            wind_dir[upos]= 270 - wind_dir[upos] 
-            uneg = np.where(uwind < 0)
-            wind_dir[uneg] = 90 - wind_dir[uneg] 
+            wind_dir = np.where(uwind>=0, 270-wind_dir, wind_dir)
+            wind_dir = np.where(uwind<0, 90-wind_dir, wind_dir)
+            #upos = np.where(uwind >= 0)
+            #wind_dir[upos]= 270 - wind_dir[upos] 
+            #uneg = np.where(uwind < 0)
+            #wind_dir[uneg] = 90 - wind_dir[uneg] 
             #print(wind_dir.shape , wind_dir[2])
             #print('U' , uwind.shape, uwind[2])
             #print('V' , vwind.shape, vwind[2])
             return wind_dir
+
+def wind_direction(vwind, uwind):
+        #vwind is magnitude of wind going from south to north
+        #uwind is magnitude of wind going from West to East
+        #print(len(vwind), len(uwind))
+        uwind = np.array(uwind)
+        vwind = np.array(vwind)
+        wind_dir = np.arctan(vwind/uwind)*180/pi
+        
+        wind_dir = np.where(uwind>=0, 270-wind_dir, wind_dir)
+        wind_dir = np.where(uwind<0, 90-wind_dir, wind_dir)
+
+        return wind_dir
 
 class Radiosonde(MeteoProfile):
    """radiosonde file
