@@ -1,15 +1,31 @@
+import sys
+import re
 import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import sys
-import re
 import pandas as pd
 import urllib.request, urllib.error, urllib.parse
 import xml.etree.ElementTree as ET
 import shapely.geometry as sgeo
 
+"""
+Read and process volcanic ash advisories in vAA forma
 
+This code developed at NOAA Air Resources laboratory
+PGRMMR: Alice Crawford 
+
+Classes
+class iwxxmFile: loads the iwxxm file from url
+class iwxxmVAA:  parses the iwxxm file stores information in object attributes.
+class WashingtonPage: gets url location of iwxxm file
+class iwxxmCollection: processes collections of iwxxmVAA
+"""
+
+
+# ---------------------------------------------------------------
+## Helper functions for iwxxmVAA class to parse the xml format.
+# ---------------------------------------------------------------
 def testel(root):
     try:
         for child in root:
@@ -18,44 +34,52 @@ def testel(root):
         return False
     return True
 
-
 def listel(root):
     try:
         for child in root:
-            print('tag', child.tag, 'text', child.text) 
+            print("tag", child.tag, "text", child.text)
     except:
-        print('cannot list for', type(root)) 
+        print("cannot list for", type(root))
 
-def findel(root,tag,verbose=False):
+
+def findel(root, tag, verbose=False):
     for child in root:
         if tag.lower() in child.tag.lower():
-           return child
-    if verbose: print('{} not found'.format(tag))
-    return None 
+            return child
+    if verbose:
+        print("{} not found".format(tag))
+    return None
 
-def listfindel(root,tag):
+
+def listfindel(root, tag):
     clist = []
     for child in root:
         if tag.lower() in child.tag.lower():
-           clist.append(child)
-    #print('{} not found'.format(tag))
+            clist.append(child)
+    # print('{} not found'.format(tag))
     return clist
 
+
+# ---------------------------------------------------------------
+# ---------------------------------------------------------------
 def create_new_collection(collection, vname, daterange=None, cname=None):
     newlist = collection.get_by_volcano(vname)
-    if isinstance(daterange,list):
-       blist = collection.get_by_date(daterange)
-       # only use elements that appear in both lists.
-       clist = [x for x in blist if x in newlist]
-       newlist = clist
-    name = 'Collection of iwxxm files for {}'.format(vname)
+    if isinstance(daterange, list):
+        blist = collection.get_by_date(daterange)
+        # only use elements that appear in both lists.
+        clist = [x for x in blist if x in newlist]
+        newlist = clist
+    name = "Collection of iwxxm files for {}".format(vname)
     newcollection = iwxxmCollection(name)
     newcollection.ilist = newlist
-    return newcollection 
+    return newcollection
+
 
 class iwxxmCollection:
-
-    def __init__(self, name='Collection of iwxxm files'):
+    """
+    processing collection of vaas.
+    """
+    def __init__(self, name="Collection of iwxxm files"):
         """
         Attributes
         ----------
@@ -64,14 +88,14 @@ class iwxxmCollection:
 
         Methods
         -------
-        Methods work to either 
+        Methods work to either
         1. alter the self.ilist by adding or removing objects
         2. filter the list of iwxxm objects by certain attributes
            of the object like volcano name.
         3. compare one iwxxm object in the list to another. e.g. comparing
            observation from one object to forecast at same time in another object.
         4. summarize information in the ilist. e.g. list of volcano names, time series of areas.
-        
+
         """
         self.name = "Collection of iwxxm files"
         self.ilist = []
@@ -80,41 +104,41 @@ class iwxxmCollection:
     def reset(self):
         self.ilist = []
 
-    def add_objects(self,ilist):
+    def add_objects(self, ilist):
         self.ilist.extend(ilist)
         # remove any duplicates
         self.ilist = list(set(self.ilist))
         # sort by issue date
         self.ilist.sort()
 
-    def add_files(self,xlist):
+    def add_files(self, xlist):
         for xurl in xlist:
             try:
                 xfile = iwxxmFile(xurl)
                 vobj = iwxxmVAA(fstr=str(xfile))
             except Exception as eee:
-                print('WARNING could not load {}'.format(xurl))
+                print("WARNING could not load {}".format(xurl))
                 print(str(eee))
-                print('-------------------------')
+                print("-------------------------")
                 continue
-            self.ilist.append(vobj) 
+            self.ilist.append(vobj)
         # remove any duplicates
         self.ilist = list(set(self.ilist))
         # sort by issue date
-        self.ilist.sort() 
+        self.ilist.sort()
 
-    #---------------------------------------- 
+    # ----------------------------------------
     # METHODS to filter the ilist
     def get_by_volcano(self, vname):
         sublist = [x for x in self.ilist if x.volcano_name == vname]
         return sublist
 
-
-    def get_by_date(self,daterange):
+    def get_by_date(self, daterange):
         sublist = [x for x in self.ilist if x.issueTime <= daterange[1]]
         sublist = [x for x in sublist if x.issueTime >= daterange[0]]
         return sublist
 
+    # ----------------------------------------
     # METHODS to  summarize information in the objects
     def get_volcano_list(self):
         vnames = [x.volcano_name for x in self.ilist]
@@ -126,22 +150,25 @@ class iwxxmCollection:
         Returns largest and smallest issue Time.
         """
         dates = [x.issueTime for x in self.ilist]
-        return [np.min(dates), np.max(dates)] 
+        return [np.min(dates), np.max(dates)]
 
     def get_issue_frequency(self, plot=True):
         dates = [x.issueTime for x in self.ilist]
         dates.sort()
-        diff = [y-x for x,y in zip(dates,dates[1:])]
-        times = [x.days*24 + x.seconds/3600.0 for x in diff]
+        diff = [y - x for x, y in zip(dates, dates[1:])]
+        times = [x.days * 24 + x.seconds / 3600.0 for x in diff]
         if plot:
-           plt.plot(dates[1:],times) 
-           plt.xticks(rotation=45)
-           plt.tight_layout()
-           ax = plt.gca()
-           ax.set_ylabel('Time since last vaa issued (h)')
+            plt.plot(dates[1:], times, "-b.")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            ax = plt.gca()
+            ax.set_ylabel("Time since last vaa issued (h)")
         return dates, times
 
-    def time_series(self,vname, plot=True):
+    def time_series(self, vname, plot=True, ax=None):
+        if not ax:
+            fig = plt.figure(1)
+            ax = fig.add_subplot(1, 1, 1)
         sublist = self.get_by_volcano(vname)
         obstime = []
         obsarea = []
@@ -152,33 +179,54 @@ class iwxxmCollection:
         f3time = []
         f3area = []
         for vaa in sublist:
-            area = vaa.get_areas() 
+            area = vaa.get_areas()
             time = vaa.get_times()
-            obstime.append(time[0])
-            obsarea.append(area[0])
-            f1time.append(time[1])
-            f1area.append(area[1])
-            f2time.append(time[2])
-            f2area.append(area[2])
+            if time[0]:
+                obstime.append(time[0])
+                obsarea.append(area[0])
+            if time[1]:
+                f1time.append(time[1])
+                f1area.append(area[1])
+            if time[2]:
+                f2time.append(time[2])
+                f2area.append(area[2])
             if time[3]:
                 f3time.append(time[3])
                 f3area.append(area[3])
         if plot:
-           sns.set()
-           plt.plot(obstime, obsarea, 'k.')
-           plt.plot(f1time, f1area, 'r.')
-           plt.plot(f2time, f2area, 'b+')
-           plt.plot(f3time, f3area, 'yx')
-           plt.xticks(rotation=45)
-           plt.tight_layout()
+            sns.set()
+            try:
+                ax.plot(obstime, obsarea, "--k.")
+            except:
+                print("Failed")
+                return obstime, obsarea
+            ax.plot(f1time, f1area, "r.")
+            ax.plot(f2time, f2area, "b+")
+            ax.plot(f3time, f3area, "yx")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
         return obstime, obsarea
+
+    # METHODS to pick out a certain VAA
+
+    # def match_vaa_by_time(intime, dt):
+    #    if isinstance(dt,(int,float)):
+    #       dt = datetime.timedelta(hours=dt)
+    #    for iii, vaa in enumerate(sublist):
+    #        timelist = vaa.get_times()
+    #        ctime = timelist[0]
+    #        #print('{} checking {}  to {}'.format(iii, intime, ctime))
+    #        if ctime > intime:
+    #           if ctime-intime < dt:
+    #              matches.append(iii)
+    #        elif intime <= ctime:
 
     # METHODS to compare information in different objects
 
-    def check_forecasts(self,vname,fnum=1,plot=True):
+    def check_forecasts(self, vname, fnum=1, plot=True):
         """
         RETURNS
-        matches : dict : key is the index of the vaa with the  observation. 
+        matches : dict : key is the index of the vaa with the  observation.
                          value is list of indices of the vaas with forecast at matching times.
         e.g. {8: [11]}
         means sublist[8] vaa has observation for same time as forecast in sublist[11] vaa.
@@ -192,12 +240,12 @@ class iwxxmCollection:
             obstime = time[0]
             dt = datetime.timedelta(hours=0.5)
             matches[iii] = self.find_time_match(vname, obstime, fnum, dt)
-        return matches    
+        return matches
 
-    def plot_checks(self,vname, obsiii, flist, fnum):
+    def plot_checks(self, vname, obsiii, flist, fnum):
 
-        #slist = ['Forecast0','Forecast1','Forecast2']
-        #sname = slist[fnum]
+        # slist = ['Forecast0','Forecast1','Forecast2']
+        # sname = slist[fnum]
         sublist = self.get_by_volcano(vname)
         polylist = []
 
@@ -205,29 +253,31 @@ class iwxxmCollection:
         vaa0.plot_vaa()
         plt.show()
         time0 = vaa0.get_times()[0]
-        print('Reference time {}'.format(time0))
+        print("Reference time {}".format(time0))
         polylist.append(vaa0.get_poly_list()[0])
         print(vaa0.remarks)
-       
-        for fii in flist: 
+
+        for fii in flist:
             vaaf = sublist[fii]
             vaaf.plot_vaa()
             plt.show()
             timef = vaaf.get_times()[fnum]
             obsf = vaaf.get_times()[0]
-            print('obstime {} Forecast time {} DIFF {}'.format(obsf, timef, timef-obsf))
+            print(
+                "obstime {} Forecast time {} DIFF {}".format(obsf, timef, timef - obsf)
+            )
             polylist.append(vaaf.get_poly_list()[fnum])
             print(vaaf.remarks)
-          
-        clr = ['-k','-r','-b','-c'] 
+
+        clr = ["-k", "-r", "-b", "-c"]
         for iii, poly in enumerate(polylist):
-            if not poly.is_empty: 
+            if not poly.is_empty:
                 plt.plot(*poly.exterior.xy, clr[iii])
             else:
-                print('Empty polygon')
-        #plt.plot(vlon,vlat,'^y',MarkerSize=10)
-   
-    def find_time_match(self,vname,intime,forecast,dt):
+                print("Empty polygon")
+        # plt.plot(vlon,vlat,'^y',MarkerSize=10)
+
+    def find_time_match(self, vname, intime, forecast, dt):
         """
         vname : str : volcano name
         intime : datetime.datetime object :
@@ -235,109 +285,132 @@ class iwxxmCollection:
         dt : float or datetime.timedelta object : acceptable time difference for match.
         RETURNS
         -------
-        matches : dict : key is the index of the vaa with the  observation. 
+        matches : dict : key is the index of the vaa with the  observation.
                          value is list of indices of the vaas with forecast at matching times.
         """
 
-        if isinstance(vname,'str'):
+        if isinstance(vname, str):
             sublist = self.get_by_volcano(vname)
         else:
             sublist = self.ilist
         matches = []
-        if isinstance(dt,(int,float)):
-           dt = datetime.timedelta(hours=dt)
+        if isinstance(dt, (int, float)):
+            dt = datetime.timedelta(hours=dt)
         for iii, vaa in enumerate(sublist):
             timelist = vaa.get_times()
             ctime = timelist[forecast]
-            #print('{} checking {}  to {}'.format(iii, intime, ctime))
             if ctime > intime:
-               if ctime-intime < dt:
-                  matches.append(iii)
+                if ctime - intime < dt:
+                    matches.append(iii)
             elif intime <= ctime:
-               if intime - ctime <= dt:
-                  matches.append(iii)
-        return matches       
+                if intime - ctime <= dt:
+                    matches.append(iii)
+        return matches
 
-   
+
 class WashingtonPage:
     """
     Scrape the washington vaac page for xml file locations
     """
 
     def __init__(self):
-        self.page = 'https://www.ssd.noaa.gov/VAAC/messages.html'
-        self.hcontent = ''     
+        self.page = "https://www.ssd.noaa.gov/VAAC/messages.html"
+        self.hcontent = ""
         self.hcontent_loaded = False
         self.xlist = None
-        
- 
+
     def read(self):
         hresponse = urllib.request.urlopen(self.page)
         hcode = hresponse.getcode()
         ##header = hcontent.getheaders()
         hcontent = hresponse.read()
-        self.hcontent = hcontent.decode('utf-8') 
-        if hcode == 200: self.hcontent_loaded = True
+        self.hcontent = hcontent.decode("utf-8")
+        if hcode == 200:
+            self.hcontent_loaded = True
         return hcode
 
     def find_xml(self):
         flist = []
         rlist = []
-        for match in re.finditer('\.xml', self.hcontent):
+        for match in re.finditer("\.xml", self.hcontent):
             end = match.end()
-            substr = self.hcontent[end-180:end]
-            submatch = re.search('https',substr)
-            xmlfile = substr[submatch.start():] 
-            rlist.append(substr[0:submatch.start()])
+            substr = self.hcontent[end - 180 : end]
+            submatch = re.search("https", substr)
+            xmlfile = substr[submatch.start() :]
+            rlist.append(substr[0 : submatch.start()])
             flist.append(xmlfile)
-        self.xlist =  list(zip(rlist,flist))
-
+        self.xlist = list(zip(rlist, flist))
 
     def get_xml_list(self, vname=None):
         if vname:
-           xlist = [x[1] for x in self.xlist if vname in x[0]]
+            xlist = [x[1] for x in self.xlist if vname in x[0]]
         else:
-           xlist = [x[1] for x in self.xlist]
+            xlist = [x[1] for x in self.xlist]
         return xlist
 
 
-class iwxxmFile():
-
+class iwxxmFile:
+    """
+    read in iwxxm file
+    """
     def __init__(self, url):
         self.page = url
-        self.hcontent = ''     
+        self.hcontent = ""
         self.hcode = self.read()
 
     def read(self):
         hresponse = urllib.request.urlopen(self.page)
         hcode = hresponse.getcode()
         self.hcontent = hresponse.read()
-        if hcode == 200: self.hcontent_loaded = True
+        if hcode == 200:
+            self.hcontent_loaded = True
         return hcode
 
     def __str__(self):
-        return self.hcontent.decode('utf-8')
+        """
+        Can be used as input to iwxxmVAA class.
+        """
+        return self.hcontent.decode("utf-8")
 
-    def write(self, oname = 'test.xml'):
+    def write(self, oname="test.xml"):
         if self.hcontent_loaded:
-            with open(oname, 'wb') as fid:
-                 fid.write(self.hcontent) 
+            with open(oname, "wb") as fid:
+                fid.write(self.hcontent)
         else:
-            print('content not loaded')
+            print("content not loaded")
+
 
 def get_poly(vhash):
-    if 'exterior' in vhash.keys():
-        perim = vhash['exterior']
+    if "exterior" in vhash.keys():
+        perim = vhash["exterior"]
         poly = sgeo.Polygon(perim)
     else:
         poly = sgeo.Polygon()
-    return poly      
-
+    return poly
 
 
 class iwxxmVAA:
+    """
+    class for parsing the VAAs in iwxxm format.
+    Needs to be tested / modified when more than one polygon.
+    utilizes xml.etree.ElementTree 
+    
+    """
 
-    def __init__(self, fname=None, fstr=None,verbose=False):
+    def __init__(self, fname=None, fstr=None, verbose=False):
+        """
+        fname : str : name of a file
+        fstr  : str : contents of an iwxxm vaa
+         
+        reads in information and converts it into class 
+        attributes listed below. attributes are generally
+        strings or dictionaries.
+
+        __hash__, __eq__, and __lt__ are defined so lists of 
+        these objects can be sorted and compared.
+
+        """
+
         self.strfmt = "%Y-%m-%dT%H:%M:%SZ"
         if fname:
             self.source = fname
@@ -347,60 +420,62 @@ class iwxxmVAA:
             self.source = fstr
             self.root = ET.fromstring(fstr)
         else:
-            raise Exception('input strings are empty')
-        self.vaaroot = self.get_vaaroot() 
+            raise Exception("input strings are empty")
+        self.vaaroot = self.get_vaaroot()
 
         # str
         self.bulletinIdentifier = self.get_bulletin_id()
+
         # str  This is used in the __eq__ and __hash__ functions
         # to uniquely identify the object.
-        self.__bid = self.bulletinIdentifier 
-        # str 
+        self.__bid = self.bulletinIdentifier
+
+        # str
         self.issueTime = self.get_issue_time()
-        # str 
+
+        # str
         self.issuingVolcanicAshAdvisoryCentre = self.get_vaac()
-      
+
         # these are all dictionaries.
-        self.volcano = self.get_volcano(verbose=verbose)       
+        self.volcano = self.get_volcano(verbose=verbose)
         self.details = self.get_details()
         self.obs = self.get_obs(verbose=verbose)
         self.forecast = self.get_all_forecasts(verbose=verbose)
 
-        # str 
+        # str
         self.remarks = self.get_remarks()
 
-        # str 
-        self.volcano_name = self.volcano['name']
-        self.volcano_id = self.volcano['volcanoID']
+        # str
+        self.volcano_name = self.volcano["name"]
+        self.volcano_id = self.volcano["volcanoID"]
 
     def __hash__(self):
         return hash(self.__bid)
 
-    def __eq__(self,other):
+    def __eq__(self, other):
         if self.__bid == other.__bid:
-           return True
+            return True
         else:
-           return False
+            return False
 
-    def __lt__(self,other):
+    def __lt__(self, other):
         # define so a list of vojb can be sorted by the issue date.
         if self.issueTime != other.issueTime:
-           return self.issueTime < other.issueTime 
-        
+            return self.issueTime < other.issueTime
 
     def get_times(self):
-        dkey = 'date'
+        dkey = "date"
         timelist = []
-       
+
         if dkey in self.obs.keys():
-           timelist.append(self.obs[dkey])
-        else: 
-           timelist.append(None) 
-        for fcst in ['Forecast0','Forecast1','Forecast2']:
+            timelist.append(self.obs[dkey])
+        else:
+            timelist.append(None)
+        for fcst in ["Forecast0", "Forecast1", "Forecast2"]:
             if dkey in self.forecast[fcst].keys():
-               timelist.append(self.forecast[fcst][dkey])
+                timelist.append(self.forecast[fcst][dkey])
             else:
-               timelist.append(None)     
+                timelist.append(None)
         return timelist
 
     def get_areas(self):
@@ -411,404 +486,368 @@ class iwxxmVAA:
         """
         areas = []
         poly0 = get_poly(self.obs)
-        poly1 = get_poly(self.forecast['Forecast0'])
-        poly2 = get_poly(self.forecast['Forecast1'])
-        poly3 = get_poly(self.forecast['Forecast2'])
+        poly1 = get_poly(self.forecast["Forecast0"])
+        poly2 = get_poly(self.forecast["Forecast1"])
+        poly3 = get_poly(self.forecast["Forecast2"])
         for iii, poly in enumerate([poly0, poly1, poly2, poly3]):
-            if not poly.is_empty: 
-               areas.append(poly.area)
+            if not poly.is_empty:
+                areas.append(poly.area)
             else:
-               areas.append(0)
+                areas.append(0)
         return areas
 
     def get_poly_list(self):
         poly0 = get_poly(self.obs)
-        poly1 = get_poly(self.forecast['Forecast0'])
-        poly2 = get_poly(self.forecast['Forecast1'])
-        poly3 = get_poly(self.forecast['Forecast2'])
-        return [poly0, poly1,poly2,poly3]
+        poly1 = get_poly(self.forecast["Forecast0"])
+        poly2 = get_poly(self.forecast["Forecast1"])
+        poly3 = get_poly(self.forecast["Forecast2"])
+        return [poly0, poly1, poly2, poly3]
 
-    def plot_vaa(self):
-        """
-        """
-        fig = plt.figure(1)
-        ax = fig.add_subplot(1,1,1)
-        vlat = self.volcano['latitude']
-        vlon = self.volcano['longitude']
+    def plot_vaa(self, ax=None):
+        """ """
+        if not ax:
+            fig = plt.figure(1)
+            ax = fig.add_subplot(1, 1, 1)
+        vlat = self.volcano["latitude"]
+        vlon = self.volcano["longitude"]
 
-    
         times = self.get_times()
         tstr = []
         for ttt in times:
             tstr.append(str(ttt))
- 
-        clr = ['-k','-r','-b','-c'] 
+
+        clr = ["-k", "-r", "-b", "-c"]
         for iii, poly in enumerate(self.get_poly_list()):
-            if not poly.is_empty: 
-                ax.plot(*poly.exterior.xy, clr[iii], label = tstr[iii])
-        ax.plot(vlon,vlat,'^y',MarkerSize=10)
-        handles,labels = ax.get_legend_handles_labels()
+            if not poly.is_empty:
+                ax.plot(*poly.exterior.xy, clr[iii], label=tstr[iii])
+        ax.plot(vlon, vlat, "^y", MarkerSize=10)
+        handles, labels = ax.get_legend_handles_labels()
         ax.legend(handles, labels)
 
     def get_vaaroot(self):
         vaa = self.root[0][0]
         return vaa
-  
+
     def __str__(self):
-        spc = '\n'
-        rstr = 'Issue Time (issueTime): {}'.format(self.issueTime)
+        spc = "\n"
+        rstr = "Issue Time (issueTime): {}".format(self.issueTime)
         rstr += spc
-        rstr += 'VAAC name: {}'.format(self.issuingVolcanicAshAdvisoryCentre)
+        rstr += "VAAC name: {}".format(self.issuingVolcanicAshAdvisoryCentre)
         rstr += spc
-        rstr += 'Bulletin ID: {}'.format(self.bulletinIdentifier)
+        rstr += "Bulletin ID: {}".format(self.bulletinIdentifier)
         rstr += spc
 
         for key in self.volcano:
-            rstr += '{} : {}'.format(key, self.volcano[key])
+            rstr += "{} : {}".format(key, self.volcano[key])
             rstr += spc
         for key in self.details:
-            rstr += '{} : {}'.format(key, self.details[key])
+            rstr += "{} : {}".format(key, self.details[key])
             rstr += spc
-        rstr += 'Observation ---------------------------\n'
+        rstr += "Observation ---------------------------\n"
         for key in self.obs:
-            rstr += '{} : {}'.format(key, self.obs[key])
+            rstr += "{} : {}".format(key, self.obs[key])
             rstr += spc
-        rstr += '---------------------------------------\n'
+        rstr += "---------------------------------------\n"
         for key in self.forecast:
-            if isinstance(self.forecast[key],dict):
-               rstr += '{} -------------'.format(key)
-               rstr += spc
-               for key2 in self.forecast[key]:
-                   rstr += '{} : {}'.format(key2, self.forecast[key][key2])
-                   rstr += spc
-        rstr += 'REMARKS: {}'.format(self.remarks)
+            if isinstance(self.forecast[key], dict):
+                rstr += "{} -------------".format(key)
+                rstr += spc
+                for key2 in self.forecast[key]:
+                    rstr += "{} : {}".format(key2, self.forecast[key][key2])
+                    rstr += spc
+        rstr += "REMARKS: {}".format(self.remarks)
 
         return rstr
 
     def basic(self):
         root = self.tree.getroot()
         for val in root.iter():
-            print('TAG', val.tag)
-            print('ATTR', val.attrib)
+            print("TAG", val.tag)
+            print("ATTR", val.attrib)
             for item in val.attrib.items():
-                print('ITEM', item)
-            print('TEXT', val.text)
-            print('-----------------------')  
+                print("ITEM", item)
+            print("TEXT", val.text)
+            print("-----------------------")
 
     def get_bulletin_id(self):
         for child in self.root:
-            if 'bulletinIdentifier' in child.tag:
-               bulletinIdentifier = child.tag 
-               return child.text
+            if "bulletinIdentifier" in child.tag:
+                bulletinIdentifier = child.tag
+                return child.text
         return None
 
-    def get_volcano(self,verbose=False):
-        #strfmt = "%Y-%m-%dT%H:%M:%SZ"
+    def get_volcano(self, verbose=False):
+        # strfmt = "%Y-%m-%dT%H:%M:%SZ"
         vhash = {}
         vaa = self.vaaroot
-        volcano = findel(findel(vaa,'volcano'),'EruptingVolcano')
+        volcano = findel(findel(vaa, "volcano"), "EruptingVolcano")
 
-        name = findel(volcano,'name')
-        vhash['name'] = name.text.split()[0]
-        vhash['volcanoID'] = name.text.split()[1]
+        name = findel(volcano, "name")
+        vhash["name"] = name.text.split()[0]
+        vhash["volcanoID"] = name.text.split()[1]
 
-        position = findel(findel(findel(volcano,'position'),'Point'),'pos')     
-        vhash['position'] = position.text
-        vhash['latitude'] = float(position.text.split()[0])
-        vhash['longitude'] = float(position.text.split()[1])
+        position = findel(findel(findel(volcano, "position"), "Point"), "pos")
+        vhash["position"] = position.text
+        vhash["latitude"] = float(position.text.split()[0])
+        vhash["longitude"] = float(position.text.split()[1])
 
-        edate = findel(volcano,'eruptionDate')
+        edate = findel(volcano, "eruptionDate")
         try:
-            vhash['eruptionDate'] = datetime.datetime.strptime(edate.text,self.strfmt)
+            vhash["eruptionDate"] = datetime.datetime.strptime(edate.text, self.strfmt)
         except:
-            if verbose: print('READING eruption DATE FAILED', edate.text)
-            vhash['eruptionDate'] = edate.text
-        elevation = findel(vaa,'summitElevation')
-        vhash['elevation'] = float(elevation.text)
-        vhash['elevation units'] = elevation.attrib
-
-        #listel(position)
-        #print('----')
-        #listel(name)
-        #print('----')
-        #listel(volcano)
-        #print('----')
-        
+            if verbose:
+                print("READING eruption DATE FAILED", edate.text)
+            vhash["eruptionDate"] = edate.text
+        elevation = findel(vaa, "summitElevation")
+        vhash["elevation"] = float(elevation.text)
+        vhash["elevation units"] = elevation.attrib
         return vhash
-
 
     def get_details(self):
         fhash = {}
         vaa = self.vaaroot
-        details = findel(vaa, 'eruptionDetails')
-        fhash['eruptionDetails'] = details.text    
-        info = findel(vaa, 'informationSource')
-        fhash['informationSource'] = info.text    
+        details = findel(vaa, "eruptionDetails")
+        fhash["eruptionDetails"] = details.text
+        info = findel(vaa, "informationSource")
+        fhash["informationSource"] = info.text
         return fhash
 
-    def get_all_forecasts(self,verbose=False):
-        
+    def get_all_forecasts(self, verbose=False):
         vaa = self.vaaroot
         fhash = {}
-        ss1 = 'forecast'
-        #ss2 = 'VolcanicAshForecastConditions' 
-        clist = listfindel(vaa,ss1)
+        ss1 = "forecast"
+        clist = listfindel(vaa, ss1)
         if verbose:
-           listel(vaa)
-           print('This is the get forecast method')
-           print('\n {}'.format(ss1))
-           for temp in clist:
-               listel(temp)
+            listel(vaa)
+            print("This is the get forecast method")
+            print("\n {}".format(ss1))
+            for temp in clist:
+                listel(temp)
         for iii, forecast in enumerate(clist):
             shash = {}
             if verbose:
-               print('------------------------------------')
-               print('------------------------------------')
-               print('------------------------------------')
-               print('WORKING ON FORECAST {}'.format(iii))
-            shash = self.get_forecast(forecast,verbose)
-            fhash['Forecast{}'.format(iii)]=shash
-           #print('\n {}'.format(ss2))
-           #tempA = findel(temp,ss2)
-           #listel(tempA)
+                print("------------------------------------")
+                print("------------------------------------")
+                print("------------------------------------")
+                print("WORKING ON FORECAST {}".format(iii))
+            shash = self.get_forecast(forecast, verbose)
+            fhash["Forecast{}".format(iii)] = shash
         return fhash
 
-
-    def get_forecast(self,forecast,verbose=False):
-        #vaa = self.vaaroot
+    def get_forecast(self, forecast, verbose=False):
         fhash = {}
-        #listel(vaa)
-        #ss1 = 'forecast'
-        ss2 = 'VolcanicAshForecastConditions' 
+        ss2 = "VolcanicAshForecastConditions"
         if verbose:
-           #print('This is the get forecast method')
-           #print('\n {}'.format(ss1))
-           #temp = findel(vaa,ss1)
-           #listel(temp)
-           print('\n {}'.format(ss2))
-           tempA = findel(forecast,ss2)
-           listel(tempA)
+            print("\n {}".format(ss2))
+            tempA = findel(forecast, ss2)
+            listel(tempA)
 
-        if not testel(findel(forecast,ss2)):
-           return fhash
+        if not testel(findel(forecast, ss2)):
+            return fhash
 
-        ss2a = 'phenomenonTime'
-        ss3a = 'TimeInstant'
-        ss4a = 'timePosition'
+        ss2a = "phenomenonTime"
+        ss3a = "TimeInstant"
+        ss4a = "timePosition"
 
-        if testel(findel(findel(forecast,ss2),ss2a)):
-            time = findel(findel(findel(findel(forecast,ss2),ss2a),ss3a),ss4a)
+        if testel(findel(findel(forecast, ss2), ss2a)):
+            time = findel(findel(findel(findel(forecast, ss2), ss2a), ss3a), ss4a)
             try:
-                fhash['date'] = datetime.datetime.strptime(time.text, self.strfmt)
+                fhash["date"] = datetime.datetime.strptime(time.text, self.strfmt)
             except:
-                print('Forecast data cannot be parsed', time.text)       
- 
-            if verbose:
-               print('\n {}'.format(ss2a))
-               temp = findel(tempA,ss2a)
-               listel(temp)    
-               print('\n {}'.format(ss3a))
-               temp = findel(temp,ss3a)
-               listel(temp)    
-               print('\n {}'.format(ss4a))
-               temp = findel(temp,ss4a)
-               listel(temp)    
+                print("Forecast data cannot be parsed", time.text)
 
-        ss2b = 'ashCloud'
-        ss3b = 'VolcanicAshCloudForecast'
-        ss4b = 'ashCloudExtent'
+            if verbose:
+                print("\n {}".format(ss2a))
+                temp = findel(tempA, ss2a)
+                listel(temp)
+                print("\n {}".format(ss3a))
+                temp = findel(temp, ss3a)
+                listel(temp)
+                print("\n {}".format(ss4a))
+                temp = findel(temp, ss4a)
+                listel(temp)
+
+        ss2b = "ashCloud"
+        ss3b = "VolcanicAshCloudForecast"
+        ss4b = "ashCloudExtent"
         if verbose:
-           print('\n {}'.format(ss2b))
-           temp = findel(tempA,ss2b)
-           listel(temp)    
-           print('\n {}'.format(ss3b))
-           try:
-               temp = findel(temp,ss3b)
-               listel(temp)    
-           except:
-               pass
+            print("\n {}".format(ss2b))
+            temp = findel(tempA, ss2b)
+            listel(temp)
+            print("\n {}".format(ss3b))
+            try:
+                temp = findel(temp, ss3b)
+                listel(temp)
+            except:
+                pass
         try:
-            forecast = findel(findel(findel(forecast,ss2),ss2b),ss3b)
+            forecast = findel(findel(findel(forecast, ss2), ss2b), ss3b)
         except:
-            return fhash 
-        fhash2 =  self.subfunc(forecast,verbose=verbose)
+            return fhash
+        fhash2 = self.subfunc(forecast, verbose=verbose)
         fhash.update(fhash2)
         return fhash
 
-    def get_obs(self,verbose=False):
+    def get_obs(self, verbose=False):
         vaa = self.vaaroot
         fhash = {}
-        ss1 = 'observation'
-        ss2 = 'VolcanicAshObservedOrEstimatedConditions'
-               
-        if verbose:
-           print('THIS IS THE get_obs method')
-           print('\n {}'.format(ss1))
-           temp = findel(vaa,ss1,verbose)
-           listel(temp)
- 
-           print('\n {}'.format(ss2))
-           temp = findel(temp,ss2,verbose)
-           listel(temp)
-  
-        #---------------------------------------------------------------------------
-        ss3b = 'phenomenonTime'
-        ss4b = 'TimeInstant'
-        ss5b = 'timePosition'
-        obs = findel(findel(findel(findel(findel(vaa, ss1),ss2),ss3b),ss4b),ss5b)
-        fhash['date'] = datetime.datetime.strptime(obs.text, self.strfmt)
-
- 
-        #------------------------------------------------------------------------------
-        ss3a = 'ashCloud'
-        ss4a = 'VolcanicAshCloudObservedOrEstimated' 
-  
-
+        ss1 = "observation"
+        ss2 = "VolcanicAshObservedOrEstimatedConditions"
 
         if verbose:
-           print('\n {}'.format(ss3a))
-           tempa = findel(temp,ss3a)
-           listel(tempa)
-           if  testel(tempa):
-               print('\n {}'.format(ss4a))
-               tempa = findel(tempa,ss4a)
-               listel(tempa)
-        
+            print("THIS IS THE get_obs method")
+            print("\n {}".format(ss1))
+            temp = findel(vaa, ss1, verbose)
+            listel(temp)
 
+            print("\n {}".format(ss2))
+            temp = findel(temp, ss2, verbose)
+            listel(temp)
 
-        tempb = findel(findel(findel(vaa,ss1),ss2),ss3a)
+        # ---------------------------------------------------------------------------
+        ss3b = "phenomenonTime"
+        ss4b = "TimeInstant"
+        ss5b = "timePosition"
+        obs = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3b), ss4b), ss5b)
+        fhash["date"] = datetime.datetime.strptime(obs.text, self.strfmt)
+
+        # ------------------------------------------------------------------------------
+        ss3a = "ashCloud"
+        ss4a = "VolcanicAshCloudObservedOrEstimated"
+
+        if verbose:
+            print("\n {}".format(ss3a))
+            tempa = findel(temp, ss3a)
+            listel(tempa)
+            if testel(tempa):
+                print("\n {}".format(ss4a))
+                tempa = findel(tempa, ss4a)
+                listel(tempa)
+
+        tempb = findel(findel(findel(vaa, ss1), ss2), ss3a)
         testb = testel(tempb)
         if not testb:
-           return fhash
-        tempa = findel(tempb,ss4a)
-        #tempa = findel(findel(findel(findel(vaa,ss1),ss2),ss3a),ss4a)
-        #------------------------------------------------------------------------------
-        ss5a = 'directionOfMotion'
-        motion = findel(findel(findel(findel(findel(vaa, ss1),ss2),ss3a),ss4a),ss5a)
-        fhash[ss5a] = {'value':float(motion.text), 'uom':motion.attrib['uom']}
+            return fhash
+        tempa = findel(tempb, ss4a)
+        # tempa = findel(findel(findel(findel(vaa,ss1),ss2),ss3a),ss4a)
+        # ------------------------------------------------------------------------------
+        ss5a = "directionOfMotion"
+        motion = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3a), ss4a), ss5a)
+        fhash[ss5a] = {"value": float(motion.text), "uom": motion.attrib["uom"]}
 
-        #------------------------------------------------------------------------------
-        ss5a = 'speedOfMotion'
-        motion = findel(findel(findel(findel(findel(vaa, ss1),ss2),ss3a),ss4a),ss5a)
-        if verbose: print(type(motion))
-        fhash[ss5a] = {'value':float(motion.text), 'uom':motion.attrib['uom']}
+        # ------------------------------------------------------------------------------
+        ss5a = "speedOfMotion"
+        motion = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3a), ss4a), ss5a)
+        if verbose:
+            print(type(motion))
+        fhash[ss5a] = {"value": float(motion.text), "uom": motion.attrib["uom"]}
 
-        #------------------------------------------------------------------------------
-        fhash2 = self.subfunc(tempa,verbose)
+        # ------------------------------------------------------------------------------
+        fhash2 = self.subfunc(tempa, verbose)
         fhash.update(fhash2)
 
         return fhash
-         
-    def subfunc(self,vaa,verbose=False):
+
+    def subfunc(self, vaa, verbose=False):
         fhash = {}
-        ss5a = 'ashCloudExtent'
-        ss6a = 'AirspaceVolume'
+        ss5a = "ashCloudExtent"
+        ss6a = "AirspaceVolume"
 
         if verbose:
-           print('\n {}'.format(ss5a))
-           tempb = findel(vaa,ss5a)
-           listel(tempb)
-           print('\n {}'.format(ss6a))
-           tempb = findel(tempb,ss6a)
-           listel(tempb)
+            print("\n {}".format(ss5a))
+            tempb = findel(vaa, ss5a)
+            listel(tempb)
+            print("\n {}".format(ss6a))
+            tempb = findel(tempb, ss6a)
+            listel(tempb)
 
-        extent = findel(findel(vaa,ss5a),ss6a)
-        #extent = findel(findel(findel(findel(findel(findel(vaa, ss1),ss2),ss3a),ss4a),ss5a),ss6a)
-        uplimit = findel(extent,'upperLimit')
-        uplimitref = findel(extent,'upperLimitReference')
-        lowlimit = findel(extent,'lowerLimit')
-        lowlimitref = findel(extent,'lowerLimitReference')
-        projection = findel(extent,'horizontalProjection')
-        if verbose: listel(projection)
-        fhash['ashCloudExtent'] = {'value':float(uplimit.text), 'uom':uplimit.attrib['uom']}
-
-        #------------------------------------------------------------------------------
-        
-        ss7a = 'horizontalProjection'
-        ss8a = 'Surface'
-        ss9a = 'patches'
-        ss10a = 'PolygonPatch'
-        ss11a = 'exterior'
-        ss12a = 'LinearRing'
-        ss13a = 'posList' 
-         
+        extent = findel(findel(vaa, ss5a), ss6a)
+        # extent = findel(findel(findel(findel(findel(findel(vaa, ss1),ss2),ss3a),ss4a),ss5a),ss6a)
+        uplimit = findel(extent, "upperLimit")
+        uplimitref = findel(extent, "upperLimitReference")
+        lowlimit = findel(extent, "lowerLimit")
+        lowlimitref = findel(extent, "lowerLimitReference")
+        projection = findel(extent, "horizontalProjection")
         if verbose:
-           print('---------------------------------------')
-           print('\n {}'.format(ss7a))
-           tempc = findel(extent,ss7a)
-           listel(tempc)
-           print('\n {}'.format(ss8a))
-           tempd = findel(tempc,ss8a)
-           listel(tempd)
-           print('\n {}'.format(ss9a))
-           tempe = findel(tempd,ss9a)
-           listel(tempe)
-           print('\n {}'.format(ss10a))
-           tempf = findel(tempe,ss10a)
-           listel(tempf)
-           print('\n {}'.format(ss11a))
-           tempg = findel(tempf,ss11a)
-           listel(tempg)
-           print('\n {}'.format(ss12a))
-           temph = findel(tempg,ss12a)
-           listel(temph)
-           #print('\n {}'.format(ss13a))
-           #tempi = findel(tempg,ss13a)
-           #listel(tempi)
+            listel(projection)
+        fhash["ashCloudExtent"] = {
+            "value": float(uplimit.text),
+            "uom": uplimit.attrib["uom"],
+        }
 
+        # ------------------------------------------------------------------------------
 
-        
-        projection = findel(findel(findel(findel(extent,ss7a),ss8a),ss9a),ss10a)
-        exterior = findel(projection,ss11a)
-        lring = findel(findel(exterior,ss12a),ss13a)
-        #if verbose: print('--------------')
-        #if verbose: listel(lring)
-        fhash['exterior'] = self.process_lring(lring.text.split())
-       
+        ss7a = "horizontalProjection"
+        ss8a = "Surface"
+        ss9a = "patches"
+        ss10a = "PolygonPatch"
+        ss11a = "exterior"
+        ss12a = "LinearRing"
+        ss13a = "posList"
 
-        #------------------------------------------------------------------------------
- 
-        #ss3b = 'phenomenonTime'
-        #ss4b = 'TimeInstant'
-        #ss5b = 'timePosition'
-        #obs = findel(findel(findel(findel(findel(vaa, ss1),ss2),ss3b),ss4b),ss5b)
-        #fhash['date'] = datetime.datetime.strptime(obs.text, self.strfmt)
+        if verbose:
+            print("---------------------------------------")
+            print("\n {}".format(ss7a))
+            tempc = findel(extent, ss7a)
+            listel(tempc)
+            print("\n {}".format(ss8a))
+            tempd = findel(tempc, ss8a)
+            listel(tempd)
+            print("\n {}".format(ss9a))
+            tempe = findel(tempd, ss9a)
+            listel(tempe)
+            print("\n {}".format(ss10a))
+            tempf = findel(tempe, ss10a)
+            listel(tempf)
+            print("\n {}".format(ss11a))
+            tempg = findel(tempf, ss11a)
+            listel(tempg)
+            print("\n {}".format(ss12a))
+            temph = findel(tempg, ss12a)
+            listel(temph)
+            # print('\n {}'.format(ss13a))
+            # tempi = findel(tempg,ss13a)
+            # listel(tempi)
 
-        return fhash 
+        projection = findel(findel(findel(findel(extent, ss7a), ss8a), ss9a), ss10a)
+        exterior = findel(projection, ss11a)
+        lring = findel(findel(exterior, ss12a), ss13a)
+        # if verbose: print('--------------')
+        # if verbose: listel(lring)
+        fhash["exterior"] = self.process_lring(lring.text.split())
 
+        return fhash
 
-    def process_lring(self,plist):
+    def process_lring(self, plist):
         """
         exterior is a list of [lat,lon,lat,lon,lat,lon,lat,lon]
         Need to make it into [(lat,lon),(lat,lon),(lat,lon)]
-        """ 
+        """
         tlist = []
         for iii, elem in enumerate(plist):
-            if iii%2==0:
-               tlist.append((float(plist[iii+1]),float(plist[iii])))
+            if iii % 2 == 0:
+                tlist.append((float(plist[iii + 1]), float(plist[iii])))
         return tlist
 
     def get_remarks(self):
         vaa = self.vaaroot
-        ss1 = 'remarks'
-        remarks = findel(vaa,ss1)
+        ss1 = "remarks"
+        remarks = findel(vaa, ss1)
         return remarks.text
-             
+
     def get_issue_time(self):
         minfo = self.root[0]
         vaa = minfo[0]
         time = vaa[0][0][0]
         try:
-           itime = datetime.datetime.strptime(time.text,self.strfmt)
+            itime = datetime.datetime.strptime(time.text, self.strfmt)
         except:
-           print('WARNING: cannot parse issue time for {}'.format(self.source))
-           itime = time.txt
-        return  itime
+            print("WARNING: cannot parse issue time for {}".format(self.source))
+            itime = time.txt
+        return itime
 
     def get_vaac(self):
         minfo = self.root[0]
         vaa = minfo[0]
         vaac = vaa[1][0][0][0][2]
         return vaac.text
-
-
