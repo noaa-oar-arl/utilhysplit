@@ -320,6 +320,7 @@ class WashingtonPage:
         self.xlist = None
 
     def read(self):
+        # read the web page
         hresponse = urllib.request.urlopen(self.page)
         hcode = hresponse.getcode()
         ##header = hcontent.getheaders()
@@ -634,6 +635,21 @@ class iwxxmVAA:
             fhash["Forecast{}".format(iii)] = shash
         return fhash
 
+
+    def testdate(self,date):
+        """
+        currently some sort of bug in iwxxm files 
+        so some dates are a month ahead.
+        """
+        testdate = self.issueTime
+        newdate = date
+        # if date is more than a week ahead of issue date then clearly not correct.
+        # changing month to month before works.
+        if date > testdate + datetime.timedelta(hours=24*7):
+           newdate = datetime.datetime(date.year,date.month-1,date.day,date.hour,date.minute)
+           print('warning: date out of range {}. changed to {}'.format(date,newdate))
+        return newdate
+
     def get_forecast(self, forecast, verbose=False):
         fhash = {}
         ss2 = "VolcanicAshForecastConditions"
@@ -652,7 +668,9 @@ class iwxxmVAA:
         if testel(findel(findel(forecast, ss2), ss2a)):
             time = findel(findel(findel(findel(forecast, ss2), ss2a), ss3a), ss4a)
             try:
-                fhash["date"] = datetime.datetime.strptime(time.text, self.strfmt)
+                fdate = datetime.datetime.strptime(time.text, self.strfmt)
+             
+                fhash["date"] = self.testdate(fdate)
             except:
                 print("Forecast data cannot be parsed", time.text)
 
@@ -709,7 +727,8 @@ class iwxxmVAA:
         ss4b = "TimeInstant"
         ss5b = "timePosition"
         obs = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3b), ss4b), ss5b)
-        fhash["date"] = datetime.datetime.strptime(obs.text, self.strfmt)
+        odate = datetime.datetime.strptime(obs.text, self.strfmt)
+        fhash["date"] = self.testdate(odate)
 
         # ------------------------------------------------------------------------------
         ss3a = "ashCloud"
