@@ -7,7 +7,7 @@ import xarray as xr
 import pandas as pd
 from scipy import integrate
 import matplotlib.pyplot as plt
-from utilhysplit.par2conc import fixlondf
+#from utilhysplit import par2conc
 # Opens the dataset
 
     
@@ -23,13 +23,13 @@ class volcatSO2L3:
         self.dset = xr.open_dataset(self.fname, decode_times=True)
         return self.dset 
 
-
-    def plotscatter(self,interp=False):
+    def plotscatter(self,interp=False,cmap='viridis'):
         lon = self.pframe.lon.values
         lat = self.pframe.lat.values
         mass = self.pframe.mass.values
-        plt.scatter(lon,lat,mass)
-       
+        cb = plt.scatter(lon,lat,c=mass,s=1,cmap=cmap)
+        plt.colorbar(cb) 
+        plt.tight_layout()
 
     def plotmass(self,interp=True):
         if interp:
@@ -39,7 +39,14 @@ class volcatSO2L3:
         cb = plt.pcolormesh(vals)
         plt.colorbar(cb)
 
+
+    def get_points_alt(self):
+        self.mass = self.dset.mass_loading_mean
+        
+
+
     def get_points(self):
+        #
         self.mass = self.dset.so2_column_loading_fov
         self.height = self.dset.so2_height_fov
         self.mass_interp = self.dset.so2_column_loading_interp
@@ -56,14 +63,24 @@ class volcatSO2L3:
         lon = self.lon.flatten()
         lat = self.lat.flatten()
         rlist = []
+        #print('length of mass {}'.format(len(mass)))
+        #print('length of height {}'.format(len(height)))
+        #print('length of time {}'.format(len(time)))
+        #print('length of lon {}'.format(len(lon)))
+        #print('length of lat {}'.format(len(lat)))
         for iii in np.arange(0,len(mass)):
             if not np.isnan(mass[iii]):
-               rvalue = (self.conv*mass[iii], lon[iii], lat[iii], height[iii], time[iii])
+               try:
+                   rvalue = (mass[iii],self.conv*mass[iii], lon[iii], lat[iii], height[iii], time[iii])
+               except Exception as eee:
+                   print('points2frame Exception at {}'.format(iii))
+                   print(eee)
+                   continue 
                rlist.append(rvalue)
         pframe = pd.DataFrame(rlist)
-        pframe.columns = ['mass', 'lon', 'lat','height','time']
+        pframe.columns = ['mass DU', 'mass', 'lon', 'lat','height','time']
         pframe = pframe.sort_values(['lon','lat','time'],ascending=True)
-        #pframe = fixlondf(pframe,neg=False)  
+        #pframe = par2conc.fixlondf(pframe,neg=False)  
         self.pframe = pframe
         return pframe
 

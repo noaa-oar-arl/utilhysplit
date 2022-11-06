@@ -5,6 +5,170 @@ import seaborn as sns
 import xarray as xr
 from utilhysplit.evaluation import ensemble_tools
 
+class TestTalagrand():
+
+    def __init__(self):
+        self.enumber=10 #number of ensemble members
+        self.mean=2
+        self.num=100
+
+    def make_normal_obs(self,xcenter,ycenter,varname='obs'):
+        nm = self.num
+        mean = self.mean
+        obsval = np.random.normal(mean, 1, nm)
+        xval = np.arange(xcenter-self.num, xcenter+self.num, 1)
+        yval = np.arange(ycenter-self.num, ycenter+self.num, 1)
+        #print(xval)
+        #print(yval)
+        df = pd.DataFrame(zip(obsval,xval,yval),columns=['val','x','y'])
+        df = df.set_index(['x','y'])
+        dset = df.to_xarray() 
+        dset = xr.where(dset<0,self.mean,dset)
+        #dset = dset.fillna(0)
+        dset = dset.val
+        dset = dset.assign_coords(ens=varname)
+        dset = dset.expand_dims('ens')
+        #dset = dset.val
+        #dset['ens'] = varname
+        return dset
+       
+    def non_overlapping_ensembleA(self):
+        # non-overlapping with more observations
+        self.num=15
+        xlist = []
+        obs = self.make_normal_obs(1,15,'obs') 
+        xlist.append(obs)
+        enames = ['e{}'.format(x) for x in np.arange(1,self.enumber)]
+        #print(enames)
+        ycenterlist = np.arange(21,21+5*self.enumber,5)
+        xcenterlist = np.arange(1,1+self.enumber)
+        self.num=10
+        for ens in zip(enames,xcenterlist,ycenterlist):
+            xlist.append(self.make_normal_obs(ens[1],ens[2],ens[0]))
+        dset = xr.concat(xlist,dim='ens')
+        return dset
+
+    def overlapping_ensembleA(self):
+        # perfectly overlapping ensembles.
+        # need a large number to get the sampling right.
+        self.num=100
+        xlist = []
+        obs = self.make_normal_obs(1,15,'obs') 
+        xlist.append(obs)
+        enames = ['e{}'.format(x) for x in np.arange(1,self.enumber)]
+        for ens in zip(enames):
+            xlist.append(self.make_normal_obs(1,15,ens[0]))
+        dset = xr.concat(xlist,dim='ens')
+        return dset
+
+    def overlapping_ensembleB(self):
+        # half are overlapping and half are not.
+        self.num=100
+        onum = self.num
+        xlist = []
+        ox = 1
+        oy = 15
+        obs = self.make_normal_obs(ox,oy,'obs') 
+        xlist.append(obs)
+        enames = ['e{}'.format(x) for x in np.arange(1,self.enumber)]
+        #print(enames)
+        ycenterlist = np.arange(21,21+5*self.enumber,5)
+        xcenterlist = np.arange(1,1+self.enumber)
+        nlist = np.ones([self.enumber]) * self.num
+        iii=0
+        for ens in zip(enames,xcenterlist,ycenterlist,nlist):
+            if iii < self.enumber/2:
+                xlist.append(self.make_normal_obs(ens[1],ens[2],ens[0]))
+            else:
+                xlist.append(self.make_normal_obs(ox,oy,ens[0]))
+            iii+=1
+        dset = xr.concat(xlist,dim='ens')
+        return dset
+
+    def non_overlapping_ensembleC(self):
+        # non-overlapping with more observations in half the ensemble members
+        self.num=16
+        onum = self.num
+        xlist = []
+        obs = self.make_normal_obs(1,15,'obs') 
+        xlist.append(obs)
+        enames = ['e{}'.format(x) for x in np.arange(1,self.enumber)]
+        #print(enames)
+        ycenterlist = np.arange(21,21+5*self.enumber,5)
+        xcenterlist = np.arange(1,1+self.enumber)
+        nlist = np.ones([self.enumber]) * self.num
+        iii=0
+        for ens in zip(enames,xcenterlist,ycenterlist,nlist):
+            if iii < self.enumber/2:
+               self.num = int(ens[3]) + 5
+            else:
+               self.num=int(ens[3]) - 5
+            print(self.num)
+            xlist.append(self.make_normal_obs(ens[1],ens[2],ens[0]))
+            iii+=1
+        dset = xr.concat(xlist,dim='ens')
+        return dset
+
+
+    def non_overlapping_ensembleB(self):
+        # non-overlapping with more observations in one ensemble member
+        self.num=15
+        xlist = []
+        obs = self.make_normal_obs(1,15,'obs') 
+        xlist.append(obs)
+        enames = ['e{}'.format(x) for x in np.arange(1,self.enumber)]
+        #print(enames)
+        ycenterlist = np.arange(21,21+5*self.enumber,5)
+        xcenterlist = np.arange(1,1+self.enumber)
+        nlist = np.ones([self.enumber]) * self.num
+        nlist[0] = nlist[0]+20
+        for ens in zip(enames,xcenterlist,ycenterlist,nlist):
+            self.num=int(ens[3])
+            xlist.append(self.make_normal_obs(ens[1],ens[2],ens[0]))
+        dset = xr.concat(xlist,dim='ens')
+        return dset
+
+
+    def non_overlapping_ensemble(self):
+        # non-overlapping and equal in size
+        self.num=10
+        xlist = []
+        obs = self.make_normal_obs(1,15,'obs') 
+        xlist.append(obs)
+        enames = ['e{}'.format(x) for x in np.arange(1,self.enumber)]
+        #print(enames)
+        ycenterlist = np.arange(21,21+5*self.enumber,5)
+        xcenterlist = np.arange(1,1+self.enumber)
+        for ens in zip(enames,xcenterlist,ycenterlist):
+            xlist.append(self.make_normal_obs(ens[1],ens[2],ens[0]))
+        dset = xr.concat(xlist,dim='ens')
+        return dset
+
+
+    def testgeneric(self, func):
+        dset = func
+        #dset.max(dim='ens').plot.pcolormesh()
+        tal = Talagrand(thresh=0.001,nbins=self.enumber+1)
+        df = tal.add_data_xraB(dset)
+        return tal
+
+    def otestA(self):
+        return self.testgeneric(self.overlapping_ensembleA())
+
+    def otestB(self):
+        return self.testgeneric(self.overlapping_ensembleB())
+
+    def test1(self):
+        return self.testgeneric(self.non_overlapping_ensemble())
+        
+    def test2(self):
+        return self.testgeneric(self.non_overlapping_ensembleA())
+
+    def test3(self):
+        return self.testgeneric(self.non_overlapping_ensembleB())
+
+    def test4(self):
+        return self.testgeneric(self.non_overlapping_ensembleC())
 
 class TestReliability():
     """
@@ -240,14 +404,17 @@ class Talagrand:
         # plt.show()
         return ax
 
-    def plotrank(self, fname=None, fs=10):
+    def plotrank(self, fname=None, fs=10, ax=None):
         sns.set_style('whitegrid')
+        if not ax:
+           fig = plt.figure(1)
+           ax = fig.add_subplot(1,1,1)
         nbins = self.binra.shape[0] + 1
         xval = np.arange(1, nbins)
-        plt.bar(xval, self.binra, alpha=0.5)
-        plt.xlabel('Rank', fontsize=fs)
-        plt.ylabel('Counts', fontsize=fs)
-        plt.tight_layout()
+        ax.bar(xval, self.binra, alpha=0.5)
+        ax.set_xlabel('Rank', fontsize=fs)
+        ax.set_ylabel('Counts', fontsize=fs)
+        #plt.tight_layout()
         if fname:
             plt.savefig('{}.png'.format(fname))
 
@@ -291,6 +458,16 @@ class Talagrand:
         if (row[-1] - row[0]) > (360-row[-1] + row[0]):
             return -1
 
+    def add_data_xraB(self, dset, dims='ens'):
+        dset = dset.fillna(0)
+        df = dset.to_dataframe()
+        df = df.reset_index()
+        # create unique index for each measurement point.
+        df['iii'] = df.apply(lambda row: '{}_{}'.format(row['x'], row['y']), axis=1)
+        df = df.pivot(columns=dims, values='val', index='iii')
+        self.add_data(df)
+        return df
+
     def add_data_xra(self, obs, forecast, dims='ens'):
         """
         obs : xra
@@ -318,11 +495,9 @@ class Talagrand:
         self.add_data(df)
         return df
 
-    def add_data(self, df, wind_direction=False):
-        # Assumes no duplicate values in forecast.
-        # ToDO - should be able to apply to row so that the rank becomes
-        # another column in the dataframe.
+    def add_data(self, df, wind_direction=False, verbose=False):
         obs_col = [x for x in df.columns if 'obs' in x]
+        print(obs_col)
         obs_col = obs_col[0]
         # this keeps rows which have at least one value above threshold.
         df2 = df[(df > self.thresh).any(1)]
@@ -343,7 +518,7 @@ class Talagrand:
             # sorts values
             rowcheck = rowcheck.sort_values()
             row = row.sort_values()
-            print('ROW', row)
+            if verbose: print('ROW', row)
             # creates dataframe with columns of index, name, value
             temp = pd.DataFrame(row).reset_index().reset_index()
             temp.columns = ['iii', 'name', 'val']
@@ -355,7 +530,7 @@ class Talagrand:
             # which starts at 0.
             rank = int(float(temp[temp.name == obs_col].iii))
             obsval = float(temp[temp.name == obs_col].val)
-            print('Rank', rank, obsval)
+            if verbose: print('Rank', rank, obsval)
 
             temp['zval'] = np.abs(obsval - temp['val'])
             # should be one zero value where obs matches itself.

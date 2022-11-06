@@ -101,6 +101,8 @@ def open_dataset(
         pass
     if "some_vars.nc" in fname:
         pass
+    elif "Karymsky" in fname:
+        pass
     else:
         # use parallax corrected if available and flag is set.
         dset = _get_latlon(dset, "latitude", "longitude")
@@ -578,6 +580,9 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
             filenames = tframe.filename.values
     das = []
     for nnn, iii in enumerate(filenames):
+        if not os.path.isfile(os.path.join(tdir,iii)):
+           print('file not found, skipping file {}'.format(iii))
+           continue
         if verbose:
             print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
         # opens volcat files using volcat.open_dataset
@@ -667,30 +672,37 @@ def write_parallax_corrected_files(
     already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
+    anum = 0
     if isinstance(flist,(list,np.ndarray)):
         vlist = flist
     else:
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for iii, val in enumerate(vlist):
+        if verbose: print('working on {}'.format(val))
         if isinstance(val, str):
             fname = val
         else:
             fname = val.fname
         new_fname = fname.replace(".nc", "_{}.nc".format(tag))
+        newname = os.path.join(wdir,new_fname)
+        print('wdir {}'.format(newname))
         if os.path.isfile(os.path.join(wdir, new_fname)):
-            print(
+            if verbose: print(
                 "Netcdf file exists {} in directory {} cannot write ".format(
                     new_fname, wdir
                 )
             )
+            anum+=1
         else:
             if verbose:
                 print("writing {} to {}".format(new_fname, wdir))
             dset = open_dataset(
                 os.path.join(tdir, fname), gridspace=gridspace, correct_parallax=True
             )
-            dset.to_netcdf(os.path.join(wdir, new_fname))
-
+            newname = os.path.join(wdir,new_fname)
+            print('wdir {}'.format(newname))
+            dset.to_netcdf(newname)
+    print('Number of files which were already written {}'.format(anum))
 
 def find_volcat(
     tdir, vid=None, daterange=None, return_val=2, verbose=False, include_last=False
@@ -1294,6 +1306,7 @@ def correct_pc(dset, gridspace=None):
 
     if not gridspace:
         newmass = xr.zeros_like(mass.isel(time=0))
+        newnum = xr.zeros_like(mass.isel(time=0))
         newhgt = xr.zeros_like(height.isel(time=0))
         newrad = xr.zeros_like(effrad.isel(time=0))
         #newmass = newmass.drop("longitude")
@@ -1328,6 +1341,7 @@ def correct_pc(dset, gridspace=None):
             ),
         )
         newmass = das
+        newnum = das + 1
         newhgt = das
         newrad = das
         # END of Additional code - AMR
@@ -1343,6 +1357,9 @@ def correct_pc(dset, gridspace=None):
 
     indexlist = []
     prev_point = 0
+
+    newmass,newnum,newhgt,newrad = pc_loop(tlist,newmass,newnum,newhgt,newrad)
+    """
     for point in tlist:
         iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
         if iii in indexlist:
@@ -1360,10 +1377,16 @@ def correct_pc(dset, gridspace=None):
             point[3] = maxhgt
             print("Total mass, max height: ", point)
             # End of AMR additions
+
         newmass = xr.where(
             (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
             point[2],
             newmass,
+        )
+        newnum = xr.where(
+            (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
+            newnum+1,
+            newnum,
         )
         newhgt = xr.where(
             (newhgt.coords["x"] == iii[0]) & (newhgt.coords["y"] == iii[1]),
@@ -1384,6 +1407,7 @@ def correct_pc(dset, gridspace=None):
     if len(indexlist) != len(list(set(indexlist))):
         print("WARNING: correct_pc function: some values mapped to same point")
         print(len(indexlist), len(list(set(indexlist))))
+    """
     # TODO currently the fill value is 0.
     # possibly change to nan or something else?
     newmass = newmass.assign_attrs({"_FillValue": 0})
@@ -1438,3 +1462,101 @@ def correct_pc(dset, gridspace=None):
     #dnew.longitude.attrs.update({"standard_name": "longitude"})
     #dnew = dnew.assign_attrs(dset.attrs)
     return dnew
+
+def pc_loop(tlist,newmass,newnum,newhgt,newrad):
+    indexlist = []
+    prev_point = 0
+    for point in tlist:
+        iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
+        if iii in indexlist:
+            print("WARNING: correct_pc function: some values mapped to same point")
+            print(iii, point)
+            vpi = find_iii(indexlist, iii)
+            print(tlist[vpi])
+            # AMR: 9/1/2021
+            # Need to add mass from values mapped to same grid point (conserve mass)
+            # Take max height from values mappend to same grid point (conserve top height)
+            totmass = tlist[vpi][2] + point[2]
+            maxhgt = np.max([tlist[vpi][3], point[3]])
+            # Reassigning values in point array for mass and height
+            point[2] = totmass
+            point[3] = maxhgt
+            print("Total mass, max height: ", point)
+            # End of AMR additions
+
+        newmass = xr.where(
+            (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
+            point[2],
+            newmass,
+        )
+        newnum = xr.where(
+            (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
+            newnum+1,
+            newnum,
+        )
+        newhgt = xr.where(
+            (newhgt.coords["x"] == iii[0]) & (newhgt.coords["y"] == iii[1]),
+            point[3],
+            newhgt,
+        )
+        # AMR: Need to adjust this for effective radius - not currently in tlist, and therefore not in iii
+        newrad = xr.where(
+            (newrad.coords["x"] == iii[0]) & (newrad.coords["y"] == iii[1]),
+            point[3],
+            newrad,
+        )
+        # keeps track of new indices of lat lon points.
+        indexlist.append(iii)
+        prev_point = point
+
+    # check if any points are mapped to the same point.
+    if len(indexlist) != len(list(set(indexlist))):
+        print("WARNING: correct_pc function: some values mapped to same point")
+        print(len(indexlist), len(list(set(indexlist))))
+    # TODO currently the fill value is 0.
+    return newmass, newhgt, newnum, newrad
+
+
+
+
+class TestGrids:
+
+    def __init__(self):
+        
+        self.latmin=20
+        self.latmax=30
+        self.lonmin=100
+        self.lonmax=120
+        self.gridspace=0.1
+
+
+    def smallgrid(self):
+        smallg = makegrid(self.latmin,self.latmax,self.lonmin,self.lonmax,self.gridspace)
+        smallg = xr.where(
+            (smallg.coords["x"] < 50 ) & (smallg.coords["y"] < 20),
+             1,
+             smallg,
+        )
+        self.smallg = smallg    
+      
+
+    def largegrid(self):
+        self.largeg = makegrid(self.latmin,self.latmax,self.lonmin,self.lonmax,self.gridspace*2)
+
+def makegrid(latmin,latmax,lonmin,lonmax,gridspace):
+    # lats = np.arange(latmin, latmax, gridspace)
+    lats = np.arange(latmax, latmin, gridspace * -1)
+    lons = np.arange(lonmin, lonmax, gridspace)
+    longitude, latitude = np.meshgrid(lons, lats)
+    tmp = np.zeros_like(latitude)
+    # Making zeros like arrays
+    das = xr.DataArray(
+        data=tmp,
+        dims=["y", "x"],
+        coords=dict(
+            latitude=(["y", "x"], latitude), longitude=(["y", "x"], longitude)
+        ),
+    )
+    return das
+
+

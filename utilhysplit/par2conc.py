@@ -519,7 +519,6 @@ def get_new_indices(latra, lonra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon
     # These are arrays for the entire grid.
     lat = np.arange(llcrnr_lat, llcrnr_lat + nlat * dlat, dlat)
     lon = np.arange(llcrnr_lon, llcrnr_lon + nlon * dlon, dlon)
-
     # these find the new indices
     # a = np.where(np.isclose(lat, latra[0]))[0][0]
     # b = np.where(np.isclose(lat, latra[-1]))[0][0]
@@ -532,7 +531,6 @@ def get_new_indices(latra, lonra, llcrnr_lat, llcrnr_lon, nlat, nlon, dlat, dlon
     # b = np.where(np.isclose(lon, lonra[-1]))[0][0]
     # ilon = np.arange(a, b + 1, 1)
     ilon2 = [findclose(lon, lonra[x]) for x in np.arange(0, len(lonra))]
-
     return ilat2, ilon2
 
 
@@ -576,13 +574,13 @@ class MassFit:
         self.fit = True
         self.check_n_components(min_par_num=min_par_num)
         self.fitloop()
-        # try:
-        #    self.gfit = gmm.fit(xra)
-        # except:
-        #    self.fit = False
-        # if not self.fit.converged_:
-        #    logger.warning('Fit did not converge tolderance {}'.\
-        #                    .format(self.gmm.tol))
+        #try:
+        #   self.gfit = gmm.fit(xra)
+        #except:
+        #   self.fit = False
+        #if not self.fit.converged_:
+        #   logger.warning('Fit did not converge tolderance {}'.\
+        #                   .format(self.gmm.tol))
         self.mass = mass
         self.htunits = self.get_ht_units()
 
@@ -603,11 +601,11 @@ class MassFit:
         new_n = np.min([n_max, nnn])
         # decide if change is needed.
         if new_n != nnn:
-            logger.warning(
-                "Changing n_components to {} from {} parnum {}".format(
-                    new_n, nnn, parnum
-                )
-            )
+            #logger.warning(
+            #    "Changing n_components to {} from {} parnum {}".format(
+            #        new_n, nnn, parnum
+            #    )
+            #)
             self.gmm.n_components = new_n
 
     def fitloop(self):
@@ -621,6 +619,7 @@ class MassFit:
         while not self.gfit.converged_:
             self.gmm.tol += 0.001
             logger.warning("Increasing tolerance {}".format(self.gmm.tol))
+            print("Increasing tolerance {}".format(self.gmm.tol))
             if not self.getfit():
                 break
             iii += 1
@@ -687,16 +686,16 @@ class MassFit:
             xxx = xra[:, 0]
             yyy = xra[:, 1]
             zzz = xra[:, 2]
-
+        msize=0.1
         if dim == "3d":
-            ax.scatter(xxx, yyy, zzz, c=z, s=1, cmap=cmap)
+            ax.scatter(xxx, yyy, zzz, c=z, s=msize, cmap=cmap)
         else:
             if labels=='labels':
-                ax.scatter(xxx, yyy, c=z, s=1, cmap=cmap)
+                ax.scatter(xxx, yyy, c=z, s=msize, cmap=cmap)
             elif labels=='z':
                 ax.scatter(xxx, yyy, c=resp, cmap=cmap)
             elif labels=='ht':
-                ax.scatter(xxx, yyy, c=nlabel, s=1,cmap=cmap)
+                ax.scatter(xxx, yyy, c=nlabel, s=msize,cmap=cmap)
             ax.axis("equal")
         return z
 

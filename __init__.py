@@ -1,3 +1,3 @@
-from . import utilhysplit, utilvolc
+from . import utilhysplit, utilvolc, utiltesting
 
-__all__ = ['utilhysplit', 'utilvolc']
+__all__ = ['utilhysplit', 'utilvolc','utiltesting']

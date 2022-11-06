@@ -238,17 +238,32 @@ class InverseSO2(InverseAsh):
                        fixed=False
                 if not fixed: continue
             trow = mtemp.isel(x=xii,y=yii)
-
             # append observation onto end of row.
-            tcm_row = np.append(trow, vrow.mass)           
-
-            if iii==0:
-               tcm = tcm_row
-            elif iii==1:
-               tcm = np.append([tcm],[tcm_row],axis=0)
+            tcm_row = np.append(trow, vrow.mass) 
+            # check to see if other obs corresponded to same model data.          
+            if (tii,xii,yii) in thash.keys():
+                prev_value = thash[(tii,xii,yii)]
+                new_value = tcm_row
+                #print('-------------------------------------')
+                #print('SAME ', prev_value[-1], new_value[-1])
+                #print('-------------------------------------')
+                # replace with average value
+                total_value = (prev_value[-1] + new_value[-1])/2.0
+                total_row = np.append(trow,total_value)
+                thash[(tii,xii,yii)] = total_row
             else:
-               tcm = np.append(tcm,[tcm_row],axis=0)
+                thash[(tii,xii,yii)] = tcm_row
+            #if iii==0:
+            #   tcm = tcm_row
+            #elif iii==1:
+            #   tcm = np.append([tcm],[tcm_row],axis=0)
+            #else:
+            #   tcm = np.append(tcm,[tcm_row],axis=0)
             iii+=1
+        # convert the hash to a numpy array.
+        tcm = np.array(list(thash.values()))
+            
+
         self.tcm_columns =  mtemp.ens.values
         self.tcm = tcm
         return tcm   

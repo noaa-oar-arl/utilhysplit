@@ -8,6 +8,7 @@ import pandas as pd
 import urllib.request, urllib.error, urllib.parse
 import xml.etree.ElementTree as ET
 import shapely.geometry as sgeo
+from utilhysplit import geotools
 
 """
 Read and process volcanic ash advisories in vAA forma
@@ -165,13 +166,14 @@ class iwxxmCollection:
             ax.set_ylabel("Time since last vaa issued (h)")
         return dates, times
 
-    def time_series(self, vname, plot=True, ax=None):
+    def time_series(self, vname, plot=True, ax=None, ptype='area'):
         if not ax:
             fig = plt.figure(1)
             ax = fig.add_subplot(1, 1, 1)
         sublist = self.get_by_volcano(vname)
         obstime = []
         obsarea = []
+        obsarea2 = []
         f1time = []
         f1area = []
         f2time = []
@@ -179,20 +181,33 @@ class iwxxmCollection:
         f3time = []
         f3area = []
         for vaa in sublist:
-            area = vaa.get_areas()
+            if ptype=='area':
+                aaa = vaa.get_areas()
+                ylabel = 'area (arbitrary unit)'
+            elif ptype=='distance':
+                aaa = vaa.get_distance()
+                ylabel = 'distance (km)'
+            elif ptype=='height':
+                aaa = vaa.get_height()
+                ylabel = 'Altitude (FL)'
+            elif ptype=='bearing':
+                aaa,bbb = vaa.get_bearing()
+                ylabel = 'direction (degrees)'
             time = vaa.get_times()
             if time[0]:
                 obstime.append(time[0])
-                obsarea.append(area[0])
+                obsarea.append(aaa[0])
             if time[1]:
                 f1time.append(time[1])
-                f1area.append(area[1])
+                f1area.append(aaa[1])
             if time[2]:
                 f2time.append(time[2])
-                f2area.append(area[2])
+                f2area.append(aaa[2])
             if time[3]:
                 f3time.append(time[3])
-                f3area.append(area[3])
+                f3area.append(aaa[3])
+            if ptype=='bearing':
+                obsarea2.append(bbb[0])
         if plot:
             sns.set()
             try:
@@ -200,9 +215,12 @@ class iwxxmCollection:
             except:
                 print("Failed")
                 return obstime, obsarea
+            if ptype=='bearing':
+               ax.plot(obstime,obsarea2,"--k.")
             ax.plot(f1time, f1area, "r.")
             ax.plot(f2time, f2area, "b+")
             ax.plot(f3time, f3area, "yx")
+            ax.set_ylabel(ylabel)
             plt.xticks(rotation=45)
             plt.tight_layout()
         return obstime, obsarea
@@ -390,6 +408,27 @@ def get_poly(vhash):
     return poly
 
 
+
+def vaa2traj(vaa,inp={'WORK_DIR':'./','JOBID':'777'},dt=0):
+    inp['jobname'] = vaa.volcano['latitude']
+    inp['latitude'] = vaa.volcano['latitude']
+    inp['longitude'] = vaa.volcano['longitude']
+    inp['bottom'] = vaa.volcano['elevation']*0.3048
+    top = vaa.get_height()[0]
+    inp['top'] = top*30.48 + 2000
+    inp['start_date'] = vaa.obs['date']-datetime.timedelta(hours=dt)
+    inp['forecastDirectory']='/pub/forecast/'
+    inp['archivesDirectory']='/pub/archives/'
+    inp['meteorologicalData']='gfs0p25'
+    inp['durationOfSimulation']=-12
+    inp['HYSPLIT_DIR'] = '/hysplit-users/alicec/hdev/'
+    inp['CONVERT_EXE'] = 'convert'
+    inp['GHOSTSCRIPT_EXE']='ghostscript'
+    inp['PYTHON_EXE']='python'    
+    inp['DATA_DIR'] = inp['WORK_DIR']
+    return inp
+
+
 class iwxxmVAA:
     """
     class for parsing the VAAs in iwxxm format.
@@ -503,6 +542,72 @@ class iwxxmVAA:
         poly2 = get_poly(self.forecast["Forecast1"])
         poly3 = get_poly(self.forecast["Forecast2"])
         return [poly0, poly1, poly2, poly3]
+
+    
+
+
+    def get_height(self):
+        def FL2m(fhash):
+            value = fhash['value']
+            #if fhash['uom']=='FL': value=value*30.48
+            return value
+        astr = 'ashCloudExtent'
+        if astr in self.obs.keys():
+            hlist = [FL2m(self.obs[astr])]
+        else:
+            hlist = [np.nan]
+        alist = ['Forecast0','Forecast1','Forecast2']
+        for aaa in alist:
+            if astr in self.forecast[aaa].keys():
+               hlist.append(FL2m(self.forecast[aaa][astr]))
+            else:
+               hlist.append(np.nan)
+        return hlist
+
+
+    def get_bearing(self):
+        plist = self.get_poly_list()
+        pnt = sgeo.Point(self.volcano['longitude'],self.volcano['latitude'])
+        mlist = []
+        alist = []
+        mindiff=10
+        for poly in plist:
+            bearing = 0
+            aaa = 400
+            iii=0
+            for coord in poly.exterior.coords:
+                pnt2 = sgeo.Point(coord[0],coord[1])
+                bbb = geotools.bearing(pnt,pnt2)
+                diff = geotools.distance(pnt,pnt2)
+                #bearing += geotools.bearing(pnt,pnt2)
+                #iii+=1
+                if bbb>bearing: bearing=bbb
+                if bbb<aaa: 
+                   if diff > mindiff:
+                       aaa=bbb
+                iii=1
+            if iii>0:
+                mlist.append(bearing/iii)  
+                alist.append(aaa/iii)  
+            else:
+                mlist.append(np.nan)
+                alist.append(np.nan)
+        return mlist, alist
+
+    def get_distance(self,verbose=False):
+        plist = self.get_poly_list()
+        pnt = sgeo.Point(self.volcano['longitude'],self.volcano['latitude'])
+        mlist = []
+        for poly in plist:
+            maxdiff = 0
+            for coord in poly.exterior.coords:
+                pnt2 = sgeo.Point(coord[0],coord[1])
+                diff = geotools.distance(pnt,pnt2)
+                if verbose: print(pnt, pnt2, diff)
+                if diff>maxdiff:maxdiff=diff
+            mlist.append(maxdiff)  
+            if verbose: print('-----')
+        return mlist
 
     def plot_vaa(self, ax=None):
         """ """

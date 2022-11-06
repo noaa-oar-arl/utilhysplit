@@ -145,7 +145,7 @@ def create_curves(dpra, rhop=2500, rhoa=1.2, kshape=1 ):
 
     for dp in dpra:
         tfv = stokes(rhop, rhoa, dp, Kshape )
-        tfv2 = stokes(rhop, rhoa, dp, Kshape,slip= False)
+        tfv2 = stokes(rhop, rhoa, dp, Kshape,slip= True)
     ##Ganser equation
         stokes_ra.append(tfv2) 
         ganser_ra.append(ganser(tfv, rhop, rhoa, dp, phi, verbose=False))

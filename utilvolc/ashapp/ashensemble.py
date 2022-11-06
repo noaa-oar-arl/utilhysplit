@@ -301,15 +301,15 @@ class EnsembleAshRun(AshRun):
         # this will also load the data from cdump files into an xarray.
         logger.debug("creating netcdf files")
         awipsfiles = self.make_awips_netcdf()
-
+        return -1
         # create probability of exceedence plot.
         # self.create_prob_plot()
-        logger.debug("RUNNING plot_ATL")
-        ATL_fignamelist = self.plot_ATL()
+        #logger.debug("RUNNING plot_ATL")
+        #ATL_fignamelist = self.plot_ATL()
         # creates kml and kmz  using cdump2xml module.
         self.make_kml()
         # create massloading plots.
-        mass_fignamelist = self.plot_massload()
+        #mass_fignamelist = self.plot_massload()
 
         # create parxplot for one ensemble member
         # stage would give ensemble member to use.

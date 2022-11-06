@@ -1009,6 +1009,7 @@ class InverseAsh:
 
         # keep volcat arrays for different averaging times.
         self.volcat_hash = {}
+
         # prepare_one_time method adds data to these dictionaries.
         # the data in cdump_hash and volcat_avg_hash have been aligned.
         # and are on the same grid.
@@ -2319,6 +2320,7 @@ class InverseAsh:
             print("prepare_one_time: grids cannot be aligned")
             return False
 
+        # take the average of the volcat data.
         avra = vra.fillna(0).mean(dim="time")
         maxvhra = vhra.fillna(0).max(dim="time")
 

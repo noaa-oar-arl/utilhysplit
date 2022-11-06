@@ -47,7 +47,7 @@ The following environment variables must be set prior to calling this script:
 # If GMM then could only store Gaussians or only pardump output.
 
 
-def get_suffix(suffix_type,dtfmt,nnn,ndate,bottom):
+def get_suffix(suffix_type,dtfmt,nnn,ndate,bottom,center=None):
     if suffix_type=='int':
           suffix = '{:03d}'.format(nnn)
     elif suffix_type=='date':
@@ -56,8 +56,36 @@ def get_suffix(suffix_type,dtfmt,nnn,ndate,bottom):
           suffix = '{}_{}'.format(str1,str2)
     else:
           suffix = '{:03d}'.format(nnn)
+    if center:
+          latstr = '{:.3f}'.format(center[0]).replace('.','p')
+          lonstr = '{:.3f}'.format(center[0]).replace('.','p')
+          suffix += '_' + latstr + '_' + lonstr
     return suffix
 
+
+def inverse_get_center_list(inp):
+    import numpy as np
+    # center point (lat, lon)
+    center = (inp['latitude'],inp['longitude'])
+    # area to cover. (meters squared)
+    area = inp['area']
+    # number of points to each side of center.
+    num = inp['hnum']
+    if num == 0:
+       return center
+    # here should use a square area.
+    centerlist = []
+    dlat = (area ** 0.5) / 111.0e3
+    dlon = dlat * np.cos(center[0]*np.pi/180.0)
+    lat0 = center[0]-num*dlat
+    latm = center[0]+(num+0.75)*dlat
+    latlist = np.arange(lat0,latm,dlat)  
+    lon0 = center[1]-num*dlon
+    lonm = center[1]+(num+0.75)*dlon
+    lonlist = np.arange(lon0,lonm,dlon) 
+    latlon = np.meshgrid(latlist, lonlist) 
+    latlon = zip(latlon[0].flatten(),latlon[1].flatten())
+    return list(latlon)
 
 def inverse_get_suffix_list(inp, suffix_type='date',dtfmt="%m%d%H"):
     """
@@ -84,32 +112,41 @@ def inverse_get_suffix_list(inp, suffix_type='date',dtfmt="%m%d%H"):
     edate = inp['start_date'] + datetime.timedelta(hours=inp["emissionHours"])
     ndate = sdate
     done=False
-    iii=0
     nnn=0
+    if 'hnum' in inp.keys():
+        latlonlist = inverse_get_center_list(inp)
+    else:
+        latlonlist = [1]
+    # latlon loop.
+    for center in latlonlist:
+        iii=0
     # time loop
-    while not done:
-          # vertical resolution loop.
-          vdone = False
-          jjj=0
-          bottom = inp['bottom']
-          while not vdone:
-              inhash = {}
-              inhash['sdate'] = ndate
-              inhash['edate'] = ndate+dt
-              inhash['bottom'] = bottom
-              inhash['top'] = bottom + vres
-              suffix = get_suffix(suffix_type,dtfmt,nnn,ndate,bottom)
-              suffixhash[suffix] = inhash.copy()
-              bottom += vres
-              if bottom > inp['top']: vdone=True
-              jjj+=1
-              nnn+=1
-              # limit of no more than 50 heights.
-              if jjj>50: 
-                return suffixhash
-          iii+=1
-          ndate = ndate + dt
-          if ndate >= edate: done=True
+        if len(latlonlist) > 1: center_suffix=center
+        else: center_suffix=None
+
+        while not done:
+              # vertical resolution loop.
+              vdone = False
+              jjj=0
+              bottom = inp['bottom']
+              while not vdone:
+                  inhash = {}
+                  inhash['sdate'] = ndate
+                  inhash['edate'] = ndate+dt
+                  inhash['bottom'] = bottom
+                  inhash['top'] = bottom + vres
+                  suffix = get_suffix(suffix_type,dtfmt,nnn,ndate,bottom,center_suffix)
+                  suffixhash[suffix] = inhash.copy()
+                  bottom += vres
+                  if bottom > inp['top']: vdone=True
+                  jjj+=1
+                  nnn+=1
+                  # limit of no more than 50 heights.
+                  if jjj>500: 
+                     return suffixhash
+              iii+=1
+              ndate = ndate + dt
+              if ndate >= edate: done=True
     return suffixhash 
 
 class InverseAshRun(AshRun):
@@ -354,7 +391,7 @@ class InverseAshRun(AshRun):
             logger.info("writing nc file {}".format(fname))
             cxra = cxra.assign_attrs(self.inp2attr())
             logger.debug(cxra.attrs['time description'])
-            cxra.to_netcdf(fname)
+            cxra.to_netcdf(fname,encoding={'zlib':True,'complevel':9})
             self.cxra = cxra
 
     def create_montage_pdf(self,montage_list):

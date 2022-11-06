@@ -23,7 +23,10 @@ class USGStable(object):
           i = 0
           vhash = {}
           while i== 0:
-                wline = fid.readline()
+                try:
+                    wline = fid.readline()
+                except:
+                    pass
                 if wline == '':
                    i=1
                    vhash=-1

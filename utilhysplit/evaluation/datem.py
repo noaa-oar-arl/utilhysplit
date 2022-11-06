@@ -304,7 +304,7 @@ def read_dataA(fname):
                 int(x["hour"]),
                 int(x["minute"]),
             )
-
+        print(datem)
         try:
             datem["date"] = datem.apply(getdate, axis=1)
         except BaseException:
@@ -346,11 +346,13 @@ def read_datem_file(
        returns pandas dataframe.
     """
     dtp = {"year": int, "month": int, "day": int, "hour": int}
+    print('HERE HERE HERE', fname)
     try:
-        datem = pd.read_csv(fname, names=colra, header=header, delimiter=r"\s+", dtype=dtp)
+        datem = pd.read_csv(fname, names=colra, header=header, delimiter=r"\s+", dtype=dtp,index_col=False)
     except pd.errors.ParserError:
         print('WARNING: could not read ', fname)
         datem = pd.DataFrame()
+    print('HERE HERE HERE', datem)
     datem.columns = colra
     datem["minute"] = datem["hour"] % 100
     datem["hour"] = datem["hour"] / 100
@@ -365,7 +367,13 @@ def read_datem_file(
             int(x["minute"]),
         )
 
-    datem["date"] = datem.apply(getdate, axis=1)
+    try:
+        datem["date"] = datem.apply(getdate, axis=1)
+    except BaseException:
+        print("EXCEPTION", fname)
+        print(datem[0:10])
+        sys.exit()
+    #datem["date"] = datem.apply(getdate, axis=1)
     datem.drop(["year", "month", "day", "hour", "minute"], axis=1, inplace=True)
     #colrb = [x for x in colra if x not in ["year","month","day","hour","minute"]]
     #colrb = ['date'].extend(colrb)

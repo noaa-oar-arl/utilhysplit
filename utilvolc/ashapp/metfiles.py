@@ -99,18 +99,18 @@ class MetFileFinder:
           iii += 1
        return files    
 
-   def find(self, dstart, duration):
+   def find(self, dstart, duration,hours=-1):
        #self.mstr = get_forecast_str(self.metid, self.archive_directory)
        metfiles = self.find_forecast(dstart,duration)
        if not metfiles:
            logger.info('Looking in archive for met files')
-           metfiles = self.find_archive(dstart,duration)
+           print('Looking in archive for met files')
+           metfiles = self.find_archive(dstart,duration,hours=hours)
        return metfiles
 
-   def find_archive(self, dstart, duration):
+   def find_archive(self, dstart, duration,hours=-1):
        self.mstr = get_archive_str(self.metid, self.archive_directory)
-       #print('HERE HERE', self.mstr, duration)
-       mf = MetFiles(self.mstr,hours=-1)
+       mf = MetFiles(self.mstr,hours=hours)
        mfiles = mf.get_files(dstart, duration)
        return  mfiles
 
@@ -126,7 +126,6 @@ class MetFileFinder:
        cycle_time = forecast_info['cycle_time']
        forecast_length = forecast_info['forecast_length']
        mstr = self.mstr
-  
        mf = MetFiles(mstr,hours=cycle_time)
        files = []
        iii=0
@@ -169,17 +168,34 @@ def weed_files(metfiles,dstart,duration,metid,metstr):
 def get_forecast_info(metid):
     # TO DO. set forecast_length based on metid
     mhash = {}
-    mhash['cycle_time'] = 6
+    mhash['cycle_time'] = 12       # default cycle time
+    mhash['time_res'] = 1          # default time resolution
+    mhash['forecast_length'] = 24  # default forecast length
+
     if 'gfs' in metid.lower():
         mhash['forecast_length'] = 84
         mhash['time_res'] = 3  #3 hour time resolution
-    if 'gefs' in metid.lower():
-        mhash['forecast_length'] = 4*24
+
+    elif 'gefs' in metid.lower():
+        mhash['cycle_time'] = 6
+        mhash['forecast_length'] = 6
         mhash['time_res'] = 3  #3 hour time resolution
-    if 'nam' in metid.lower():
+
+    elif 'nam' in metid.lower():
         mhash['forecast_length'] = 72
-    if 'gfs0p25' in metid.lower():
+
+    elif 'gfs0p25' in metid.lower():
         mhash['forecast_length'] = 24
+
+    elif('era5' in metid.lower()):
+        mhash['forecast_length'] = 24
+
+    elif('merra2' in metid.lower()):
+        mhash['forecast_length'] = 24
+
+    else:
+        logger.error('get_forecast_info: metid not recognized')
+
     return mhash
 
 def get_archive_str(metid, ARCDIR='/pub/archive'):
@@ -189,6 +205,10 @@ def get_archive_str(metid, ARCDIR='/pub/archive'):
         metstr = 'gdas1/gdas1.%b%y.week'
     elif('gefs' in metid.lower()):
         metstr = 'gefs'
+    elif('era5' in metid.lower()):
+        metstr = 'ERA5_%Y%m%d.ARL'
+    elif('merra2' in metid.lower()):
+        metstr = 'MERRA2_%Y%m%d.ARL'
     else:
         print('METID not found for archive ', metid)
         sys.exit()
@@ -211,11 +231,12 @@ def get_forecast_str(metid, FCTDIR='/pub/forecast'):
         met = 'gefs'
     else:
         logger.warning('Did not recognize MET name {}.'.format(metid))
-        lgger.warning('Using GFS')
+        logger.warning('Using GFS')
         met = 'gfs' 
     #metnamefinal = 'No data found'
     #        metime = dtm
     metdir = path.join(FCTDIR , '%Y%m%d/')
+    #print('fcst str', metdir)
     metfilename = 'hysplit.t%Hz.' + met 
     if 'gfs' in metid.lower():
         metfilename += 'f'
@@ -278,6 +299,7 @@ class MetFiles:
         self.mdt = datetime.timedelta(hours=hours)
 
     def get_files(self, sdate, runtime):
+        # MetFiles class
         """
         sdate : datetime object. start date.
         runtime : integer. hours of runtime.
@@ -365,7 +387,7 @@ class MetFiles:
         sdate : datetime.datetime ojbect
         runtime : int (hours of runtime)
         """
-        print('HERE', sdate, runtime)
+        #print('HERE', sdate, runtime)
         nlist = []
         sdate = sdate.replace(tzinfo=None)
         if not isinstance(self.mdt, datetime.timedelta):
@@ -375,6 +397,7 @@ class MetFiles:
             runtime = abs(runtime)
             end_date = sdate
             sdate = end_date - datetime.timedelta(hours=runtime)
+            print('backwards', sdate, end_date)
         else:
             end_date = sdate + datetime.timedelta(hours=runtime)
         done = False
@@ -382,8 +405,8 @@ class MetFiles:
         if "%H" in self.strfmt:
             sdate = self.handle_hour(sdate)
         edate = sdate
-        #if self.verbose:
-            #print("GETMET", sdate, edate, end_date, runtime, self.mdt)
+        if self.verbose:
+           print("GETMET", sdate, edate, end_date, runtime, self.mdt)
         zzz = 0
         while not done:
             if "week" in self.strfmt:
@@ -396,15 +419,20 @@ class MetFiles:
             mdate = datetime.datetime.strptime(temp,self.strfmt)
             # end time of this particular file.
             medate = mdate + self.mdt
+            #print('file', temp, self.strfmt)
+            #print('begin time of file', mdate)
+            #print('end time of file', medate)
+            #print('-------------')
 
-            temp = temp.lower()
-           
+            #temp = temp.lower()
+            #print('MDT', self.mdt) 
             # also need to increment the edate to get next possible file name 
             edate = edate + self.mdt
             #if not path.isfile(temp):
             #    temp = temp.lower()
             if not path.isfile(temp):
                 logger.info("WARNING " +  temp + " meteorological file does not exist")
+                print("WARNING " +  temp + " meteorological file does not exist")
                 #pass
                 #logger.debug("WARNING " +  temp + " meteorological file does not exist")
                 #temp = self.altmet.makefilelist(edate, self.altmet.mdt)

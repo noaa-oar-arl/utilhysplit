@@ -106,6 +106,9 @@ class Cdump2Awips:
         """
         # self.dt = dt
         self.add_probs = False 
+
+        # set to True to add compression
+        self.zlib=True
           
         self.dfmt = "%Y-%m-%d %H:%M:%S"
         self.outname = outname
@@ -183,7 +186,7 @@ class Cdump2Awips:
 
     def make_conc_level(self, fid, variable_name, min_level, max_level):
         coordlist = self.coordlist
-        concid = fid.createVariable(variable_name, "f4", coordlist)
+        concid = fid.createVariable(variable_name, "f4", coordlist,zlib=self.zlib)
         concid.units = self.munit + "/m3"
         concid.long_name = "Concentration Array"
         concid.bottomlevel = min_level
@@ -266,25 +269,24 @@ class Cdump2Awips:
                 minlev = "SFC"
             varname = maxlev
             concid_list.append(self.make_conc_level(fid, varname, minlev, maxlev))
-
-        massid = fid.createVariable("MassLoading", "f4", self.coordlist)
+        massid = fid.createVariable("MassLoading", "f4", self.coordlist,zlib=self.zlib,least_significant_digit=2)
         massid.units = self.massunit + "/m2"
         massid.long_name = "Mass Loading from SFC to " + maxlev
 
         # Standard Contour levels for concentration in mg/m3
-        clevelid = fid.createVariable("Contour_levels", "f4", ("contour_levels"))
+        clevelid = fid.createVariable("Contour_levels", "f4", ("contour_levels"),zlib=self.zlib)
         clevelid[:] = clevs
 
         # Dimension with different ensemble members.
-        ensembleid = fid.createVariable("ensemble", "str", ("ensid"))
-        ensid = fid.createVariable("ensid", "i4", ("ensid"))
-        sourceid = fid.createVariable("source", "str", ("ensid"))
+        ensembleid = fid.createVariable("ensemble", "str", ("ensid"),zlib=self.zlib)
+        ensid = fid.createVariable("ensid", "i4", ("ensid"),zlib=self.zlib)
+        sourceid = fid.createVariable("source", "str", ("ensid"),zlib=self.zlib)
 
-        latid = fid.createVariable("latitude", "f4", ("latitude"))
+        latid = fid.createVariable("latitude", "f4", ("latitude"),zlib=self.zlib)
         latid.long_name = "latitude degrees north from the equator"
         latid.units = "degrees_north"
         latid.point_spacing = "even"
-        lonid = fid.createVariable("longitude", "f4", ("longitude"))
+        lonid = fid.createVariable("longitude", "f4", ("longitude"),zlib=self.zlib)
         lonid.long_name = "longitude degrees east from the greenwhich meridian"
         lonid.units = "degrees_east"
         lonid.point_spacing = "even"
@@ -294,14 +296,14 @@ class Cdump2Awips:
         # levelid.long_name = 'Top height of each layer'
         # levelid.units='m'
 
-        timeid = fid.createVariable("time", "f4", ("time"))
+        timeid = fid.createVariable("time", "f4", ("time"),zlib=self.zlib)
         # attributes for time grid.
         timeid.units = "days since 1970-01-01 00:00:00"
         timeid.standard_name = "time"
         timeid.bounds = "time_bnds"
         timeid.calendar = "gregorian"
 
-        time_bnds = fid.createVariable("time_bnds", "f4", ("time", "bnds"))
+        time_bnds = fid.createVariable("time_bnds", "f4", ("time", "bnds"),zlib=self.zlib)
 
         # Put data into variables
         # only one time per file.

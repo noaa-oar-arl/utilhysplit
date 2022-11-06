@@ -1104,8 +1104,8 @@ class HycsControl:
             if self.rtype == "trajectory":
                 if self.outdir[-1] != "/":
                     self.outdir += "/"
-                fid.write(self.outdir + "\n")
-                fid.write(self.outfile)
+                fid.write(self.outdir.strip() + "\n")
+                fid.write(self.outfile.strip())
                 return False
 
             if annotate:
@@ -1214,8 +1214,8 @@ class HycsControl:
             if self.rtype == "vmixing":
                 return "Vmixing"
             if self.rtype == "trajectory":
-                self.outdir = content[zzz]
-                self.outfile = content[zzz + 1]
+                self.outdir = content[zzz].strip()
+                self.outfile = content[zzz + 1].strip()
                 return "Traj"
             # this is end of trajectory file
 

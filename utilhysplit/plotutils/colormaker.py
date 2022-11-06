@@ -36,7 +36,10 @@ class ColorMaker:
             return rval
 
         hval = [subfunc(x) for x in list(rgb)]
-        return "{}{}{}{}".format(self.transparency, hval[0], hval[1], hval[2])
+        if self.transparency:
+            return "{}{}{}{}".format(self.transparency, hval[0], hval[1], hval[2])
+        else:
+            return "{}{}{}".format(hval[0], hval[1], hval[2])
 
     def get_cmap(self, cname="viridis", nvals=10):
         cmap = matplotlib.cm.get_cmap(cname)

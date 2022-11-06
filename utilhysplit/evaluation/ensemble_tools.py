@@ -146,6 +146,55 @@ def preprocess(indra, enslist=None, sourcelist=None):
     return dra, dim
 
 
+def ATLra(indra,enslist,sourcelist,threshlist,norm=True,weights=None,
+          include_zero=False):
+
+    #------------------------------------------------
+    # making frequency of exceedances
+    atl_list = []
+    for thresh in threshlist:
+        temp = ATL(indra,enslist,sourcelist,thresh,norm,weights,include_zero)
+        temp = temp.assign_coords(thresh=thresh)
+        temp = temp.expand_dims('thresh')
+        atl_list.append(temp)
+    new = xr.concat(atl_list, dim='thresh')
+
+    atthash = {}
+    atthash['Description'] = 'Ensemble relative frequency of exceedance'
+    atthash['thresh unit'] = 'mg/m3'
+    atthash['unit'] = 'percent of ensemble members above threshold'
+    new.attrs.update(atthash)
+
+    #------------------------------------------------
+    # making gridded concentration
+    problev=50
+    apl = APL(indra,problev=problev)
+    descrip = 'Concentrations at {} percentile level'.format(problev) 
+    atthash={}
+    atthash['Description'] = descrip
+    atthash['units'] = 'mg/m3'
+    apl.attrs.update(atthash)
+
+    
+    #------------------------------------------------
+    # making dataset
+    dhash = {}
+    dhash['FrequencyOfExceedance'] = new
+    dhash['Concentration'] = apl
+    dset = xr.Dataset(data_vars = dhash)
+
+    nhash = {}
+    nhash['Model'] = 'HYSPLIT'
+    nhash['Meteorological model'] = 'GFS'
+    nhash['VAAC'] = 'TEST'
+    nhash['Volcano'] = 'Popocetepetl' 
+
+    dset.attrs.update(nhash)
+
+    return dset
+
+
+
 def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None,
         include_zero=False):
     """

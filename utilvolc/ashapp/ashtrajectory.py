@@ -8,12 +8,12 @@
 # -----------------------------------------------------------------------------
 # To run in offline mode use python ash_run.py -777
 # -----------------------------------------------------------------------------
-
+import numpy as np
 import datetime
 import logging
 import os
-from runhelper import Helper 
-from ashbase import AshRun
+from utilvolc.ashapp.runhelper import Helper 
+from utilvolc.ashapp.ashbase import AshRun
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class TrajectoryAshRun(AshRun):
         control : HycsControl object
         stage : int or str
         """
+        logger.error('running additional control setup')
         # for dispersion control
         # add location of eruption
         # trajectories every 2 km 
@@ -40,17 +41,19 @@ class TrajectoryAshRun(AshRun):
         lat = self.inp['latitude']
         lon = self.inp['longitude']
         control.remove_locations()
-        plist = list(range(0,26000,2000))
+        plist = list(range(0,26000,1000))
+        height_list = list(np.arange(vent,height,500))
         #height_list = [x for x in plist if x > vent and x < height]
+         
         # This returns list of FL every FL50. 12 levels total.
-        height_list,rlist = self.set_levels_A()
+        #height_list,rlist = self.set_levels_A()
         # For trajectory every FL100 is sufficient
-        height_list = height_list[::2]        
+        #height_list = height_list[::2]        
         if not height_list:
             logger.info('No height found between vent {} and top height'
                         ' {}. Using Default heights'.format(vent, height))
             height_list = list(range(5000,25000,5000))
-
+        logger.error("{} to {} height list {}".format(vent, height, height_list))
         [control.add_location((lat,lon), ht) for ht in height_list] 
         control.outdir = self.inp['WORK_DIR']
         control.outfile = self.filelocator.get_tdump_filename(stage)        
@@ -128,8 +131,10 @@ class TrajectoryAshRun(AshRun):
             with open(fn, 'at') as f:
                 f.write(msg)
                 f.write('\n')
-
-        mapopt = self.inp['mapBackground']
+        if 'mapBackground' not in self.inp.keys():
+            mapopt='toner'
+        else:
+            mapopt = self.inp['mapBackground']
         if mapopt == 'terrain':
             maparg = '--street-map=0'
         elif mapopt == 'toner':

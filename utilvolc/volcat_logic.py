@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 #
 # Issue = vl.get_files pauses and asks if you want to overwrite the logfiles.
 # TODO  -  figure out what permissions need to be set for files.
+# TODO  -  generation of parallax corrected files is slow.
 
 
 def workflow():
@@ -130,6 +131,12 @@ def workflow():
 
 
 def get_summary_file_df(fdir, verbose=False, hours=48):
+    """
+    fdir : str : location of summary files
+    Returns
+    sumdf : pandas dataframe with information from all the summary files.
+    """
+
     vlist = []
     if not hours:
         logger.warning("get_summary_file_df input hours None, setting hours to 100")
@@ -155,7 +162,8 @@ def get_summary_file_df(fdir, verbose=False, hours=48):
             continue
         vlist.append(sfn.open_dataframe())
         # df = sfn.open_dataframe()
-    return pd.concat(vlist)
+    sumdf = pd.concat(vlist)
+    return sumdf
 
 
 class VFile:
@@ -165,6 +173,7 @@ class VFile:
         self.dtfmt = "s%Y%j_%H%M%S"
         self.vhash = {"FileName": fname}
         temp = self.parse(fname)
+        self.exists = os.path.isfile(os.path.join(self.fdir, self.fname))
 
     def parse(self, fname):
         """
@@ -279,21 +288,30 @@ class Events:
     """
     combines information from multiple Event Files.
 
+    Attributes
+        self.df : pandas DataFrame : information on event files
+        self.ndir = str
+
+        self.events    # list of xarray DataSets with volcat data
+        self.pcevents  # list of xarray DataSets with volcat data
 
 
     """
 
     def __init__(self):
+        # Events class
         self.df = pd.DataFrame()
         self.ndir = None
 
-        self.events = []
-        self.pcevents = []
+        self.events = []  # list of xarray DataSets with volcat data
+        self.pcevents = []  # list of xarray DataSets with volcat data
+        self.maxi = 0
 
     def save_csv(self, inp=None):
         """
         save dataframe as csv file
         """
+        # Events class
         if not self.ndir:
             self.get_dir(inp)
         fname = os.path.join(self.ndir, "Events.csv")
@@ -303,6 +321,7 @@ class Events:
         """
         reads csv file that was previously saved
         """
+        # Events class
         if not self.ndir:
             self.get_dir(inp)
         if not cname:
@@ -317,6 +336,7 @@ class Events:
         """
         reads csv file that was previously saved and adds it to dataframe.
         """
+        # Events class
         dftemp = self.read_csv(cname)
         if not self.df.empty:
             dftemp = pd.concat(self.df, dftemp)
@@ -327,6 +347,7 @@ class Events:
         """
         elist: list of EventFile objects.
         """
+        # Events class
         elist = []
         for eve in eventlist:
             df = eve.df.copy()
@@ -346,10 +367,11 @@ class Events:
             elif isinstance(elist, pandas.core.frame.DataFrame):
                 self.df = pd.concat([self.df, elist])
 
-    def check_val(self,val):
+    def check_val(self, val):
         """
         plots val vs. observation date.
         """
+        # Events class
         dtemp = self.df
         sns.set()
         for fid in dtemp[val].unique():
@@ -361,21 +383,24 @@ class Events:
         ax.set_ylabel(val)
 
     def check_sensor(self):
-        self.check_val('SENSOR_NAME')
+        # Events class
+        self.check_val("SENSOR_NAME")
 
     def check_feature_id(self):
-        self.check_val('FEATURE_ID')
-        #dtemp = self.df
-        #sns.set()
-        #for fid in dtemp["FEATURE_ID"].unique():
+        # Events class
+        self.check_val("FEATURE_ID")
+        # dtemp = self.df
+        # sns.set()
+        # for fid in dtemp["FEATURE_ID"].unique():
         #    dtemp2 = dtemp[dtemp["FEATURE_ID"] == fid]
         #    plt.plot(dtemp2["observation_date"], dtemp2["FEATURE_ID"], ".")
-        #fig = plt.gcf()
-        #fig.autofmt_xdate()
-        #ax = plt.gca()
-        #ax.set_ylabel("feature id")
+        # fig = plt.gcf()
+        # fig.autofmt_xdate()
+        # ax = plt.gca()
+        # ax.set_ylabel("feature id")
 
     def get_dir(self, inp, verbose=False):
+        # Events class
         tdir = inp["VOLCAT_DIR"]
         volcnames = self.df["VOLCANO_NAME"].unique()
         if len(volcnames) > 1:
@@ -390,6 +415,7 @@ class Events:
         return ndir
 
     def download(self, inp, verbose=False):
+        # Events class
         ndir = self.get_dir(inp)
         if verbose:
             print("Downloading to {}".format(ndir))
@@ -407,14 +433,51 @@ class Events:
                 if verbose:
                     print("Already Downloaded", eurl)
 
+    def get_closest_time(self, target_time, nmatches=1):
+        # Events class
+        df2 = self.df.copy()
+        df2 = df2[["observation_date", "EVENT_FILE"]]
+        # create column with time delta object showing time differences
+        df2["diff"] = target_time - df2["observation_date"]
+        # create column with absolute difference in hours.
+        df2["hdiff"] = df2.apply(
+            lambda row: np.abs(row["diff"].days * 24 + row["diff"].seconds / 3600.0),
+            axis=1,
+        )
+        # get row with the smallest absolute difference
+        best = df2.nsmallest(nmatches, "hdiff")
+        return best
+
+    def get_flist(self):
+        # Events class
+        flist = self.df["EVENT_FILE"].unique()
+        yeslist = [x for x in flist if os.path.isfile(os.path.join(self.ndir, x))]
+        return yeslist
+
+    def get_missing_flist(self):
+        # Events class
+        flist = self.df["EVENT_FILE"].unique()
+        nolist = [x for x in flist if not os.path.isfile(os.path.join(self.ndir, x))]
+        return nolist
+
     def write_parallax_corrected(
-        self, inp=None, gridspace=None, daterange=None, verbose=False
+        # Events class
+        self,
+        inp=None,
+        gridspace=None,
+        daterange=None,
+        verbose=False,
     ):
         if not self.ndir:
             self.get_dir(inp)
         wdir = os.path.join(self.ndir, "pc_corrected")
-        flist = self.df["EVENT_FILE"].unique()
-        #flist = [flist[0]]
+        # make sure directory exists
+        if not os.path.isdir(wdir):
+            make_dir(self.ndir, "pc_corrected")
+
+        # make sure files exist
+        flist = self.get_flist()
+        # flist = [flist[0]]
         print("Number of parallax files to write {}".format(len(flist)))
         volcat.write_parallax_corrected_files(
             self.ndir,
@@ -425,74 +488,100 @@ class Events:
             gridspace=gridspace,
         )
 
-    def get_flist(self):
+    def get_flistdf(self):
+        # Events class
         """
         returns list of files sorted by date and feature id.
         """
-        slist = ['SENSOR_NAME', 'observation_date','FEATURE_ID']
+        slist = ["observation_date", "FEATURE_ID"]
         alist = slist.copy()
-        alist.append('EVENT_FILE')
-        df2 = self.df[alist].sort_values(by=slist,ascending=False)
-        #flist = df2['EVENT_FILE'].values
+        alist.append("EVENT_FILE")
+        alist.append("SENSOR_NAME")
+        df2 = self.df[alist].sort_values(by=slist, ascending=True)
+        # flist = df2['EVENT_FILE'].values
         return df2
-   
+
     def check_fid(self):
-        jtemp = self.get_flist()
-        jdt = jtemp['observation_date'].unique()
+        jtemp = self.get_flistdf()
+        jdt = jtemp["observation_date"].unique()
         for jjj in jdt:
-            atemp = jtemp[jtemp['observation_date']==jjj]
-            if len(atemp)>1:
-               print(atemp[['observation_date','FEATURE_ID']])
-               print('------------')
-        print('done checking fid')
+            atemp = jtemp[jtemp["observation_date"] == jjj]
+            if len(atemp) > 1:
+                print(atemp[["observation_date", "FEATURE_ID"]])
+                print("------------")
+        print("done checking fid")
 
-
-    def get_volcat_events(self):
+    def get_volcat_events(self, bysensor=None, verbose=False):
         # close any open files first.
-          
         for event in self.events:
             event.close()
-        flist = self.get_flist()['EVENT_FILE'].values
+        df2 = self.get_flistdf()
+        if bysensor:
+            df2 = df2[df2["SENSOR_NAME"] == bysensor]
+        flist = self.get_flist()  # df2['EVENT_FILE'].values
         das = volcat.get_volcat_list(
-            self.ndir, flist=flist, correct_parallax=False, verbose=False
+            self.ndir, flist=flist, correct_parallax=False, verbose=verbose
         )
+        if verbose:
+            print("get_volcat_events {}".format(len(das)))
+
+        def ftime(x):
+            return x.time.values[0]
+        das.sort(key=ftime)
+        self.pcevents = das
+
         self.events = das
         self.maxi = len(das)
 
-    def get_volcat_events_pc(self):
+
+    
+
+    def get_volcat_events_pc(self, verbose=False):
         for event in self.pcevents:
             event.close()
-        flist = self.get_flist()['EVENT_FILE'].values
+        flist = self.get_flist()
         wdir = os.path.join(self.ndir, "pc_corrected")
         flist = [x.replace(".nc", "_pc.nc") for x in flist]
-        #flist = [flist[0]]
+        # flist = [flist[0]]
         das = volcat.get_volcat_list(
-            wdir, flist=flist, correct_parallax=False, verbose=False
+            wdir, flist=flist, correct_parallax=False, verbose=verbose
         )
+        def ftime(x):
+            return x.time.values[0]
+        das.sort(key=ftime)
         self.pcevents = das
+        self.maxi = len(das)
 
     def get_vloc(self):
         vloc = [self.df.VOLCANO_LAT.unique()[0], self.df.VOLCANO_LON.unique()[0]]
         return vloc
 
-    def boxplot(self, bstep=10):
-        self.vplot.make_boxplot(np.arange(0, self.maxi - 1, bstep))
+    def boxplot(self, vplot, bstep=10):
+        vplot.make_boxplot(np.arange(0, self.maxi - 1, bstep))
 
-    def vplots(self):
+    def vplots(self, clr="-k"):
         from utilvolc import volcat_plots as vp
 
-        self.vplot = vp.VolcatPlots(self.events)
-        self.vplot.make_arrays()
-        self.vplot.volcat_describe_plot()
-        fig1 = self.vplot.plot_multiA(fignum=1, smooth=0.08, yscale="linear")
-        fig2 = self.vplot.plot_multiB(fignum=2)
+        vplot = vp.VolcatPlots(self.events)
+        vplot.main_clr = clr
+        vplot.make_arrays()
+        vplot.volcat_describe_plot()
+        fig1 = vplot.plot_multiA(fignum=1, smooth=0.08, yscale="linear")
+        fig2 = vplot.plot_multiB(fignum=2)
+        return vplot
+
+    def volcat2poly(self,iii):
+        pcdas = self.pcevents[iii]
+        vmass = volcat.get_mass(das[iii], clip=True)
+       
+
 
     def compare_pc(self, pstep):
         vloc = self.get_vloc()
         das = self.events
         pcdas = self.pcevents
         vlist = list(np.arange(0, self.maxi, pstep))
-        jtemp = self.get_flist()
+        jtemp = self.get_flistdf()
         for iii in vlist:
             fig = plt.figure(1, figsize=(10, 5))
             ax = fig.add_subplot(1, 2, 1)
@@ -500,8 +589,8 @@ class Events:
             vmass = volcat.get_mass(das[iii], clip=True)
             pcmass = volcat.get_mass(pcdas[iii], clip=True)
             sns.set()
-            print('sensor', jtemp['SENSOR_NAME'].values[iii])
-            print('feature id', jtemp['FEATURE_ID'].values[iii])
+            print("sensor", jtemp["SENSOR_NAME"].values[iii])
+            print("feature id", jtemp["FEATURE_ID"].values[iii])
             print(vmass.time.values, pcmass.time.values)
             temp = vmass.isel(time=0)
             plt.sca(ax)
@@ -510,6 +599,7 @@ class Events:
                 temp.latitude.values,
                 np.log10(temp.values),
             )
+            # parallax corrected on the right.
             plt.colorbar(cb)
             plt.plot(vloc[1], vloc[0], "m^", MarkerSize=5)
             temp = pcmass.isel(time=0)
@@ -526,10 +616,60 @@ class Events:
             plt.show()
             plt.close()
 
-    def plots(self, pstep):
+    def plots_with_vaas(self, vaas, pstep=1, pc=True):
+        vloc = self.get_vloc()
+
+        def ftime(x):
+            return x.time.values[0]
+
+        das = self.pcevents
+        das2 = self.events
+
+        das.sort(key=ftime)
+        das2.sort(key=ftime)
+        vlist = list(np.arange(0, self.maxi, pstep))
+        for iii in vlist:
+            intime = pd.to_datetime(das[iii].time.values[0])
+            ptime = pd.to_datetime(das2[iii].time.values[0])
+            print(intime, ptime, intime == ptime)
+            matches = vaas.find_time_match(vname=None, intime=intime, forecast=0, dt=1)
+            if not matches:
+                print("NO VAA for {}".format(intime))
+                continue
+            fig = plt.figure(1, figsize=(10, 5))
+            ax = fig.add_subplot(1, 1, 1)
+            vmass = volcat.get_mass(das[iii], clip=True)
+            vmass2 = volcat.get_mass(das2[iii], clip=True)
+            temp = vmass.isel(time=0)
+            temp2 = vmass2.isel(time=0)
+            cb = plt.pcolormesh(
+                temp.longitude.values,
+                temp.latitude.values,
+                np.log10(temp.values),
+                cmap="Reds",
+            )
+            cb2 = plt.pcolormesh(
+                temp2.longitude.values,
+                temp2.latitude.values,
+                np.log10(temp2.values),
+                cmap="Blues",
+            )
+            plt.colorbar(cb)
+            plt.colorbar(cb2)
+            plt.plot(vloc[1], vloc[0], "m^", MarkerSize=5)
+            for mmm in matches:
+                vaa = vaas.ilist[mmm]
+                vaa.plot_vaa(ax=ax)
+                plt.title(intime)
+            plt.show()
+
+    def plots(self, pstep, pc=False):
 
         vloc = self.get_vloc()
-        das = self.events
+        if pc:
+            das = self.pcevents
+        else:
+            das = self.events
         vlist = list(np.arange(0, self.maxi, pstep))
         for iii in vlist:
             fig = plt.figure(1, figsize=(10, 5))
@@ -632,6 +772,9 @@ class EventFile(VFile):
 
     def open(self):
         fname = os.path.join(self.fdir, self.fname)
+        if not self.exists:
+            logger.warning("file does not exist {}".format(fname))
+            return False
         jsonf = open_json(os.path.join(self.fdir, self.fname))
 
         fdict = jsonf["FILES"]
@@ -648,8 +791,7 @@ class EventFile(VFile):
 
         jsonf.pop("FILES")
         self.attrs = jsonf
-
-
+        return True
 
     def check_feature_id(self):
         dtemp = self.df
@@ -664,7 +806,22 @@ class EventFile(VFile):
 
 
 class WorkFlow:
-    def __init__(self, inp, hours=24, verbose=False):
+    """
+    Attributes:
+        dirhash : dictionary : directory locations
+        greenlist : list :
+        sumdf : DataFrame
+        logdf : DataFrame
+        ehash : dictionary
+    """
+
+    def __init__(self, inp, verbose=False):
+        """
+        inp : dictionary
+              key = JPSS_DIR
+              key = VOLCAT_LOGFILES
+              key = VOLCAT_DIR
+        """
         # set directories
         self.dirhash = self.set_directories(inp)
         # get list of volcanoes to process data for
@@ -675,13 +832,40 @@ class WorkFlow:
         self.sumdf = pd.DataFrame()
         # DataFrame with info from log files
         self.logdf = pd.DataFrame()
-        # dictionary. key is volcano name. value is Event bject
+        # dictionary. key is volcano name. value is Event object
         self.ehash = {}
 
-    def reset_greenlist(self, hours=24):
+    def get_all_volcanos(self, hours=24):
+        """
+        hours : integer
+        """
         # get pandas dataframe with summary file.
         self.sumdf = get_summary_file_df(self.dirhash["JPSS_DIR"], hours=hours)
-        self.greenlist = self.sumdf["VOLCANO_NAME"].unique()
+        # make the greenlist all the volcanoes in the summary files
+        greenlist = self.sumdf["VOLCANO_NAME"].unique()
+        return greenlist
+
+    def reset_greenlist(self, hours=24):
+        """
+        hours : integer
+        """
+        self.greenlist = self.get_all_volcanos(hours=hours)
+
+    def get_inactive(self, hours=24):
+        self.sumdf = get_summary_file_df(self.dirhash["JPSS_DIR"], hours=hours)
+        allvolc = self.sumdf["VOLCANO_NAME"].unique()
+        inactive = [x for x in self.greenlist if x not in allvolc]
+        return inactive
+
+    def get_redlist(self, hours=24):
+        self.sumdf = get_summary_file_df(self.dirhash["JPSS_DIR"], hours=hours)
+        allvolc = self.sumdf["VOLCANO_NAME"].unique()
+        # red = [x for x in self.greenlist if x not in allvolc]
+        red = [x for x in allvolc if x not in self.greenlist]
+        return red
+
+    def get_sumdf(self, hours=24):
+        return get_summary_file_df(self.dirhash["JPSS_DIR"], hours=hours)
 
     def get_volcat(self, hours=24, verbose=False):
         """
@@ -708,8 +892,6 @@ class WorkFlow:
         for volc in self.ehash.keys():
             print(volc)
             self.ehash[volc].check_fid()
-          
-
 
     def set_directories(self, inp):
         """
@@ -721,11 +903,32 @@ class WorkFlow:
         return inp
 
     def get_greenlist(self):
+        # WorkFlow class
         gfile = os.path.join(self.dirhash["VOLCAT_DIR"], "green_list.txt")
         with open(gfile, "r") as fid:
             greenlist = fid.readlines()
         greenlist = [x.strip() for x in greenlist]
         return greenlist
+
+    def write_parallax_corrected(self, gridspace=None, elist=None):
+        # WorkFlow class
+
+        failed_list = []
+        # if not isinstance(elist,list):
+        #    elist = self.ehash.keys()
+
+        print("WRITING FOR THESE", elist)
+        for volc in elist:
+            print("writing parallax corrected for {}".format(volc))
+            try:
+                self.ehash[volc].write_parallax_corrected(gridspace=None)
+            except Exception as eee:
+                print("FAILED to create")
+                print(eee)
+                print("----------------")
+                failed_list.append(volc)
+        print("parallax correction failed for {}".format(", ".join(failed_list)))
+        return failed_list
 
 
 def file_progression():

@@ -365,7 +365,6 @@ class MetFiles:
         sdate : datetime.datetime ojbect
         runtime : int (hours of runtime)
         """
-        print('HERE', sdate, runtime)
         nlist = []
         sdate = sdate.replace(tzinfo=None)
         if not isinstance(self.mdt, datetime.timedelta):
@@ -399,12 +398,16 @@ class MetFiles:
             # end time of this particular file.
             medate = mdate + self.mdt
 
-            temp = temp.lower()
-           
+            #print('zzzzzzzzzzzzzzzzzz HERE', temp)
+            #temp = temp.lower()
+            #print(edate) 
             # also need to increment the edate to get next possible file name 
-            edate = edate + self.mdt
-            #if not path.isfile(temp):
-            #    temp = temp.lower()
+            try:
+                edate = edate + self.mdt
+            except:
+                print('EDATE', edate, 'MDT', self.mdt) 
+            if not path.isfile(temp):
+                temp = temp.lower()
             if not path.isfile(temp):
                 logger.info("WARNING " +  temp + " meteorological file does not exist")
                 #pass

@@ -223,6 +223,10 @@ class CompareMetProfile:
         self.df2 = df2
 
     def call_and_read(self,nstop=24,call=True, overwrite=False):
+        """
+        creates proflist
+        """
+
         dt = self.dt
         lat = self.lat
         lon = self.lon
@@ -259,6 +263,28 @@ class CompareMetProfile:
     def set_ref(self,ref):
         self.ref = ref
 
+    def plot_ts2(self,yvarname,fignum=1):
+        sns.set()
+        sns.set_style('whitegrid')
+        fig = plt.figure(fignum)
+        ax1 = fig.add_subplot(1,1,1)
+        for prof,label,color in self.generate_prof():
+            print('THIS IS', label)
+            fig = plt.figure(fignum)
+            ax1 = fig.add_subplot(1,1,1)
+            #print(label, '-----')
+            xvar = prof.get_var(yvarname)
+            if label == self.ref: lw=5
+            else: lw=1
+            if xvar!= -1: ax1.plot(prof.date_ra, xvar,marker='.', color=color, label=label,LineWidth=lw)
+           
+            handles, labels = ax1.get_legend_handles_labels()
+            plt.legend(handles,labels,loc='best',prop={'size':10})
+            ax1.set_ylabel(yvarname)
+            fig.autofmt_xdate()
+            plt.show()
+        return ax1
+
     def plot_ts(self,yvarname,fignum=1):
         sns.set()
         sns.set_style('whitegrid')
@@ -284,7 +310,7 @@ class CompareMetProfile:
             yvar = prof.get_var(yvarname)
             ax1.plot(xvar, yvar, label=label)
             
-    def standard_surface_plots(self,plotall=True,varlist=None,fignum=1):
+    def standard_surface_plots(self,plotall=True,varlist=None,fignum=1,together=True):
         print(type(varlist),varlist)
         if isinstance(varlist,list):
             varlist = varlist
@@ -296,7 +322,10 @@ class CompareMetProfile:
         varlist.sort()
         for iii, var in enumerate(varlist):
             print(var)
-            ax = self.plot_ts(var,fignum=fignum+iii)
+            if together:
+                ax = self.plot_ts(var,fignum=fignum+iii)
+            else:
+                ax = self.plot_ts2(var,fignum=fignum+iii)
             #plt.show()
         return ax
 
