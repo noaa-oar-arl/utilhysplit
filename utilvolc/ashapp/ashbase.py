@@ -21,15 +21,16 @@ import shutil
 import subprocess
 import sys
 import zipfile
+
+import numpy as np
 import requests
 import xarray as xr
-import numpy as np
 
-import utilvolc.ashapp.metfiles as metfile
-from utilhysplit import hcontrol
 from monetio.models import hysplit
-from utilvolc.ashapp.runhelper import Helper, ConcplotColors, JobFileNameComposer
-
+from utilhysplit import hcontrol
+import utilvolc.ashapp.metfiles as metfile
+from utilvolc.ashapp.runhelper import (ConcplotColors, Helper,
+                                       JobFileNameComposer)
 # from runhandler import ProcessList
 from utilvolc.volcMER import HT2unit
 
@@ -69,15 +70,16 @@ def FL2meters(flight_level):
     return int(meters)
     # return int(np.ceil(flight_level / 10.0) * 10)
 
-def make_chemrate(wdir):
-    fname = 'CHEMRATE.TXT'
-    fstr = '1 2 0.01 1.0'
-    fpath = os.path.join(wdir,fname)
-    with open(fpath, 'w') as fid:
-         fid.write(fstr) 
-     
 
-#class SO2Run(AshRun):
+def make_chemrate(wdir):
+    fname = "CHEMRATE.TXT"
+    fstr = "1 2 0.01 1.0"
+    fpath = os.path.join(wdir, fname)
+    with open(fpath, "w") as fid:
+        fid.write(fstr)
+
+
+# class SO2Run(AshRun):
 #
 #    def __init__(self, JOBID):
 #        super().__init__(JOBID)
@@ -119,12 +121,12 @@ class AshRun:
         blist = [(cdumpname, source_tag, met_tag)]
         century = 100 * (int(self.inp["start_date"].year / 100))
         # If SO2 then only put SO2 in the xarray
-        if self.so2: 
-           species=['pS02']
+        if self.so2:
+            species = ["pS02"]
         else:
-           species=None
+            species = None
         cdumpxra = hysplit.combine_dataset(
-            blist, century=century, sample_time_stamp="start",species=species
+            blist, century=century, sample_time_stamp="start", species=species
         )
         return cdumpxra
 
@@ -167,17 +169,17 @@ class AshRun:
             cxra = mult * self.get_cdump_xra()
         cxra = cxra.assign_attrs({"mult": mult})
         logger.info("writing nc file {}".format(fname))
-        #cxra.attrs.update(self.inp2attr())
+        # cxra.attrs.update(self.inp2attr())
 
         # need to change to dataset to add compression
         cxra2 = cxra.to_dataset()
-        ehash = {'zlib':True,'complevel':9}
+        ehash = {"zlib": True, "complevel": 9}
         vlist = [x for x in cxra2.data_vars]
         vhash = {}
         for vvv in vlist:
             vhash[vvv] = ehash
-        cxra2.to_netcdf(fname,encoding=vhash)
-        # 
+        cxra2.to_netcdf(fname, encoding=vhash)
+        #
 
         self.cxra = cxra
         # if empty then return an emtpy list.
@@ -234,13 +236,12 @@ class AshRun:
         self.metfilefinder.set_forecast_directory(self.inp["forecastDirectory"])
         self.metfilefinder.set_archives_directory(self.inp["archivesDirectory"])
         self.maptexthash = self.get_maptext_info()
-        if 'control' in self.inp.keys():
-            self.default_control =  self.inp['control']
-        if 'setup' in self.inp.keys():
-            self.default_setup =  self.inp['setup']
-        logger.warning('Using control {}'.format(self.default_control)) 
-        logger.warning('Using setup {}'.format(self.default_setup))
-
+        if "control" in self.inp.keys():
+            self.default_control = self.inp["control"]
+        if "setup" in self.inp.keys():
+            self.default_setup = self.inp["setup"]
+        logger.warning("Using control {}".format(self.default_control))
+        logger.warning("Using setup {}".format(self.default_setup))
 
     def update_run_status(self, jobId, status):
         if self.apistr:
@@ -319,10 +320,10 @@ class AshRun:
     def set_levels(self, cgrid):
         height = self.inp["top"]
         levlist, rlist = self.set_levels_A()
-        #print('LEVELS', levlist)
-        #sys.exit()
-        #levlist = np.arange(0,45000,5000)
-        #levlist = np.arange(0,32000,1000)
+        # print('LEVELS', levlist)
+        # sys.exit()
+        # levlist = np.arange(0,45000,5000)
+        # levlist = np.arange(0,32000,1000)
         cgrid.set_levels(levlist)
 
     def additional_control_setup(self, control, stage=0):
@@ -348,15 +349,15 @@ class AshRun:
         control.concgrids[0].outfile = self.filelocator.get_cdump_filename(stage)
         logger.info("{}".format(control.concgrids[0].outfile))
         # center concentration grid at the volcano
-        #control.concgrids[0].centerlat = np.floor(lat)
-        #control.concgrids[0].centerlon = np.floor(lon)
+        # control.concgrids[0].centerlat = np.floor(lat)
+        # control.concgrids[0].centerlon = np.floor(lon)
         control.concgrids[0].centerlat = lat
         control.concgrids[0].centerlon = lon
         # set the levels
         self.set_levels(control.concgrids[0])
 
         # add emission duration
-        rate_test=0
+        rate_test = 0
         if not self.so2:
             for spec in control.species:
                 spec.duration = emission
@@ -366,12 +367,12 @@ class AshRun:
             spec = control.species[0]
             spec.duration = emission
             spec2 = control.species[1]
-            spec2.duration = 0 
+            spec2.duration = 0
             rate_test = spec.rate + spec2.rate
-      
-        if np.abs(1-rate_test) > 0.01:
-           logger.warning('Non unit emision rate {}'.format(rate_test))
-            
+
+        if np.abs(1 - rate_test) > 0.01:
+            logger.warning("Non unit emision rate {}".format(rate_test))
+
         # TO DO
         # set sample start to occur on the hour.
         stime = self.inp["start_date"]
@@ -407,10 +408,10 @@ class AshRun:
         pardumpname = self.filelocator.get_pardump_filename(stage)
         setup.add("poutf", pardumpname)
 
-        #setup.add("numpar", "2000")
-        #setup.add("numpar", "20000")
+        # setup.add("numpar", "2000")
+        # setup.add("numpar", "20000")
         setup.add("numpar", "100000")
-        #setup.add("maxpar", "500000")
+        # setup.add("maxpar", "500000")
 
         # base frequency of pardump output on length of simulation.
         if duration < 6:
@@ -424,11 +425,11 @@ class AshRun:
             setup.add("ncycl", "3")
 
         keys = list(setup.nlist.keys())
-        if 'ichem' in keys:
-            if int(setup.nlist['ichem']) == 2:
-               make_chemrate(self.inp['WORK_DIR']) 
-               logger.warning('creating chemrate file for SO2')
-               self.so2=True
+        if "ichem" in keys:
+            if int(setup.nlist["ichem"]) == 2:
+                make_chemrate(self.inp["WORK_DIR"])
+                logger.warning("creating chemrate file for SO2")
+                self.so2 = True
         # write file
         return setup
 
@@ -477,7 +478,7 @@ class AshRun:
             redraw = True
         self.write_cxra()
         if self.after_run_check(update=True):
-           self.create_plots(redraw)
+            self.create_plots(redraw)
         #     # create zip with cdump and pardump files etc.
         #     status = self.create_zipped_up_file(
         #         self.filelocator.get_zipped_filename(tag=""),
