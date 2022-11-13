@@ -182,7 +182,7 @@ class VolcatPlots:
                 # print('here')
             else:
                 lw = 1
-            ax.step(sdata, y, clr[jjj % len(clr)], LineWidth=lw)
+            ax.step(sdata, y, clr[jjj % len(clr)], linewidth=lw)
         return ax
 
     def make_spline(self,s=20):
