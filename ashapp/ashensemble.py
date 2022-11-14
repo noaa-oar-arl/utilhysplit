@@ -1,22 +1,23 @@
 # -----------------------------------------------------------------------------
 
-#from abc import ABC, abstractmethod
+# from abc import ABC, abstractmethod
 import datetime
 import logging
 import os
 import time
 
-# from hysplitdata.traj import model
-# from hysplitplot import timezone
+import ensemble_tools
 
 # import hysplit
-import metfiles as metfile
-from monetio.models import hysplit
-from runhelper import Helper
-from runhandler import ProcessList
+from utilhysplit import metfiles
 from ashbase import AshRun
-import ensemble_tools
 from cdump2xml import HysplitKml
+from monetio.models import hysplit
+from runhandler import ProcessList
+from runhelper import Helper
+
+# from hysplitdata.traj import model
+# from hysplitplot import timezone
 
 
 # from locusts import LocustsFileNameComposer, Helper, LocustsSetUpParser, FlightPlannerFactory, \
@@ -41,9 +42,7 @@ The following environment variables must be set prior to calling this script:
 
 
 class ConProbThresholds:
-    """
-
-    """
+    """ """
 
     def __init__(self, mass_converter):
         # find probability of exceedence for the following levels.
@@ -68,7 +67,6 @@ class ConProbThresholds:
 
 
 class EnsembleAshRun(AshRun):
-
     def __init__(self, JOBID):
         super().__init__(JOBID)
         self.ens_suffix_list = None
@@ -81,7 +79,7 @@ class EnsembleAshRun(AshRun):
             logger.info("plot_massload cxra is empty")
             return False
         enslist = self.cxra.ens.values
-        #level = self.cxra.z.values
+        # level = self.cxra.z.values
         vlist = [self.inp["longitude"], self.inp["latitude"]]
         flin = self.filelocator.get_massloading_filename(
             stage=0, frame=999, ptype="png"
@@ -89,7 +87,9 @@ class EnsembleAshRun(AshRun):
         flin = flin.replace("999", "zzz")
         # flin = flin.replace('gif','pdf')
         logger.debug("Massloading FILENAME{}".format(flin))
-        fignamelist = ensemble_tools.massload_plot(self.cxra, enslist, vlist=vlist, name=flin)
+        fignamelist = ensemble_tools.massload_plot(
+            self.cxra, enslist, vlist=vlist, name=flin
+        )
         # list of figure names generated.
         return fignamelist
 
@@ -150,7 +150,9 @@ class EnsembleAshRun(AshRun):
         flin = flin.replace("gif", "png")
         logger.debug("NEW FILENAME{}".format(flin))
         clevels = [5, 20, 40, 60, 80, 95]
-        title = "HYSPLIT ensemble relative frequency exceeding {:0.2f}mg/m3".format(thresh)
+        title = "HYSPLIT ensemble relative frequency exceeding {:0.2f}mg/m3".format(
+            thresh
+        )
         title += "\n GEFS {} members".format(len(enslist))
 
         fignamelist = ensemble_tools.ATLtimeloop(
@@ -225,7 +227,10 @@ class EnsembleAshRun(AshRun):
             self.compose_setup(stage)
             # start run and wait for it to finish..
             run_suffix = self.filelocator.get_control_suffix(stage)
-            cproc = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), run_suffix]
+            cproc = [
+                os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
+                run_suffix,
+            ]
             logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
             processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=suffix)
             stage += 1
@@ -269,7 +274,7 @@ class EnsembleAshRun(AshRun):
             rval = False
         else:
             logger.debug("cdump file found {}".format(fln))
-            rval= True
+            rval = True
         return rval
 
     def after_run_check(self, update=True):
@@ -281,11 +286,13 @@ class EnsembleAshRun(AshRun):
         If update true then will  update run status to FAILED if not all files are found.
         """
         rval = True
-        #fnlist = []
-        #for stage in range(1,len(self.ens_suffix_list)+1):
+        # fnlist = []
+        # for stage in range(1,len(self.ens_suffix_list)+1):
         #    fnlist.append(self.filelocator.get_cdump_filename(stage=stage))
-        fnlist = [self.filelocator.get_cdump_filename(stage=x) for  x in\
-                                         range(1,len(self.ens_suffix_list)+1)]
+        fnlist = [
+            self.filelocator.get_cdump_filename(stage=x)
+            for x in range(1, len(self.ens_suffix_list) + 1)
+        ]
         rlist = [self.file_not_found_error(fn, update) for fn in fnlist]
         if not all(rlist):
             rval = False
@@ -294,6 +301,7 @@ class EnsembleAshRun(AshRun):
                 logger.info(datetime.datetime.now())
         return rval
 
+    # TO DO fix this
     def create_plots(self, redraw=False, stage=0):
         # ensemble mean of massloading to be on main display
 
@@ -304,12 +312,12 @@ class EnsembleAshRun(AshRun):
         return -1
         # create probability of exceedence plot.
         # self.create_prob_plot()
-        #logger.debug("RUNNING plot_ATL")
-        #ATL_fignamelist = self.plot_ATL()
+        # logger.debug("RUNNING plot_ATL")
+        # ATL_fignamelist = self.plot_ATL()
         # creates kml and kmz  using cdump2xml module.
         self.make_kml()
         # create massloading plots.
-        #mass_fignamelist = self.plot_massload()
+        # mass_fignamelist = self.plot_massload()
 
         # create parxplot for one ensemble member
         # stage would give ensemble member to use.
@@ -319,22 +327,27 @@ class EnsembleAshRun(AshRun):
                                           member"
         self.create_maptext()
         # particle plots do not need to be re-drawn when unit mass changed.
-        if not redraw: self.create_parxplot(stage=1)
- 
+        if not redraw:
+            self.create_parxplot(stage=1)
+
         flist = []
-        iii=0
+        iii = 0
         if len(mass_fignamelist) == len(ATL_fignamelist):
-            for val in zip(mass_fignamelist, ATL_fignamelist): 
-                parfilename = self.filelocator.get_parxplot_filename(stage=0, frame=iii,ptype='gif')
+            for val in zip(mass_fignamelist, ATL_fignamelist):
+                parfilename = self.filelocator.get_parxplot_filename(
+                    stage=0, frame=iii, ptype="gif"
+                )
                 for fn in [val[0], val[1], parfilename]:
                     if os.path.exists(fn):
                         flist.append(fn)
                     else:
-                        logger.warn('file {} not found'.format(fn))
-                iii+=1
+                        logger.warn("file {} not found".format(fn))
+                iii += 1
         else:
-            logger.warning('Mass loading figures and ATL figures have different lengths')
-            flist = mass_fignamelist 
+            logger.warning(
+                "Mass loading figures and ATL figures have different lengths"
+            )
+            flist = mass_fignamelist
         self.create_montage_pdf(flist)
 
         # NO longer create ensemble mean concentrations.
@@ -348,16 +361,15 @@ class EnsembleAshRun(AshRun):
         self.maptexthash["run_description"] = "Ensemble Run"
         self.create_maptext()
         Helper.move("MAPTEXT.CFG", self.filelocator.get_maptext_filename_for_zip())
-        
 
-    def create_montage_pdf(self,montage_list):
+    def create_montage_pdf(self, montage_list):
         c = [self.inp["CONVERT_EXE"]]
         c.extend(montage_list)
         c.append(self.filelocator.get_totalpdf_filename(stage=0))
-        logger.info('Creating montage pdf {}'.format(" ".join(c))) 
+        logger.info("Creating montage pdf {}".format(" ".join(c)))
         Helper.execute_with_shell(c)
 
-    def set_levels_A(self):
-        levlist, rlist = super().set_levels_A()
+    def set_qva_levels(self):
+        levlist, rlist = super().set_qva_levels()
         rlist = ["Number of members\n above 0.2 mg/m3 \n" + x for x in rlist]
         return levlist, rlist

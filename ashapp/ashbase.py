@@ -28,8 +28,8 @@ import xarray as xr
 
 from monetio.models import hysplit
 from utilhysplit import hcontrol
-import utilvolc.ashapp.metfiles as metfile
-from utilvolc.ashapp.runhelper import (ConcplotColors, Helper,
+import utilhysplit.metfiles as metfile
+from ashapp.runhelper import (ConcplotColors, Helper,
                                        JobFileNameComposer)
 # from runhandler import ProcessList
 from utilvolc.volcMER import HT2unit
@@ -298,14 +298,9 @@ class AshRun:
         control.add_duration(duration)
         return control
 
-    def set_levels_A(self):
-        # standard
-        # levlist_fl = [200,350,550,660]
-
-        # every 5000 ft (FL500 chunks)
+    def set_qva_levels(self):
+        # every 5000 ft (FL50 chunks)
         # Approx 1.5 km.
-        # by Flight levels (approx 100 ft)
-        # levlist_fl = np.arange(50,650,50)
         levlist_fl = range(50, 650, 50)
         levlist = [FL2meters(x) for x in levlist_fl]
         rlist = []
@@ -318,12 +313,7 @@ class AshRun:
         return levlist, rlist
 
     def set_levels(self, cgrid):
-        height = self.inp["top"]
-        levlist, rlist = self.set_levels_A()
-        # print('LEVELS', levlist)
-        # sys.exit()
-        # levlist = np.arange(0,45000,5000)
-        # levlist = np.arange(0,32000,1000)
+        levlist, rlist = self.set_qva_levels()
         cgrid.set_levels(levlist)
 
     def additional_control_setup(self, control, stage=0):

@@ -2,26 +2,24 @@
 
 # from abc import ABC, abstractmethod
 import datetime
-import numpy as np
 import logging
 import os
 import time
-from glob import glob
+
+import numpy as np
+
+import xarray as xr
+# import hysplit
+from monetio.models import hysplit
+from utilvolc import write_emitimes as vwe
+from utilvolc.ashapp.ashbase import AshRun
+from utilvolc.ashapp.emitimes import EmiTimes
+from utilvolc.ashapp.runhandler import ProcessList
+from utilvolc.ashapp.runhelper import AshDINameComposer
 
 # from hysplitdata.traj import model
 # from hysplitplot import timezone
 
-# import hysplit
-import utilvolc.ashapp.metfiles as metfile
-from monetio.models import hysplit
-from utilvolc.ashapp.runhelper import Helper
-from utilvolc.ashapp.runhandler import ProcessList
-from utilvolc.ashapp.ashbase import AshRun
-import utilvolc.ensemble_tools as ensemble_tools
-from utilvolc.ashapp.cdump2xml import HysplitKml
-from utilvolc.ashapp.emitimes import EmiTimes
-from utilvolc import write_emitimes as vwe
-from utilvolc.ashapp.runhelper import AshDINameComposer
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +51,14 @@ def find_di_file(wdir, daterange, ftype, rtype="fname"):
     # elist = glob(os.path.join(wdir,'EMIT_*'))
     elist = edf["filename"].values
     if rtype == "fname":
-        return elist
+        rval =  elist
     elif rtype == "dataframe":
-        return edf
+        rval = edf
+    return rval
 
 class DataInsertionRun(AshRun):
-    def __init__(self, JOBID):
-        super().__init__(JOBID)
+    #def __init__(self, JOBID):
+    #    super().__init__(JOBID)
 
     def add_inputs(self, inp):
         inp["emissionHours"] = 0
@@ -83,11 +82,11 @@ class DataInsertionRun(AshRun):
             hours=self.inp["durationOfSimulation"]
         )
         cdf = find_cdump_df(self.inp["WORK_DIR"], [self.inp["start_date"], edate])
-        blist = cdf["filename"].values
+        blist = list(cdf["filename"].values)
         alist = []
-        if len(blist) == 0:
+        if not blist:
             logger.warning("No cdump files found")
-            return xr.DataSet()
+            return xr.Dataset()
         for fname in blist:
             alist.append((fname, fname, self.inp["meteorologicalData"]))
         century = 100 * (int(self.inp["start_date"].year / 100))

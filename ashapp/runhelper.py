@@ -1,4 +1,4 @@
-# -----------------------------------------------------------------------------
+# ----- ------------------------------------------------------------------------
 # Air Resources Laboratory
 #
 # runhelper.py -
@@ -17,7 +17,6 @@
 import datetime
 import glob
 import logging
-import math
 import os
 import pathlib
 
@@ -27,7 +26,6 @@ import subprocess
 import sys
 
 from utilhysplit.hcontrol import NameList
-
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +194,7 @@ class JobSetUp:
             self.inp[astr] = default
 
     def not_used(self, inp):
-        poll_list = inp["pollutants"]
+        #poll_list = inp["pollutants"]
         # for  poll in poll_list:
         # poll['inCloudRemovalRate']
         # poll['belowCloudRemovalRate']
