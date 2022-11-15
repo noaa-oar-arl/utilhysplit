@@ -74,7 +74,7 @@ def inverse_get_center_list(inp):
         return center
     # here should use a square area.
     # centerlist = []
-    dlat = (area**0.5) / 111.0e3
+    dlat = (area ** 0.5) / 111.0e3
     dlon = dlat * np.cos(center[0] * np.pi / 180.0)
     lat0 = center[0] - num * dlat
     latm = center[0] + (num + 0.75) * dlat
@@ -161,39 +161,54 @@ class InverseAshRun(AshRun):
     EmissionHours for the inverse run is set equal to timeres.
     """
 
+    # methods from parent
+    # inp2attr
+    # add_api_info
+    # update_run_status
+    # handle_crash
+    # add_api_info
+    # setup_basic_control
+    # compose_control
+    # compose_setup
+    # debug_message
+    # doit
+    # ---not used--
+    # get_ash_reduction  (not needed)
+    # create_parxplot    (not needed)
+    # create_massloading_plot (not needed)
+    # make_gelabel       (not needed)
+    # create_concentration_plot (not needed)
+    # create_montage_page(not needed)
+    # create_concentration_montage (not needed)
+    # create montage_pdf (not needed)
+    # convert_ps_to_image(not needed)
+    # convert_ps_to_pdf  (not needed)
+    # get_maptext_info (not needed)
+    # create_maptext   (not needed)
+    # create_zipped_up_file (not needed)
+
+    # methods that use parent method
+    # __init__
+    # add_inputs
+    # additional_control_setup
+    #
+    # methods that overide parent
+    # get_conc_multiplier
+    # get_cdump_xra
+    # get_maptext_info (not needed)
+    # cleanup (not implemented TODO)
+    # set_levels
+    # run_model
+    # after_run_check
+    #
+    # New methods
+    # file_not_found_error
+
     def __init__(self, JOBID):
         super().__init__(JOBID)
         self.invs_suffix_hash = {}
         self.number_of_members = 0
-        self.awips = True
-
-    def plot_massload(self):
-        if self.cxra.size <= 1:
-            logger.info("plot_massload cxra is empty")
-            return False
-        enslist = self.cxra.ens.values
-        # level = self.cxra.z.values
-        vlist = [self.inp["longitude"], self.inp["latitude"]]
-        flin = self.filelocator.get_massloading_filename(
-            stage=0, frame=999, ptype="png"
-        )
-        flin = flin.replace("999", "zzz")
-        # flin = flin.replace('gif','pdf')
-        logger.debug("Massloading FILENAME{}".format(flin))
-        fignamelist = ensemble_tools.massload_plot(
-            self.cxra, enslist, vlist=vlist, name=flin
-        )
-        # list of figure names generated.
-        return fignamelist
-
-    def make_kml(self):
-        return -1
-
-    def plot_ATL(self):
-        """
-        plots probability of exceedances.
-        """
-        return -1
+        self.awips = False  # set to True in AshRun class
 
     def get_conc_multiplier(self):
         """
@@ -210,18 +225,13 @@ class InverseAshRun(AshRun):
         control.concgrids[0].interval = (1, 0)
 
     def get_cdump_xra(self):
+        # overwrite parent class method
         blist = []
 
         def make_tuple(inval):
             source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
             suffix = inval[1]
-            # iii = inval[0] + 1
-            # iii = inval[0]
             cdumpname = self.filelocator.get_cdump_filename(stage=suffix)
-            # cdumpname = "{}.{:03d}".format(
-            # self.filelocator.get_cdump_base(stage=sxuffix), iii
-            #    self.filelocator.get_cdump_base(stage=suffix), iii
-            # )
             met_tag = suffix
             logger.info("adding to netcdf file :{} {}".format(met_tag, cdumpname))
             return (cdumpname, source_tag, met_tag)
@@ -232,7 +242,6 @@ class InverseAshRun(AshRun):
         cdumpxra = hysplit.combine_dataset(
             blist, century=century, sample_time_stamp="start"
         )
-        print("attrs", cdumpxra.attrs["time description"])
         if cdumpxra.size <= 1:
             logger.debug("ENSEMBLE xra is empty")
         else:
@@ -240,10 +249,9 @@ class InverseAshRun(AshRun):
         return cdumpxra
 
     def add_inputs(self, inp):
+        # uses parent class and adds additional.
         logger.info("adding inverse inputs")
         self.invs_suffix_hash = inverse_get_suffix_list(inp)
-        # for shash in self.invs_suffix_hash.keys():
-        #    print(shash, self.invs_suffix_hash[shash])
         super().add_inputs(inp)
         if inp["meteorologicalData"].lower() == "gefs":
             logger.info("ens member {}".format(inp["gefsmember"]))
@@ -253,8 +261,10 @@ class InverseAshRun(AshRun):
         self.maptexthash = self.get_maptext_info()
 
     def get_maptext_info(self):
+        # defined to overwrite the parent class function.
+        # not needed currently
         maptexthash = {}
-        rstr = "HYSPLIT ensemble mean."
+        rstr = "HYSPLIT unit mass run"
         maptexthash["run_description"] = rstr
         maptexthash["infoc"] = ""
         return maptexthash
@@ -267,7 +277,7 @@ class InverseAshRun(AshRun):
         #    run_suffix = self.filelocator.get_control_suffix(stage)
 
     def run_model(self):
-
+        # defined to overwrite the parent class function.
         Helper.execute("pwd")
         maxprocess = 40
         # stage = 1
@@ -303,10 +313,7 @@ class InverseAshRun(AshRun):
             ]
             logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
             num_proces = processhandler.checkprocs()
-            print("----")
             Helper.execute("pwd")
-            print("----")
-            print(self.inp["WORK_DIR"])
             Helper.execute(["ls", "CONTROL.{}".format(cproc[1])])
             while num_proces > maxprocess:
                 time.sleep(10)
@@ -341,13 +348,14 @@ class InverseAshRun(AshRun):
                 done = True
 
     def file_not_found_error(self, fln, message=False):
+        # new method not in parent class
         if not os.path.exists(fln):
             if message:
                 logger.error(
                     "******************************************************************************"
                 )
                 logger.error(
-                    "The model was not able to create ensemble {} file \
+                    "The model was not able to create run for inversion {} file \
                               for job {}.".format(
                         fln, self.JOBID
                     )
@@ -369,13 +377,9 @@ class InverseAshRun(AshRun):
 
         If update true then will  update run status to FAILED if not all files are found.
         """
+        # overwrites parent method
         rval = True
-        # fnlist = []
-        # for stage in range(1,len(self.invs_suffix_list)+1):
-        #    fnlist.append(self.filelocator.get_cdump_filename(stage=stage))
         suffix_list = list(self.invs_suffix_hash.keys())
-        # fnlist = [self.filelocator.get_cdump_filename(stage=x) for  x in\
-        #                                 range(1,len(suffix_list)+1)]
         fnlist = [self.filelocator.get_cdump_filename(stage=x) for x in suffix_list]
         rlist = [self.file_not_found_error(fn, update) for fn in fnlist]
         if not all(rlist):
@@ -386,26 +390,17 @@ class InverseAshRun(AshRun):
         return rval
 
     def create_plots(self, redraw=False, stage=0):
-        # ensemble mean of massloading to be on main display
-
-        # make the awips2 files.
-        # this will also load the data from cdump files into an xarray.
+        # overwrites parent method
+        # do not need to create plots for inversion runs
         logger.debug("creating netcdf files")
-        self.make_netcdf()
+        self.write_cxra()
 
-    def make_netcdf(self):
-
-        # convert to mg /m3
+    def write_cxra(self):
+        # overwrites parent method
         fname = "xrfile.{}.nc".format(self.JOBID)
         mult = 1
         if os.path.isfile(fname):
             logger.info("netcdf file exists. {}".format(fname))
-            # cxra = xr.open_dataset(fname)
-            # cxra = cxra.__xarray_dataarray_variable__
-            # pmult = cxra.attrs["mult"]
-            # cxra = mult * cxra / pmult
-            # remove netcdf file so new one can be written.
-            # Helper.remove(os.path.join(self.inp["WORK_DIR"], fname))
         else:
             logger.info("netcdf file does not exist. Creating {}".format(fname))
             cxra = self.get_cdump_xra()
@@ -416,14 +411,8 @@ class InverseAshRun(AshRun):
             cxra.to_netcdf(fname, encoding={"zlib": True, "complevel": 9})
             self.cxra = cxra
 
-    def create_montage_pdf(self, montage_list):
-        c = [self.inp["CONVERT_EXE"]]
-        c.extend(montage_list)
-        c.append(self.filelocator.get_totalpdf_filename(stage=0))
-        logger.info("Creating montage pdf {}".format(" ".join(c)))
-        Helper.execute_with_shell(c)
-
     def set_levels(self, cgrid):
+        # overwrites parent method
         # for the inversion, the vertical resolution can be coarse
         # because comparing to column mass loading.
         # however it needs to cover the entire column.
@@ -434,7 +423,8 @@ class InverseAshRun(AshRun):
         top = np.ceil(top / 1000) * 1000 + 2 * vres
         bottom = np.floor(bottom / 1000) * 1000
         levlist = np.arange(bottom, top, vres)
-        # levlist, rlist = super().set_qva_levels()
-        # rlist = ["vertical levels for inversion \n" + x for x in rlist]
         cgrid.set_levels(levlist)
-        # return levlist, rlist
+
+    def make_awips_netcdf(self):
+        # overwrites parent method
+        pass
