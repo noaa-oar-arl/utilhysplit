@@ -29,8 +29,8 @@ import xarray as xr
 from monetio.models import hysplit
 from utilhysplit import hcontrol
 import utilhysplit.metfiles as metfile
-from ashapp.runhelper import (ConcplotColors, Helper,
-                                       JobFileNameComposer)
+from ashapp.runhelper import ConcplotColors, Helper, JobFileNameComposer
+
 # from runhandler import ProcessList
 from utilvolc.volcMER import HT2unit
 
@@ -231,7 +231,6 @@ class AshRun:
         self.filelocator = JobFileNameComposer(
             self.inp["WORK_DIR"], self.JOBID, self.inp["jobname"]
         )
-        # TO DO -  currently will only find forecast files.
         self.metfilefinder = metfile.MetFileFinder(self.inp["meteorologicalData"])
         self.metfilefinder.set_forecast_directory(self.inp["forecastDirectory"])
         self.metfilefinder.set_archives_directory(self.inp["archivesDirectory"])

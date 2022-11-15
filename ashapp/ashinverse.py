@@ -3,7 +3,8 @@ import datetime
 import logging
 import numpy as np
 import os
-#import sys
+
+# import sys
 import time
 
 from monetio.models import hysplit
@@ -72,7 +73,7 @@ def inverse_get_center_list(inp):
     if num == 0:
         return center
     # here should use a square area.
-    #centerlist = []
+    # centerlist = []
     dlat = (area**0.5) / 111.0e3
     dlon = dlat * np.cos(center[0] * np.pi / 180.0)
     lat0 = center[0] - num * dlat
@@ -214,7 +215,7 @@ class InverseAshRun(AshRun):
         def make_tuple(inval):
             source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
             suffix = inval[1]
-            #iii = inval[0] + 1
+            # iii = inval[0] + 1
             # iii = inval[0]
             cdumpname = self.filelocator.get_cdump_filename(stage=suffix)
             # cdumpname = "{}.{:03d}".format(
@@ -261,7 +262,7 @@ class InverseAshRun(AshRun):
     def cleanup(self):
         # defined to overwrite the parent class function.
         pass
-        #stage = 1
+        # stage = 1
         # for suffix in self.ens_suffix_generator:
         #    run_suffix = self.filelocator.get_control_suffix(stage)
 
@@ -276,10 +277,11 @@ class InverseAshRun(AshRun):
         processhandler.pipe_stderr()
         # save bottom and top in separate variables for concentration grid
         # vertical resolution
-        self.inp['vent'] = self.inp['bottom']
-        self.inp['top_height'] = self.inp['top']
+        self.inp["vent"] = self.inp["bottom"]
+        self.inp["top_height"] = self.inp["top"]
         # create a run for each suffix in this list.
-        for suffix in self.invs_suffix_hash.keys():
+
+        for iii, suffix in enumerate(self.invs_suffix_hash.keys()):
             logger.debug("Working on {}".format(suffix))
             # not using the ensemble meteorology at this time.
             # self.metfilefinder.set_ens_member("." + suffix)
@@ -421,18 +423,18 @@ class InverseAshRun(AshRun):
         logger.info("Creating montage pdf {}".format(" ".join(c)))
         Helper.execute_with_shell(c)
 
-    def set_levels(self,cgrid):
+    def set_levels(self, cgrid):
         # for the inversion, the vertical resolution can be coarse
-        # because comparing to column mass loading. 
+        # because comparing to column mass loading.
         # however it needs to cover the entire column.
         vres = 5000
-        top = self.inp['top_height']
-        bottom = self.inp['vent']
+        top = self.inp["top_height"]
+        bottom = self.inp["vent"]
         # use 5km above the expected plume top.
-        top = np.ceil(top/1000)*1000 + 2*vres
-        bottom = np.floor(bottom/1000)*1000
-        levlist = np.arange(bottom,top,vres)
-        #levlist, rlist = super().set_qva_levels()
-        #rlist = ["vertical levels for inversion \n" + x for x in rlist]
+        top = np.ceil(top / 1000) * 1000 + 2 * vres
+        bottom = np.floor(bottom / 1000) * 1000
+        levlist = np.arange(bottom, top, vres)
+        # levlist, rlist = super().set_qva_levels()
+        # rlist = ["vertical levels for inversion \n" + x for x in rlist]
         cgrid.set_levels(levlist)
-        #return levlist, rlist
+        # return levlist, rlist

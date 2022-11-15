@@ -98,13 +98,18 @@ class MetFileFinder:
           iii += 1
        return files    
 
+
    def find(self, dstart, duration,hours=-1):
-       #self.mstr = get_forecast_str(self.metid, self.archive_directory)
+       # look for forecast first.
+       self.mstr = get_forecast_str(self.metid, self.archive_directory)
        metfiles = self.find_forecast(dstart,duration)
+       # if not found then use archive
        if not metfiles:
            logger.info('Looking in archive for met files')
-           print('Looking in archive for met files')
            metfiles = self.find_archive(dstart,duration,hours=hours)
+       else:
+           logger.info('met files found in forecast directory')
+
        return metfiles
 
    def find_archive(self, dstart, duration,hours=-1):
@@ -427,8 +432,8 @@ class MetFiles:
             #if not path.isfile(temp):
             #    temp = temp.lower()
             if not path.isfile(temp):
-                logger.info("WARNING " +  temp + " meteorological file does not exist")
-                print("WARNING " +  temp + " meteorological file does not exist")
+                logger.info("INFO " +  temp + " forecast meteorological file does not exist")
+                #print("WARNING " +  temp + " meteorological file does not exist")
                 #pass
                 #logger.debug("WARNING " +  temp + " meteorological file does not exist")
                 #temp = self.altmet.makefilelist(edate, self.altmet.mdt)
