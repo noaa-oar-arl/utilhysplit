@@ -1,5 +1,5 @@
 # volcat.py
-# A reader for VOLCAT data using xarray
+# A reader for VOLCAT ash data using xarray
 import sys
 import os
 from os import walk
@@ -10,6 +10,8 @@ import cartopy.feature as cfeat
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
+
+from  utilvolc.get_area import get_area
 
 # from pyresample.bucket import BucketResampler
 
@@ -55,7 +57,6 @@ mass_sum:
 get_time:
 get_atherr: returns array of ash top height error from VOLCAT
 matchvals:
-find_iii:
 correct_pc: corrects parallax
 Class: VolcatName
      compare: compares volcat file names - shows difference
@@ -1083,6 +1084,19 @@ def get_radius(dset, vname=None, clip=True):
     return check_names(dset, vname, checklist, clip=clip)
 
 
+def check_total_mass(dset):
+    mass = get_mass(dset)
+    area = get_area(mass)
+    # area returned in km2.
+    # mass in g/m2
+    # 1e6 to convert are to m2
+    # 1e-9 to convert g to Tg
+    masstot = mass * area * 1e-6
+    masstot = masstot.sum().values  
+    # return unit is in Tg
+    return  masstot
+   
+
 def get_total_mass(dset):
     # unit is in Tg.
     """Units are in Tg"""
@@ -1125,7 +1139,7 @@ def get_atherr(dset):
     return height_err
 
 
-def matchvals(pclat, pclon, massra, height):
+def matchvals(pclat, pclon, massra, height,area):
     # pclat : xarray DataArray
     # pclon : xarray DataArray
     # mass  : xarray DataArray
@@ -1136,7 +1150,8 @@ def matchvals(pclat, pclon, massra, height):
     pclat = pclat.values.flatten()
     mass = massra.values.flatten()
     height = height.values.flatten()
-    tlist = list(zip(pclat, pclon, mass, height))
+    area = area.values.flatten()
+    tlist = list(zip(pclat, pclon, mass, height,area))
     # only return tuples in which mass has a valid value
     if "_FillValue" in massra.attrs:
         fill = massra.attrs["_FillValue"]
@@ -1145,13 +1160,6 @@ def matchvals(pclat, pclon, massra, height):
         # get rid of Nans.
         tlist = [x for x in tlist if ~np.isnan(x[2])]
     return tlist
-
-
-def find_iii(tlist, match):
-    for iii, val in enumerate(tlist):
-        if val == match:
-            return iii
-    return -1
 
 
 def determine_pc_grid_space():
@@ -1163,6 +1171,9 @@ def correct_pc(dset, gridspace=None):
     moves mass and height values into the coordinate values closest
     to the parallax corrected values. Results in dataset with mass and height shifted
     to parallax corrected positions.
+
+    gridspace : float
+                if gridspace is not None then also regrids onto grid with this spacing.
     """
     # 06/02/2021 amc commented out use of the ashdet field.
     # AMR: Added ability to grid parallax corrected data to regular grid
@@ -1206,18 +1217,18 @@ def correct_pc(dset, gridspace=None):
             ),
         )
         newmass = das.copy()
-        newnum = das.copy() + 1
         newhgt = das.copy()
         newrad = das.copy()
         # END of Additional code - AMR
     newmass.attrs = mass.attrs
     newhgt.attrs = height.attrs
     newrad.attrs = effrad.attrs
-
+    area = get_area(mass)
+    newarea = get_area(newmass)
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
-    tlist = np.array(matchvals(pclon, pclat, mass, height))
+    tlist = np.array(matchvals(pclon, pclat, mass, height,area))
 
     indexlist = []
     prev_point = 0
@@ -1229,7 +1240,7 @@ def correct_pc(dset, gridspace=None):
         else:
            return True
 
-    newmass,newnum,newhgt,newrad = pc_loop(tlist,newmass,newnum,newhgt,newrad)
+    newmass,newhgt,newrad = pc_loop(tlist,newmass,newhgt,newrad)
 
     # TODO currently the fill value is 0.
     # possibly change to nan or something else?
@@ -1259,15 +1270,14 @@ def correct_pc(dset, gridspace=None):
 
     newmass = newmass.assign_coords(longitude=(("y","x"),lon))
     newmass = newmass.assign_coords(latitude=(("y","x"),lat))
-    newnum = newnum.assign_coords(longitude=(("y","x"),lon))
-    newnum = newnum.assign_coords(latitude=(("y","x"),lat))
     newhgt = newhgt.assign_coords(longitude=(("y","x"),lon))
     newhgt = newhgt.assign_coords(latitude=(("y","x"),lat))
     newrad = newrad.assign_coords(longitude=(("y","x"),lon))
     newrad = newrad.assign_coords(latitude=(("y","x"),lat))
 
-    # adjust the mass. see pc_loop for explanation
-    newmass = xr.where(newnum>1, newmass/newnum, newmass)
+    # adjust the mass to mass loading by dividing by new area.
+    newmass = xr.where(newmass>0, newmass/newarea, newmass)
+    newmass = xr.where(newmass==0, np.nan, newmass)
 
     if not check_compat(newmass, newhgt):
        print('warning: coordinate values are not the same')
@@ -1294,56 +1304,32 @@ def correct_pc(dset, gridspace=None):
     #dnew = dnew.assign_attrs(dset.attrs)
     return dnew
 
-def pc_loop(tlist,newmass,newnum,newhgt,newrad):
+def pc_loop(tlist,newmass,newhgt,newrad):
     testmass = newmass.copy()
-
-    indexlist = []
-    prev_point = 0
+    indexhash = {}
+    hthash = {}
+    aratio = 1
     for point in tlist:
         iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
-        if iii in indexlist:
-            #print("WARNING: correct_pc function: some values mapped to same point")
-            #print(iii, point)
-            vpi = find_iii(indexlist, iii)
-            #print(tlist[vpi])
-            # AMR: 9/1/2021
-            # Need to add mass from values mapped to same grid point (conserve mass)
-            # Take max height from values mappend to same grid point (conserve top height)
-            totmass = tlist[vpi][2] + point[2]
-            maxhgt = np.max([tlist[vpi][3], point[3]])
-            # Reassigning values in point array for mass and height
-            point[2] = totmass
-            point[3] = maxhgt
-            #print("Total mass, max height: ", point)
-            # End of AMR additions
+        area = point[4]
+        hgt = point[3]
+        totmass = point[2] * area
+        if iii in indexhash.keys():
+            indexhash[iii] += totmass
+            hthash[iii] = np.max((hthash[iii],hgt))
+        else:
+            indexhash[iii] = totmass
+            hthash[iii] = hgt
 
         newmass = xr.where(
             (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
-            point[2],
+            indexhash[iii],
             newmass,
         )
-        # c = mass loading
-        # c' = mass loading on new grid.
-        # a = area of orginal pixels
-        # A = area of new grid
-        # m = c*a = mass of ash in the column
-       
-        # m1 + m2 = (c1+c2)a
-        # c' = (c1+c2)a / A
-        # a/A can be approximated by 1/N where N is the number of
-        # original pixels that were mapped to the new pixel.
-        # this only works where the area of new grid is larger than old grid.
-        # use newmass = newmass / newnum. this is done in the main function
-        # after the coordinates are adjusted to be the same.
 
-        newnum = xr.where(
-            (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
-            newnum+1,
-            newnum,
-        )
         newhgt = xr.where(
             (newhgt.coords["x"] == iii[0]) & (newhgt.coords["y"] == iii[1]),
-            point[3],
+            hthash[iii],
             newhgt,
         )
         # AMR: Need to adjust this for effective radius - not currently in tlist, and therefore not in iii
@@ -1352,22 +1338,7 @@ def pc_loop(tlist,newmass,newnum,newhgt,newrad):
             point[3],
             newrad,
         )
-        # keeps track of new indices of lat lon points.
-        indexlist.append(iii)
-        prev_point = point
-    print('Max mapped to point', np.max(newnum.values)) 
-    #print(newmass)
-    #print('--')
-    #print(newnum)
-    #newmass = xr.where(newnum>1,newmass/newnum,newmass)  
-    #print('--')
-    #print(newmass)
-    # check if any points are mapped to the same point.
-    if len(indexlist) != len(list(set(indexlist))):
-        print("WARNING: correct_pc function: some values mapped to same point")
-        print(len(indexlist), len(list(set(indexlist))))
-    # TODO currently the fill value is 0.
-    return newmass, newhgt, newnum, newrad
+    return newmass,newhgt, newrad
 
 
 

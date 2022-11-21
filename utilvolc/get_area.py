@@ -8,6 +8,7 @@ def get_area(
     """Calculates the area (km^2) of each volcat grid cell
     Converts degress to meters using a radius of 6378.137km.
     Input:
+    dset : xarray DataArray with coordinates latitude (y,x) and longitude (y,x)
     write: boolean (default: False) Write area to file
     clip: boolean (default: True) Use clipped array around data, reduces domain
     output:
@@ -15,20 +16,25 @@ def get_area(
     """
     d2r = np.pi / 180.0  # convert degress to radians
     d2km = 6378.137 * d2r  # convert degree latitude to kilometers
+ 
 
-    if clip == True:
-        mass = volcat.get_mass(dset)
-        mass = mass.isel(time=0)
-        # mass = volcat.get_mass(dset)
-    else:
-        mass = dset.ash_mass_loading.isel(time=0)
+    #if clip == True:
+    #    mass = volcat.get_mass(dset)
+    #    mass = mass.isel(time=0)
+    #    # mass = volcat.get_mass(dset)
+    #else:
+    #    mass = dset.ash_mass_loading.isel(time=0)
+    if 'time' in dset.coords and 'time' in dset.dims:
+        dset = dset.isel(time=0)
+    # latitude (y,x)
+    # longitude (y,x)    
     # make sure dimensions are in the right order.
-    mass = mass.transpose('y','x')
-    lat = mass.latitude.values
-    lon = mass.longitude.values
+    dset = dset.transpose('y','x')
+    lat =  dset.latitude.values
+    lon =  dset.longitude.values
     latrad = lat * d2r  # Creating latitude array in radians
     coslat = np.cos(latrad) * d2km * d2km
-    shape = np.shape(mass)
+    shape = np.shape(dset)
     # Make shifted lat and shifted lon arrays to use for calculations
     lat_shift = lat[1:, :]
     lon_shift = lon[:, 1:]
