@@ -7,10 +7,13 @@ import xarray as xr
 import pandas as pd
 from scipy import integrate
 import matplotlib.pyplot as plt
-#from utilhysplit import par2conc
+import seaborn as sns
+from utilhysplit.fixlondf import fixlondf
 # Opens the dataset
 
-    
+   
+
+ 
 
 class volcatSO2L3:
 
@@ -18,12 +21,17 @@ class volcatSO2L3:
         self.fname = fname
         # use to convert from DU to  g/m^2 
         self.conv = (2.6867E20) * (64.066) * (1/(6.022E23))
+        self.dset = self.open_dataset()
+        self.get_points()
+        self.pframe = self.points2frame()
 
     def open_dataset(self):
-        self.dset = xr.open_dataset(self.fname, decode_times=True)
-        return self.dset 
+        dset = xr.open_dataset(self.fname, decode_times=True)
+        return dset 
 
-    def plotscatter(self,interp=False,cmap='viridis'):
+    def plotscatter(self,interp=False,cmap='viridis',neg=False):
+        self.pframe = fixlondf(self.pframe,colname='lon',neg=neg)
+        sns.set(style='whitegrid')
         lon = self.pframe.lon.values
         lat = self.pframe.lat.values
         mass = self.pframe.mass.values
@@ -44,7 +52,6 @@ class volcatSO2L3:
         self.mass = self.dset.mass_loading_mean
         
 
-
     def get_points(self):
         #
         self.mass = self.dset.so2_column_loading_fov
@@ -58,6 +65,7 @@ class volcatSO2L3:
 
     def points2frame(self):
         mass = self.mass.values.flatten()
+        mass_interp = self.mass_interp.values.flatten()
         height = self.height.values.flatten()
         time = self.time.values.flatten()
         lon = self.lon.flatten()
@@ -71,17 +79,19 @@ class volcatSO2L3:
         for iii in np.arange(0,len(mass)):
             if not np.isnan(mass[iii]):
                try:
-                   rvalue = (mass[iii],self.conv*mass[iii], lon[iii], lat[iii], height[iii], time[iii])
+                   rvalue = (mass[iii],self.conv*mass[iii],
+                             mass_interp[iii],mass_interp[iii]*self.conv,lon[iii], 
+                             lat[iii], height[iii], time[iii])
                except Exception as eee:
                    print('points2frame Exception at {}'.format(iii))
                    print(eee)
                    continue 
                rlist.append(rvalue)
         pframe = pd.DataFrame(rlist)
-        pframe.columns = ['mass DU', 'mass', 'lon', 'lat','height','time']
+        pframe.columns = ['mass DU','mass', 'massI DU', 'massI','lon','lat','height','time']
         pframe = pframe.sort_values(['lon','lat','time'],ascending=True)
-        #pframe = par2conc.fixlondf(pframe,neg=False)  
-        self.pframe = pframe
+        #pframe = fixlondf(pframe,neg=False)  
+        #self.pframe = pframe
         return pframe
 
 
