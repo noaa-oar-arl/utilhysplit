@@ -117,27 +117,29 @@ class InverseAshRun(AshRun):
 
     def get_cdump_xra(self):
         # overwrite parent class method
-        blist = []
+        if self.cxra.ndim==0:
+            blist = []
 
-        def make_tuple(inval):
-            source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
-            suffix = inval[1]
-            cdumpname = self.filelocator.get_cdump_filename(stage=suffix)
-            met_tag = suffix
-            logger.info("adding to netcdf file :{} {}".format(met_tag, cdumpname))
-            return (cdumpname, source_tag, met_tag)
+            def make_tuple(inval):
+                source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
+                suffix = inval[1]
+                cdumpname = self.filelocator.get_cdump_filename(stage=suffix)
+                met_tag = suffix
+                logger.info("adding to netcdf file :{} {}".format(met_tag, cdumpname))
+                return (cdumpname, source_tag, met_tag)
 
-        suffix_list = self.invs_suffix_hash.keys()
-        blist = [make_tuple(x) for x in enumerate(suffix_list)]
-        century = 100 * (int(self.inp["start_date"].year / 100))
-        cdumpxra = hysplit.combine_dataset(
-            blist, century=century, sample_time_stamp="start"
-        )
-        if cdumpxra.size <= 1:
-            logger.debug("ENSEMBLE xra is empty")
-        else:
-            logger.debug("ENSEMBLE xra is full")
-        return cdumpxra
+            suffix_list = self.invs_suffix_hash.keys()
+            blist = [make_tuple(x) for x in enumerate(suffix_list)]
+            century = 100 * (int(self.inp["start_date"].year / 100))
+            cdumpxra = hysplit.combine_dataset(
+                blist, century=century, sample_time_stamp="start"
+            )
+            if cdumpxra.size <= 1:
+                logger.debug("ENSEMBLE xra is empty")
+            else:
+                logger.debug("ENSEMBLE xra is full")
+            self.cxra = cdumpxra
+        return self.cxra
 
     def add_inputs(self, inp):
         # uses parent class and adds additional.
@@ -296,11 +298,16 @@ class InverseAshRun(AshRun):
             logger.info("netcdf file does not exist. Creating {}".format(fname))
             cxra = self.get_cdump_xra()
             cxra = cxra.assign_attrs({"mult": mult})
-            logger.info("writing nc file {}".format(fname))
             cxra = cxra.assign_attrs(self.inp2attr())
-            logger.debug(cxra.attrs["time description"])
-            cxra.to_netcdf(fname, encoding={"zlib": True, "complevel": 9})
-            self.cxra = cxra
+            self.write_with_compression(cxra,fname)
+            #cxra2 = cxra.to_dataset()
+            #ehash = {"zlib":True,"complevel":9}
+            #vlist = [x for x in cxra2.data_vars]
+            #for vvv in vlist:
+            #    vhash[vvv] = ehash
+            #logger.info("writing nc file {}".format(fname))
+            #logger.debug(cxra.attrs["time description"])
+            #cxra2.to_netcdf(fname, encoding=vhash)
 
     def set_levels(self, cgrid):
         # overwrites parent method

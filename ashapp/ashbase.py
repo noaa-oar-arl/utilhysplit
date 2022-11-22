@@ -91,6 +91,13 @@ def make_chemrate(wdir):
 #        make_chemrate(self.inp['WORK_DIR'])
 
 
+#def ncfile_encoding(dset):
+#    encoding = {}
+#    ekeys = {"_FillValue", "dtype","scale_factor",'add_offset','grid_mapping')
+#    for dvar in dset.data_vars:
+#        encoding[data_var] = {key: v:q
+
+
 class AshRun:
     def __init__(self, JOBID):
         self.JOBID = str(JOBID)  # string
@@ -114,21 +121,23 @@ class AshRun:
         self.so2 = False
 
     def get_cdump_xra(self):
-        blist = []
-        cdumpname = self.filelocator.get_cdump_filename(stage=0)
-        source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
-        met_tag = self.inp["meteorologicalData"]
-        blist = [(cdumpname, source_tag, met_tag)]
-        century = 100 * (int(self.inp["start_date"].year / 100))
-        # If SO2 then only put SO2 in the xarray
-        if self.so2:
-            species = ["pS02"]
-        else:
-            species = None
-        cdumpxra = hysplit.combine_dataset(
-            blist, century=century, sample_time_stamp="start", species=species
-        )
-        return cdumpxra
+        if self.cxra.ndim==0:
+            blist = []
+            cdumpname = self.filelocator.get_cdump_filename(stage=0)
+            source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
+            met_tag = self.inp["meteorologicalData"]
+            blist = [(cdumpname, source_tag, met_tag)]
+            century = 100 * (int(self.inp["start_date"].year / 100))
+            # If SO2 then only put SO2 in the xarray
+            if self.so2:
+                species = ["pS02"]
+            else:
+                species = None
+            cdumpxra = hysplit.combine_dataset(
+                blist, century=century, sample_time_stamp="start", species=species
+            )
+            self.cxra = cdumpxra
+        return self.cxra 
 
     def inp2attr(self):
         """
@@ -168,10 +177,35 @@ class AshRun:
             logger.info("netcdf file does not exist. Creating {}".format(fname))
             cxra = mult * self.get_cdump_xra()
         cxra = cxra.assign_attrs({"mult": mult})
+        cxra = cxra.assign_attrs(self.inp2attr())
         logger.info("writing nc file {}".format(fname))
         # cxra.attrs.update(self.inp2attr())
 
         # need to change to dataset to add compression
+        self.write_with_compression(cxra,fname)
+        if not self.cxra.size > 1:
+            logger.info(
+                "make_awips_netcdf: cxra empty. cannot create awips\
+                         files"
+            )
+            return []
+
+   # when writing to netcdf file, attributes which are numpy arrays do not write properly.
+   # need to change them to lists.
+    @staticmethod
+    def check_attributes(atthash):
+        for key in atthash.keys():
+            val = atthash[key]
+            if isinstance(val, np.ndarray):
+               newval = list(val)
+            atthash[key] = newval
+        return atthash
+
+
+    @staticmethod
+    def write_with_compression(cxra,fname):
+        atthash = check_attributes(cxra.attrs)
+        cxra = cxra.assign_attrs(atthash)
         cxra2 = cxra.to_dataset()
         ehash = {"zlib": True, "complevel": 9}
         vlist = [x for x in cxra2.data_vars]
@@ -179,16 +213,6 @@ class AshRun:
         for vvv in vlist:
             vhash[vvv] = ehash
         cxra2.to_netcdf(fname, encoding=vhash)
-        #
-
-        self.cxra = cxra
-        # if empty then return an emtpy list.
-        if not self.cxra.size > 1:
-            logger.info(
-                "make_awips_netcdf: cxra empty. cannot create awips\
-                         files"
-            )
-            return []
 
     def make_awips_netcdf(self):
         import cdump2netcdf

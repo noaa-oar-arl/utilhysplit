@@ -171,26 +171,27 @@ class EnsembleAshRun(AshRun):
 
     def get_cdump_xra(self):
         blist = []
+        if self.cxra.ndim==0:
+            def make_tuple(inval):
+                source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
+                suffix = inval[1]
+                iii = inval[0] + 1
+                cdumpname = "{}.{:03d}".format(
+                    self.filelocator.get_cdump_base(stage=iii), iii
+                )
+                met_tag = suffix
+                logger.info("adding to netcdf file :{} {}".format(met_tag, cdumpname))
+                return (cdumpname, source_tag, met_tag)
 
-        def make_tuple(inval):
-            source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
-            suffix = inval[1]
-            iii = inval[0] + 1
-            cdumpname = "{}.{:03d}".format(
-                self.filelocator.get_cdump_base(stage=iii), iii
-            )
-            met_tag = suffix
-            logger.info("adding to netcdf file :{} {}".format(met_tag, cdumpname))
-            return (cdumpname, source_tag, met_tag)
-
-        blist = [make_tuple(x) for x in enumerate(self.ens_suffix_list)]
-        century = 100 * (int(self.inp["start_date"].year / 100))
-        cdumpxra = hysplit.combine_dataset(blist, century=century)
-        if cdumpxra.size <= 1:
-            logger.debug("ENSEMBLE xra is empty")
-        else:
-            logger.debug("ENSEMBLE xra is full")
-        return cdumpxra
+            blist = [make_tuple(x) for x in enumerate(self.ens_suffix_list)]
+            century = 100 * (int(self.inp["start_date"].year / 100))
+            cdumpxra = hysplit.combine_dataset(blist, century=century)
+            if cdumpxra.size <= 1:
+                logger.debug("ENSEMBLE xra is empty")
+            else:
+                logger.debug("ENSEMBLE xra is full")
+            self.cxra = cdumpxra
+        return self.cxra
 
     def add_inputs(self, inp):
         logger.info("adding ensemble inputs")
