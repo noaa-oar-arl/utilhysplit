@@ -12,10 +12,10 @@ import xarray as xr
 # import hysplit
 from monetio.models import hysplit
 from utilvolc import write_emitimes as vwe
-from utilvolc.ashapp.ashbase import AshRun
-from utilvolc.ashapp.emitimes import EmiTimes
-from utilvolc.ashapp.runhandler import ProcessList
-from utilvolc.ashapp.runhelper import AshDINameComposer
+from ashapp.ashbase import AshRun
+from utilhysplit.emitimes import EmiTimes
+from ashapp.runhandler import ProcessList
+from utilvolc.runhelper import AshDINameComposer
 
 # from hysplitdata.traj import model
 # from hysplitplot import timezone

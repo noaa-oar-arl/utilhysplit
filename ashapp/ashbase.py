@@ -29,7 +29,7 @@ import xarray as xr
 from monetio.models import hysplit
 from utilhysplit import hcontrol
 import utilhysplit.metfiles as metfile
-from ashapp.runhelper import ConcplotColors, Helper, JobFileNameComposer
+from utilvolc.runhelper import ConcplotColors, Helper, JobFileNameComposer
 
 # from runhandler import ProcessList
 from utilvolc.volcMER import HT2unit
@@ -216,9 +216,9 @@ class AshRun:
     # def postprocessing(self):
     #    return -1
 
-    def preprocessing(self):
-        # no preprocessing for this workflow
-        return -1
+    #def preprocessing(self):
+    #    # no preprocessing for this workflow
+    #    return -1
 
     def add_api_info(self, apistr, urlstr, headerstr):
         self.apistr = apistr
@@ -265,7 +265,6 @@ class AshRun:
         # logger.debug("Setting up control stage {}".format(stage))
         duration = self.inp["durationOfSimulation"]
         stime = self.inp["start_date"]
-        print("STIME-------------", stime)
         # c.jobid_str = self.JOBID
         # work_dir = self.WORK_DIR
 
@@ -320,6 +319,8 @@ class AshRun:
         # if setting levels here then need to use the set_levels
         # function and also adjust the labeling for the levels.
 
+        # round to nearest latitude longitude point.
+        # this is for better matching with gridded volcat data.
         lat = self.inp["latitude"]
         lon = self.inp["longitude"]
         vent = self.inp["bottom"]
@@ -340,8 +341,8 @@ class AshRun:
         # center concentration grid at the volcano
         # control.concgrids[0].centerlat = np.floor(lat)
         # control.concgrids[0].centerlon = np.floor(lon)
-        control.concgrids[0].centerlat = lat
-        control.concgrids[0].centerlon = lon
+        control.concgrids[0].centerlat = int(lat)
+        control.concgrids[0].centerlon = int(lon)
         # set the levels
         self.set_levels(control.concgrids[0])
 
@@ -458,7 +459,7 @@ class AshRun:
         logger.info("Model submitted on {}".format(datetime.datetime.now()))
         # if files are already there then do not run the model.
         if not self.after_run_check(update=False):
-            self.preprocessing()
+            #self.preprocessing()
             self.run_model()
             # self.postprocessing()
             redraw = False

@@ -13,8 +13,8 @@ from utilhysplit import metfiles
 from ashbase import AshRun
 from cdump2xml import HysplitKml
 from monetio.models import hysplit
-from runhandler import ProcessList
-from runhelper import Helper
+from utilhysplit.runhandler import ProcessList
+from utilvolc.runhelper import Helper
 
 # from hysplitdata.traj import model
 # from hysplitplot import timezone

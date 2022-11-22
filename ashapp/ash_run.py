@@ -2,9 +2,10 @@
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# ash_run.py - run HYSPLIT model on web and create plots
+# ash_run.py - run HYSPLIT model on web (or offline) and create plots
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
+# 15 NOV 2022 (AMC) - updated how tests can be run
 # -----------------------------------------------------------------------------
 # To run in offline mode standard dispersion run  python ash_run.py -999
 # To run in offline mode standard trajectory run  python ash_run.py -777
@@ -25,7 +26,7 @@ import traceback
 import requests
 
 from utilhysplit.metfiles import gefs_suffix_list
-from runhelper import JobSetUp, make_inputs_from_file
+from utilvolc.runhelper import JobSetUp, make_inputs_from_file
 from utils import setup_logger
 
 logger = logging.getLogger(__name__)
@@ -36,9 +37,10 @@ def print_usage():
         """\
 USAGE: ash_run.py RUNTYPE JOBID
 
-where RUNTYPE is either 'run' or 'redraw' (withou quotations) and JOBID
+where RUNTYPE is either 'run' or 'redraw' or 'test' (without quotations) and JOBID
 is the job identification number.
 
+If not using runtype of 'test' then
 The following environment variables must be set prior to calling this script:
     VOLCANICASH_API_KEY         - secret key to access the hysplitash web APIs.
     VOLCANICASH_URL             - URL to the hysplitash web application."""
@@ -78,6 +80,34 @@ def create_run_instance(JOBID, inp):
     arun.add_inputs(inp)
     return arun
 
+def choosetest(JOBID,setup):
+    if JOBID == "-446":
+        # test inverse dispersion run.
+        # currently
+        setup.add_inverse_params()
+        inp = setup.inp
+        inp["runflag"] = "inverse"
+        # inp['meteorologicalData'] = 'GFS'
+        arun = create_run_instance("446", inp)
+    elif JOBID == "-555":
+        # test ensemble trajectory run.
+        # currently
+        inp["runflag"] = "trajectory"
+        inp["meteorologicalData"] = "GEFS"
+        arun = create_run_instance("1004", inp)
+    elif JOBID == "-888":
+        # test ensemble dispersion run.
+        inp["meteorologicalData"] = "GEFS"
+        arun = create_run_instance("1001", inp)
+    elif JOBID == "-777":
+        # test trajectory  run.
+        inp["runflag"] = "trajectory"
+        arun = create_run_instance("1003", inp)
+    else:
+        # test regular dispersion run.
+        inp["runflag"] = "dispersion"
+        arun = create_run_instance("1005", inp)
+    return arun
 
 if __name__ == "__main__":
     # Configure the logger so that log messages appears in the "Model Status" text box.
@@ -90,6 +120,7 @@ if __name__ == "__main__":
     RUNTYPE = sys.argv[1]  # 'run' or 'redraw'
     JOBID = sys.argv[2]  # This is a REDRAWID for redraw.
     setup = JobSetUp()
+
     # create a test to run without inputs from web page.
     if RUNTYPE == 'test':
         logging.getLogger().setLevel(20)
@@ -119,6 +150,7 @@ if __name__ == "__main__":
             arun.doit()
         sys.exit(1)
 
+    # create test based on JOBID
     elif JOBID in ["-999", "-888", "-777", "-555", "-446"]:
         # config file should be called config.jobid.txt
         logging.getLogger().setLevel(20)
@@ -129,71 +161,41 @@ if __name__ == "__main__":
         setup = make_inputs_from_file("./", configname)
         inp = setup.inp
         # inp = setup.make_test_inputs()
-    if JOBID == "-446":
-        # test inverse dispersion run.
-        # currently
-        setup.add_inverse_params()
-        inp = setup.inp
-        inp["runflag"] = "inverse"
-        # inp['meteorologicalData'] = 'GFS'
-        arun = create_run_instance("446", inp)
+        arun=choosetest(JOBID,setup,inp)
         arun.doit()
         sys.exit(1)
-    if JOBID == "-555":
-        # test ensemble trajectory run.
-        # currently
-        inp["runflag"] = "trajectory"
-        inp["meteorologicalData"] = "GEFS"
-        arun = create_run_instance("1004", inp)
-        arun.doit()
-        sys.exit(1)
-    elif JOBID == "-888":
-        # test ensemble run.
-        inp["meteorologicalData"] = "GEFS"
-        arun = create_run_instance("1001", inp)
-        arun.doit()
-        sys.exit(1)
-    elif JOBID == "-777":
-        # test trajectory  run.
-        inp["runflag"] = "trajectory"
-        arun = create_run_instance("1003", inp)
-        arun.doit()
-        sys.exit(1)
-    elif JOBID == "-999":
-        # test regular run.
-        inp["runflag"] = "dispersion"
-        arun = create_run_instance("1002", inp)
-        arun.doit()
-        sys.exit(1)
-    # arun = AshRun(JOBID)
-    apistr = "VOLCANICASH_API_KEY"
-    urlstr = "VOLCANICASH_URL"
-    headerstr = "VolcanicAsh-API-Key"
-    try:
-        API_KEY = os.environ[apistr]
-        RUN_URL = os.environ[urlstr]
-        if RUNTYPE == "redraw":
-            # Update JOBID after obtaining the redraw input.
-            REDRAWID = sys.argv[2]
-            inputUrl = "{}/redrawinput/{}".format(RUN_URL, REDRAWID)
-            r = requests.get(inputUrl, headers={headerstr: API_KEY})
-            a = r.json()
-            JOBID = a["id"]
-        else:
-            inputUrl = "{}/runinput/{}".format(RUN_URL, JOBID)
-            r = requests.get(inputUrl, headers={headerstr: API_KEY})
-            a = r.json()
-        # print(json.dumps(a, indent=4))
-        inp = setup.parse_inputs(a)
-        arun = create_run_instance(JOBID, inp)
-        arun.add_api_info(apistr, urlstr, headerstr)
-        arun.doit()
-    except Exception:
-        # TODO:
-        # Send the error message to the Application layer so that the user could see it.
-        logger.error(
-            "Oops! Something went wrong. This is an internal error and we will need to fix it."
-        )
-        logger.error(traceback.format_exc())
-        arun.handle_crash()
+    
+    # actual run from web api inputs
+    else:
+        # arun = AshRun(JOBID)
+        apistr = "VOLCANICASH_API_KEY"
+        urlstr = "VOLCANICASH_URL"
+        headerstr = "VolcanicAsh-API-Key"
+        try:
+            API_KEY = os.environ[apistr]
+            RUN_URL = os.environ[urlstr]
+            if RUNTYPE == "redraw":
+                # Update JOBID after obtaining the redraw input.
+                REDRAWID = sys.argv[2]
+                inputUrl = "{}/redrawinput/{}".format(RUN_URL, REDRAWID)
+                r = requests.get(inputUrl, headers={headerstr: API_KEY})
+                a = r.json()
+                JOBID = a["id"]
+            else:
+                inputUrl = "{}/runinput/{}".format(RUN_URL, JOBID)
+                r = requests.get(inputUrl, headers={headerstr: API_KEY})
+                a = r.json()
+            # print(json.dumps(a, indent=4))
+            inp = setup.parse_inputs(a)
+            arun = create_run_instance(JOBID, inp)
+            arun.add_api_info(apistr, urlstr, headerstr)
+            arun.doit()
+        except Exception:
+            # TODO:
+            # Send the error message to the Application layer so that the user could see it.
+            logger.error(
+                "Oops! Something went wrong. This is an internal error and we will need to fix it."
+            )
+            logger.error(traceback.format_exc())
+            arun.handle_crash()
     sys.exit(0)
