@@ -7,18 +7,22 @@ import datetime
 import xarray as xr
 import cartopy.crs as ccrs
 import cartopy.feature as cfeat
+import logging
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-
+import monet
 from  utilvolc.get_area import get_area
+
+
+logger = logging.getLogger(__name__)
 
 # from pyresample.bucket import BucketResampler
 
 # change log
 # 2022 Nov 17 AMC updated correct_pc with better regrid support.
 # 2022 Nov 17 AMC updated open_dataset
-
+# 2022 Nov 22 AMC correct_pc need to use np.nanmin to get min values
 
 """
 This script contains routines that open/read VOLCAT data in xarray format,
@@ -575,10 +579,10 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
     das = []
     for nnn, iii in enumerate(filenames):
         if not os.path.isfile(os.path.join(tdir,iii)):
-           print('file not found, skipping file {}'.format(iii))
+           logger.warning('file not found, skipping file {}'.format(iii))
            continue
         if verbose:
-            print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
+           logger.info('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
         # opens volcat files using volcat.open_dataset
         if not "_pc" in iii:
             das.append(
@@ -666,10 +670,14 @@ def write_parallax_corrected_files(
     already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
+    logger.info('volcat write_parallax_corrected_files function')
     anum = 0
+    newnamelist = []
     if isinstance(flist,(list,np.ndarray)):
+        if verbose: print('Using filenamse from list')
         vlist = flist
     else:
+        if verbose: print('Finding filenames')
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for iii, val in enumerate(vlist):
         if verbose: print('working on {}'.format(val))
@@ -679,7 +687,7 @@ def write_parallax_corrected_files(
             fname = val.fname
         new_fname = fname.replace(".nc", "_{}.nc".format(tag))
         newname = os.path.join(wdir,new_fname)
-        print('wdir {}'.format(newname))
+        #print('wdir {}'.format(newname))
         if os.path.isfile(os.path.join(wdir, new_fname)):
             if verbose: print(
                 "Netcdf file exists {} in directory {} cannot write ".format(
@@ -694,9 +702,13 @@ def write_parallax_corrected_files(
                 os.path.join(tdir, fname), gridspace=gridspace, correct_parallax=True
             )
             newname = os.path.join(wdir,new_fname)
-            print('wdir {}'.format(newname))
+            #print('wdir {}'.format(newname))
             dset.to_netcdf(newname)
-    print('Number of files which were already written {}'.format(anum))
+            if not os.path.isfile(os.path.join(wdir, new_fname)):
+                logger.warning('Warning: file did not write {} {}'.format(wdir,new_fname))
+            else:  
+                logger.info('file did write {} {}'.format(wdir,new_fname))
+    #print('Number of files which were already written {}'.format(anum))
 
 def find_volcat(
     tdir, vid=None, daterange=None, return_val=2, verbose=False, include_last=False
@@ -1197,10 +1209,16 @@ def correct_pc(dset, gridspace=None):
         # if this is not the case, need to adjust this portion of the function
         # maybe loop through the variables to calculate max,min?
         # NEED to make this more general, for various grid spaces
-        latmin = round(mass.latitude.values.min())
-        latmax = round(mass.latitude.values.max()) + 1.0
-        lonmin = round(mass.longitude.values.min())
-        lonmax = round(mass.longitude.values.max()) + 1.0
+        #latmin = round(mass.latitude.values.min())
+        #latmax = round(mass.latitude.values.max()) + 1.0
+        #lonmin = round(mass.longitude.values.min())
+        #lonmax = round(mass.longitude.values.max()) + 1.0
+        # some files had nan's at the edges for lat/lon values
+        # so change to using this.
+        latmin = np.nanmin(mass.latitude.values)
+        latmax = np.nanmax(mass.latitude.values) + 1.0
+        lonmin = np.nanmin(mass.longitude.values)
+        lonmax = np.nanmax(mass.longitude.values) + 1.0
         # lats = np.arange(latmin, latmax, gridspace)
         lats = np.arange(latmax, latmin, gridspace * -1)
         lons = np.arange(lonmin, lonmax, gridspace)
