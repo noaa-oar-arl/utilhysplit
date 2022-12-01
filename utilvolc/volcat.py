@@ -13,7 +13,8 @@ import numpy.ma as ma
 import pandas as pd
 import monet
 from  utilvolc.get_area import get_area
-
+from utilhysplit import hysplit_gridutil
+from monetio.models import hysplit
 
 logger = logging.getLogger(__name__)
 
@@ -1177,6 +1178,13 @@ def matchvals(pclat, pclon, massra, height,area):
 def determine_pc_grid_space():
     return 1
 
+# Notes
+# to improve speed of parallax correction
+# could look at getting the difference between parallax corrected coordinates
+# and actual coordinates. Hopefully difference would be the same across all points.
+# then just shift the whole grid by that much.
+# then additional regridding would have to be performed.
+
 
 def correct_pc(dset, gridspace=None):
     """
@@ -1219,6 +1227,13 @@ def correct_pc(dset, gridspace=None):
         latmax = np.nanmax(mass.latitude.values) + 1.0
         lonmin = np.nanmin(mass.longitude.values)
         lonmax = np.nanmax(mass.longitude.values) + 1.0
+  
+        # want grid to be at
+        latmin = np.floor(latmin)
+        latmax =  np.ceil(latmax)
+        lonmin = np.floor(lonmin)
+        lonmax = np.ceil(lonmax)  
+
         # lats = np.arange(latmin, latmax, gridspace)
         lats = np.arange(latmax, latmin, gridspace * -1)
         lons = np.arange(lonmin, lonmax, gridspace)
@@ -1326,7 +1341,7 @@ def pc_loop(tlist,newmass,newhgt,newrad):
     testmass = newmass.copy()
     indexhash = {}
     hthash = {}
-    aratio = 1
+    #aratio = 1
     for point in tlist:
         iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
         area = point[4]
@@ -1359,6 +1374,66 @@ def pc_loop(tlist,newmass,newhgt,newrad):
     return newmass,newhgt, newrad
 
 
+def combine_regridded(vlist,dlat,dlon):
+    # check range of longitude values.
+    # from 0 to 360 or -180 to 180?
+    minlon = 9000
+    maxlon = -9000
+    for das in vlist:
+        lonra = das.sel(y=1).longitude.values
+        small = np.min(lonra)
+        large = np.max(lonra)
+        minlon = np.min([minlon,small])
+        maxlon = np.max([maxlon,large])
+    # set corner longitude accordingly
+    if minlon < 0 and maxlon <= 180.0:
+       crnrlon = -180
+    elif minlon >=0 and maxlon <=360:
+       crnrlon = 0
+    else:
+       print('grids not using same longitude range')
+       print('longitudes from {} to {}'.format(minlon, maxlon))
+       print('warning: cannot combine')
+       return vlist
 
+    # create a global grid.
+    nlat = np.ceil(180.0/dlat)
+    nlon = np.ceil(360.0/dlon)
+    attrs = {'llcrnr latitude'   : 0,
+             'llcrnr longitude'  : crnrlon,
+             'Latitude Spacing'  : dlat,
+             'Longitude Spacing' : dlon,
+             'Number Lat Points' : nlat,
+             'Number Lon Points' : nlon}
+    rlist = []
+    for iii, das in enumerate(vlist):
+        latra = das.sel(x=1).latitude.values
+        lonra = das.sel(y=1).longitude.values
+        ynew, xnew =  hysplit_gridutil.get_new_indices(latra,lonra,attrs)
+        das = das.assign_coords(y=ynew)
+        das = das.assign_coords(x=xnew)
+        rlist.append(das)
+        # xnew will encompass areas of all the data-arrays.
+        if iii==0:
+           dnew = das.copy()
+        else:
+           aaa, dnew = xr.align(das,dnew,join="outer")
+           dnew = dnew.fillna(0) 
+   
+    # now expand each array to size of xnew.   
+    blist = []
+    for iii, das in enumerate(rlist):
+        bbb, junk = xr.align(das,dnew,join="outer")
+        bbb.expand_dims("ens")
+        bbb["ens"] = iii
+        blist.append(bbb) 
+    newra = xr.concat(blist,'ens')
+    # add grid information to dataset
+    newra.attrs.update(attrs)
+    # if don't do this then some of the lat lon coords will be nan.
+    newra = hysplit.reset_latlon_coords(newra)
+    return newra
+
+ 
 
 
