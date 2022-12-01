@@ -1374,17 +1374,52 @@ def pc_loop(tlist,newmass,newhgt,newrad):
     return newmass,newhgt, newrad
 
 
-def combine_regridded(vlist,dlat,dlon):
+def combine_regridded(vlist):
+    """
+    vlist : list of xarray DataArray or DataSet. 
+            volcat data which has been regridded onto
+            regular lat-lon grid.
+            Each object needs to have the same grid spacing.
+            If objects have a time dimension then length of time dimension should be 1.
+
+    Returns :
+            xarray DataArray or Dataset which is combination of
+            those in the input list.
+            If input objects have time dimension or coordinate then output will
+            be concated along the time dimension. If they do not then an
+            ens dimension will be created.
+
+    Possible Issues :
+           grid corners are set at (0,0) or (-180,0). If input arrays are not
+           compatible with those grid corners (e.g. spacing of 0.5 and original grid
+           corner of 20.25) then this will fail or produce unexpected results.
+    """
+    emptyvalue = xr.DataArray()
+
     # check range of longitude values.
     # from 0 to 360 or -180 to 180?
+    # also find gid spacing and make sure grid spacing
+    # same for all grids.
     minlon = 9000
     maxlon = -9000
-    for das in vlist:
+    dlat = []
+    dlon = []
+    for iii, das in enumerate(vlist):
         lonra = das.sel(y=1).longitude.values
         small = np.min(lonra)
         large = np.max(lonra)
         minlon = np.min([minlon,small])
         maxlon = np.max([maxlon,large])
+
+        temp = das.copy()
+        xval = temp.x.values+1
+        yval = temp.y.values+1
+        temp = temp.assign_coords(x=("x",xval))
+        temp = temp.assign_coords(y=("y",yval))
+        atemp = hysplit_gridutil.find_grid_specs(temp)
+        dlat.append(atemp['Latitude Spacing'])
+        dlon.append(atemp['Longitude Spacing'])
+
     # set corner longitude accordingly
     if minlon < 0 and maxlon <= 180.0:
        crnrlon = -180
@@ -1394,8 +1429,28 @@ def combine_regridded(vlist,dlat,dlon):
        print('grids not using same longitude range')
        print('longitudes from {} to {}'.format(minlon, maxlon))
        print('warning: cannot combine')
-       return vlist
+       return emptyvalue
 
+    # check that all grids have same spacing.
+    tol = 1e-2
+    dlat.sort()
+    check1 = dlat[-1]-dlat[0]<=tol 
+    if not check1:
+       print('Grids do not have the same spacing')
+       print(str.join(' ',[str(x) for x in dlat]))
+       print('warning: cannot combine')
+       return emptyvalue
+    dlon.sort()
+    check2 = dlon[-1]-dlon[0]<=tol 
+    if not check2:
+       print('Grids do not have the same spacing')
+       print(str.join(' ',[str(x) for x in dlon]))
+       print('warning: cannot combine')
+       return emptyvalue
+
+    dlat = dlat[0]
+    dlon = dlon[0] 
+    logger.info('grid spacing is {} {}'.format(dlat,dlon))
     # create a global grid.
     nlat = np.ceil(180.0/dlat)
     nlon = np.ceil(360.0/dlon)
@@ -1405,14 +1460,34 @@ def combine_regridded(vlist,dlat,dlon):
              'Longitude Spacing' : dlon,
              'Number Lat Points' : nlat,
              'Number Lon Points' : nlon}
+
+
+    # check if time is a dimension
+
     rlist = []
+    dimvalue = []
     for iii, das in enumerate(vlist):
+
+        # check if time is a dimension
+        if 'time' in das.dims:
+            das = das.isel(time=0)
+            dimvalue.append(das.time.values) 
+            newdim = 'time' 
+        elif 'time' in das.coords:
+            dimvalue.append(das.time.values)
+            newdim = 'time' 
+        else:
+            newdim = 'ens'
+            dimvalue.append(iii)
+
+        # put in new x and y indices for global grid.
         latra = das.sel(x=1).latitude.values
         lonra = das.sel(y=1).longitude.values
         ynew, xnew =  hysplit_gridutil.get_new_indices(latra,lonra,attrs)
         das = das.assign_coords(y=ynew)
         das = das.assign_coords(x=xnew)
         rlist.append(das)
+
         # xnew will encompass areas of all the data-arrays.
         if iii==0:
            dnew = das.copy()
@@ -1424,10 +1499,11 @@ def combine_regridded(vlist,dlat,dlon):
     blist = []
     for iii, das in enumerate(rlist):
         bbb, junk = xr.align(das,dnew,join="outer")
-        bbb.expand_dims("ens")
-        bbb["ens"] = iii
+        bbb.expand_dims(newdim)
+        bbb[newdim] = dimvalue[iii]
         blist.append(bbb) 
-    newra = xr.concat(blist,'ens')
+    # concatenate the expanded arrays which all have same size.
+    newra = xr.concat(blist,newdim)
     # add grid information to dataset
     newra.attrs.update(attrs)
     # if don't do this then some of the lat lon coords will be nan.
