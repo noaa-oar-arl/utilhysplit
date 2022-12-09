@@ -14,7 +14,7 @@ from monetio.models import hysplit
 from utilvolc import write_emitimes as vwe
 from ashapp.ashbase import AshRun
 from utilhysplit.emitimes import EmiTimes
-from ashapp.runhandler import ProcessList
+from utilhysplit.runhandler import ProcessList
 from utilvolc.runhelper import AshDINameComposer
 
 # from hysplitdata.traj import model

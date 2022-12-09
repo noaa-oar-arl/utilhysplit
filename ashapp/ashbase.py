@@ -5,11 +5,15 @@
 # ash_run.py - run HYSPLIT model on web and create plots
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
+# 09 DEC 2022 (AMC) - changed latspan to 180 and lonspan to 360 for global grid.
+# 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired. 
+#
 # -----------------------------------------------------------------------------
 # To run in offline mode use python ash_run.py -999
 #
 #
 # -----------------------------------------------------------------------------
+
 
 
 # from abc mport ABC, abstractmethod
@@ -198,13 +202,12 @@ class AshRun:
             val = atthash[key]
             if isinstance(val, np.ndarray):
                newval = list(val)
-            atthash[key] = newval
+               atthash[key] = newval
         return atthash
 
 
-    @staticmethod
-    def write_with_compression(cxra,fname):
-        atthash = check_attributes(cxra.attrs)
+    def write_with_compression(self,cxra,fname):
+        atthash = self.check_attributes(cxra.attrs)
         cxra = cxra.assign_attrs(atthash)
         cxra2 = cxra.to_dataset()
         ehash = {"zlib": True, "complevel": 9}
@@ -367,6 +370,9 @@ class AshRun:
         # control.concgrids[0].centerlon = np.floor(lon)
         control.concgrids[0].centerlat = int(lat)
         control.concgrids[0].centerlon = int(lon)
+        # set a global grid
+        control.concgrids[0].latspan = 180.0
+        control.concgrids[0].lonspan = 360.0
         # set the levels
         self.set_levels(control.concgrids[0])
 
@@ -424,7 +430,7 @@ class AshRun:
 
         # setup.add("numpar", "2000")
         # setup.add("numpar", "20000")
-        setup.add("numpar", "100000")
+        setup.add("numpar", "10000")
         # setup.add("maxpar", "500000")
 
         # base frequency of pardump output on length of simulation.

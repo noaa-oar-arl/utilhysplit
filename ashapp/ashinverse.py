@@ -8,7 +8,6 @@ import os
 import time
 
 from monetio.models import hysplit
-from ashapp import ensemble_tools
 from ashapp.ashbase import AshRun
 from utilhysplit.runhandler import ProcessList
 from utilvolc.runhelper import Helper

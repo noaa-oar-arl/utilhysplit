@@ -1,21 +1,21 @@
 import datetime
-import os
-import sys
-import xarray as xr
-import numpy as np
 import logging
+import os
+
+import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
+
 from monetio.models import hysplit
 
 # import matplotlib.pyplot as plt
 
 # 01/28/2020 AMC cdump2awips created to make a netcdf file appropriate for input into AWIPS
 # hysplit.py was modified in the forked version of MONET to make this work.
+# 11/06/2022 AMC many unsed variables munit, datestr, lat, lon
 
 # combine_cdump creates a 6 dimensional xarray dataarray object from cdump files.
 #
-# TO DO: use the hysp_massload function in hysplit.py rather than the one here.
 
 # Notes from Jorge.
 # global attribute time_origin=2020-02-04 16:20:47
@@ -26,12 +26,6 @@ from monetio.models import hysplit
 
 
 logger = logging.getLogger(__name__)
-
-
-def mass_loading(xrash):
-    # returns mass loading in each level.
-    # return hysplit.calc_aml(xrash)
-    return hysplit.hysp_massload(xrash)
 
 
 def meters2FL(meters):
@@ -58,7 +52,7 @@ def meters2FL(meters):
 #    return lev1, lev2, lev3
 
 
-#class Tdump2Awips:
+# class Tdump2Awips:
 #    def __init__(
 #        self,
 #        df,                  # pandas datframe
@@ -76,6 +70,7 @@ def meters2FL(meters):
 #        ntraj = len(df.traj_num.unique())
 #        ntimes = len(df.time.unique())
 
+
 class Cdump2Awips:
     def __init__(
         self,
@@ -84,7 +79,7 @@ class Cdump2Awips:
         munit="unit",
         fileformat="NETCDF4",
         jobid="unknown",
-        globalhash={},
+        globalhash={'default':'None'},
     ):
         """
         xrash1 : xarray data-array output by combine_datset of hysplit.py in monetio
@@ -102,14 +97,14 @@ class Cdump2Awips:
         coordinates are latitude, longitude, time, ensid.
         Although time is a variable only one time per file.
         Each level containing concentrations is a variable.
-     
+
         """
         # self.dt = dt
-        self.add_probs = False 
+        self.add_probs = False
 
         # set to True to add compression
-        self.zlib=True
-          
+        self.zlib = True
+
         self.dfmt = "%Y-%m-%d %H:%M:%S"
         self.outname = outname
         self.munit = munit  # mass unit for concentration
@@ -136,7 +131,7 @@ class Cdump2Awips:
             "time", "ensemble", "x", "y", "z", transpose_coords=False
         )
         # array with mass loading rather than concentration.
-        mass = mass_loading(xrash)
+        mass =  hysplit.hysp_massload(xrash)
         # if concentration  unit is mg then make mass loading unit in g.
         if self.munit == "mg":
             mass = mass / 1000.0
@@ -161,7 +156,7 @@ class Cdump2Awips:
 
     def add_global_attributes(self, fid):
         # GLOBAL ATTRIBUTES
-        #logger.debug("Adding global attributes")
+        # logger.debug("Adding global attributes")
         fid.jobid = self.jobid
         fid.time_origin = datetime.datetime.now().strftime(self.dfmt)
         fid.concentration_mass_unit = self.munit
@@ -186,7 +181,7 @@ class Cdump2Awips:
 
     def make_conc_level(self, fid, variable_name, min_level, max_level):
         coordlist = self.coordlist
-        concid = fid.createVariable(variable_name, "f4", coordlist,zlib=self.zlib)
+        concid = fid.createVariable(variable_name, "f4", coordlist, zlib=self.zlib)
         concid.units = self.munit + "/m3"
         concid.long_name = "Concentration Array"
         concid.bottomlevel = min_level
@@ -200,7 +195,7 @@ class Cdump2Awips:
         Returns :
            outname : str
 
-        uses attributes: 
+        uses attributes:
             self.xrash
             self.mass
             self.sample_time
@@ -208,9 +203,9 @@ class Cdump2Awips:
             self.massunit
             self.coordlist
             self.add_probs
- 
+
         uses methods:
-             self.add_global_attributes         
+             self.add_global_attributes
              self.make_conc_level
 
         uses function:
@@ -230,7 +225,8 @@ class Cdump2Awips:
         # DEFINE DIMENSIONS
         lat_shape = xrash.shape[3]
         lon_shape = xrash.shape[2]
-        lat = fid.createDimension("latitude", lat_shape)
+        # lat and lon get 'unused variable' warnings. 
+        lat = fid.createDimension("latitude", lat_shape)  
         lon = fid.createDimension("longitude", lon_shape)
         # level = fid.createDimension('levels',len(levelra))
 
@@ -239,15 +235,15 @@ class Cdump2Awips:
         ens_shape = xrash.coords["ensemble"].shape[0]
         # add ensemble mean, ensemble standard deviation,
         # probability of exceedances for 0.02, 0.2, 2, 5, 10 mg/m3.
-        if self.add_probs: 
-           ens_shape += 7
+        if self.add_probs:
+            ens_shape += 7
         ensemble = fid.createDimension("ensid", ens_shape)
 
         time = fid.createDimension("time", 1)  # one time per file
         bnds = fid.createDimension("bnds", 2)  # two bounds per time.
 
         # origin = fid.createDimension('origins',hxr.attrs['Number Start Locations'])
-        origin = fid.createDimension("origins", 1)
+        #origin = fid.createDimension("origins", 1)
         # Scalar variables
 
         # latra, lonra = hf.getlatlon(hxr)
@@ -269,24 +265,32 @@ class Cdump2Awips:
                 minlev = "SFC"
             varname = maxlev
             concid_list.append(self.make_conc_level(fid, varname, minlev, maxlev))
-        massid = fid.createVariable("MassLoading", "f4", self.coordlist,zlib=self.zlib,least_significant_digit=2)
+        massid = fid.createVariable(
+            "MassLoading",
+            "f4",
+            self.coordlist,
+            zlib=self.zlib,
+            least_significant_digit=2,
+        )
         massid.units = self.massunit + "/m2"
         massid.long_name = "Mass Loading from SFC to " + maxlev
 
         # Standard Contour levels for concentration in mg/m3
-        clevelid = fid.createVariable("Contour_levels", "f4", ("contour_levels"),zlib=self.zlib)
+        clevelid = fid.createVariable(
+            "Contour_levels", "f4", ("contour_levels"), zlib=self.zlib
+        )
         clevelid[:] = clevs
 
         # Dimension with different ensemble members.
-        ensembleid = fid.createVariable("ensemble", "str", ("ensid"),zlib=self.zlib)
-        ensid = fid.createVariable("ensid", "i4", ("ensid"),zlib=self.zlib)
-        sourceid = fid.createVariable("source", "str", ("ensid"),zlib=self.zlib)
+        ensembleid = fid.createVariable("ensemble", "str", ("ensid"), zlib=self.zlib)
+        ensid = fid.createVariable("ensid", "i4", ("ensid"), zlib=self.zlib)
+        sourceid = fid.createVariable("source", "str", ("ensid"), zlib=self.zlib)
 
-        latid = fid.createVariable("latitude", "f4", ("latitude"),zlib=self.zlib)
+        latid = fid.createVariable("latitude", "f4", ("latitude"), zlib=self.zlib)
         latid.long_name = "latitude degrees north from the equator"
         latid.units = "degrees_north"
         latid.point_spacing = "even"
-        lonid = fid.createVariable("longitude", "f4", ("longitude"),zlib=self.zlib)
+        lonid = fid.createVariable("longitude", "f4", ("longitude"), zlib=self.zlib)
         lonid.long_name = "longitude degrees east from the greenwhich meridian"
         lonid.units = "degrees_east"
         lonid.point_spacing = "even"
@@ -296,14 +300,16 @@ class Cdump2Awips:
         # levelid.long_name = 'Top height of each layer'
         # levelid.units='m'
 
-        timeid = fid.createVariable("time", "f4", ("time"),zlib=self.zlib)
+        timeid = fid.createVariable("time", "f4", ("time"), zlib=self.zlib)
         # attributes for time grid.
         timeid.units = "days since 1970-01-01 00:00:00"
         timeid.standard_name = "time"
         timeid.bounds = "time_bnds"
         timeid.calendar = "gregorian"
 
-        time_bnds = fid.createVariable("time_bnds", "f4", ("time", "bnds"),zlib=self.zlib)
+        time_bnds = fid.createVariable(
+            "time_bnds", "f4", ("time", "bnds"), zlib=self.zlib
+        )
 
         # Put data into variables
         # only one time per file.
@@ -338,13 +344,13 @@ class Cdump2Awips:
         # dimensions are stacked.
         ensid_list = self.xrash.coords["ens"].values
         if self.add_probs:
-           ensid_list.extend(['ensemble mean', 'ensemble standard deviation'])
-           ensid_list.extend(['Probability of exceedance 0.02 mg/m3'])
-           ensid_list.extend(['Probability of exceedance 0.2 mg/m3'])
-           ensid_list.extend(['Probability of exceedance 2 mg/m3'])
-           ensid_list.extend(['Probability of exceedance 5 mg/m3'])
-           ensid_list.extend(['Probability of exceedance 10 mg/m3'])
-        ensembleid[:] =  ensid_list
+            ensid_list.extend(["ensemble mean", "ensemble standard deviation"])
+            ensid_list.extend(["Probability of exceedance 0.02 mg/m3"])
+            ensid_list.extend(["Probability of exceedance 0.2 mg/m3"])
+            ensid_list.extend(["Probability of exceedance 2 mg/m3"])
+            ensid_list.extend(["Probability of exceedance 5 mg/m3"])
+            ensid_list.extend(["Probability of exceedance 10 mg/m3"])
+        ensembleid[:] = ensid_list
         sourceid[:] = self.xrash.coords["source"].values
         # this does not need to be changed with add_prob.
         ensid[:] = np.arange(1, ens_shape + 1)
@@ -359,7 +365,7 @@ def makeconc(xrash, date1, level, mult=1, dotranspose=False, verbose=False):
     xrash : xarray data-array
     date1 : datetime.datetime object
     level : list of level names
-    RETURNS 
+    RETURNS
     c1 : data array with concentration from multiple levels combined.
     """
     # this is for mass loading.

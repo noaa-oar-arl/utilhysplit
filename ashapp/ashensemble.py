@@ -6,7 +6,7 @@ import logging
 import os
 import time
 
-import ensemble_tools
+import ashapp_plotting
 
 # import hysplit
 from utilhysplit import metfiles
@@ -16,29 +16,22 @@ from monetio.models import hysplit
 from utilhysplit.runhandler import ProcessList
 from utilvolc.runhelper import Helper
 
-# from hysplitdata.traj import model
-# from hysplitplot import timezone
-
-
-# from locusts import LocustsFileNameComposer, Helper, LocustsSetUpParser, FlightPlannerFactory, \
-#                    SingleHeightSource, LocustSwarm
 
 
 logger = logging.getLogger(__name__)
 
 
-def print_usage():
-    print(
-        """\
-USAGE: ashensemble.py JOBID
+#def print_usage():
+#    print(
+#        """\
+#    )
+"""
+classes
+ConProbThresholds
+"""
 
-The following environment variables must be set prior to calling this script:
-    RUN_API_KEY         - secret key to access Locusts web APIs.
-    RUN_URL             - URL to the Locusts web application."""
-    )
-
-
-# Base class is AshRun
+# CHANGE LOG
+# 2022 Dec 8 (AMC) changed name of ensemble_tools to ashapp_plotting
 
 
 class ConProbThresholds:
@@ -87,7 +80,7 @@ class EnsembleAshRun(AshRun):
         flin = flin.replace("999", "zzz")
         # flin = flin.replace('gif','pdf')
         logger.debug("Massloading FILENAME{}".format(flin))
-        fignamelist = ensemble_tools.massload_plot(
+        fignamelist = ashapp_plotting.massload_plot(
             self.cxra, enslist, vlist=vlist, name=flin
         )
         # list of figure names generated.
@@ -104,7 +97,7 @@ class EnsembleAshRun(AshRun):
         # convert to g/m2
         mxra = mxra.isel(source=0).mean(dim="ens") / 1000.0
         attrs = self.cxra.attrs
-        levels = ensemble_tools.set_levels(mxra)
+        levels = ashapp_plotting.set_levels(mxra)
         h2xml = HysplitKml(
             levels=levels,
             sourcehash=self.inp,
@@ -155,7 +148,7 @@ class EnsembleAshRun(AshRun):
         )
         title += "\n GEFS {} members".format(len(enslist))
 
-        fignamelist = ensemble_tools.ATLtimeloop(
+        fignamelist = ashapp_plotting.ATLtimeloop(
             self.cxra,
             enslist,
             thresh,
