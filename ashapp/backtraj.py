@@ -80,8 +80,10 @@ class BackTraj(TrajectoryAshRun):
         processhandler.pipe_stderr()
         self.read_obsdf()
         max_procs = 10
+        tdumplist = []
         for iii, row in enumerate(self.obsdf.iterrows()):
             tdumpfile = "tdump.{}".format(iii)
+            tdumplist.append(tdumpfile)
             if not os.path.isfile(tdumpfile):
                 self.inp["top"] = row[1].height * 1000
                 self.inp["latitude"] = row[1].lat
@@ -128,6 +130,13 @@ class BackTraj(TrajectoryAshRun):
                 processhandler.killall()
                 logger.warning("HYSPLIT run Timed out")
                 done = True
+        cname = "{}.csv".format(self.JOBID)
+        outname = "TRAJ_{}.csv".format(self.JOBID)
+        trajdf = combine_traj(tdumplist, csvfile = cname)
+        print('WRITING csv file {}'.format(outname))
+        trajdf.to_csv(outname)
+         
+
 
     def create_plots(self, redraw=False, stage=0):
         pass
