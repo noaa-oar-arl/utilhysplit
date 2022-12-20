@@ -6,14 +6,13 @@
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
 # 09 DEC 2022 (AMC) - changed latspan to 180 and lonspan to 360 for global grid.
-# 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired. 
+# 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired.
 #
 # -----------------------------------------------------------------------------
 # To run in offline mode use python ash_run.py -999
 #
 #
 # -----------------------------------------------------------------------------
-
 
 
 # from abc mport ABC, abstractmethod
@@ -95,7 +94,7 @@ def make_chemrate(wdir):
 #        make_chemrate(self.inp['WORK_DIR'])
 
 
-#def ncfile_encoding(dset):
+# def ncfile_encoding(dset):
 #    encoding = {}
 #    ekeys = {"_FillValue", "dtype","scale_factor",'add_offset','grid_mapping')
 #    for dvar in dset.data_vars:
@@ -125,7 +124,7 @@ class AshRun:
         self.so2 = False
 
     def get_cdump_xra(self):
-        if self.cxra.ndim==0:
+        if self.cxra.ndim == 0:
             blist = []
             cdumpname = self.filelocator.get_cdump_filename(stage=0)
             source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
@@ -141,7 +140,7 @@ class AshRun:
                 blist, century=century, sample_time_stamp="start", species=species
             )
             self.cxra = cdumpxra
-        return self.cxra 
+        return self.cxra
 
     def inp2attr(self):
         """
@@ -186,7 +185,7 @@ class AshRun:
         # cxra.attrs.update(self.inp2attr())
 
         # need to change to dataset to add compression
-        self.write_with_compression(cxra,fname)
+        self.write_with_compression(cxra, fname)
         if not self.cxra.size > 1:
             logger.info(
                 "make_awips_netcdf: cxra empty. cannot create awips\
@@ -194,19 +193,18 @@ class AshRun:
             )
             return []
 
-   # when writing to netcdf file, attributes which are numpy arrays do not write properly.
-   # need to change them to lists.
+    # when writing to netcdf file, attributes which are numpy arrays do not write properly.
+    # need to change them to lists.
     @staticmethod
     def check_attributes(atthash):
         for key in atthash.keys():
             val = atthash[key]
             if isinstance(val, np.ndarray):
-               newval = list(val)
-               atthash[key] = newval
+                newval = list(val)
+                atthash[key] = newval
         return atthash
 
-
-    def write_with_compression(self,cxra,fname):
+    def write_with_compression(self, cxra, fname):
         atthash = self.check_attributes(cxra.attrs)
         cxra = cxra.assign_attrs(atthash)
         cxra2 = cxra.to_dataset()
@@ -243,7 +241,7 @@ class AshRun:
     # def postprocessing(self):
     #    return -1
 
-    #def preprocessing(self):
+    # def preprocessing(self):
     #    # no preprocessing for this workflow
     #    return -1
 
@@ -489,7 +487,7 @@ class AshRun:
         logger.info("Model submitted on {}".format(datetime.datetime.now()))
         # if files are already there then do not run the model.
         if not self.after_run_check(update=False):
-            #self.preprocessing()
+            # self.preprocessing()
             self.run_model()
             # self.postprocessing()
             redraw = False
