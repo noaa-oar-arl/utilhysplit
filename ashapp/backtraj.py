@@ -2,8 +2,9 @@ import datetime
 import logging
 import os
 import time
-
+import numpy as np
 import pandas as pd
+import sys
 from monetio.models import hytraj
 from utilhysplit import hcontrol
 from utilhysplit.runhandler import ProcessList
@@ -26,7 +27,11 @@ def combine_traj(fnames, csvfile=None):
     if csvfile:
         weightcsv = pd.read_csv(csvfile)
     for iii, fnn in enumerate(fnames):
-        df1 = hytraj.open_dataset(fnn)
+        try:
+            df1 = hytraj.open_dataset(fnn)
+        except:
+            print('Failed {}'.format(fnn))
+            continue
         temp = fnn.split(".")
         trajnum = int(temp[-1])
         df1["trajnum"] = trajnum
@@ -85,7 +90,9 @@ class BackTraj(TrajectoryAshRun):
             tdumpfile = "tdump.{}".format(iii)
             tdumplist.append(tdumpfile)
             if not os.path.isfile(tdumpfile):
-                self.inp["top"] = row[1].height * 1000
+                self.inp["top"] = row[1].heightI * 1000
+                if self.inp["top"] == np.nan:
+                   logger.warning("Height is NaN {}".format(iii))
                 self.inp["latitude"] = row[1].lat
                 self.inp["longitude"] = row[1].lon
                 stime = row[1].time
@@ -105,7 +112,7 @@ class BackTraj(TrajectoryAshRun):
                 # logger.info('Running {} with job id {}'.format("hyts_std", cproc[1]))
                 processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=run_suffix)
                 # wait 5 seconds between run starts.
-                time.sleep(5)
+                time.sleep(1)
             else:
                 print("tdump file already exists {}".format(tdumpfile))
             num_procs = processhandler.checkprocs()
