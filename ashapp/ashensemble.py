@@ -214,7 +214,7 @@ class EnsembleAshRun(AshRun):
         processhandler.pipe_stdout()
         processhandler.pipe_stderr()
         # start all the runs
-        for suffix in self.ens_suffix_list:
+        for stage, suffix in enumerate(self.ens_suffix_list):
             logger.debug("Working on {}".format(suffix))
             self.metfilefinder.set_ens_member("." + suffix)
             self.compose_control(stage, rtype="dispersion")
@@ -227,7 +227,6 @@ class EnsembleAshRun(AshRun):
             ]
             logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
             processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=suffix)
-            stage += 1
             # wait 5 seconds between run starts to avoid
             # runs trying to access ASCDATA.CFG at the same time.
             time.sleep(5)

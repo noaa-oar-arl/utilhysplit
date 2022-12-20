@@ -73,6 +73,10 @@ def create_run_instance(JOBID, inp):
         from ashdatainsertion import DataInsertionRun
         arun = DataInsertionRun(JOBID)
 
+    elif inp["runflag"] == "BackTrajectory":
+        from backtraj import BackTraj
+        arun = BackTraj(JOBID)
+
     else: # Trajectory run
         from ashtrajectory import TrajectoryAshRun
         arun = TrajectoryAshRun(JOBID)
