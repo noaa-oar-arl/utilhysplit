@@ -1,5 +1,12 @@
 python code for reading and creating HYSPLIT input files as well as processing HYSPLIT output files.
 
+
+* ashapp directory contains code for creating HYSPLIT runs
+* utilvolc directory contains code specific to volcanic ash applications
+* utilhysplit directory contains general utilities for working with HYSPLIT
+* utilml directory contains code which has dependency on the sklearn module
+* utiltesting contains tests
+
 hcontrol.py contains classes and functions for writing and reading HYSPLIT input files, CONTROL, SETUP.CFG and ASC.CFG
 
 isoch.py creates time of arrival charts. Needs a concentration (cdump) file as input. Optional input is CONTROL file.
