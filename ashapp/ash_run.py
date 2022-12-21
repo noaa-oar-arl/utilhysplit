@@ -43,7 +43,18 @@ is the job identification number.
 If not using runtype of 'test' then
 The following environment variables must be set prior to calling this script:
     VOLCANICASH_API_KEY         - secret key to access the hysplitash web APIs.
-    VOLCANICASH_URL             - URL to the hysplitash web application."""
+    VOLCANICASH_URL             - URL to the hysplitash web application.
+
+If using 'test' then a configuration file is read. 
+The call should be of the form
+python ash_run.py test JOBID
+
+The program will look for a file with the name config.JOBID.txt and read it for inputs.
+Examples are provided.
+"""
+
+
+
     )
 
 
