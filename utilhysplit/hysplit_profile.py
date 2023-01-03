@@ -282,7 +282,7 @@ class MeteoProfile(object):
             testdate = datetime.datetime(int(year),int(month),int(day),int(hour),int(minute))
             return testdate
 
-    @static
+    @staticmethod
     def wind_direction(vwind,uwind):
         return wind_direction(vwind,uwind)
 
