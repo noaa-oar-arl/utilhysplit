@@ -1,16 +1,17 @@
 #!/opt/Tools/anaconda3/bin/python
 import datetime
-from optparse import OptionParser
 import os.path
+import warnings
+from optparse import OptionParser
+
 import matplotlib as mpl
-mpl.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.basemap import Basemap
-import matplotlib as mpl
-from pyhysplit.hysplit import ModelBin
-from pyhysplit.hysplit import HycsControl
-import warnings
+
+from pyhysplit.hysplit import HycsControl, ModelBin
+
+mpl.use('Agg')
 
 #import time
 #import sys

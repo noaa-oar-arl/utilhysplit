@@ -1,10 +1,11 @@
 # cylsource.py
 # Writes multiple line sources in cylinder around volcanic vent
 # Makes figure of line source locations
-import numpy as np
 import datetime
 import sys
+
 import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.basemap import Basemap
 
 # Note. the place holder lat lon values in the CONTROL file must be within the meteorological grid-space.

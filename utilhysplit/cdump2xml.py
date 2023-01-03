@@ -1,12 +1,13 @@
+import datetime
+import logging
 import os
+import zipfile
+
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 from lxml import etree
 from lxml.builder import ElementMaker
-import datetime
-import logging
-import zipfile
 
 logger = logging.getLogger(__name__)
 

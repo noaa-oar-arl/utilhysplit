@@ -1,7 +1,6 @@
 import datetime
-from utilhysplit import hcontrol
-from utilhysplit import metfiles
 
+from utilhysplit import hcontrol, metfiles
 
 # Read a default CONTROL file.
 control = hcontrol.HycsControl(fname='CONTROL.0',
@@ -33,4 +32,3 @@ control.fname = 'CONTROL.{}'.format(suffix)
 # write the CONTROL file
 control.write(metgrid=1,query=False,overwrite=True)
 print('writing control {} {}'.format(control.wdir, control.fname)) 
-

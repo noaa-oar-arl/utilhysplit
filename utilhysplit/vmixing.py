@@ -2,13 +2,16 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 #import numpy as np
 #import string
-import os
 import datetime
+import os
+
 #import subprocess
 import matplotlib.pyplot as plt
 import pandas as pd
 import xarray as xr
+
 from utilhysplit import hcontrol
+
 
 """
 PRGMMR: Alice Crawford  ORG: ARL  
