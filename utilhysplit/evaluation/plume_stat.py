@@ -1,14 +1,14 @@
 # plume_stat.py
 
+import time
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import xarray as xr
 import scipy
-import matplotlib.pyplot as plt
-import time
-from utilhysplit.evaluation import ensemble_tools
-from utilhysplit.evaluation import statmain
+import xarray as xr
 from scipy.signal import convolve2d
+from utilhysplit.evaluation import ensemble_tools, statmain
 
 """
 Routines to calculate various statistics like Critical Success Index, Gilbert Skill Score, Fractions Skill Score,

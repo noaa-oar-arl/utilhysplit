@@ -1,16 +1,18 @@
-from matplotlib.colors import BoundaryNorm
-import xarray as xr
-import pandas as pd
+import datetime
+import os
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
+import monetio.models.hysplit as hysplit
 import numpy as np
 import numpy.ma as ma
-import monetio.models.hysplit as hysplit
-import datetime
+import pandas as pd
 import seaborn as sns
-import os
-import matplotlib.pyplot as plt
+import xarray as xr
+from matplotlib.colors import BoundaryNorm
 from utilhysplit.evaluation.statmain import cdf
+
 
 """
 FUNCTIONS

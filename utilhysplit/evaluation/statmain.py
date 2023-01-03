@@ -1,18 +1,17 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-import sys
-import numpy as np
-
 # import matplotlib.pyplot as plt
 import datetime
-
 # from subprocess import call
 # from os import path
 import os
+import subprocess
+import sys
+
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
-import subprocess
-import seaborn as sns
+
 
 """
 NAME: statmain.py

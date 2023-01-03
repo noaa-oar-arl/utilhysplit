@@ -1,16 +1,16 @@
 #!/n-home/alicec/anaconda/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-import sys 
-import numpy as np
 import datetime
 import os
-import pandas as pd
+import sys
+
 import matplotlib.pyplot as plt
-from scipy.stats import linregress
-from scipy.stats import describe
-from utilhysplit.evaluation.statmain import cdf
-from utilhysplit.evaluation.statmain import MatchedData
+import numpy as np
+import pandas as pd
+from scipy.stats import describe, linregress
 from utilhysplit.evaluation import ensemble_tools
+from utilhysplit.evaluation.statmain import MatchedData, cdf
+
 
 def not_used_cdf(newra, scale=1):
     if method==3:   
@@ -427,4 +427,3 @@ def old_function():
    return scale, poly, obs, fc
 
 #----------------------------------------------------------------------------------------------------------------------------------------
-

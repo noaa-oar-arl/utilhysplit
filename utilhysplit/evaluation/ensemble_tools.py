@@ -1,13 +1,11 @@
 import matplotlib.pyplot as plt
-import seaborn as sns
-import xarray as xr
 import numpy as np
 import pandas as pd
-from utilhysplit.evaluation.statmain import cdf
-from utilhysplit.evaluation.statmain import pixel_matched_cdf
-from utilhysplit.evaluation.statmain import get_pixel_matching_threshold
-from utilhysplit.evaluation import plume_stat
-from utilhysplit.evaluation import hysplit_boxplots
+import seaborn as sns
+import xarray as xr
+from utilhysplit.evaluation import hysplit_boxplots, plume_stat
+from utilhysplit.evaluation.statmain import (cdf, get_pixel_matching_threshold,
+                                             pixel_matched_cdf)
 
 """
 FUNCTIONS

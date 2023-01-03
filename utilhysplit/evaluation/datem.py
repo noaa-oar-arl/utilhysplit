@@ -1,13 +1,15 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-import numpy as np
 import datetime
 import os
-from subprocess import call
-from os import path
 import sys
-import os
+from os import path
+from subprocess import call
+
+import numpy as np
 import pandas as pd
-from monetio.obs.obs_util import timefilter
+
+#from monetio.obs.obs_util import timefilter
+
 # from ashfall_base_iceland import RunParams
 # from arlhysplit.runh import date2dir
 
@@ -414,8 +416,8 @@ def write_datem(df,
      runstring: string
        string in datem format.
     """
-    if drange:
-        df = timefilter(df, drange)
+    #if drange:
+    #    df = timefilter(df, drange)
 
     units = df['units'].tolist()
     units = list(set(units))

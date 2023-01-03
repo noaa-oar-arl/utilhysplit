@@ -1,8 +1,10 @@
-import os
 import datetime
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.pyplot as plt 
 import xarray as xr
+
 
 def get_variance(dset):
     wvar = dset.w_variance
@@ -99,5 +101,3 @@ class ARMdata:
     @staticmethod
     def open_dataset(fname):
         return  xr.open_dataset(fname)
-       
-  

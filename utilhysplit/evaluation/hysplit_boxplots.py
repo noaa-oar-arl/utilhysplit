@@ -1,7 +1,8 @@
+import datetime
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import datetime
-import matplotlib.pyplot as plt
 import seaborn as sns
 
 
@@ -44,4 +45,3 @@ def prepare_boxplotdata(datelist, vdata):
     dj = pd.DataFrame(newdata.T, columns=datelist)
     dj = dj.replace(-999,np.NaN)
     return dj
-
