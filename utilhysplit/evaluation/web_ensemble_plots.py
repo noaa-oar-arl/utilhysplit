@@ -9,9 +9,9 @@ import pandas as pd
 import xarray as xr
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 from matplotlib.colors import BoundaryNorm
-from utilhysplit.plotutils.color_util import ColorMaker
+from utilhysplit.plotutils.colormaker import ColorMaker
 
-import hysplit
+from monetio.models import hysplit
 from ensemble_tools import ATL
 
 logger = logging.getLogger(__name__)
