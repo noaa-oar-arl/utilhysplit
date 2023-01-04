@@ -12,7 +12,7 @@ from matplotlib.colors import BoundaryNorm
 from utilhysplit.plotutils.colormaker import ColorMaker
 
 from monetio.models import hysplit
-from ensemble_tools import ATL
+from utilhysplit.ensemble_tools import ATL
 
 logger = logging.getLogger(__name__)
 
