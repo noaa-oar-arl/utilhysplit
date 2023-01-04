@@ -10,7 +10,7 @@ from scipy.signal import find_peaks
 from utilhysplit.evaluation import statmain
 from utilhysplit import hcontrol
 from utilhysplit import metfiles
-from utilhysplit import profile
+from utilhysplit import hysplit_profile
 
 def get_peaks(olist,plot=True):
     """
