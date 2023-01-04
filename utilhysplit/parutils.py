@@ -1,26 +1,28 @@
 #!/n-home/alicec/anaconda/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
+import datetime
+import string
+import sys
 from math import *
-import sys 
-from scipy.io import netcdf
-from pylab import *
+
+import matplotlib as mpl
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.ma as ma
-import matplotlib.pyplot as plt
-import string
-import datetime
-import matplotlib as mpl
-from matplotlib.path import Path
-#from mpl_toolkits.basemap import Basemap
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.animation as animation
-import shapely.geometry as sgeo
-from utilhysplit import ashgeo
 #import ashgeo
 #from pyvolcat.modis import ModisNC
 #from pyhysplit.hysplit import Pardump
 #from mytools import sortxyz
 import pandas as pd
+import shapely.geometry as sgeo
+from matplotlib.path import Path
+#from mpl_toolkits.basemap import Basemap
+from mpl_toolkits.mplot3d import Axes3D
+from pylab import *
+from scipy.io import netcdf
+
+from utilhysplit import ashgeo
 
 ##notes - fundamental sampling resolution of caliop lidar is 30 meters vertical and 333 meters horizontal.
 ##06/08/15 modified to read pardump binary file (rather than ascii file created by par2asc. 
@@ -333,5 +335,3 @@ class ParGroup(object):
         for par in self.df:
             str1 += str(par) + "\n"
         return str1
-
-

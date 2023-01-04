@@ -1,7 +1,9 @@
 #import matplotlib.pyplot as plt
 #import textwrap
-import pandas as pd
 import datetime
+
+import pandas as pd
+
 #import reventador as reventador
 
 
@@ -40,5 +42,3 @@ class ParDat:
         self.df = df
         #self.df['pmass'] = 1
         return df
-
-
