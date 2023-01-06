@@ -501,7 +501,7 @@ class Talagrand:
         print(obs_col)
         obs_col = obs_col[0]
         # this keeps rows which have at least one value above threshold.
-        df2 = df[(df > self.thresh).any(1)]
+        df2 = df[(df > self.thresh).any(axis=1)]
 
         for iii in np.arange(0, len(df2)):
             # selects row
