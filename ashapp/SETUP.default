@@ -1,0 +1,14 @@
+&SETUP
+delt = 5
+initd = 0,
+kblt=2,
+kdef=0,
+khmax = 9999,
+kmsl=1,
+maxpar = 100000,
+ncycl = 3,
+ndump = 3,
+numpar = 200000,
+ninit = 1,
+area=1,
+/
