@@ -19,14 +19,14 @@ class VolcatPlots:
         """
         # sort dset list by time
         def ftime(x):
-            return x.time.values
+            return x.time.values[0]
         dsetlist.sort(key=ftime)
         self.dset = dsetlist
         self.set_plot_settings()
 
     def make_arrays(self):
         das = self.dset
- 
+        dsetlist = [] 
         #sns.set()
         #sns.set_style('whitegrid')
         masslist = []
@@ -59,7 +59,7 @@ class VolcatPlots:
                 print('cannot get height',iii)
                 continue
             vrad  = volcat.get_radius(das[iii],clip=True)
-
+            dsetlist.append(das[iii])
             self.vmass.append(vmass)  
             maxmass.append(np.max(vmass))
             minmass.append(np.min(vmass))
@@ -81,11 +81,11 @@ class VolcatPlots:
             minradius.append(np.min(vrad))
             maxradius.append(np.max(vrad))
 
-            
-            if (pd.to_datetime(das[iii-1].time.values[0]) > pd.to_datetime(das[iii].time.values[0])):
-                print('WARNING: time not increasing ')
-                print(das[iii-1].time.values)
-                print(das[iii].time.values)
+            if iii>0: 
+                if (pd.to_datetime(das[iii-1].time.values[0]) > pd.to_datetime(das[iii].time.values[0])):
+                    print('WARNING: time not increasing ')
+                    print(iii-1, das[iii-1].time.values)
+                    print(iii, das[iii].time.values)
 
             # mer in kg/s. divide by 1e9 to convert from Tg to kg.
             # divide by 10*60 to get from per retrieval to per second.
@@ -110,10 +110,11 @@ class VolcatPlots:
         self.averad = radius
         self.minrad = minradius
         self.maxrad = maxradius
+        self.dset = dsetlist
+
 
     def boxplotdata(self, datelist, vdata):
         self.dj = hysplit_boxplots.prepare_boxplotdata(datelist,vdata)
-
 
     def make_boxplot(self, cols=None):
         hysplit_boxplots.make_boxplot(self.dj, cols=cols)
@@ -136,7 +137,11 @@ class VolcatPlots:
         for jjj, volc in enumerate(vlist):
             volc = volc.values.flatten()
             volc = [x for x in volc if x > threshold]
-            sts = describe(volc)
+            try:
+                sts = describe(volc)
+            except:
+                print('no mass in file', jjj)
+                continue
             vdata.append(volc)
             date.append(self.dlist[jjj][0])
             ens.append('obs')
@@ -155,12 +160,13 @@ class VolcatPlots:
         self.dfstats = dfout
         return dfout
 
-    def volcat_cdf_plot(self, threshold=0, nums=None):
+    def volcat_cdf_plot(self, threshold=0, nums=None, skip=1):
         #step = 5
         clr = ["-m", "-r", "-b", "-c", "-g"]
         if isinstance(nums,list): vlist = self.vmass[nums[0]:nums[1]]
         else: vlist = self.vmass
         for jjj, volc in enumerate(vlist):
+            if not jjj%skip==0: continue
             # print(self.cdump.time.values[iii])
             #volcat = self.volcat_avg_hash[iii]
             volc = volc.values.flatten()
@@ -176,7 +182,7 @@ class VolcatPlots:
                 # print('here')
             else:
                 lw = 1
-            ax.step(sdata, y, clr[jjj % len(clr)], LineWidth=lw)
+            ax.step(sdata, y, clr[jjj % len(clr)], linewidth=lw)
         return ax
 
     def make_spline(self,s=20):
@@ -361,7 +367,7 @@ class VolcatPlots:
         ax.set_ylabel('Total Area (km$^2$)')
         ax.set_xlabel('Time')
 
-    def sub_plot_mer(self,ax, yscale='log', spline=False):
+    def sub_plot_mer(self,ax, yscale='linear', spline=False):
         yval = self.mer
         xval = self.dlist
         if not spline:

@@ -47,20 +47,13 @@ class EmitName(VolcatName):
 
     def make_keylist(self):
         self.keylist = ["algorithm name"]
-        # self.keylist.append("satellite platform")
-        # self.keylist.append("event scanning strategy")
         self.keylist.append("image date")  # should be image date (check)
         self.keylist.append("image time")
-        # self.keylist.append("fid")
         self.keylist.append("volcano id")
-        # self.keylist.append("description")
-        # self.keylist.append("WMO satellite id")
-        # self.keylist.append("image scanning strategy")
         self.keylist.append("event date")  # should be event date (check)
         self.keylist.append("event time")
         self.keylist.append("layer")
         self.keylist.append("particles")
-        # self.keylist.append("feature id")
 
 
 def find_emit(tdir):
@@ -94,6 +87,20 @@ def get_emit_name_df(tdir):
     vlist = [x.vhash for x in tlist]
     vdf = pd.DataFrame(vlist)
     return vdf
+
+def make_filename2(volcat_fname, prefix, suffix):
+    """Makes unique string for various filenames from volcat filename
+    Inputs:
+    fname: name of volcat file - just volcat file, not full path (string)
+    Outputs:
+    match: (string) of important identifiying information"""
+    # Parse filename for image datetime, event datetime, and volcano id
+    vname = VolcatName(volcat_fname)
+    pid1 = vname.vhash["idate"].strftime(vname.image_dtfmt)
+    pid2 = vname.vhash["volcano id"]
+    match = "{}_{}".format(pid1, pid2, pid3)
+    filename = "{}_{}_{}".format(prefix, match, suffix)
+    return filename
 
 
 def make_filename(volcat_fname, prefix, suffix):
@@ -245,7 +252,7 @@ class InsertVolcat:
         represented as values from [0] to [1] - default is [1] (list)
         vname: volcano name - default is None (string)
         vid: volcano id - default is None (string)
-        fname: name of volcat file (string) default is None
+        fname: str,list or None. name of volcat file (string)  or list of names. default is None
         Outputs:
         --------------
         """
@@ -264,10 +271,12 @@ class InsertVolcat:
         self.vid = vid
         self.layer = layer
         self.centered = centered
-        if fname == None:
-            self.volclist = find_fnames()
+        if isinstance(fname, list):
+           self.fnamelist = fname
+        elif isinstance(fname, str):
+           self.fnamelist = [fname]
         else:
-            self.fname = fname
+           self.fnamelist = find_fnames()
         self.emit_name = None
        
 
@@ -302,29 +311,8 @@ class InsertVolcat:
             ].tolist()
         return volclist
 
-    def make_match(self):
-        """Makes unique string for various filenames from volcat filename
-        Inputs:
-        fname: name of volcat file - just volcat file, not full path (string)
-        Outputs:
-        match: (string) of important identifiying information"""
-        # Parse filename for image datetime, event datetime, and volcano id
-        parsedf = self.fname.split("_")
-        match = (
-            parsedf[4]
-            + "_"
-            + parsedf[5]
-            + "_"
-            + parsedf[7]
-            + "_"
-            + parsedf[12]
-            + "_"
-            + parsedf[13]
-        )
-        return match
-
     def get_area(
-        self, write=False, correct_parallax=True, decode_times=False, clip=True
+        self, dset, write=False, correct_parallax=True, decode_times=False, clip=True
     ):
         """Calculates the area (km^2) of each volcat grid cell
         Converts degress to meters using a radius of 6378.137km.
@@ -339,14 +327,14 @@ class InsertVolcat:
         d2r = pi / 180.0  # convert degress to radians
         d2km = 6378.137 * d2r  # convert degree latitude to kilometers
 
-        if self.fname:
-            dset = volcat.open_dataset(
-                self.vdir + self.fname,
-                correct_parallax=correct_parallax,
-                decode_times=decode_times,
-            )
-        else:
-            print("ERROR: Need volcat filename!")
+        #if self.fnamelist:
+        #    dset = volcat.open_dataset(
+        #        self.vdir + fname,
+        #        correct_parallax=correct_parallax,
+        #        decode_times=decode_times,
+        #    )
+        #else:
+        #    print("ERROR: Need volcat filename!")
         # Extracts ash mass array (two methods - one is smaller domain around feature)
         # Removes time dimension
         if clip == True:
@@ -389,8 +377,28 @@ class InsertVolcat:
         dset.close()
         return area
 
-    def make_1D(
-        self, correct_parallax=True, area_file=True, decode_times=False, clip=True
+    def make_1D_fromlist(self, fnamelist, correct_parallax=True, area_file=False, decode_times=False, clip=True):
+        lat = np.array([])
+        lon = np.array([])
+        hgt = np.array([])
+        mass = np.array([])
+        area = np.array([])
+        
+        for fname in fnamelist:
+            print('NAME', fname)
+            lat2, lon2, hgt2, mass2, area2 =  self.make_1D(fname,
+                                                 correct_parallax=correct_parallax, 
+                                                 area_file=area_file, decode_times=decode_times, clip=clip)
+            lat = np.append(lat,lat2)
+            lon = np.append(lon,lon2)
+            hgt = np.append(hgt,hgt2)
+            mass = np.append(mass, mass2)
+            area = np.append(area,area2)
+        return lat, lon, hgt, mass, area
+         
+
+    def make_1D(self,fname,
+                correct_parallax=True, area_file=True, decode_times=False, clip=True
     ):
         """Makes compressed 1D arrays of latitude, longitude, ash height,
         mass emission rate, and area
@@ -404,19 +412,24 @@ class InsertVolcat:
         lat: 1D array of latitude
         lon: 1D array of longitude
         hgt: 1D array of ash top height
-        mass: 1D array of ash mass
-        area: 1D array of area
+        mass: 1D array of ash mass (grams)
+        area: 1D array of area  (m2)
         """
         import numpy.ma as ma
+        dset = volcat.open_dataset(
+            self.vdir + fname,
+            correct_parallax=correct_parallax,
+            decode_times=decode_times,
+        )
 
-        if self.fname:
-            dset = volcat.open_dataset(
-                self.vdir + self.fname,
-                correct_parallax=correct_parallax,
-                decode_times=decode_times,
-            )
-        else:
-            print("ERROR: Need volcat filename!")
+        #if self.fname:
+        #    dset = volcat.open_dataset(
+        #        self.vdir + self.fname,
+        #        correct_parallax=correct_parallax,
+        #        decode_times=decode_times,
+        #    )
+        #else:
+        #    print("ERROR: Need volcat filename!")
         # Extracts ash mass array - Removes time dimension
         # TO DO - there is some error associated with the clipping.
         if clip == True:
@@ -433,7 +446,7 @@ class InsertVolcat:
         # areadir = self.vdir+'Area/'
         if area_file:
             areadir = self.wdir + "area/"
-            match = self.make_match()
+            #match = self.make_match()
             if correct_parallax == True:
                 arealist = glob(areadir + "*_pc.nc")
             else:
@@ -443,11 +456,12 @@ class InsertVolcat:
                 areafile = areafile[0]
                 areaf = xr.open_dataset(areafile).area
         else:
-            areaf = self.get_area(clip=clip)
+            areaf = self.get_area(dset,clip=clip)
 
         # Calculating mass - rate is (mass/hr) in HYSPLIT
-        # area needs to be in m^2 not km^2!
-        ashmass = mass * areaf * 1000.0 * 1000.0
+        # ashmass is g/m2. Multiply by m2 to get grams.
+        areaf = areaf * 1000.0 * 1000  # converting area from (km^2) to (m^2)
+        ashmass = mass * areaf 
         latitude = mass.latitude
         longitude = mass.longitude
 
@@ -462,9 +476,7 @@ class InsertVolcat:
         lat = ma.compressed(latitude)[~np.isnan(hgt_nan)]  # removing nan values
         lon = ma.compressed(longitude)[~np.isnan(hgt_nan)]  # removing nan values
         area = ma.compressed(areaf)[~np.isnan(hgt_nan)]  # removing nan values
-        area = area * 1000.0 * 1000  # Moving area from (km^2) to (m^2)
         hgt = hgt * 1000.0  # Moving hgt from (km) to (m)
-
         return lat, lon, hgt, mass, area
 
     def make_tags(self):
@@ -480,12 +492,14 @@ class InsertVolcat:
         self.layer = layer
 
     def check_for_file(self):
-        if os.path.isfile(self.make_emit_filename()): return True
+        if os.path.isfile(os.path.join(self.wdir,self.make_emit_filename())): return True
         else: return False
 
     def make_emit_filename(self):
+        numfiles = len(self.fnamelist)
         speciestag,layertag = self.make_tags()
-        filename = make_emit_filename(self.fname, speciestag, layertag)
+        speciestag = "f{}{}".format(numfiles, speciestag)
+        filename = make_emit_filename(self.fnamelist[0], speciestag, layertag)
         return filename
 
     def write_emit(
@@ -527,7 +541,9 @@ class InsertVolcat:
         """
         # Call make_1D() array to get lat, lon, height, mass, and area arrays
         # try:
-        lat, lon, hgt, mass, area = self.make_1D(
+        filename = self.make_emit_filename()
+        lat, lon, hgt, mass, area = self.make_1D_fromlist(
+            self.fnamelist,
             correct_parallax=correct_parallax,
             area_file=area_file,
             decode_times=decode_times,
@@ -549,23 +565,16 @@ class InsertVolcat:
                 print("{:2e} min mass".format(np.min(mass)))
         if len(mass) < min_line_number:
             return False
-        # except:
-        #    print('error in make_1d')
-        # Calculating constants for mass rate (g/hr) determination
-        # AMR: 8/3/2021 - added code to account for different durations under 1 hour
-        # Is this acceptable for durations longer that 1 hour? A constant value of 1?
-        # AMC conversion to g/h is same whether smaller or larger than hour.
-        # if float(self.duration) <= 60.0:
+
+        # do not write empty emit-times files
+        if len(mass) == 0:
+            if verbose:
+                print("---- Emitimes file NOT written: " + self.wdir + filename)
+            return False
+
         const = 60.0 / float(self.duration)
-        # else:
-        # const = 1.
-        # match = self.make_match()
-
-        filename = self.make_emit_filename()
-
-        # filename = "VOLCAT_" + match + "_par" + str(self.pollnum)
         records = np.shape(hgt)[0] * self.pollnum
-        # AMR: 8/3/2021 - added layer flag, and writing layer capability to emitimes file, accounting for ash in a layer for data insertion method.
+
         if self.layer > 0.0:
             records = records * 2
         f = open(self.wdir + filename, "w")

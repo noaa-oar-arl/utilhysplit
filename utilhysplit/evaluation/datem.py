@@ -1,13 +1,15 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-import numpy as np
 import datetime
 import os
-from subprocess import call
-from os import path
 import sys
-import os
+from os import path
+from subprocess import call
+
+import numpy as np
 import pandas as pd
-from monetio.obs.obs_util import timefilter
+
+#from monetio.obs.obs_util import timefilter
+
 # from ashfall_base_iceland import RunParams
 # from arlhysplit.runh import date2dir
 
@@ -304,7 +306,7 @@ def read_dataA(fname):
                 int(x["hour"]),
                 int(x["minute"]),
             )
-
+        print(datem)
         try:
             datem["date"] = datem.apply(getdate, axis=1)
         except BaseException:
@@ -346,11 +348,13 @@ def read_datem_file(
        returns pandas dataframe.
     """
     dtp = {"year": int, "month": int, "day": int, "hour": int}
+    print('HERE HERE HERE', fname)
     try:
-        datem = pd.read_csv(fname, names=colra, header=header, delimiter=r"\s+", dtype=dtp)
+        datem = pd.read_csv(fname, names=colra, header=header, delimiter=r"\s+", dtype=dtp,index_col=False)
     except pd.errors.ParserError:
         print('WARNING: could not read ', fname)
         datem = pd.DataFrame()
+    print('HERE HERE HERE', datem)
     datem.columns = colra
     datem["minute"] = datem["hour"] % 100
     datem["hour"] = datem["hour"] / 100
@@ -365,7 +369,13 @@ def read_datem_file(
             int(x["minute"]),
         )
 
-    datem["date"] = datem.apply(getdate, axis=1)
+    try:
+        datem["date"] = datem.apply(getdate, axis=1)
+    except BaseException:
+        print("EXCEPTION", fname)
+        print(datem[0:10])
+        sys.exit()
+    #datem["date"] = datem.apply(getdate, axis=1)
     datem.drop(["year", "month", "day", "hour", "minute"], axis=1, inplace=True)
     #colrb = [x for x in colra if x not in ["year","month","day","hour","minute"]]
     #colrb = ['date'].extend(colrb)
@@ -406,8 +416,8 @@ def write_datem(df,
      runstring: string
        string in datem format.
     """
-    if drange:
-        df = timefilter(df, drange)
+    #if drange:
+    #    df = timefilter(df, drange)
 
     units = df['units'].tolist()
     units = list(set(units))

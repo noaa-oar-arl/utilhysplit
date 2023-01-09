@@ -5,6 +5,9 @@
 # ash_run.py - run HYSPLIT model on web and create plots
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
+# 09 DEC 2022 (AMC) - changed latspan to 180 and lonspan to 360 for global grid.
+# 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired.
+#
 # -----------------------------------------------------------------------------
 # To run in offline mode use python ash_run.py -999
 #
@@ -12,7 +15,7 @@
 # -----------------------------------------------------------------------------
 
 
-#from abc import ABC, abstractmethod
+# from abc mport ABC, abstractmethod
 import datetime
 import glob
 import logging
@@ -21,16 +24,20 @@ import shutil
 import subprocess
 import sys
 import zipfile
+
+import numpy as np
 import requests
 import xarray as xr
 
-import utilvolc.ashapp.metfiles as metfile
-from utilhysplit import hcontrol
 from monetio.models import hysplit
-from utilvolc.ashapp.runhelper import Helper, ConcplotColors, JobFileNameComposer
-#from runhandler import ProcessList
+from utilhysplit import hcontrol
+import utilhysplit.metfiles as metfile
+from utilvolc.runhelper import ConcplotColors, Helper, JobFileNameComposer
+
+# from runhandler import ProcessList
 from utilvolc.volcMER import HT2unit
-#from cdump2xml import HysplitKml
+
+# from cdump2xml import HysplitKml
 
 # from ashbase import AshRun
 # from ashensemble import EnsembleAshRun
@@ -56,7 +63,7 @@ The following environment variables must be set prior to calling this script:
 # TrajectoryAshRun inherits from AshRun
 
 
-#def meters2FL(meters):
+# def meters2FL(meters):
 #    flight_level = meters * 3.28084 / 100.0
 #    return int(np.ceil(flight_level / 10.0) * 10)
 
@@ -65,6 +72,33 @@ def FL2meters(flight_level):
     meters = flight_level * 100 / 3.28084
     return int(meters)
     # return int(np.ceil(flight_level / 10.0) * 10)
+
+
+def make_chemrate(wdir):
+    fname = "CHEMRATE.TXT"
+    fstr = "1 2 0.01 1.0"
+    fpath = os.path.join(wdir, fname)
+    with open(fpath, "w") as fid:
+        fid.write(fstr)
+
+
+# class SO2Run(AshRun):
+#
+#    def __init__(self, JOBID):
+#        super().__init__(JOBID)
+#        self.default_control = 'CONTROL.so2'
+#        self.default_setup =  'SETUP.so2'
+
+#    def add_inputs(self, inp):
+#        super().add_inputs(inp)
+#        make_chemrate(self.inp['WORK_DIR'])
+
+
+# def ncfile_encoding(dset):
+#    encoding = {}
+#    ekeys = {"_FillValue", "dtype","scale_factor",'add_offset','grid_mapping')
+#    for dvar in dset.data_vars:
+#        encoding[data_var] = {key: v:q
 
 
 class AshRun:
@@ -87,15 +121,26 @@ class AshRun:
         # read cdump file into this xarray.
         self.cxra = xr.DataArray()
 
+        self.so2 = False
+
     def get_cdump_xra(self):
-        blist = []
-        cdumpname = self.filelocator.get_cdump_filename(stage=0)
-        source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
-        met_tag = self.inp["meteorologicalData"]
-        blist = [(cdumpname, source_tag, met_tag)]
-        century = 100 * (int(self.inp["start_date"].year / 100))
-        cdumpxra = hysplit.combine_dataset(blist, century=century,sample_time_stamp='start')
-        return cdumpxra
+        if self.cxra.ndim == 0:
+            blist = []
+            cdumpname = self.filelocator.get_cdump_filename(stage=0)
+            source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
+            met_tag = self.inp["meteorologicalData"]
+            blist = [(cdumpname, source_tag, met_tag)]
+            century = 100 * (int(self.inp["start_date"].year / 100))
+            # If SO2 then only put SO2 in the xarray
+            if self.so2:
+                species = ["pS02"]
+            else:
+                species = None
+            cdumpxra = hysplit.combine_dataset(
+                blist, century=century, sample_time_stamp="start", species=species
+            )
+            self.cxra = cdumpxra
+        return self.cxra
 
     def inp2attr(self):
         """
@@ -106,7 +151,12 @@ class AshRun:
         for key in self.inp.keys():
             try:
                 val = str(self.inp[key])
+                logger.info("attribute can be written as string {}".format(key))
+                logger.info("attribute can be written as string {}".format(val))
             except:
+                logger.warning("attribute cannot be written as string {}".format(key))
+                val = "skip"
+            if "/" in val:
                 val = "skip"
             if val != "skip":
                 atthash[key] = val
@@ -130,18 +180,44 @@ class AshRun:
             logger.info("netcdf file does not exist. Creating {}".format(fname))
             cxra = mult * self.get_cdump_xra()
         cxra = cxra.assign_attrs({"mult": mult})
+        cxra = cxra.assign_attrs(self.inp2attr())
         logger.info("writing nc file {}".format(fname))
-        cxra.attrs.update(self.inp2attr())
-        cxra.to_netcdf(fname)
-        self.cxra = cxra
-        # if empty then return an emtpy list.
+        # cxra.attrs.update(self.inp2attr())
+
+        # need to change to dataset to add compression
+        self.write_with_compression(cxra, fname)
         if not self.cxra.size > 1:
-            logger.info("make_awips_netcdf: cxra empty. cannot create awips\
-                         files")
+            logger.info(
+                "make_awips_netcdf: cxra empty. cannot create awips\
+                         files"
+            )
             return []
+
+    # when writing to netcdf file, attributes which are numpy arrays do not write properly.
+    # need to change them to lists.
+    @staticmethod
+    def check_attributes(atthash):
+        for key in atthash.keys():
+            val = atthash[key]
+            if isinstance(val, np.ndarray):
+                newval = list(val)
+                atthash[key] = newval
+        return atthash
+
+    def write_with_compression(self, cxra, fname):
+        atthash = self.check_attributes(cxra.attrs)
+        cxra = cxra.assign_attrs(atthash)
+        cxra2 = cxra.to_dataset()
+        ehash = {"zlib": True, "complevel": 9}
+        vlist = [x for x in cxra2.data_vars]
+        vhash = {}
+        for vvv in vlist:
+            vhash[vvv] = ehash
+        cxra2.to_netcdf(fname, encoding=vhash)
 
     def make_awips_netcdf(self):
         import cdump2netcdf
+
         ghash = {}
         ghash["source_latitude"] = self.inp["latitude"]
         ghash["source_longitude"] = self.inp["longitude"]
@@ -149,6 +225,7 @@ class AshRun:
         ghash["emission_start"] = self.inp["start_date"]
         ghash["emission_duration_hours"] = self.inp["emissionHours"]
         # in mg
+        mult = self.get_conc_multiplier()
         mer = mult / 1e6 / 3600  # kg released in a second.
         ghash["MER"] = mer
         ghash["MER_unit"] = "kg/s"
@@ -164,9 +241,9 @@ class AshRun:
     # def postprocessing(self):
     #    return -1
 
-    def preprocessing(self):
-        # no preprocessing for this workflow
-        return -1
+    # def preprocessing(self):
+    #    # no preprocessing for this workflow
+    #    return -1
 
     def add_api_info(self, apistr, urlstr, headerstr):
         self.apistr = apistr
@@ -179,11 +256,16 @@ class AshRun:
         self.filelocator = JobFileNameComposer(
             self.inp["WORK_DIR"], self.JOBID, self.inp["jobname"]
         )
-        # TO DO -  currently will only find forecast files.
         self.metfilefinder = metfile.MetFileFinder(self.inp["meteorologicalData"])
         self.metfilefinder.set_forecast_directory(self.inp["forecastDirectory"])
         self.metfilefinder.set_archives_directory(self.inp["archivesDirectory"])
         self.maptexthash = self.get_maptext_info()
+        if "control" in self.inp.keys():
+            self.default_control = self.inp["control"]
+        if "setup" in self.inp.keys():
+            self.default_setup = self.inp["setup"]
+        logger.warning("Using control {}".format(self.default_control))
+        logger.warning("Using setup {}".format(self.default_setup))
 
     def update_run_status(self, jobId, status):
         if self.apistr:
@@ -205,10 +287,9 @@ class AshRun:
         inp : dictionary with inputs
         used for both dispersion and trajectory runs.
         """
-        #logger.debug("Setting up control stage {}".format(stage))
+        # logger.debug("Setting up control stage {}".format(stage))
         duration = self.inp["durationOfSimulation"]
         stime = self.inp["start_date"]
-        print('STIME-------------', stime)
         # c.jobid_str = self.JOBID
         # work_dir = self.WORK_DIR
 
@@ -233,22 +314,17 @@ class AshRun:
         for mfile in metfiles:
             logger.debug(os.path.join(mfile[0], mfile[1]))
             control.add_metfile(mfile[0], mfile[1])
-        if not metfiles: 
+        if not metfiles:
             self.update_run_status(self.JOBID, "TERMINATED. missing met files")
             sys.exit()
         # add duration of simulation
         control.add_duration(duration)
         return control
 
-    def set_levels_A(self):
-        # standard
-        # levlist_fl = [200,350,550,660]
-
-        # every 5000 ft (FL500 chunks)
+    def set_qva_levels(self):
+        # every 5000 ft (FL50 chunks)
         # Approx 1.5 km.
-        # by Flight levels (approx 100 ft)
-        # levlist_fl = np.arange(50,650,50)
-        levlist_fl = range(50, 750, 50)
+        levlist_fl = range(50, 650, 50)
         levlist = [FL2meters(x) for x in levlist_fl]
         rlist = []
         plev = "SFC"
@@ -260,7 +336,7 @@ class AshRun:
         return levlist, rlist
 
     def set_levels(self, cgrid):
-        levlist, rlist = self.set_levels_A()
+        levlist, rlist = self.set_qva_levels()
         cgrid.set_levels(levlist)
 
     def additional_control_setup(self, control, stage=0):
@@ -268,32 +344,53 @@ class AshRun:
         # if setting levels here then need to use the set_levels
         # function and also adjust the labeling for the levels.
 
+        # round to nearest latitude longitude point.
+        # this is for better matching with gridded volcat data.
         lat = self.inp["latitude"]
         lon = self.inp["longitude"]
         vent = self.inp["bottom"]
         height = self.inp["top"]
         emission = self.inp["emissionHours"]
-        rate = self.inp['rate']
-        area = self.inp['area']
+        rate = self.inp["rate"]
+        area = self.inp["area"]
 
         # add location of eruption
         # with uniform vertical line source
         control.remove_locations()
-        control.add_location((lat, lon), vent, rate=rate,area=area )
-        control.add_location((lat, lon), height,rate=rate,area=area)
+        control.add_location((lat, lon), vent, rate=rate, area=area)
+        control.add_location((lat, lon), height, rate=0.0001, area=area)
         # rename cdump file
         control.concgrids[0].outdir = self.inp["WORK_DIR"]
         control.concgrids[0].outfile = self.filelocator.get_cdump_filename(stage)
-        logger.info('{}'.format(control.concgrids[0].outfile))
+        logger.info("{}".format(control.concgrids[0].outfile))
         # center concentration grid at the volcano
-        control.concgrids[0].centerlat = lat
-        control.concgrids[0].centerlon = lon
+        # control.concgrids[0].centerlat = np.floor(lat)
+        # control.concgrids[0].centerlon = np.floor(lon)
+        control.concgrids[0].centerlat = int(lat)
+        control.concgrids[0].centerlon = int(lon)
+        # set a global grid
+        control.concgrids[0].latspan = 180.0
+        control.concgrids[0].lonspan = 360.0
         # set the levels
         self.set_levels(control.concgrids[0])
 
         # add emission duration
-        for spec in control.species:
+        rate_test = 0
+        if not self.so2:
+            for spec in control.species:
+                spec.duration = emission
+                rate_test += spec.rate
+        # for so2, the sulfate emission has 0 emissions.
+        else:
+            spec = control.species[0]
             spec.duration = emission
+            spec2 = control.species[1]
+            spec2.duration = 0
+            rate_test = spec.rate + spec2.rate
+
+        if np.abs(1 - rate_test) > 0.01:
+            logger.warning("Non unit emision rate {}".format(rate_test))
+
         # TO DO
         # set sample start to occur on the hour.
         stime = self.inp["start_date"]
@@ -301,12 +398,11 @@ class AshRun:
         if stime.minute > 30:
             stime = stime + datetime.timedelta(hours=1)
         sample_start = stime.strftime("%y %m %d %H 00")
-        #logger.debug("Setting sample start {}".format(sample_start))
+        # logger.debug("Setting sample start {}".format(sample_start))
         control.concgrids[0].sample_start = sample_start
 
-        control.concgrids[0].interval = (self.inp['samplingIntervalHours'],0)
+        control.concgrids[0].interval = (self.inp["samplingIntervalHours"], 0)
         control.concgrids[0].sampletype = -1
-
 
     def compose_control(self, stage, rtype):
         control = self.setup_basic_control(stage, rtype=rtype)
@@ -320,7 +416,9 @@ class AshRun:
             fname=self.default_setup, working_directory=self.inp["DATA_DIR"]
         )
         # read default
-        setup.read()
+        setup.read(case_sensitive=False)
+        print(setup.wdir, setup.fname)
+        print(setup.nlist.keys())
         newname = self.filelocator.get_setup_filename(stage)
         # rename file
         setup.rename(name=newname, working_directory=self.inp["WORK_DIR"])
@@ -328,8 +426,10 @@ class AshRun:
         pardumpname = self.filelocator.get_pardump_filename(stage)
         setup.add("poutf", pardumpname)
 
-        setup.add("numpar", "20000")
-        setup.add("maxpar", "500000")
+        # setup.add("numpar", "2000")
+        # setup.add("numpar", "20000")
+        setup.add("numpar", "10000")
+        # setup.add("maxpar", "500000")
 
         # base frequency of pardump output on length of simulation.
         if duration < 6:
@@ -342,6 +442,12 @@ class AshRun:
             setup.add("ndump", "3")
             setup.add("ncycl", "3")
 
+        keys = list(setup.nlist.keys())
+        if "ichem" in keys:
+            if int(setup.nlist["ichem"]) == 2:
+                make_chemrate(self.inp["WORK_DIR"])
+                logger.warning("creating chemrate file for SO2")
+                self.so2 = True
         # write file
         return setup
 
@@ -352,7 +458,7 @@ class AshRun:
     def debug_message(self):
         # debug messages
         logger.debug("HYSPLIT_DIR     = {}".format(self.inp["HYSPLIT_DIR"]))
-        #logger.debug("MAP_DIR         = {}".format(self.inp["MAP_DIR"]))
+        # logger.debug("MAP_DIR         = {}".format(self.inp["MAP_DIR"]))
         logger.debug("WORK_DIR        = {}".format(self.inp["WORK_DIR"]))
         logger.debug("CONVERT_EXE     = {}".format(self.inp["CONVERT_EXE"]))
         logger.debug("GHOSTSCRIPT_EXE = {}".format(self.inp["GHOSTSCRIPT_EXE"]))
@@ -381,35 +487,34 @@ class AshRun:
         logger.info("Model submitted on {}".format(datetime.datetime.now()))
         # if files are already there then do not run the model.
         if not self.after_run_check(update=False):
-            self.preprocessing()
+            # self.preprocessing()
             self.run_model()
             # self.postprocessing()
-            redraw=False
+            redraw = False
         else:
-            logger.info("REDRAW for run {} {}".format(self.JOBID,self.inp["WORK_DIR"]))
+            logger.info("REDRAW for run {} {}".format(self.JOBID, self.inp["WORK_DIR"]))
             redraw = True
         self.write_cxra()
-      #  if self.after_run_check(update=True):
-      #      self.create_plots(redraw)
-       #     # create zip with cdump and pardump files etc.
-       #     status = self.create_zipped_up_file(
-       #         self.filelocator.get_zipped_filename(tag=""),
-       #         self.filelocator.get_all_ashbase_filenames(),
-       #     )
-            # create zip with netcdf files for awips.
-       #     logger.debug('CREATE AWIPS zipped files')
-       #     status = self.create_zipped_up_file(
-       #         self.filelocator.get_zipped_filename(tag="awips2_"),
-       #         self.filelocator.get_awips_filenames(),
-       #     )
+        if self.after_run_check(update=True):
+            self.create_plots(redraw)
+        #     # create zip with cdump and pardump files etc.
+        #     status = self.create_zipped_up_file(
+        #         self.filelocator.get_zipped_filename(tag=""),
+        #         self.filelocator.get_all_ashbase_filenames(),
+        #     )
+        # create zip with netcdf files for awips.
+        #     logger.debug('CREATE AWIPS zipped files')
+        #     status = self.create_zipped_up_file(
+        #         self.filelocator.get_zipped_filename(tag="awips2_"),
+        #         self.filelocator.get_awips_filenames(),
+        #     )
         self.update_run_status(self.JOBID, "COMPLETED")
         self.cleanup()
 
-    def after_run_check(self, stage=0,update=False):
+    def after_run_check(self, stage=0, update=False):
         # Check for the tdump/cdump file
         rval = True
         fn = self.filelocator.get_cdump_filename(stage=stage)
-        logger.info("Looking for cdump file " + fn)
         if not os.path.exists(fn):
             rval = False
             if update:
@@ -423,6 +528,10 @@ class AshRun:
                     "******************************************************************************"
                 )
                 self.handle_crash(stage=0)
+        if not rval:
+            logger.info("NOT found cdump file " + fn)
+        else:
+            logger.info("found cdump file " + fn)
         return rval
 
     def get_conc_multiplier(self):
@@ -443,8 +552,8 @@ class AshRun:
 
     def create_plots(self, redraw=False, stage=0):
         """
-         Plot creation
-         """
+        Plot creation
+        """
         self.create_maptext()
         fn = self.filelocator.get_cdump_filename(stage=stage)
         self.create_massloading_plot(fn, stage)
@@ -452,7 +561,8 @@ class AshRun:
         # output. only in the massloading output.
         Helper.remove(os.path.join(self.inp["WORK_DIR"], "MAPTEXT.CFG"))
         # don't need to redraw particle plots.
-        if not redraw: self.create_parxplot(stage)
+        if not redraw:
+            self.create_parxplot(stage)
         self.create_concentration_plot(fn, stage)
         self.create_concentration_montage(stage=stage)
         # create the maptext file again for inclusion in zip file.
@@ -763,12 +873,12 @@ class AshRun:
 
     def create_montage_page(self, flin, flout, stage, iii, jjj):
         """
-            flin : function which generates filename
-            flout : function which generates filename
-            jjj : frame number of output
-            iii : frame number of first input file
-            stage : input for flin and flout
-            """
+        flin : function which generates filename
+        flout : function which generates filename
+        jjj : frame number of output
+        iii : frame number of first input file
+        stage : input for flin and flout
+        """
         done = False
         outputname = flout(stage, frame=jjj)
         # self.filelocator.get_concentration_montage_filename(stage,frame=jjj)
@@ -790,7 +900,7 @@ class AshRun:
         if done == True:
             return None, done, iii
         c.extend(["-geometry 200x200", "-tile 2x6", outputname])
-        #logger.debug("Create montage: " + " ".join(c))
+        # logger.debug("Create montage: " + " ".join(c))
         # Sonny - not sure why I need shell=True?
         # subprocess.Popen(' '.join(c), shell=True)
         Helper.execute_with_shell(c)
@@ -893,7 +1003,10 @@ class AshRun:
             stderr=sys.stderr,
         )
         p2 = subprocess.Popen(
-            c, stdin=p1.stdout, stdout=subprocess.PIPE, stderr=sys.stderr,
+            c,
+            stdin=p1.stdout,
+            stdout=subprocess.PIPE,
+            stderr=sys.stderr,
         )
         p1.stdout.close()  # allow p1 to receive a SIGPIPE if p2 exists.
         stdoutdata, stderrdata = p2.communicate()
@@ -934,7 +1047,7 @@ class AshRun:
         if metfiles:
             metfiles = list(zip(*metfiles))[1]
         else:
-            metfiles = 'unknown'
+            metfiles = "unknown"
 
         maptexthash["infoc"] = ",".join(metfiles)
 
@@ -966,7 +1079,7 @@ class AshRun:
         sp8 = "        "
         estart = self.inp["start_date"].strftime("%Y %m %d %H:%M UTC")
 
-        #metid = self.inp["meteorologicalData"]
+        # metid = self.inp["meteorologicalData"]
         # start_lon
         # start_lat
         # data[0] #alert type
@@ -981,7 +1094,9 @@ class AshRun:
         )
         poll = "Pollutant: Ash \n"
         ## TO DO calculate release quantity
-        release_a = "Start: {}  Duration: {} h {} min\n".format(estart, ehours, eminutes)
+        release_a = "Start: {}  Duration: {} h {} min\n".format(
+            estart, ehours, eminutes
+        )
         release_b = "Release: {}    m63: {:1g}\n".format(emission_rate, m63)
         info_a = "Vertical distribution: {}{}  GSD: {}{}  Particles: {}\n".format(
             "uniform", sp8, "default", sp8, "20,000"
@@ -1042,7 +1157,8 @@ class AshRun:
                     z.write(f, arcname=bn)
 
     def create_zipped_up_file(self, filename, files):
-        if not files: return False
+        if not files:
+            return False
         logger.debug("{} files to be zipped {}".format(filename, "\n".join(files)))
         with zipfile.ZipFile(
             filename, "w", compresslevel=self.inp["zip_compression_level"]

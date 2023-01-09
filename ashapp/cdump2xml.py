@@ -1,10 +1,12 @@
-import os
 import datetime
-import zipfile
 import logging
+import os
+import zipfile
+
 import matplotlib
+
 # tried using this to write a 'gif'. did not work.
-#matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
 from lxml import etree
@@ -18,6 +20,7 @@ logger = logging.getLogger(__name__)
 # Mass_loading
 # Deposition
 # Exposure
+
 
 def color2kml(cstr):
     """
@@ -243,6 +246,7 @@ def add_placemark(namestr, t1, t2, stylestr):
     pmk.append(style)
     return pmk
 
+
 def AQI_folder():
     folder = etree.Element("Folder")
     name = etree.Element("name")
@@ -251,10 +255,11 @@ def AQI_folder():
     viz = etree.SubElement(folder, "visibility")
     viz.text = "0"
     description = etree.SubElement(folder, "description")
-    dstr = 'http://www.epa.gov/airnow/today/airnow.kml Clink on the link to access'
-    dstr += 'AQI data from EPA.'
+    dstr = "http://www.epa.gov/airnow/today/airnow.kml Clink on the link to access"
+    dstr += "AQI data from EPA."
     description.text = dstr
     return folder
+
 
 def smoke_folder():
     folder = etree.Element("Folder")
@@ -264,10 +269,11 @@ def smoke_folder():
     viz = etree.SubElement(folder, "visibility")
     viz.text = "0"
     description = etree.SubElement(folder, "description")
-    dstr = 'http://www.ospo.noaa.gov/Products/land/hms.html Clink on the link to access'
-    dstr += 'wilderfire smoke Google Earth overlays from NOAA NESDIS'
+    dstr = "http://www.ospo.noaa.gov/Products/land/hms.html Clink on the link to access"
+    dstr += "wilderfire smoke Google Earth overlays from NOAA NESDIS"
     description.text = dstr
     return folder
+
 
 def weather_folder():
     folder = etree.Element("Folder")
@@ -277,10 +283,11 @@ def weather_folder():
     viz = etree.SubElement(folder, "visibility")
     viz.text = "0"
     description = etree.SubElement(folder, "description")
-    dstr = 'http://weather.gov/gis/ Clink on the link to access weather related'
-    dstr += 'Google Earth overlays from the National Weather Service'
+    dstr = "http://weather.gov/gis/ Clink on the link to access weather related"
+    dstr += "Google Earth overlays from the National Weather Service"
     description.text = dstr
     return folder
+
 
 def start_folder(
     iii=1, jobid=999, btime=datetime.datetime.now(), etime=datetime.datetime.now()
@@ -294,11 +301,11 @@ def start_folder(
     Returns
     folder : etree Element
     """
-    #t1 = btime.strftime("%Y-%m-%dT%H:%M:00Z")
-    #t2 = etime.strftime("%Y-%m-%dT%H:%M:00Z")
+    # t1 = btime.strftime("%Y-%m-%dT%H:%M:00Z")
+    # t2 = etime.strftime("%Y-%m-%dT%H:%M:00Z")
     folder = etree.Element("Folder")
     name = etree.Element("name")
-    #leaflets_names = ['Mass_loading','Concentration','Deposition','Exposure']
+    # leaflets_names = ['Mass_loading','Concentration','Deposition','Exposure']
     ntext = "<pre>Mass_loading"
     validstr = "\nValid:{}UTC</pre>".format(btime.strftime("%Y%m%d %H%M"))
     name.text = ntext + validstr
@@ -345,8 +352,11 @@ def legend_namer(iii, jobid=""):
 def path2str(path, ht):
     # leaflets needs coordinates to be -180 to 180.
     def process(x):
-        if x >= 180: return x-360
-        else: return x
+        if x >= 180:
+            return x - 360
+        else:
+            return x
+
     temp = ["{:0.3f},{:0.3f},{:0.2f}".format(process(x[0]), x[1], ht) for x in path]
     return str.join("\n", temp)
 
@@ -465,11 +475,11 @@ class HysplitKml:
         jobid=999,
         legend_label="Mass_loading",
     ):
-        #leaflets_names = ['Mass_loading','Concentration','Deposition','Exposure']
+        # leaflets_names = ['Mass_loading','Concentration','Deposition','Exposure']
         # self.cxra = cxra
         self.levels = levels
         self.stylehash = {}
-        self.kname = '{}.kml'.format(jobid)
+        self.kname = "{}.kml".format(jobid)
 
         self.clist = self.get_default_colors()
         self.set_style_dict(self.clist)
@@ -527,7 +537,6 @@ class HysplitKml:
         self.document.append(weather_folder())
         self.document.append(smoke_folder())
         self.document.append(AQI_folder())
- 
 
     def add_source_folder(self):
         pname = self.sourcename
@@ -595,7 +604,7 @@ class HysplitKml:
         self.add_source_folder()
         self.document.append(get_hysplit_overlay())
         self.document.append(get_noaa_overlay())
-        self.add_extra_folders() 
+        self.add_extra_folders()
 
     def add_intro(self):
         name = etree.SubElement(self.document, "name")
@@ -655,9 +664,9 @@ class HysplitKml:
         """
         add a style for each contour level.
         """
-        #iii = 1
-        #for lev in self.levels:
-        for iii in range(1, len(self.levels)+1):
+        # iii = 1
+        # for lev in self.levels:
+        for iii in range(1, len(self.levels) + 1):
             tag = "conc{}".format(iii)
             self.add_style_to_root(tag)
         #    iii += 1

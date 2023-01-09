@@ -1,6 +1,14 @@
-import os
-import datetime
+#import logging
+
 import matplotlib
+
+#logger = logging.getLogger(__name__)
+
+def color2kml(cstr):
+    """
+    python used RGB while KML expects BGR.
+    """
+    return cstr[0:2] + cstr[-2:] + cstr[4:6] + cstr[2:4]
 
 class ColorMaker:
     def __init__(self, cname, nvals, ctype="hex", transparency="C8"):
@@ -12,7 +20,7 @@ class ColorMaker:
         transparency : str: transparency value to use in hexidecimal.
         """
         self.transparency = transparency
-        self.clist = []
+        self.clist = []      # list of nvals colors equally spaced througout the colormap
         self.ctype = ctype
         self.get_cmap(cname, nvals)
 
@@ -36,7 +44,10 @@ class ColorMaker:
             return rval
 
         hval = [subfunc(x) for x in list(rgb)]
-        return "{}{}{}{}".format(self.transparency, hval[0], hval[1], hval[2])
+        if self.transparency:
+            return "{}{}{}{}".format(self.transparency, hval[0], hval[1], hval[2])
+        else:
+            return "{}{}{}".format(hval[0], hval[1], hval[2])
 
     def get_cmap(self, cname="viridis", nvals=10):
         cmap = matplotlib.cm.get_cmap(cname)
@@ -52,5 +63,3 @@ class ColorMaker:
         #        self.clist.append(self.rgb_to_hex(cmap(iii)))
         #    else:
         #        self.clist.append(cmap[iii])
-
-

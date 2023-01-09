@@ -1,25 +1,27 @@
 #!/n-home/alicec/anaconda/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-from math import *
-#import sys 
-#from scipy.io import netcdf
-#from pylab import *
-import numpy as np
-import pandas as pd
-#import numpy.ma as ma
-#import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
-import string
 import datetime
-#from matplotlib.path import Path
-#import shapely.geometry as sgeo
-from scipy import interpolate
 #from read_arason import *
 #import subprocess
 #import sys, getopt
 #from operator import itemgetter
 #import codecs
 import os.path
+import string
+from math import *
+
+#import numpy.ma as ma
+#import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+#import sys 
+#from scipy.io import netcdf
+#from pylab import *
+import numpy as np
+import pandas as pd
+#from matplotlib.path import Path
+#import shapely.geometry as sgeo
+from scipy import interpolate
+
 ##mytools is a module which contains conversions and other useful routines.
 #from mytools import *  
 #import random
@@ -72,6 +74,7 @@ def callprofile(hdir, mdir, meteo, lat, lon, dt, mfname='', nstop=24, offset=0):
         lat, lon latitude longitude 
         dt time step
         mfname - name of file to move profile.txt to """
+    print('current directory', os.getcwd(), mfname)
     callstr = os.path.join(hdir + "profile")
     p1 = "-d" + mdir
     p2 = "-f" + meteo
@@ -207,6 +210,7 @@ class MeteoProfile(object):
                if len(temp2) != len(self.var3d)+1: 
                   #print('warning: line contains missing values ', line)
                   continue
+                     
                temp = [tm] 
                temp.extend(temp2)
                #print(temp)
@@ -278,6 +282,9 @@ class MeteoProfile(object):
             testdate = datetime.datetime(int(year),int(month),int(day),int(hour),int(minute))
             return testdate
 
+    @staticmethod
+    def wind_direction(vwind,uwind):
+        return wind_direction(vwind,uwind)
 
     #def __str__(self):
     #    """prints out in format suitable for entry into plume rise model"""
@@ -285,21 +292,32 @@ class MeteoProfile(object):
     #    descrip="descrip"
     #    return descrip        
 
-    def wind_direction(self, vwind, uwind):
-            #vwind is magnitude of wind going from south to north
-            #uwind is magnitude of wind going from West to East
-            #print(len(vwind), len(uwind))
-            uwind = np.array(uwind)
-            vwind = np.array(vwind)
-            wind_dir = np.arctan(vwind/uwind)*180/pi
-            upos = np.where(uwind >= 0)
-            wind_dir[upos]= 270 - wind_dir[upos] 
-            uneg = np.where(uwind < 0)
-            wind_dir[uneg] = 90 - wind_dir[uneg] 
-            #print(wind_dir.shape , wind_dir[2])
-            #print('U' , uwind.shape, uwind[2])
-            #print('V' , vwind.shape, vwind[2])
-            return wind_dir
+def wind_components(wdir, wspd):
+    wdiro = np.array(wdir)
+    wspd = np.array(wspd)
+    wdir = wdiro + 180.0
+
+    costheta = np.cos(wdir*np.pi/180.0)
+    sintheta = np.sin(wdir*np.pi/180.0)
+
+    uwnd = wspd * sintheta
+    vwnd = wspd * costheta
+    return vwnd, uwnd
+    
+
+def wind_direction(vwind, uwind):
+    #vwind is magnitude of wind going from south to north
+    #uwind is magnitude of wind going from West to East
+    #print(len(vwind), len(uwind))
+    uwind = np.array(uwind)
+    vwind = np.array(vwind)
+    wind_dir = np.arctan(vwind/uwind)*180/pi
+    wind_dir = np.where(uwind>=0, 270-wind_dir, wind_dir)
+    wind_dir = np.where(uwind<0, 90-wind_dir, wind_dir)
+    #print(wind_dir.shape , wind_dir[2])
+    #print('U' , uwind.shape, uwind[2])
+    #print('V' , vwind.shape, vwind[2])
+    return wind_dir
 
 class Radiosonde(MeteoProfile):
    """radiosonde file
@@ -642,4 +660,3 @@ def plot_profiles(plist,tlist,vlist, clrs=['r','b','g','k','m'], syms=['.','o','
         plt.ylim((0,20000)) 
         fignum+=1
         fignum_i+=1
-

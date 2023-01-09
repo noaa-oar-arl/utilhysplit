@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from utilhysplit.profile import callprofile
-from utilhysplit.profile import MeteoProfile
+from utilhysplit.hysplit_profile import callprofile
+from utilhysplit.hysplit_profile import MeteoProfile
 from utilhysplit.plotutils import colormaker
 
 def test_wind_direction():
@@ -64,9 +64,8 @@ def wind_direction(vwind, uwind):
         
         uwind = np.array(uwind)
         vwind = np.array(vwind)
-        zrs = np.where(uwind==0)
-        uwind[zrs] = 0.001
-        wind_dir = np.arctan(vwind/uwind)*180/np.pi
+        temp = np.where(uwind==0,0.001,uwind) 
+        wind_dir = np.arctan(vwind/temp)*180/np.pi
         upos = np.where(uwind >= 0)
         wind_dir[upos]= 270 - wind_dir[upos] 
         uneg = np.where(uwind < 0)
@@ -128,6 +127,14 @@ def example_use(hdir, tdir):
     # look at differences between datasets for surface variables. 
     cp.check_diff('PBLH') 
 
+    # look at profile of 3d variable at one time.
+    varlist = ['WWND','TEMP','UWND_rot']
+    dtt = d1
+    for var in varlist:
+        cp.check_3d(var,dtt)
+
+    # look at profile of wind speed and wind direction at one time.
+    ax1, ax2 = cp.windspd(dtt)
 
 
 class CompareMetProfile:
@@ -223,6 +230,10 @@ class CompareMetProfile:
         self.df2 = df2
 
     def call_and_read(self,nstop=24,call=True, overwrite=False):
+        """
+        creates proflist
+        """
+
         dt = self.dt
         lat = self.lat
         lon = self.lon
@@ -259,17 +270,39 @@ class CompareMetProfile:
     def set_ref(self,ref):
         self.ref = ref
 
-    def plot_ts(self,yvarname):
+    def plot_ts2(self,yvarname,fignum=1):
         sns.set()
         sns.set_style('whitegrid')
-        fig = plt.figure(1)
+        fig = plt.figure(fignum)
+        ax1 = fig.add_subplot(1,1,1)
+        for prof,label,color in self.generate_prof():
+            print('THIS IS', label)
+            fig = plt.figure(fignum)
+            ax1 = fig.add_subplot(1,1,1)
+            #print(label, '-----')
+            xvar = prof.get_var(yvarname)
+            if label == self.ref: lw=5
+            else: lw=1
+            if xvar!= -1: ax1.plot(prof.date_ra, xvar,marker='.', color=color, label=label,linewidth=lw)
+           
+            handles, labels = ax1.get_legend_handles_labels()
+            plt.legend(handles,labels,loc='best',prop={'size':10})
+            ax1.set_ylabel(yvarname)
+            fig.autofmt_xdate()
+            plt.show()
+        return ax1
+
+    def plot_ts(self,yvarname,fignum=1):
+        sns.set()
+        sns.set_style('whitegrid')
+        fig = plt.figure(fignum)
         ax1 = fig.add_subplot(1,1,1)
         for prof,label,color in self.generate_prof():
             #print(label, '-----')
             xvar = prof.get_var(yvarname)
             if label == self.ref: lw=5
             else: lw=1
-            if xvar!= -1: ax1.plot(prof.date_ra, xvar,marker='.', color=color, label=label,LineWidth=lw)
+            if xvar!= -1: ax1.plot(prof.date_ra, xvar,marker='.', color=color, label=label,linewidth=lw)
         handles, labels = ax1.get_legend_handles_labels()
         plt.legend(handles,labels,loc='best',prop={'size':10})
         ax1.set_ylabel(yvarname)
@@ -284,15 +317,23 @@ class CompareMetProfile:
             yvar = prof.get_var(yvarname)
             ax1.plot(xvar, yvar, label=label)
             
-    def standard_surface_plots(self,plotall=True):
-        varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M','V10M']
+    def standard_surface_plots(self,plotall=True,varlist=None,fignum=1,together=True):
+        print(type(varlist),varlist)
+        if isinstance(varlist,list):
+            varlist = varlist
+        else:
+            varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M','V10M']
+        print(type(varlist))
         #varlist = ['PBLH','USTR','SHTF','T02M','TPP1','TPP6','SHTF','DSWF','U10M']
         if plotall: varlist = self.twodlist
         varlist.sort()
-        for var in varlist:
+        for iii, var in enumerate(varlist):
             print(var)
-            ax = self.plot_ts(var)
-            plt.show()
+            if together:
+                ax = self.plot_ts(var,fignum=fignum+iii)
+            else:
+                ax = self.plot_ts2(var,fignum=fignum+iii)
+            #plt.show()
         return ax
 
     def create_frame(self,var):
@@ -362,15 +403,17 @@ class CompareMetProfile:
             try:
                ax.plot(dfdir,df.index,color=color,marker='.',
                        label=label,linewidth=lw,alpha=alpha,
-                       MarkerSize=ms)
-            except:
+                       markersize=ms)
+            except Exception as eee:
                 print('failed {}'.format(label))
+                print(eee)
             try:
                ax1.plot(dfspd,df.index,color=color,marker='.',
                        label=label,linewidth=lw,alpha=alpha,
-                       MarkerSize=ms)
-            except:
+                       markersize=ms)
+            except Exception as eee:
                 print('failed {}'.format(label))
+                print(eee)
             #if iii> 1: break
             #iii+=1
         handles, labels = ax.get_legend_handles_labels()
@@ -380,9 +423,10 @@ class CompareMetProfile:
         ax1.invert_yaxis()
         return ax, ax1
 
-    def check_3d(self,var,date,legend=False):
-        fig = plt.figure(10)
-        ax = fig.add_subplot(1,1,1)
+    def check_3d(self,var,date,legend=False,ax=None):
+        if not ax:
+            fig = plt.figure(10)
+            ax = fig.add_subplot(1,1,1)
         #iii=0
         for prof, label, color in self.generate_prof():
             if var not in prof.var3d: continue
@@ -390,7 +434,7 @@ class CompareMetProfile:
             df = df[df['time'] == date]
             df.set_index('PRES1',inplace=True)
             if label == self.ref: 
-               lw=8
+               lw=1
                alpha=1
             else: 
                lw=1

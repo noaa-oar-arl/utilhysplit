@@ -1,8 +1,10 @@
-import os
 import datetime
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.pyplot as plt 
 import xarray as xr
+
 
 def get_variance(dset):
     wvar = dset.w_variance
@@ -29,11 +31,12 @@ def plot_variance(dset, levels=None, coarsen=(6,1), ax=None):
     #plt.show() 
     return cb
 
-def get_vmix_colors():
+def get_vmix_colors(levels=None):
     from matplotlib.colors import BoundaryNorm
-    levels = [0,0.002,0.004,0.008]
-    levels.extend([0.04,0.06,0.08,0.1])
-    levels.extend([0.6,0.8,1.0,1.2,1.4,1.6,1.8,2,2.5,3])
+    if not isinstance(levels,list):
+        levels = [0,0.002,0.004,0.008]
+        levels.extend([0.04,0.06,0.08,0.1])
+        levels.extend([0.6,0.8,1.0,1.2,1.4,1.6,1.8,2,2.5,3])
     #cmap = plt.get_cmap('bone')
     #cmap = plt.get_cmap('copper')
     cmap = plt.get_cmap('viridis')
@@ -98,5 +101,3 @@ class ARMdata:
     @staticmethod
     def open_dataset(fname):
         return  xr.open_dataset(fname)
-       
-  

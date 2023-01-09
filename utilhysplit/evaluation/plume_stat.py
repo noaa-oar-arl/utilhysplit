@@ -1,14 +1,14 @@
 # plume_stat.py
 
+import time
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import xarray as xr
 import scipy
-import matplotlib.pyplot as plt
-import time
-from utilhysplit.evaluation import ensemble_tools
-from utilhysplit.evaluation import statmain
+import xarray as xr
 from scipy.signal import convolve2d
+from utilhysplit.evaluation import ensemble_tools, statmain
 
 """
 Routines to calculate various statistics like Critical Success Index, Gilbert Skill Score, Fractions Skill Score,
@@ -289,7 +289,7 @@ class CalcScores:
         return tframe
 
 
-    def calc_basics_orig(self, probthresh=None, clip=False, sz=1, obsprob=False):
+    def calc_basics(self, probthresh=None, clip=False, sz=1, obsprob=False):
         """
         probthresh : int or float
         clip : boolean. If True then remove 
@@ -310,24 +310,30 @@ class CalcScores:
         self.total_points
 
         """
-        #print('calc basics zzzzzzzzzzzzzzzzzzzzzzzzzzzz', sz)
+        binxra2 = self.binxra2.copy()
+        # apply probability threshold first.
+        #if isinstance(probthresh, (int, float)):
+        #    # convert probabilistic forecast to deterministic using threshold.
+        #    binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
 
         if sz == 1:
             binxra1 = self.binxra1
-            binxra2 = self.binxra2
+            # binxra2 = self.binxra2
         else:
             binxra1, binxra2 = self.convolve(sz)
             # need observations to be 1 or 0 ?
             # result from 1 pixel in the neighborhood being
             # above threshold.
-            # obs_probthresh = 1/(sz*sz)
-            # if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
-            # binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
+            obs_probthresh = 1/(sz*sz)
+            #binxra1 = self.binxra1
+            #if probthresh: obs_probthresh=np.min([obs_probthresh,probthresh])
+            #binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
+            binxra1 = xr.where(binxra1 >= obs_probthresh, 1.0, 0)
             # use original observation array.
 
-            if not obsprob:
-                print('plume stat calc_basics obsprob set zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
-                binxra1 = self.binxra1
+            #if not obsprob:
+            #    print('plume stat calc_basics obsprob set zzzzzzzzzzzzzzzzzzzzzzzzzzzz')
+            #    binxra1 = self.binxra1
             #   print('Setting probthresh) {}'.format(probthresh))
 
         if clip:
@@ -338,15 +344,17 @@ class CalcScores:
             temp = temp.dropna(dim='y', how='all')
             binxra2 = temp.isel(temp=1).fillna(0)
             binxra1 = temp.isel(temp=0).fillna(0)
-        # else:
-        #    binxra1 = self.binxra1
         if isinstance(probthresh, (int, float)):
             # convert probabilistic forecast to deterministic using threshold.
             binxra2 = xr.where(binxra2 >= probthresh, 1.0, 0)
-            # binxra1 = xr.where(binxra1 >= probthresh, 1.0, 0)
+        # else:
+        #    binxra1 = self.binxra1
         # else:
         # else:
         #    binxra2 = self.binxra2
+
+        self.simra = binxra2
+        self.obsra = binxra1
 
         # both have above threshold pixels.
         self.match = binxra1 * binxra2
@@ -365,7 +373,7 @@ class CalcScores:
         self.totalpts = binxra1.shape[0] * binxra1.shape[1]
 
 
-    def calc_basics(self, probthresh=None, clip=False, sz=1, obsprob=False):
+    def calc_basics_exp(self, probthresh=None, clip=False, sz=1, obsprob=False):
         """
         probthresh : int or float
         clip : boolean. If True then remove 
@@ -494,6 +502,7 @@ class CalcScores:
     def calc_precision_recall(self, clip=True, multi=False, problist=np.arange(0, 1.05, 0.05), sz=1):
         xlist = []
         ylist = []
+        blist = []
         for prob in problist:
             #print('calc PRC, get contingency table', sz, prob)
             # self.calc_basics(prob, clip=clip)
@@ -501,6 +510,7 @@ class CalcScores:
             tframe = self.table2csi(tframe0)
             ylist.append(tframe['precision'].values[0])
             xlist.append(tframe['POD'].values[0])
+            blist.append(tframe['b'].values[0])
         baseline = tframe['baseline']
         ylist2 = ylist.copy()
         xlist2 = xlist.copy()
@@ -510,7 +520,7 @@ class CalcScores:
         ylist2.reverse()
         xlist2.reverse()
         area = scipy.integrate.trapz(y=ylist2, x=xlist2)
-        return xlist, ylist, baseline, area
+        return xlist, ylist, baseline, area, blist
 
     def calc_roc(self, clip=True, multi=False, problist=np.arange(0.05, 1, 0.10), sz=1):
         """

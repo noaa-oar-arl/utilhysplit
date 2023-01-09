@@ -1,11 +1,13 @@
 #!/n-home/alicec/anaconda/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-from math import *
-import sys
-import numpy as np
 import datetime
+import sys
+from math import *
+
+import numpy as np
 import pandas as pd
-import monet
+
+#import monet
 
 
 def coarsen(small, large):

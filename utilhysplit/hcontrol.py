@@ -1,8 +1,8 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import datetime
+import logging
 import os
 from os import path
-import logging
 
 # from pylab import matrix
 """
@@ -890,6 +890,24 @@ class HycsControl:
         fname : str : name of control file
         working_directory : str : directory where CONTROL file is
         rtype : string : dispersion, trajectory, vmixing
+
+    Attributes
+        fname   : str
+        wdir    : str
+        species   : list of objects in the Species class
+        concgrids : list of objects in the ConcGrid class
+        locs      : list of objects in ControlLoc class
+        metfiles: list of str
+        metdir  : list of str
+        nlocs   : int
+        num_grids : int
+        num_sp  : int
+        rtype   : str
+        outfile : str - name of output file name
+        outdir  : str
+        run_duration : int
+        vertical_motion : int
+        ztop : int
     """
 
     def __init__(self, fname="CONTROL", working_directory="./", rtype="dispersion"):
@@ -899,9 +917,9 @@ class HycsControl:
         self.wdir = working_directory
         self.species = []  # list of objects in Species class
         self.concgrids = []  # list of object in ConcGrid class
-        self.locs = []
-        self.metfiles = []
-        self.metdirs = []
+        self.locs = []       # list of ControlLoc class objects
+        self.metfiles = []   # list of str
+        self.metdirs = []    # list of str
         self.nlocs = 0  # number of locations
         self.num_grids = 0  # number of concentration grids.
         self.num_sp = 0  # number of pollutants / species
@@ -943,6 +961,10 @@ class HycsControl:
         """
         self.num_grids += 1
         self.concgrids.append(cgrid)
+
+    def copy(self):
+        return -1
+
 
     def add_dummy_location(self):
         newloc = self.locs[0].copy()
@@ -1104,8 +1126,8 @@ class HycsControl:
             if self.rtype == "trajectory":
                 if self.outdir[-1] != "/":
                     self.outdir += "/"
-                fid.write(self.outdir + "\n")
-                fid.write(self.outfile)
+                fid.write(self.outdir.strip() + "\n")
+                fid.write(self.outfile.strip())
                 return False
 
             if annotate:
@@ -1214,8 +1236,8 @@ class HycsControl:
             if self.rtype == "vmixing":
                 return "Vmixing"
             if self.rtype == "trajectory":
-                self.outdir = content[zzz]
-                self.outfile = content[zzz + 1]
+                self.outdir = content[zzz].strip()
+                self.outfile = content[zzz + 1].strip()
                 return "Traj"
             # this is end of trajectory file
 

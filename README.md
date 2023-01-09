@@ -18,3 +18,7 @@ UPDATES
 
 6/11/2020 Added utilvolc folder: contains utilities for volcano hysplit applications and volcat data manipulation
 
+11/5/2022 start with new conda environment to look at dependencies.
+install xarray, cartopy, shapely, netCDF4, lxml, seaborn
+dask dependency in monetio.
+removed everything in the the __init__.py in monetio.obs directory so don't need dask.

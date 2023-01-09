@@ -39,7 +39,7 @@ def HT2unit(HT, M63=0.1, verbose=True):
     Assume model output is one unit mass per hour. """
     MER = mastinMER(HT)
     unit_mass, mass63  = MER2unit(MER,M63=M63)
-    if verbose: print('HEIGHT %0.1f km,  MER %0.3e kg/s , M63 %1f , unit mass=%0.3e g/hr.' %(HT, MER, M63, unit_mass))
+    if verbose: print('HEIGHT %0.1f km,  MER %0.3e kg/s , M63 %1f , unit mass=%0.3e g/hr.' %(HT, MER, M63, mass63))
     return mass63
 
 def mastinEVEM(HT, DRE = 2500):
@@ -63,6 +63,19 @@ def sizedist():
     """
     mfrac = (0.01,0.07,0.25,0.67)
     return mfrac 
+
+def area(dlat,dlon,rlat=0):
+    """
+    
+    dlat, dlon : float. should be in degrees
+    dh : float : should be in km
+    """
+    import numpy as np
+    adj = np.cos(rlat * np.pi / 180.0)  
+    deg2km = 111.0
+    km2m = 1e3
+    rval = adj * dlat * dlon * (deg2km)**2 * (km2m)**2
+    return rval # in meters squared. 
 
 def volume(dlat,dlon,dh,rlat=0):
     """
@@ -125,6 +138,10 @@ def calc1(HT, dlat,dlon,dh,rlat=0,N=20000,M63=0.05, verbose=True):
     """
     Can be used to help estimate minimum concentration that
     can be reliably calculated.
+    HT : float. height of plume in km.
+
+
+
     """
     M63 = 0.05
     MER = mastinMER(HT)  #mass eruption in kg/s

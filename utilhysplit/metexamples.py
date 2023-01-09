@@ -1,5 +1,6 @@
-import utilhysplit.metfiles as mf
 import datetime
+
+import utilhysplit.metfiles as mf
 
 d1 = datetime.datetime(2017, 12, 5, 2)
 runtime = 50

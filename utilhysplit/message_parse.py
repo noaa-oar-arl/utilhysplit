@@ -2,8 +2,10 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 #from math import *
 from optparse import OptionParser
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+
 #import datetime
 #import pandas as pd
 #from pylab import matrix

@@ -7,10 +7,13 @@ import xarray as xr
 import pandas as pd
 from scipy import integrate
 import matplotlib.pyplot as plt
-from utilhysplit.par2conc import fixlondf
+import seaborn as sns
+from utilhysplit.fixlondf import fixlondf
 # Opens the dataset
 
-    
+   
+
+ 
 
 class volcatSO2L3:
 
@@ -18,18 +21,28 @@ class volcatSO2L3:
         self.fname = fname
         # use to convert from DU to  g/m^2 
         self.conv = (2.6867E20) * (64.066) * (1/(6.022E23))
+        self.dset = self.open_dataset()
+        self.get_points()
+        self.pframe = self.points2frame()
 
     def open_dataset(self):
-        self.dset = xr.open_dataset(self.fname, decode_times=True)
-        return self.dset 
+        dset = xr.open_dataset(self.fname, decode_times=True)
+        return dset 
 
-
-    def plotscatter(self,interp=False):
-        lon = self.pframe.lon.values
-        lat = self.pframe.lat.values
-        mass = self.pframe.mass.values
-        plt.scatter(lon,lat,mass)
-       
+    def plotscatter(self,interp=False,cmap='viridis',neg=False):
+        pframe = self.pframe.copy()
+        pframe = fixlondf(pframe,colname='lon',neg=neg)
+        sns.set(style='whitegrid')
+        lon = pframe.lon.values
+        lat = pframe.lat.values
+        if not interp:
+            mass = pframe.mass.values
+        else:
+            mass = pframe.massI.values
+             
+        cb = plt.scatter(lon,lat,c=mass,s=0.1,cmap=cmap)
+        plt.colorbar(cb) 
+        plt.tight_layout()
 
     def plotmass(self,interp=True):
         if interp:
@@ -39,7 +52,13 @@ class volcatSO2L3:
         cb = plt.pcolormesh(vals)
         plt.colorbar(cb)
 
+
+    def get_points_alt(self):
+        self.mass = self.dset.mass_loading_mean
+        
+
     def get_points(self):
+        #
         self.mass = self.dset.so2_column_loading_fov
         self.height = self.dset.so2_height_fov
         self.mass_interp = self.dset.so2_column_loading_interp
@@ -49,22 +68,63 @@ class volcatSO2L3:
         lat = self.dset.lat.values
         self.lon, self.lat = np.meshgrid(lon,lat)
 
+
+    def sample_and_write(self, nnn=100, fname=None,method=0):
+        """
+        nnn : int : number of points in returned dataframe
+        fname : str : name of csv file to write. Needs to be entire path.
+        method : int
+                 0 sort dataframe by lon, lat point then take ever nth row
+                 to achieve the desired number of points. This produces an approximation to
+                 uniform spatial sampling.
+                 1 use the points with the highet mass loading.
+        """
+        pframe = self.pframe.copy()
+        if method==0:
+           pframe =  pframe.sort_values(by=['lon','lat'])
+           nskp = int(np.ceil(len(pframe)/nnn))
+           pframe = pframe.iloc[0::nskp,:]
+        elif method==1:
+           mass = pframe['mass'].values
+           mass.sort()
+           pframe = pframe[pframe['mass']> mass[-1*nnn]]
+        if isinstance(fname,str):
+           pnew = pframe.reset_index()
+           pnew = pnew.drop(['index'],axis=1)
+           pframe.to_csv(fname)
+        return pframe
+
     def points2frame(self):
         mass = self.mass.values.flatten()
+        mass_interp = self.mass_interp.values.flatten()
         height = self.height.values.flatten()
+        height_interp = self.height_interp.values.flatten()
         time = self.time.values.flatten()
         lon = self.lon.flatten()
         lat = self.lat.flatten()
         rlist = []
+        #print('length of mass {}'.format(len(mass)))
+        #print('length of height {}'.format(len(height)))
+        #print('length of time {}'.format(len(time)))
+        #print('length of lon {}'.format(len(lon)))
+        #print('length of lat {}'.format(len(lat)))
         for iii in np.arange(0,len(mass)):
-            if not np.isnan(mass[iii]):
-               rvalue = (self.conv*mass[iii], lon[iii], lat[iii], height[iii], time[iii])
-               rlist.append(rvalue)
+            if not np.isnan(mass_interp[iii]):
+                try:
+                   rvalue = (mass[iii],self.conv*mass[iii],
+                          mass_interp[iii],mass_interp[iii]*self.conv,lon[iii], 
+                         lat[iii], height[iii],height_interp[iii], time[iii])
+                except Exception as eee:
+                   print('points2frame Exception at {}'.format(iii))
+                   print(eee)
+                   continue 
+             
+                rlist.append(rvalue)
         pframe = pd.DataFrame(rlist)
-        pframe.columns = ['mass', 'lon', 'lat','height','time']
+        pframe.columns = ['mass DU','mass', 'massI DU', 'massI','lon','lat','height','heightI','time']
         pframe = pframe.sort_values(['lon','lat','time'],ascending=True)
         #pframe = fixlondf(pframe,neg=False)  
-        self.pframe = pframe
+        #self.pframe = pframe
         return pframe
 
 

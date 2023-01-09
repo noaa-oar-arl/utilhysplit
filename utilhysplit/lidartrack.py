@@ -1,9 +1,10 @@
 #!/n-home/alicec/anaconda/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 from math import *
-from pylab import *
+
 import numpy as np
 import shapely.geometry as sgeo
+from pylab import *
 
 ##notes - fundamental sampling resolution of caliop lidar is 30 meters vertical and 333 meters horizontal.
 ##06/08/15 modified to read pardump binary file (rather than ascii file created by par2asc. 
@@ -123,4 +124,3 @@ class LidarTrack(object):
         x , y = self.map(pnt.x, pnt.y)
         dist = self.line2.project(sgeo.Point(x,y))
         return dist 
-

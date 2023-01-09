@@ -1,20 +1,29 @@
 # volcat.py
-# A reader for VOLCAT data using xarray
-# For use with MONET
+# A reader for VOLCAT ash data using xarray
 import sys
 import os
 from os import walk
 import datetime
 import xarray as xr
-import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeat
+import logging
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
+import monet
+from  utilvolc.get_area import get_area
+from utilhysplit import hysplit_gridutil
+from monetio.models import hysplit
+
+logger = logging.getLogger(__name__)
 
 # from pyresample.bucket import BucketResampler
 
+# change log
+# 2022 Nov 17 AMC updated correct_pc with better regrid support.
+# 2022 Nov 17 AMC updated open_dataset
+# 2022 Nov 22 AMC correct_pc need to use np.nanmin to get min values
 
 """
 This script contains routines that open/read VOLCAT data in xarray format,
@@ -42,8 +51,6 @@ _get_time: set time dimension for VOLCAT data
 _get_latlon: rename lat/lon, set coordinates of VOLCAT data
 get_data: extracts desired data from large volcat file
 check_names:
-create_pc_plot: plots parallax corrected vs uncorrected values
-compare_pc: compares corrected vs uncorrected values
 get_pc_latitude: uses parallax corrected latitude
 get_pc_longitude: uses parallax corrected longitude
 get_height: returns array of ash top height from VOLCAT
@@ -54,13 +61,7 @@ get_ashdet:
 mass_sum:
 get_time:
 get_atherr: returns array of ash top height error from VOLCAT
-plot_height: plots ash top height from VOLCAT
-plot_radius: plots ash effective radius from VOLCAT
-plot_mass: plots ash mass loading from VOLCAT
-plot_gen: generates quick plot, not saved
 matchvals:
-matchvals2:
-find_iii:
 correct_pc: corrects parallax
 Class: VolcatName
      compare: compares volcat file names - shows difference
@@ -95,16 +96,16 @@ def open_dataset(
     else:
         dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale, decode_times=decode_times)
         # not needed for new Bezy data.
-    try:
+    if 'Dim1' in dset.dims.keys() and 'Dim2' in dset.dims.keys(): 
         dset = dset.rename({"Dim1": "y", "Dim0": "x"})
-    except:
-        pass
-    if "some_vars.nc" in fname:
-        pass
-    else:
+    #if "some_vars.nc" in fname:
+    #    pass
+    #elif "Karymsky" in fname:
+    #    pass
+    #else:
         # use parallax corrected if available and flag is set.
-        dset = _get_latlon(dset, "latitude", "longitude")
-        dset = _get_time(dset)
+    dset = _get_latlon(dset, "latitude", "longitude")
+    dset = _get_time(dset)
     if "pc_latitude" in dset.data_vars and correct_parallax:
         if not gridspace:
             dset = correct_pc(dset)
@@ -237,7 +238,7 @@ def regrid_volcat(das, cdump):
         {
             "ash_mass_loading": newmass,
             "ash_cloud_height": newhgt,
-            # 'effective_radius_of_ash': newrad,
+            'effective_radius_of_ash': newrad,
             "ash_mass_loading_total_mass": totmass,
             "feature_area": farea,
         }
@@ -578,8 +579,11 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
             filenames = tframe.filename.values
     das = []
     for nnn, iii in enumerate(filenames):
+        if not os.path.isfile(os.path.join(tdir,iii)):
+           logger.warning('file not found, skipping file {}'.format(iii))
+           continue
         if verbose:
-            print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
+           logger.info('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
         # opens volcat files using volcat.open_dataset
         if not "_pc" in iii:
             das.append(
@@ -667,30 +671,45 @@ def write_parallax_corrected_files(
     already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
+    logger.info('volcat write_parallax_corrected_files function')
+    anum = 0
+    newnamelist = []
     if isinstance(flist,(list,np.ndarray)):
+        if verbose: print('Using filenamse from list')
         vlist = flist
     else:
+        if verbose: print('Finding filenames')
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
     for iii, val in enumerate(vlist):
+        if verbose: print('working on {}'.format(val))
         if isinstance(val, str):
             fname = val
         else:
             fname = val.fname
         new_fname = fname.replace(".nc", "_{}.nc".format(tag))
+        newname = os.path.join(wdir,new_fname)
+        #print('wdir {}'.format(newname))
         if os.path.isfile(os.path.join(wdir, new_fname)):
-            print(
+            if verbose: print(
                 "Netcdf file exists {} in directory {} cannot write ".format(
                     new_fname, wdir
                 )
             )
+            anum+=1
         else:
             if verbose:
                 print("writing {} to {}".format(new_fname, wdir))
             dset = open_dataset(
                 os.path.join(tdir, fname), gridspace=gridspace, correct_parallax=True
             )
-            dset.to_netcdf(os.path.join(wdir, new_fname))
-
+            newname = os.path.join(wdir,new_fname)
+            #print('wdir {}'.format(newname))
+            dset.to_netcdf(newname)
+            if not os.path.isfile(os.path.join(wdir, new_fname)):
+                logger.warning('Warning: file did not write {} {}'.format(wdir,new_fname))
+            else:  
+                logger.info('file did write {} {}'.format(wdir,new_fname))
+    #print('Number of files which were already written {}'.format(anum))
 
 def find_volcat(
     tdir, vid=None, daterange=None, return_val=2, verbose=False, include_last=False
@@ -1049,57 +1068,6 @@ def check_names(dset, vname, checklist, clip=True):
     return xr.DataArray()
 
 
-def create_pc_plot(dset):
-    """
-    creates plots of parallax corrected vs. uncorrected values.
-    """
-
-    def subfunc(ax, vals):
-        ax.plot(vals[0], vals[1], "k.", MarkerSize=1)
-        # plot 1:1 line
-        minval = np.min(vals[0])
-        maxval = np.max(vals[0])
-        ax.plot([minval, maxval], [minval, maxval], "--r.", MarkerSize=1)
-
-    latitude, longitude = compare_pc(dset)
-    fig = plt.figure(1)
-    ax1 = fig.add_subplot(2, 1, 1)
-    ax2 = fig.add_subplot(2, 1, 2)
-
-    ax1.set_ylabel("uncorrected")
-    ax2.set_ylabel("uncorrected")
-    ax2.set_xlabel("corrected")
-
-    subfunc(ax1, latitude)
-    subfunc(ax2, longitude)
-    return fig, ax1, ax2
-
-
-def compare_pc(dset):
-    """
-    Returns:
-    latitude : [list of parrallax corrected values, list of uncorrected values]
-    longitude : [list of parrallax corrected values, list of uncorrected values]
-    """
-
-    def process(pc, val):
-        # pair corrected and uncorrected values.
-        pzip = list(zip(pc, val))
-        # remove nans
-        new = [x for x in pzip if not np.isnan(x[0])]
-        return list(zip(*new))
-
-    pc_lat = get_pc_latitude(dset)
-    pc_lon = get_pc_longitude(dset)
-    latvals = pc_lat.latitude.values.flatten()
-    lonvals = pc_lon.longitude.values.flatten()
-    pclat = pc_lat.values.flatten()
-    pclon = pc_lon.values.flatten()
-
-    latitude = process(pclat, latvals)
-    longitude = process(pclon, lonvals)
-    return latitude, longitude
-
 
 def get_pc_latitude(dset, vname=None, clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
@@ -1128,6 +1096,19 @@ def get_radius(dset, vname=None, clip=True):
     checklist = ["ash_r_eff", "effective_radius_of_ash"]
     return check_names(dset, vname, checklist, clip=clip)
 
+
+def check_total_mass(dset):
+    mass = get_mass(dset)
+    area = get_area(mass)
+    # area returned in km2.
+    # mass in g/m2
+    # 1e6 to convert are to m2
+    # 1e-9 to convert g to Tg
+    masstot = mass * area * 1e-6
+    masstot = masstot.sum().values  
+    # return unit is in Tg
+    return  masstot
+   
 
 def get_total_mass(dset):
     # unit is in Tg.
@@ -1171,64 +1152,10 @@ def get_atherr(dset):
     return height_err
 
 
-def plot_height(dset):
-    """Plots ash top height from VOLCAT
-    Does not save figure - quick image creation"""
-    fig = plt.figure("Ash_Top_Height")
-    title = "Ash Top Height (km)"
-    ax = fig.add_subplot(1, 1, 1)
-    plot_gen(dset, ax, val="height", time=None, plotmap=True, title=title)
-
-
-def plot_radius(dset):
-    """Plots ash effective radius from VOLCAT
-    Does not save figure - quick image creation"""
-    fig = plt.figure("Ash_Effective_Radius")
-    title = "Ash effective radius ($\mu$m)"
-    ax = fig.add_subplot(1, 1, 1)
-    plot_gen(dset, ax, val="radius", time=None, plotmap=True, title=title)
-
-
-def plot_mass(dset):
-    fig = plt.figure("Ash_Mass_Loading")
-    ax = fig.add_subplot(1, 1, 1)
-    plot_gen(dset, ax, val="mass", time=None, plotmap=True, title="Ash_Mass_Loading")
-
-
-def plot_gen(dset, ax, val="mass", time=None, plotmap=True, title=None):
-    """Plot ash mass loading from VOLCAT
-    Does not save figure - quick image creation"""
-    # lat=dset.latitude
-    # lon=dset.longitude
-    if val == "mass":
-        mass = get_mass(dset)
-    elif val == "radius":
-        mass = get_radius(dset)
-    elif val == "height":
-        mass = get_height(dset)
-    if time and "time" in mass.coords:
-        mass = mass.sel(time=time)
-    elif "time" in mass.coords:
-        mass = mass.isel(time=0)
-    lat = mass.latitude
-    lon = mass.longitude
-    if plotmap:
-        m = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
-        m.add_feature(cfeat.LAND)
-        m.add_feature(cfeat.COASTLINE)
-        m.add_feature(cfeat.BORDERS)
-        plt.pcolormesh(lon, lat, mass, transform=ccrs.PlateCarree())
-    else:
-        plt.pcolormesh(lon, lat, mass)
-    plt.colorbar()
-    plt.title(title)
-    plt.show()
-
-
-def matchvals(pclat, pclon, massra, height):
+def matchvals(pclat, pclon, massra, height,area):
     # pclat : xarray DataArray
     # pclon : xarray DataArray
-    # mass : xarray DataArray
+    # mass  : xarray DataArray
     # height : xarray DataArray
     # used in correct_pc
     # returns 1D list of tuples of values in the 4 DataArrays
@@ -1236,7 +1163,8 @@ def matchvals(pclat, pclon, massra, height):
     pclat = pclat.values.flatten()
     mass = massra.values.flatten()
     height = height.values.flatten()
-    tlist = list(zip(pclat, pclon, mass, height))
+    area = area.values.flatten()
+    tlist = list(zip(pclat, pclon, mass, height,area))
     # only return tuples in which mass has a valid value
     if "_FillValue" in massra.attrs:
         fill = massra.attrs["_FillValue"]
@@ -1247,35 +1175,15 @@ def matchvals(pclat, pclon, massra, height):
     return tlist
 
 
-def matchvals2(pclat, pclon, ashdet):
-    # pclat : xarray DataArray
-    # pclon : xarray DataArray
-    # ashdet : xarray DataArray
-    # used in correct_pc
-    # returns 1D list of tuples of values in the 3 DataArrays
-    pclon = pclon.values.flatten()
-    pclat = pclat.values.flatten()
-    ash = ashdet.values.flatten()
-    tlist = list(zip(pclat, pclon, ash))
-    # only return tuples in which mass has a valid value
-    if "_FillValue" in ashdet.attrs:
-        fill = ashdet.attrs["_FillValue"]
-        tlist = [x for x in tlist if x[2] != fill]
-    else:
-        # get rid of Nans.
-        tlist = [x for x in tlist if ~np.isnan(x[2])]
-    return tlist
-
-
-def find_iii(tlist, match):
-    for iii, val in enumerate(tlist):
-        if val == match:
-            return iii
-    return -1
-
-
 def determine_pc_grid_space():
     return 1
+
+# Notes
+# to improve speed of parallax correction
+# could look at getting the difference between parallax corrected coordinates
+# and actual coordinates. Hopefully difference would be the same across all points.
+# then just shift the whole grid by that much.
+# then additional regridding would have to be performed.
 
 
 def correct_pc(dset, gridspace=None):
@@ -1283,6 +1191,9 @@ def correct_pc(dset, gridspace=None):
     moves mass and height values into the coordinate values closest
     to the parallax corrected values. Results in dataset with mass and height shifted
     to parallax corrected positions.
+
+    gridspace : float
+                if gridspace is not None then also regrids onto grid with this spacing.
     """
     # 06/02/2021 amc commented out use of the ashdet field.
     # AMR: Added ability to grid parallax corrected data to regular grid
@@ -1294,15 +1205,11 @@ def correct_pc(dset, gridspace=None):
 
     if not gridspace:
         newmass = xr.zeros_like(mass.isel(time=0))
-        newhgt = xr.zeros_like(height.isel(time=0))
-        newrad = xr.zeros_like(effrad.isel(time=0))
-        #newmass = newmass.drop("longitude")
-        #newhgt = newhgt.drop("longitude")
-        #newrad = newrad.drop("longitude") 
-        #newmass = newmass.drop("latitude")
-        #newhgt = newhgt.drop("latitude")
-        #newrad = newrad.drop("latitude") 
-    # newashdet = xr.zeros_like(ashdet.isel(time=0))
+        newnum = xr.zeros_like(mass.isel(time=0))
+        newhgt = xr.zeros_like(mass.isel(time=0))
+        newrad = xr.zeros_like(mass.isel(time=0))
+        lon = dset.ash_mass_loading.longitude.values
+        lat = dset.ash_mass_loading.latitude.values
     else:
         # AMR: Making regular grid for parallax correction
         # Changes pushed 8/26/2021
@@ -1310,80 +1217,64 @@ def correct_pc(dset, gridspace=None):
         # if this is not the case, need to adjust this portion of the function
         # maybe loop through the variables to calculate max,min?
         # NEED to make this more general, for various grid spaces
-        latmin = round(mass.latitude.values.min())
-        latmax = round(mass.latitude.values.max()) + 1.0
-        lonmin = round(mass.longitude.values.min())
-        lonmax = round(mass.longitude.values.max()) + 1.0
+        #latmin = round(mass.latitude.values.min())
+        #latmax = round(mass.latitude.values.max()) + 1.0
+        #lonmin = round(mass.longitude.values.min())
+        #lonmax = round(mass.longitude.values.max()) + 1.0
+        # some files had nan's at the edges for lat/lon values
+        # so change to using this.
+        latmin = np.nanmin(mass.latitude.values)
+        latmax = np.nanmax(mass.latitude.values) + 1.0
+        lonmin = np.nanmin(mass.longitude.values)
+        lonmax = np.nanmax(mass.longitude.values) + 1.0
+  
+        # want grid to be at
+        latmin = np.floor(latmin)
+        latmax =  np.ceil(latmax)
+        lonmin = np.floor(lonmin)
+        lonmax = np.ceil(lonmax)  
+
         # lats = np.arange(latmin, latmax, gridspace)
         lats = np.arange(latmax, latmin, gridspace * -1)
         lons = np.arange(lonmin, lonmax, gridspace)
-        longitude, latitude = np.meshgrid(lons, lats)
-        tmp = np.zeros_like(latitude)
+        lon, lat = np.meshgrid(lons, lats)
+        #lon = longitude
+        #lat = latitude
+        tmp = np.zeros_like(lat)
         # Making zeros like arrays
         das = xr.DataArray(
             data=tmp,
             dims=["y", "x"],
             coords=dict(
-                latitude=(["y", "x"], latitude), longitude=(["y", "x"], longitude)
+                latitude=(["y", "x"], lat), longitude=(["y", "x"], lon)
             ),
         )
-        newmass = das
-        newhgt = das
-        newrad = das
+        newmass = das.copy()
+        newhgt = das.copy()
+        newrad = das.copy()
         # END of Additional code - AMR
     newmass.attrs = mass.attrs
     newhgt.attrs = height.attrs
     newrad.attrs = effrad.attrs
-
+    area = get_area(mass)
+    newarea = get_area(newmass)
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
-    tlist = np.array(matchvals(pclon, pclat, mass, height))
-    # tlist = np.array(matchvals2(pclon, pclat, ashdet))
+    tlist = np.array(matchvals(pclon, pclat, mass, height,area))
 
     indexlist = []
     prev_point = 0
-    for point in tlist:
-        iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
-        if iii in indexlist:
-            print("WARNING: correct_pc function: some values mapped to same point")
-            print(iii, point)
-            vpi = find_iii(indexlist, iii)
-            print(tlist[vpi])
-            # AMR: 9/1/2021
-            # Need to add mass from values mapped to same grid point (conserve mass)
-            # Take max height from values mappend to same grid point (conserve top height)
-            totmass = tlist[vpi][2] + point[2]
-            maxhgt = np.max([tlist[vpi][3], point[3]])
-            # Reassigning values in point array for mass and height
-            point[2] = totmass
-            point[3] = maxhgt
-            print("Total mass, max height: ", point)
-            # End of AMR additions
-        newmass = xr.where(
-            (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
-            point[2],
-            newmass,
-        )
-        newhgt = xr.where(
-            (newhgt.coords["x"] == iii[0]) & (newhgt.coords["y"] == iii[1]),
-            point[3],
-            newhgt,
-        )
-        # AMR: Need to adjust this for effective radius - not currently in tlist, and therefore not in iii
-        newrad = xr.where(
-            (newrad.coords["x"] == iii[0]) & (newrad.coords["y"] == iii[1]),
-            point[3],
-            newrad,
-        )
-        # keeps track of new indices of lat lon points.
-        indexlist.append(iii)
-        prev_point = point
 
-    # check if any points are mapped to the same point.
-    if len(indexlist) != len(list(set(indexlist))):
-        print("WARNING: correct_pc function: some values mapped to same point")
-        print(len(indexlist), len(list(set(indexlist))))
+
+    def check_compat(t1, t2):
+        if not np.array_equal(t1.longitude.values,t2.longitude.values,equal_nan=True):
+           return False
+        else:
+           return True
+
+    newmass,newhgt,newrad = pc_loop(tlist,newmass,newhgt,newrad)
+
     # TODO currently the fill value is 0.
     # possibly change to nan or something else?
     newmass = newmass.assign_attrs({"_FillValue": 0})
@@ -1398,21 +1289,32 @@ def correct_pc(dset, gridspace=None):
     newhgt = newhgt.transpose("time", "y", "x", transpose_coords=True)
     newrad = newrad.transpose("time", "y", "x", transpose_coords=True)
     # keep original names for mass and height.
-  
-    # getting some odd error messages here 
-    #newmass = newmass.drop("longitude")
-    #newhgt = newhgt.drop("longitude")
-    #newrad = newrad.drop("longitude") 
-    #newmass = newmass.drop("latitude")
-    #newhgt = newhgt.drop("latitude")
-    #newrad = newrad.drop("latitude") 
+ 
+    # ---------------------------------------
+    # this block resets the longitude and latitude values
+    # becase they are floats they change in the pc_loop function
+    # slightly and the the Dataset creation throws an error. 
+    newmass = newmass.drop("longitude")
+    newhgt = newhgt.drop("longitude")
+    newrad = newrad.drop("longitude") 
+    newmass = newmass.drop("latitude")
+    newhgt = newhgt.drop("latitude")
+    newrad = newrad.drop("latitude") 
 
-    #newmass = newmass.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
-    #newmass = newmass.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
-    #newhgt = newhgt.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
-    #newhgt = newhgt.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
-    #newrad = newrad.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
-    #newrad = newrad.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
+    newmass = newmass.assign_coords(longitude=(("y","x"),lon))
+    newmass = newmass.assign_coords(latitude=(("y","x"),lat))
+    newhgt = newhgt.assign_coords(longitude=(("y","x"),lon))
+    newhgt = newhgt.assign_coords(latitude=(("y","x"),lat))
+    newrad = newrad.assign_coords(longitude=(("y","x"),lon))
+    newrad = newrad.assign_coords(latitude=(("y","x"),lat))
+
+    # adjust the mass to mass loading by dividing by new area.
+    newmass = xr.where(newmass>0, newmass/newarea, newmass)
+    newmass = xr.where(newmass==0, np.nan, newmass)
+
+    if not check_compat(newmass, newhgt):
+       print('warning: coordinate values are not the same')
+    # ---------------------------------------
 
     dnew = xr.Dataset(
         {
@@ -1425,10 +1327,6 @@ def correct_pc(dset, gridspace=None):
             "feature_id": dset.feature_id,
         }
     )
-    #dnew = dnew.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude))
-    #dnew = dnew.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude))
-    #dnew.ash_mass_loading.assign_coords(latitude=(("y","x"),dset.ash_mass_loading.latitude),inplace=True)
-    #dnew.ash_mass_loading.assign_coords(longitude=(("y","x"),dset.ash_mass_loading.longitude),inplace=True)
 
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
@@ -1438,3 +1336,180 @@ def correct_pc(dset, gridspace=None):
     #dnew.longitude.attrs.update({"standard_name": "longitude"})
     #dnew = dnew.assign_attrs(dset.attrs)
     return dnew
+
+def pc_loop(tlist,newmass,newhgt,newrad):
+    testmass = newmass.copy()
+    indexhash = {}
+    hthash = {}
+    #aratio = 1
+    for point in tlist:
+        iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
+        area = point[4]
+        hgt = point[3]
+        totmass = point[2] * area
+        if iii in indexhash.keys():
+            indexhash[iii] += totmass
+            hthash[iii] = np.max((hthash[iii],hgt))
+        else:
+            indexhash[iii] = totmass
+            hthash[iii] = hgt
+
+        newmass = xr.where(
+            (newmass.coords["x"] == iii[0]) & (newmass.coords["y"] == iii[1]),
+            indexhash[iii],
+            newmass,
+        )
+
+        newhgt = xr.where(
+            (newhgt.coords["x"] == iii[0]) & (newhgt.coords["y"] == iii[1]),
+            hthash[iii],
+            newhgt,
+        )
+        # AMR: Need to adjust this for effective radius - not currently in tlist, and therefore not in iii
+        newrad = xr.where(
+            (newrad.coords["x"] == iii[0]) & (newrad.coords["y"] == iii[1]),
+            point[3],
+            newrad,
+        )
+    return newmass,newhgt, newrad
+
+
+def combine_regridded(vlist):
+    """
+    vlist : list of xarray DataArray or DataSet. 
+            volcat data which has been regridded onto
+            regular lat-lon grid.
+            Each object needs to have the same grid spacing.
+            If objects have a time dimension then length of time dimension should be 1.
+
+    Returns :
+            xarray DataArray or Dataset which is combination of
+            those in the input list.
+            If input objects have time dimension or coordinate then output will
+            be concated along the time dimension. If they do not then an
+            ens dimension will be created.
+
+    Possible Issues :
+           grid corners are set at (0,0) or (-180,0). If input arrays are not
+           compatible with those grid corners (e.g. spacing of 0.5 and original grid
+           corner of 20.25) then this will fail or produce unexpected results.
+    """
+    emptyvalue = xr.DataArray()
+
+    # check range of longitude values.
+    # from 0 to 360 or -180 to 180?
+    # also find gid spacing and make sure grid spacing
+    # same for all grids.
+    minlon = 9000
+    maxlon = -9000
+    dlat = []
+    dlon = []
+    for iii, das in enumerate(vlist):
+        lonra = das.sel(y=1).longitude.values
+        small = np.min(lonra)
+        large = np.max(lonra)
+        minlon = np.min([minlon,small])
+        maxlon = np.max([maxlon,large])
+
+        temp = das.copy()
+        xval = temp.x.values+1
+        yval = temp.y.values+1
+        temp = temp.assign_coords(x=("x",xval))
+        temp = temp.assign_coords(y=("y",yval))
+        atemp = hysplit_gridutil.find_grid_specs(temp)
+        dlat.append(atemp['Latitude Spacing'])
+        dlon.append(atemp['Longitude Spacing'])
+
+    # set corner longitude accordingly
+    if minlon < 0 and maxlon <= 180.0:
+       crnrlon = -180
+    elif minlon >=0 and maxlon <=360:
+       crnrlon = 0
+    else:
+       print('grids not using same longitude range')
+       print('longitudes from {} to {}'.format(minlon, maxlon))
+       print('warning: cannot combine')
+       return emptyvalue
+
+    # check that all grids have same spacing.
+    tol = 1e-2
+    dlat.sort()
+    check1 = dlat[-1]-dlat[0]<=tol 
+    if not check1:
+       print('Grids do not have the same spacing')
+       print(str.join(' ',[str(x) for x in dlat]))
+       print('warning: cannot combine')
+       return emptyvalue
+    dlon.sort()
+    check2 = dlon[-1]-dlon[0]<=tol 
+    if not check2:
+       print('Grids do not have the same spacing')
+       print(str.join(' ',[str(x) for x in dlon]))
+       print('warning: cannot combine')
+       return emptyvalue
+
+    dlat = dlat[0]
+    dlon = dlon[0] 
+    logger.info('grid spacing is {} {}'.format(dlat,dlon))
+    # create a global grid.
+    nlat = np.ceil(180.0/dlat)
+    nlon = np.ceil(360.0/dlon)
+    attrs = {'llcrnr latitude'   : 0,
+             'llcrnr longitude'  : crnrlon,
+             'Latitude Spacing'  : dlat,
+             'Longitude Spacing' : dlon,
+             'Number Lat Points' : nlat,
+             'Number Lon Points' : nlon}
+
+
+    # check if time is a dimension
+
+    rlist = []
+    dimvalue = []
+    for iii, das in enumerate(vlist):
+
+        # check if time is a dimension
+        if 'time' in das.dims:
+            das = das.isel(time=0)
+            dimvalue.append(das.time.values) 
+            newdim = 'time' 
+        elif 'time' in das.coords:
+            dimvalue.append(das.time.values)
+            newdim = 'time' 
+        else:
+            newdim = 'ens'
+            dimvalue.append(iii)
+
+        # put in new x and y indices for global grid.
+        latra = das.sel(x=1).latitude.values
+        lonra = das.sel(y=1).longitude.values
+        ynew, xnew =  hysplit_gridutil.get_new_indices(latra,lonra,attrs)
+        das = das.assign_coords(y=ynew)
+        das = das.assign_coords(x=xnew)
+        rlist.append(das)
+
+        # xnew will encompass areas of all the data-arrays.
+        if iii==0:
+           dnew = das.copy()
+        else:
+           aaa, dnew = xr.align(das,dnew,join="outer")
+           dnew = dnew.fillna(0) 
+   
+    # now expand each array to size of xnew.   
+    blist = []
+    for iii, das in enumerate(rlist):
+        bbb, junk = xr.align(das,dnew,join="outer")
+        bbb.expand_dims(newdim)
+        bbb[newdim] = dimvalue[iii]
+        blist.append(bbb) 
+    # concatenate the expanded arrays which all have same size.
+    newra = xr.concat(blist,newdim)
+    # add grid information to dataset
+    newra.attrs.update(attrs)
+    # if don't do this then some of the lat lon coords will be nan.
+    newra = hysplit.reset_latlon_coords(newra)
+    return newra
+
+ 
+
+

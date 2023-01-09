@@ -1,16 +1,16 @@
 #!/n-home/alicec/anaconda/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-import sys 
-import numpy as np
 import datetime
 import os
-import pandas as pd
+import sys
+
 import matplotlib.pyplot as plt
-from scipy.stats import linregress
-from scipy.stats import describe
-from utilhysplit.evaluation.statmain import cdf
-from utilhysplit.evaluation.statmain import MatchedData
+import numpy as np
+import pandas as pd
+from scipy.stats import describe, linregress
 from utilhysplit.evaluation import ensemble_tools
+from utilhysplit.evaluation.statmain import MatchedData, cdf
+
 
 def not_used_cdf(newra, scale=1):
     if method==3:   
@@ -229,7 +229,8 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
        sorted_fc = np.sort(rfc)* scale    #use scaling from linear regression.
    else:
        sorted_fc = np.sort(rfc)           #don't use scaling from linear regression.
-   diff = sorted_fc -  sorted_obs      
+   #diff = sorted_fc -  sorted_obs      
+   diff = (sorted_fc -  sorted_obs)   
    #plt.plot(sorted_obs, diff, 'k.')
    #plt.show()         
    fco = np.array(sorted_fc)
@@ -325,13 +326,17 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
    return poly, fc, rhash
 
 def plot_cdf_match_fit(fco,y2,y3,diff,ax1):
+    fs=18    
     ax1.plot(fco, diff,'-k',linewidth=4,label='Difference' )
     ax1.plot(fco, y2,'-c', label='fit')
     if isinstance(y3,np.ndarray): ax1.plot(fco, y3,'-r', label='fit')
-    ax1.set_ylabel('Difference')
-    ax1.set_xlabel('Forecast value')
+    ax1.set_ylabel('Difference (g m$^{-2}$)', fontsize=fs)
+    ax1.set_xlabel('Forecast value (g m$^{-2}$)', fontsize=fs)
+    ax1.tick_params(labelsize=fs)
+    plt.tight_layout()
 
 def plot_cdf_match(robs, fco, fc,fcp):
+       fs = 18
        x1, y1 = cdf(robs)
        x2, y2 = cdf(fco)
        x3, y3 = cdf(fc)
@@ -342,10 +347,12 @@ def plot_cdf_match(robs, fco, fc,fcp):
        if isinstance(fcp,np.ndarray):  plt.step(x4, y4, '--r', label='Corrected',linewidth=3) #green shows cdf of scaled forecast.
        #plt.title(plotdata + ' red(obs), blue(forecast), green(scaled forecast)')
        ax = plt.gca()
-       ax.set_xlabel('Values')
+       ax.set_ylabel('CDF',fontsize=fs)
+       ax.set_xlabel('Mass Loading (g m$^{-2}$)', fontsize=fs)
        handles,labels = ax.get_legend_handles_labels()
-       ax.legend(handles,labels,loc='lower right')
-
+       ax.legend(handles,labels,loc='lower right',fontsize=fs)
+       ax.tick_params(labelsize=fs)
+       plt.tight_layout()
 
 def old_function(): 
    #scaled_obsra = MatchedData(obs, fc)
@@ -420,4 +427,3 @@ def old_function():
    return scale, poly, obs, fc
 
 #----------------------------------------------------------------------------------------------------------------------------------------
-

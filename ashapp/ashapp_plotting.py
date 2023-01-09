@@ -1,16 +1,42 @@
 import datetime
-import xarray as xr
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from matplotlib.colors import BoundaryNorm
+
 import cartopy
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import xarray as xr
+from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+from matplotlib.colors import BoundaryNorm
 
 # 2021 2 Jun amc replaced ATL function with one in utilhysplit.evaluation.ensemble_tool.py file.
 # 2021 2 Jun added preprocessing function also in the evaluation ensemble_tools file.
- 
+# 2022 9 Dec ATLtimeloop returns fignamelist 
+
+"""
+classes 
+    LabelData
+functions
+    label_ax
+    get_transform
+    set_levels
+    massload_plot
+    sub_massload_plot
+    ATtimeloop
+    check_thresh
+    set_ATL_text
+    plotATL
+    meterv2FL
+    reset_plots
+    format_plot
+    ATLsubplot
+    massload_ensemble_mean
+    preprocess
+    ATL
+"""
+
+
+
 
 class LabelData:
     def __init__(self, time, descrip, units, source="", tag=""):
@@ -193,7 +219,7 @@ def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=
         plt.savefig(name)
 
 
-
+# TODO in ashensmble the call to this expects a retun.
 def ATLtimeloop(
     revash,
     enslist,
@@ -220,7 +246,7 @@ def ATLtimeloop(
     iii = 0
     if adjust > 0:
         thresh = check_thresh(np.max(revash), thresh, adjust)
-
+    fignamelist = []
     for time in revash.time.values:
         revash2 = revash.sel(time=time)
         source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[0], vlist[1])
@@ -228,12 +254,14 @@ def ATLtimeloop(
         rtot = ATL(revash2, enslist, thresh, level, norm=norm)
         # figname = name.replace('zzz',"{:02d}".format(iii))
         figname = name.replace("zzz", "{}".format(iii))
+        fignamelist.append(figname)
         if norm:
             rtot = rtot * 100
         title2 = "{}\n{}".format(title, label.time)
         plotATL(rtot, vlist, name=figname, levels=clevels, thresh=thresh, title=title2)
         iii += 1
     reset_plots()
+    return fignamelist
 
 
 def check_thresh(cmax, thresh, adjust):
@@ -501,5 +529,3 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=False, weights=None
         nmembers = len(enslist)
         dra2 = dra2 / nmembers
     return dra2
-
-

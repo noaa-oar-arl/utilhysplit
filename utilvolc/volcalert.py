@@ -7,6 +7,11 @@ import lxml.objectify as obj
 import numpy as np
 from datetime import datetime
 
+# volcalert is used to read the volcat alert files.
+# There is a another volcalert.py in the autoash website.
+# volcat_log
+
+
 #Opening xml file
 def open_xml(xmlFile):
     """Opens the xml alert file from VOLCAT"""

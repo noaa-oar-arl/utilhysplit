@@ -1,17 +1,18 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-from math import *
+import datetime
+import string
 import sys
+import time
+from itertools import permutations
+from math import *
+from math import cos, pi
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import string
-import datetime
-from itertools import permutations
-import time
 #from xarray import DataArray as da
 import xarray as xr
-import numpy as np
-from math import pi, cos
+
 
 """
 routines to help calculates critical success index by a point by point comparison.
