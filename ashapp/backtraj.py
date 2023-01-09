@@ -34,7 +34,8 @@ def combine_traj(fnames, csvfile=None):
             continue
         temp = fnn.split(".")
         trajnum = int(temp[-1])
-        df1["trajnum"] = trajnum
+        df1["traj_num"] = trajnum
+        print('TRAJNUM', trajnum)
         if csvfile:
             temp = weightcsv.loc[trajnum]
             weight = temp.massI
