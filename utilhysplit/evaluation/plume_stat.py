@@ -35,8 +35,8 @@ Functions:
     plot_roc (plots output from CalcScores.calc_roc)
 """
 # 2021 Jun 9 amc added plot_roc function to plot output from the calc_roc method in CalcScores.
-# AMC - note that we are using ATL from ensemble_tools and ensemble_tools also imports
-# from plume_stat.py. Some of the functions need to be rearranged to avoid this situation.
+# AMC - note that we are using ATL from ensemble_tools.
+
 # To go to multicategory forecasts need to add a threshold dimension onto binxra1 and binxra2
 
 # 2021 Jul 2 amr added calc_weights to calculate a normalized list of weights for use with ensemble_tools.ATL function
