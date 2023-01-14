@@ -581,9 +581,11 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
     for nnn, iii in enumerate(filenames):
         if not os.path.isfile(os.path.join(tdir,iii)):
            logger.warning('file not found, skipping file {}'.format(iii))
+           print('file not found, skipping file {}'.format(iii))
            continue
         if verbose:
            logger.info('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
+           print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
         # opens volcat files using volcat.open_dataset
         if not "_pc" in iii:
             das.append(
@@ -680,7 +682,9 @@ def write_parallax_corrected_files(
     else:
         if verbose: print('Finding filenames')
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
+
     for iii, val in enumerate(vlist):
+        print(type(val))
         if verbose: print('working on {}'.format(val))
         if isinstance(val, str):
             fname = val
@@ -834,6 +838,7 @@ class VolcatName:
     def make_datekeys(self):
         self.datekeys = [3, 4, 10, 11]
 
+
     def make_keylist(self):
         self.keylist = ["algorithm name"]
         self.keylist.append("satellite platform")
@@ -895,7 +900,10 @@ class VolcatName:
         return diffhash
 
     def __str__(self):
-        val = [self.vhash[x] for x in self.keylist]
+        # 2023 14 Jan (amc) make sure keys are in the dictionary.
+        keys = self.vhash.keys()
+        keylist = [x for x in self.keylist if x in keys]
+        val = [self.vhash[x] for x in keylist]
         return str.join("_", val)
 
     def parse(self, fname):
@@ -1197,6 +1205,8 @@ def correct_pc(dset, gridspace=None):
     """
     # 06/02/2021 amc commented out use of the ashdet field.
     # AMR: Added ability to grid parallax corrected data to regular grid
+    # 2023 Jan 14 (amc) make sure grids stay in range -180,180 and -90,90.
+    # 2023 Jan 14 (amc) replace np.arange with np.linspace 
 
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
@@ -1228,15 +1238,49 @@ def correct_pc(dset, gridspace=None):
         lonmin = np.nanmin(mass.longitude.values)
         lonmax = np.nanmax(mass.longitude.values) + 1.0
   
-        # want grid to be at
-        latmin = np.floor(latmin)
-        latmax =  np.ceil(latmax)
-        lonmin = np.floor(lonmin)
-        lonmax = np.ceil(lonmax)  
+        latmin = int(np.floor(latmin))
+        latmax =  int(np.ceil(latmax))
+        lonmin = int(np.floor(lonmin))
+        lonmax = int(np.ceil(lonmax))
+        if latmax > 90.0: latmax = 90
+        if latmin < -90.0: latmin = -90
+        if lonmax > 180.0: lonmax = 180
+        if lonmin < -180.0: lonmin = -180
 
-        # lats = np.arange(latmin, latmax, gridspace)
-        lats = np.arange(latmax, latmin, gridspace * -1)
-        lons = np.arange(lonmin, lonmax, gridspace)
+        # --------------------------------------------
+        def set_array(lmin,lmax,ddd,tp): 
+            # would like to decrease res but linspace
+            res = 0.001
+            if tp=='latitude':
+               tmax = 90.0
+               tmin = -90
+            else:
+               tmax =  180.0
+               tmin = -180.0
+            numd = int(np.ceil((lmax-lmin)/ddd))
+            
+            # linspace was giving step sizes of 0.101.
+            outra,step = np.linspace(lmin,lmax,num=numd,retstep=True)
+
+            if step - ddd > res:
+                print('WARNING  spacing not correct')
+                print(outra[1]-outra[0], ddd)
+                print(lmin,lmax,numd)
+                print(outra)
+            
+            if outra[-1] > tmax+res: 
+                print('WARNING, value greater than max')
+                print(outra[-10:])
+            return outra
+        # --------------------------------------------
+
+        lats = set_array(latmin,latmax,gridspace,'latitude')
+        lons = set_array(lonmin,lonmax,gridspace,'longitude')
+
+        #lats = np.arange(latmin, latmax, gridspace)
+        #lats = np.arange(latmax, latmin, gridspace * -1)
+        #lons = np.arange(lonmin, lonmax, gridspace)
+        #lons = [x for x in lons if x<=180.001]
         lon, lat = np.meshgrid(lons, lats)
         #lon = longitude
         #lat = latitude
@@ -1335,6 +1379,14 @@ def correct_pc(dset, gridspace=None):
     #dnew.latitude.attrs.update({"standard_name": "latitude"})
     #dnew.longitude.attrs.update({"standard_name": "longitude"})
     #dnew = dnew.assign_attrs(dset.attrs)
+
+    checklon = dnew.isel(y=0).longitude.values
+    if np.any(checklon > 180.001):
+       print('warning longitude values above 180 found')
+    if np.any(checklon < -180.001):
+       print('warning longitude values below -180 found')
+
+
     return dnew
 
 def pc_loop(tlist,newmass,newhgt,newrad):
@@ -1343,6 +1395,10 @@ def pc_loop(tlist,newmass,newhgt,newrad):
     hthash = {}
     #aratio = 1
     for point in tlist:
+        lon = point[0]
+        if lon>180.0001: 
+           print('changing lon', lon, lon-360.0)
+           lon=lon-360.0
         iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
         area = point[4]
         hgt = point[3]
@@ -1386,7 +1442,7 @@ def combine_regridded(vlist):
             xarray DataArray or Dataset which is combination of
             those in the input list.
             If input objects have time dimension or coordinate then output will
-            be concated along the time dimension. If they do not then an
+            be concatenated along the time dimension. If they do not then an
             ens dimension will be created.
 
     Possible Issues :
@@ -1405,7 +1461,7 @@ def combine_regridded(vlist):
     dlat = []
     dlon = []
     for iii, das in enumerate(vlist):
-        lonra = das.sel(y=1).longitude.values
+        lonra = das.isel(y=0).longitude.values
         small = np.min(lonra)
         large = np.max(lonra)
         minlon = np.min([minlon,small])
@@ -1420,19 +1476,26 @@ def combine_regridded(vlist):
         dlat.append(atemp['Latitude Spacing'])
         dlon.append(atemp['Longitude Spacing'])
 
+    # ----------------------------------
     # set corner longitude accordingly
-    if minlon < 0 and maxlon <= 180.0:
+    # should be -180 to -180
+    # crnrlon should always be -180.
+    # TODO - this block can be streamlined. 
+    if maxlon <= 180.0:
        crnrlon = -180
     elif minlon >=0 and maxlon <=360:
-       crnrlon = 0
+       print('warning lon points > 180 detected')
+       crnrlon = -180
     else:
        print('grids not using same longitude range')
        print('longitudes from {} to {}'.format(minlon, maxlon))
-       print('warning: cannot combine')
-       return emptyvalue
+       #print('warning: cannot combine')
+       crnrlon = -180
+       #return emptyvalue
+    # ----------------------------------
 
     # check that all grids have same spacing.
-    tol = 1e-2
+    tol = 0.01
     dlat.sort()
     check1 = dlat[-1]-dlat[0]<=tol 
     if not check1:
@@ -1451,16 +1514,6 @@ def combine_regridded(vlist):
     dlat = dlat[0]
     dlon = dlon[0] 
     logger.info('grid spacing is {} {}'.format(dlat,dlon))
-    # create a global grid.
-    nlat = np.ceil(180.0/dlat)
-    nlon = np.ceil(360.0/dlon)
-    attrs = {'llcrnr latitude'   : 0,
-             'llcrnr longitude'  : crnrlon,
-             'Latitude Spacing'  : dlat,
-             'Longitude Spacing' : dlon,
-             'Number Lat Points' : nlat,
-             'Number Lon Points' : nlon}
-
 
     # check if time is a dimension
 
@@ -1481,11 +1534,21 @@ def combine_regridded(vlist):
             dimvalue.append(iii)
 
         # put in new x and y indices for global grid.
-        latra = das.sel(x=1).latitude.values
-        lonra = das.sel(y=1).longitude.values
-        ynew, xnew =  hysplit_gridutil.get_new_indices(latra,lonra,attrs)
-        das = das.assign_coords(y=ynew)
-        das = das.assign_coords(x=xnew)
+        #latra = das.sel(x=1).latitude.values
+        #lonra = das.sel(y=1).longitude.values
+        #ynew, xnew =  hysplit_gridutil.get_new_indices(latra,lonra,attrs)
+        #das = das.assign_coords(y=ynew)
+        #das = das.assign_coords(x=xnew)
+
+        # create global grid and use that. 
+        # this changes the x and y values that correspond to the lat lon values.
+        # important because aligning with other grids is done with x and y since
+        # they are integers. It is difficult to align with floats.
+        attrs = hysplit_gridutil.create_global_grid(dlat,dlon,crnrlon)
+        try:
+            das = hysplit_gridutil.change_grid(das,attrs)
+        except:
+            print('volcat not compatible with global grid: ', attrs)
         rlist.append(das)
 
         # xnew will encompass areas of all the data-arrays.
@@ -1508,8 +1571,10 @@ def combine_regridded(vlist):
     newra.attrs.update(attrs)
     # if don't do this then some of the lat lon coords will be nan.
     newra = hysplit.reset_latlon_coords(newra)
+    if 'time' in newra.dims:
+        newra = newra.sortby('time',ascending=True)
+    hysplit.reset_latlon_coords(newra)
     return newra
 
  
-
 
