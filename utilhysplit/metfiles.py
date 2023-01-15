@@ -58,7 +58,7 @@ class MetFileFinder:
    def set_archives_directory(self, dpath):
        logger.debug('set_archives_directory')
        self.archive_directory = dpath 
-       self.archive_mstr = get_archive_str(self.metid, self.forecast_directory)
+       self.archive_mstr = get_archive_str(self.metid, self.archive_directory)
 
    def set_ens_member(self, suffix):
        logger.debug('set_ens_member')
@@ -100,7 +100,6 @@ class MetFileFinder:
           runtime = duration
        #print(dstart, duration, dstart+datetime.timedelta(hours=duration))
        #print(newdate, runtime, newdate + datetime.timedelta(hours=runtime))
-       sys.exit()
        mf = MetFiles(mstr,hours=24)
        files = []
        iii=0
@@ -129,6 +128,7 @@ class MetFileFinder:
    def find_archive(self, dstart, duration,hours=-1):
        logger.debug('find archive')
        mf = MetFiles(self.archive_mstr,hours=hours)
+       print(self.archive_mstr)
        mfiles = mf.get_files(dstart, duration)
        return  mfiles
 
