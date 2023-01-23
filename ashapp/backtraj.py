@@ -93,6 +93,8 @@ class BackTraj(TrajectoryAshRun):
         processhandler.pipe_stderr()
         self.read_obsdf()
         max_procs = 10
+        maxtime = 5*100
+        test_time=0
         tdumplist = []
         for iii, row in enumerate(self.obsdf.iterrows()):
             tdumpfile = "tdump.{}".format(iii)
@@ -125,9 +127,13 @@ class BackTraj(TrajectoryAshRun):
                 print("tdump file already exists {}".format(tdumpfile))
             num_procs = processhandler.checkprocs()
             while num_procs >= max_procs:
+                num_procs = processhandler.checkprocs()
                 print("in loop {}".format(num_procs))
                 time.sleep(5)
-
+                test_time += 5
+                if test_time>maxtime: 
+                   logger.warning('Number of processes timed out {}'.format(maxtime))
+                   break 
         # wait for runs to finish
         done = False
         seconds_to_wait = 30
