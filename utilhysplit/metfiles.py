@@ -105,7 +105,7 @@ class MetFileFinder:
        iii=0
        while not files:
           newdate = newdate - datetime.timedelta(hours=cycle_time * iii)
-          files = mf.make_file_list(newdate, runtime)
+          files = mf.make_file_list(newdate, runtime,warn=False)
           if cycle_time *iii > forecast_length: break
           iii += 1
        return files    
@@ -154,7 +154,7 @@ class MetFileFinder:
           # keep going back 6 hours until find first cycle that covers
           # the time period.
           newdate = dstart - datetime.timedelta(hours=cycle_time * iii)
-          files = mf.make_file_list(newdate, duration)
+          files = mf.make_file_list(newdate, duration,warn=warn)
           # double check that start of first files is before start date.
           if files:
               metdate = datetime.datetime.strptime(files[0],mstr)
@@ -325,7 +325,7 @@ class MetFiles:
         RETURNS :
         list of tuples (directory, filename)
         """
-        nlist = self.make_file_list(sdate, runtime)
+        nlist = self.make_file_list(sdate, runtime,warn=False)
         return process(nlist)
 
     @staticmethod
@@ -404,7 +404,7 @@ class MetFiles:
         # dttt=datetime.timedelta(hours=24)
         return dttt
 
-    def make_file_list(self, sdate, runtime):
+    def make_file_list(self, sdate, runtime,warn=False):
         """
         INPUTS
         sdate : datetime.datetime ojbect
@@ -450,7 +450,7 @@ class MetFiles:
             #if not path.isfile(temp):
             #    temp = temp.lower()
             if not path.isfile(temp):
-                logger.info("INFO " +  temp + " forecast meteorological file does not exist")
+                if warn: logger.info("INFO " +  temp + " forecast meteorological file does not exist")
                 #print("WARNING " +  temp + " meteorological file does not exist")
                 #pass
                 #logger.debug("WARNING " +  temp + " meteorological file does not exist")
