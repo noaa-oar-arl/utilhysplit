@@ -12,7 +12,7 @@ from matplotlib.colors import BoundaryNorm
 from utilhysplit.plotutils.colormaker import ColorMaker
 
 from monetio.models import hysplit
-from utilhysplit.ensemble_tools import ATL
+from utilhysplit.evaluation.ensemble_tools import ATL
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +61,11 @@ def label_ax(ax, label, transform):
     ha = "left"
     rot = "horizontal"
     xloc = 0.05
+    yloc = 0.5
     yspc = 0.1
     ax.text(
         xloc,
-        0.9,
+        yloc,
         label.model,
         va=va,
         ha=ha,
@@ -75,7 +76,7 @@ def label_ax(ax, label, transform):
     )
     ax.text(
         xloc,
-        0.9 - yspc,
+        yloc - yspc,
         label.time,
         va=va,
         ha=ha,
@@ -86,7 +87,7 @@ def label_ax(ax, label, transform):
     )
     ax.text(
         xloc,
-        0.9 - 2 * yspc,
+        yloc - 2 * yspc,
         label.descrip,
         va=va,
         ha=ha,
@@ -97,7 +98,7 @@ def label_ax(ax, label, transform):
     )
     ax.text(
         xloc,
-        0.9 - 3 * yspc,
+        yloc - 3 * yspc,
         label.units,
         va=va,
         ha=ha,
@@ -108,7 +109,7 @@ def label_ax(ax, label, transform):
     )
     ax.text(
         xloc,
-        0.9 - 4 * yspc,
+        yloc - 4 * yspc,
         label.source,
         va=va,
         ha=ha,
@@ -119,7 +120,7 @@ def label_ax(ax, label, transform):
     )
     ax.text(
         xloc,
-        0.9 - 5 * yspc,
+        yloc - 5 * yspc,
         label.tag,
         va=va,
         ha=ha,
@@ -201,9 +202,9 @@ def massload_plot(revash, enslist, name="None", vlist=None):
         y = mass2.latitude
         # z = mass2.where(mass2!=0)
         central_longitude = decide_central_longitude(x)
-        if central_longitude !=0:
-            x = shift_xvals(x.values,central_longitude)
-            if iii==0: vlist[0] = shift_xvals(vlist[0],central_longitude)
+        #if central_longitude !=0:
+        #    x = shift_xvals(x.values,central_longitude)
+        #     if iii==0: vlist[0] = shift_xvals(vlist[0],central_longitude)
         transform = get_transform(central_longitude)
 
         figname = name.replace("zzz", "{}".format(iii))
@@ -306,11 +307,11 @@ def check_thresh(cmax, thresh, adjust):
 def set_ATL_text(nrow):
     if nrow >= 6:
         yplace = 0.8
-        xplace = 0.15
+        xplace = 0.95
         size = 10
     else:
         yplace = 0.90
-        xplace = 0.15
+        xplace = 0.95
         size = 20
     return xplace, yplace, size
 
@@ -319,6 +320,7 @@ def plotATL(
     rtot, vlist, name="None", levels=[1, 5, 10, 20], thresh=0.2, title="HYSPLIT"
 ):
     """
+    vlist : [latitude, longitude] of volcano location
     plot ensemble relative frequency for concentration.
     creates plot for one time period.
     creates subplot for each vertical level.
@@ -336,11 +338,13 @@ def plotATL(
     else:
         nrow = 1
         ncol = 1
+    print('NROW, NCOL', nrow, ncol)
     z = temp.where(temp != 0)
     central_longitude = decide_central_longitude(x)
-    if central_longitude !=0:
-       x = shift_xvals(x.values,central_longitude)
-       vlist_copy[0] = shift_xvals(vlist[0],central_longitude)
+    print('central longitude', central_longitude)
+    #if central_longitude !=0:
+    #   x = shift_xvals(x.values,central_longitude)
+    #   vlist_copy[0] = shift_xvals(vlist[0],central_longitude)
     transform = get_transform(central_longitude)
     fig, axarr = plt.subplots(
         nrows=nrow,
@@ -373,12 +377,13 @@ def plotATL(
         cbar_ax = fig.axes[-1]
         cbar_ax.tick_params(labelsize=10)
         fig.suptitle(title, size=10)
+        print('NAME', name)
         if name != "None":
             plt.savefig(name)
             plt.close()
     else:
         logger.warning('plotATL. no plots created')
-
+        print('no plots')
 
 def meterev2FL(meters):
     return "FL{:2.0f}".format(meters / 30.48)
@@ -455,6 +460,7 @@ def ATLsubplot(
     cmap = plt.get_cmap("viridis")
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
     cb2 = ax.pcolormesh(x, y, z, cmap=cmap, transform=transform, norm=norm)
+    #ax.pcolormesh(x, y, z, cmap=cmap, transform=transform, norm=norm)
     try:
         ax.plot(vlist[0], vlist[1], "r^")
     #except Exception as ex:

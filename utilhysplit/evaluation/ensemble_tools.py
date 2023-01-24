@@ -32,6 +32,15 @@ topheight : returns height of level
 # 2022 Jan 10 amc moved functions for fss and afss to ensemble_stat.py to remove dependency on plume_stat.py
 
 
+#def forecast(indra,levs=[0.2,2,5,10,10000])
+
+#def make_forecast(cdump,tii=0):
+#    threshlist = [0.2,2,5,10]
+#    rtot = ATL(aeval 
+     
+
+
+
 def APL(indra, problev=50, enslist=None, sourcelist=None):
     """
     Applied Percentile Level
@@ -143,6 +152,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
         #print("Warning: could not find source or ens dimension")
         dim = None
     return dra, dim
+
 
 
 def ATLra(indra,enslist,sourcelist,threshlist,norm=True,weights=None,
@@ -328,13 +338,13 @@ def plot_ens_area(ensdfin,ax=None,plotmean=False,legend=False,clrlist=None,ensli
         if isinstance(enslist,list): val = val[enslist]
         obs = ensdf.pivot(columns='ens',values='area_obs',index='time')
         obs = obs[obs.columns[0]]
-        ax.plot(obs.index.values,obs.values, LineStyle='--', LineWidth=10,alpha=0.5,label='obs')
+        ax.plot(obs.index.values,obs.values, linestyle='--', linewidth=10,alpha=0.5,label='obs')
         if not clrlist:
             val.plot(ax=ax,legend=None,colormap='tab20') 
         else:
             val.plot(ax=ax,legend=None,color=clrlist,alpha=0.5) 
         #if 'mean' in val.columns and plotmean: 
-        #    val.plot(ax=ax, y='mean', legend=None, LineWidth=5,colormap='winter')
+        #    val.plot(ax=ax, y='mean', legend=None, linewidth=5,colormap='winter')
     else:
         val = ensdf.pivot(columns='ens',values=cname,index='time')
         val = ensdf.pivot(columns='ens',values=cname,index='time')
@@ -370,7 +380,7 @@ def plot_ens_accuracy(ensdfin,cname='MAE',
         else:
             val.plot(ax=ax,legend=None,colormap='tab20') 
         #if 'mean' in val.columns and plotmean: 
-        #    val.plot(ax=ax, y='mean', legend=None, LineWidth=5,colormap='winter')
+        #    val.plot(ax=ax, y='mean', legend=None, linewidth=5,colormap='winter')
          
     else:
         val = ensdf.pivot(columns='ens',values=cname,index='time')

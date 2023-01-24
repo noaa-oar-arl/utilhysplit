@@ -1110,7 +1110,7 @@ def plot_probthresh(tframe, ax=None, clr='--ko', label='', plotprob=False):
     # ax.set_ylabel('Hit Rate')
     ax.set_ylabel('POD, FAR, CSI')
     ax2.set_ylabel('Bias')
-    ax2.plot([0, 1], [1, 1], '-k', LineWidth=4, alpha=0.3)
+    ax2.plot([0, 1], [1, 1], '-k', linewidth=4, alpha=0.3)
     prob = tframe[tframe['probthresh'].isnull()].reset_index()
 
     # Not sure what the interpretation of this should be?
@@ -1141,6 +1141,6 @@ def plot_precision_recall(xlist, ylist, baseline, ax=None, clr='--ko', label='')
         ax = fig.add_subplot(1, 1, 1)
     ax.plot(xlist, ylist, clr, label=label)
     if baseline:
-        ax.plot(xlist[0],xlist[-1], [baseline,baseline], clr.replace('o',''), LineWidth=3, alpha=0.5)
+        ax.plot(xlist[0],xlist[-1], [baseline,baseline], clr.replace('o',''), linewidth=3, alpha=0.5)
     ax.set_ylabel('Precision $p(o_1|y_1)$')
     ax.set_xlabel('POD $p(y_1|o_1)$')

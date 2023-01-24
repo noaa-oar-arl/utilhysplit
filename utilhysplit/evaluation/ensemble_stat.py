@@ -183,16 +183,16 @@ def plot_ens_fss_ts(ensdf, nval=5, clrs=None):
     else:
         ensfss.plot(ax=ax, legend=None, color=clrs)
     colA = uniform.columns[0]
-    uniform.plot(ax=ax, y=colA, LineStyle="--", legend=None, colormap="winter")
+    uniform.plot(ax=ax, y=colA, linestyle="--", legend=None, colormap="winter")
     if "mean" in ensfss.columns:
         ensfss.plot(
-            ax=ax, y="mean", LineWidth=5, colormap="winter", legend=None, label="mean"
+            ax=ax, y="mean", linewidth=5, colormap="winter", legend=None, label="mean"
         )
     if "prob" in ensfss.columns:
         ensfss.plot(
             ax=ax,
             y="prob",
-            LineWidth=3,
+            linewidth=3,
             colormap="gist_gray",
             legend=None,
             label="prob",
@@ -210,9 +210,9 @@ def plot_afss_ts(ensdf, clrs=None):
     else:
         afss.plot(ax=ax, legend=None, color=clrs)
     if "mean" in afss.columns:
-        afss.plot(ax=ax, y="mean", LineWidth=5, colormap="winter", legend=None)
+        afss.plot(ax=ax, y="mean", linewidth=5, colormap="winter", legend=None)
     if "prob" in afss.columns:
-        afss.plot(ax=ax, y="prob", LineWidth=3, colormap="gist_gray", legend=None)
+        afss.plot(ax=ax, y="prob", linewidth=3, colormap="gist_gray", legend=None)
     ax.set_ylabel("AFSS")
     return afss
 
@@ -222,7 +222,7 @@ def plot_afss(ensdf):
     afss = ensdf[["ens", "afss"]]
     afss = afss.drop_duplicates()
     afss = afss.set_index("ens")
-    afss.plot(ax=ax, LineStyle="", Marker="o", legend=None)
+    afss.plot(ax=ax, linestyle="", Marker="o", legend=None)
     ax.set_ylabel("AFSS")
 
 
@@ -260,9 +260,9 @@ def plot_ens_fss(
     nmin = float(np.min(ensdf["Nlen"])) * sizemult
     nmax = float(np.max(ensdf["Nlen"])) * sizemult
     if "mean" in ensfss.columns:
-        ensfss.plot(ax=ax, y="mean", LineWidth=5, colormap="winter", legend=None)
+        ensfss.plot(ax=ax, y="mean", linewidth=5, colormap="winter", legend=None)
     if "prob" in ensfss.columns:
-        ensfss.plot(ax=ax, y="prob", LineWidth=3, colormap="gist_gray", legend=None)
+        ensfss.plot(ax=ax, y="prob", linewidth=3, colormap="gist_gray", legend=None)
     # plot random forecast
     for randomval in random:
         ax.plot([nmin, nmax], [randomval, randomval], "--k")
