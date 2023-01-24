@@ -3,12 +3,17 @@
 #
 # runhelper.py -
 #
+# Classes
 # Helper class contains functions for executing commands.
 # JobSetUp class setups the dictionary which contains information for ash runs.
 # Job and JobFileNameComposer class create filenames.
+# ConcplotColors class
 
-#  make_inputs_from_file . returns an instance of JobSetUp class.
-#
+# Functions
+# make_inputs_from_file . returns an instance of JobSetUp class.
+# make_dir
+# list_dirs 
+
 # 18 APR 2020 (SYZ) - Initial.
 # 15 Jun 2020 (AMC) - Adapted from locusts.py
 # -----------------------------------------------------------------------------
@@ -91,9 +96,13 @@ class Helper:
         if stdoutdata is not None:
             logger.info(stdoutdata)
             print(stdoutdata)
+        else:
+            logger.info('executed with no stdout data')
         if stderrdata is not None:
             logger.error(stderrdata)
             print(stderrdata)
+        else:
+            logger.info('executed with no stderr data')
 
     def execute(cmd, **kwargs):
         """
@@ -153,8 +162,13 @@ def make_inputs_from_file(wdir, config_file="ash_config.txt"):
     config.read()
 
     # convert dates to datetime objects.
-    temp = list(map(int, config.nlist["start_date"].split(":")))
-    config.nlist["start_date"] = datetime.datetime(temp[0], temp[1], temp[2], temp[3])
+    #temp = list(map(int, config.nlist["start_date"].split(":")))
+    if not 'start_date' in config.nlist.keys():
+        print('cannot find start_date {}'.format(config.nlist.keys()))
+        sys.exit()
+    else:
+        temp = list(map(int, config.nlist["start_date"].split(":")))
+        config.nlist["start_date"] = datetime.datetime(temp[0], temp[1], temp[2], temp[3])
 
     # convert values to floats where possible.
     for key in config.nlist.keys():

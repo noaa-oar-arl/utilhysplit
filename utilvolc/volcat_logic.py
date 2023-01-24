@@ -705,12 +705,13 @@ class Events:
         vmass = volcat.get_mass(das[iii], clip=True)
        
 
-    def compare_pc(self, pstep):
+    def compare_pc(self, pstep, central_longitude=0,vlist=None):
         vloc = self.get_vloc()
       
         das = self.events
         pcdas = self.pcevents
-        vlist = list(np.arange(0, self.maxi, pstep))
+        if not isinstance(vlist,list):
+            vlist = list(np.arange(0, self.maxi, pstep))
         jtemp = self.get_flistdf()
         for iii in vlist:
             #fig = plt.figure(1, figsize=(10, 5))
@@ -718,7 +719,7 @@ class Events:
             #ax2 = fig.add_subplot(1, 2, 2)
             #ax = map_util.draw_map(1,ax)
             #ax2 = map_util.draw_map(1,ax2)
-            transform = ashapp_plotting.get_transform()
+            transform = ashapp_plotting.get_transform(central_longitude=-180)
             fig,axarr = plt.subplots(nrows=1,ncols=2,figsize=(10,5),
                                      constrained_layout=False,
                                      subplot_kw={"projection":transform})
@@ -2215,7 +2216,7 @@ def write_emitimes(
     volcano=None,
     event_date=None,
     pc=True,
-    verbose=False,
+    verbose=True,
     clip=True,
     overwrite=False,
 ):
@@ -2252,6 +2253,7 @@ def write_emitimes(
             # Create emitimes directory within volcano directory if it doesnt exist
     emit_dirs = []
     for directory in datadirs:
+        print('HERE', directory)
         newdir = "emitimes"
         make_dir(directory, newdir=newdir, verbose=verbose)
         emit_dir = os.path.join(directory, newdir, "")
@@ -2269,13 +2271,15 @@ def write_emitimes(
             volc_dir = directory
         # Dataframe of files in directory
         dframe = volcat.get_volcat_name_df(volc_dir)
-
         # sort by image date
         # dframe = dframe.sort_values(by="idate")
 
         # pick by event date if indicated
         if event_date:
             dframe = dframe[dframe["edate"] == event_date]
+        else:
+            print('available event dates', dframe["edate"].unique())
+            return
 
         imgdates = dframe["idate"].unique()
         # loop through image dates
@@ -2295,6 +2299,8 @@ def write_emitimes(
                 pollnum=pollnum,
                 pollpercents=pollpercents,
             )
+            #print('FILENAME', filenames)
+            #overwrite=True
             if not volcemit.check_for_file() or overwrite:
                 volcemit.write_emit(area_file=False, clip=clip, verbose=verbose)
                 logger.info(
