@@ -332,7 +332,9 @@ class WashingtonPage:
     """
 
     def __init__(self):
-        self.page = "https://www.ssd.noaa.gov/VAAC/messages.html"
+        #self.page = "https://www.ssd.noaa.gov/VAAC/messages.html"
+        self.page = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/messages.html"
+        self.xmlpage = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/volcanoes/xml_files/"
         self.hcontent = ""
         self.hcontent_loaded = False
         self.xlist = None
@@ -349,6 +351,20 @@ class WashingtonPage:
         return hcode
 
     def find_xml(self):
+        flist = []
+        rlist = []
+        for match in re.finditer("\.xml", self.hcontent):
+            end = match.end()
+            #print(self.hcontent[match.start():match.end()])
+            substr = self.hcontent[end - 180 : end]
+            submatch = re.search("FV", substr)
+            xmlfile = self.xmlpage +  substr[submatch.start() :]
+            rlist.append(substr[0 : submatch.start()])
+            flist.append(xmlfile)
+        self.xlist = list(zip(rlist, flist))
+
+    # the web page changed in January 2022. this no longer works.
+    def find_xml_old(self):
         flist = []
         rlist = []
         for match in re.finditer("\.xml", self.hcontent):
