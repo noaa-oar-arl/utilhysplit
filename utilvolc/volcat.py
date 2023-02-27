@@ -1,20 +1,22 @@
 # volcat.py
 # A reader for VOLCAT ash data using xarray
-import sys
-import os
-from os import walk
 import datetime
-import xarray as xr
+import logging
+import os
+import sys
+from os import walk
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeat
-import logging
+import monet
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-import monet
-from  utilvolc.get_area import get_area
-from utilhysplit import hysplit_gridutil
+import xarray as xr
 from monetio.models import hysplit
+from utilhysplit import hysplit_gridutil
+
+from utilvolc.get_area import get_area
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,8 @@ logger = logging.getLogger(__name__)
 # 2022 Nov 17 AMC updated correct_pc with better regrid support.
 # 2022 Nov 17 AMC updated open_dataset
 # 2022 Nov 22 AMC correct_pc need to use np.nanmin to get min values
+# 2023 Feb 27 AMC moved some functions to volcat_legacy.py
+
 
 """
 This script contains routines that open/read VOLCAT data in xarray format,
@@ -118,16 +122,18 @@ def open_dataset(
         dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale, decode_times=True)
         return dset
     else:
-        dset = xr.open_dataset(fname, mask_and_scale=mask_and_scale, decode_times=decode_times)
+        dset = xr.open_dataset(
+            fname, mask_and_scale=mask_and_scale, decode_times=decode_times
+        )
         # not needed for new Bezy data.
-    if 'Dim1' in dset.dims.keys() and 'Dim2' in dset.dims.keys(): 
+    if "Dim1" in dset.dims.keys() and "Dim2" in dset.dims.keys():
         dset = dset.rename({"Dim1": "y", "Dim0": "x"})
-    #if "some_vars.nc" in fname:
+    # if "some_vars.nc" in fname:
     #    pass
-    #elif "Karymsky" in fname:
+    # elif "Karymsky" in fname:
     #    pass
-    #else:
-        # use parallax corrected if available and flag is set.
+    # else:
+    # use parallax corrected if available and flag is set.
     dset = _get_latlon(dset, "latitude", "longitude")
     dset = _get_time(dset)
     if "pc_latitude" in dset.data_vars and correct_parallax:
@@ -142,6 +148,7 @@ def open_dataset(
     else:
         dset.attrs.update({"parallax corrected coordinates": "False"})
     return dset
+
 
 def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=False):
     """
@@ -164,7 +171,7 @@ def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=Fa
         temp = temp[temp["volcano id"] == vid]
     if fid:
         temp = temp[temp["fid"] == fid]
-    if 'volcano id' in temp.columns and 'edate' in temp.columns:
+    if "volcano id" in temp.columns and "edate" in temp.columns:
         if "fid" in temp.columns:
             temp = temp.sort_values(["volcano id", "fid", "edate"], axis=0)
         else:
@@ -172,11 +179,20 @@ def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=Fa
     return temp
 
 
-def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
-                    fdate=None, flist=None, return_val=2,
-                    correct_parallax=True, mask_and_scale=True,
-                    decode_times=True, verbose=False,
-                    include_last=True,):
+def get_volcat_list(
+    tdir,
+    daterange=None,
+    vid=None,
+    fid=None,
+    fdate=None,
+    flist=None,
+    return_val=2,
+    correct_parallax=True,
+    mask_and_scale=True,
+    decode_times=True,
+    verbose=False,
+    include_last=True,
+):
     """
     returns list of data-arrays with volcat data.
     Inputs:
@@ -195,7 +211,7 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
     Outputs:
     das: list of datasets
     """
-    if isinstance(flist,(list,np.ndarray)):
+    if isinstance(flist, (list, np.ndarray)):
         filenames = flist
     else:
         tframe = get_volcat_name_df(
@@ -203,21 +219,22 @@ def get_volcat_list(tdir, daterange=None, vid=None, fid=None,
         )
         if fdate:
             eventd = pd.to_datetime(fdate).to_datetime64()
-            filenames = tframe.loc[tframe['edate'] == eventd, 'filename'].tolist()
+            filenames = tframe.loc[tframe["edate"] == eventd, "filename"].tolist()
         else:
             filenames = tframe.filename.values
     das = []
     for nnn, iii in enumerate(filenames):
-        if not os.path.isfile(os.path.join(tdir,iii)):
-           logger.warning('file not found, skipping file {}'.format(iii))
-           print('file not found, skipping file {}'.format(iii))
-           continue
+        if not os.path.isfile(os.path.join(tdir, iii)):
+            logger.warning("file not found, skipping file {}".format(iii))
+            print("file not found, skipping file {}".format(iii))
+            continue
         if verbose:
-           logger.info('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
-           print('working on {} {} out of {}'.format(nnn, iii, len(filenames)))
+            logger.info("working on {} {} out of {}".format(nnn, iii, len(filenames)))
+            print("working on {} {} out of {}".format(nnn, iii, len(filenames)))
         # opens volcat files using volcat.open_dataset
         if not "_pc" in iii:
-            if verbose: print('opening', iii, correct_parallax, mask_and_scale, decode_times)
+            if verbose:
+                print("opening", iii, correct_parallax, mask_and_scale, decode_times)
             das.append(
                 open_dataset(
                     os.path.join(tdir, iii),
@@ -262,47 +279,54 @@ def write_parallax_corrected_files(
     already exists, then this function returns a message to that effect and
     does not overwrite the file.
     """
-    logger.info('volcat write_parallax_corrected_files function')
+    logger.info("volcat write_parallax_corrected_files function")
     anum = 0
     newnamelist = []
-    if isinstance(flist,(list,np.ndarray)):
-        if verbose: print('Using filenamse from list')
+    if isinstance(flist, (list, np.ndarray)):
+        if verbose:
+            print("Using filenamse from list")
         vlist = flist
     else:
-        if verbose: print('Finding filenames')
+        if verbose:
+            print("Finding filenames")
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
 
     for iii, val in enumerate(vlist):
         print(type(val))
-        if verbose: print('working on {}'.format(val))
+        if verbose:
+            print("working on {}".format(val))
         if isinstance(val, str):
             fname = val
         else:
             fname = val.fname
         new_fname = fname.replace(".nc", "_{}.nc".format(tag))
-        newname = os.path.join(wdir,new_fname)
-        #print('wdir {}'.format(newname))
+        newname = os.path.join(wdir, new_fname)
+        # print('wdir {}'.format(newname))
         if os.path.isfile(os.path.join(wdir, new_fname)):
-            if verbose: print(
-                "Netcdf file exists {} in directory {} cannot write ".format(
-                    new_fname, wdir
+            if verbose:
+                print(
+                    "Netcdf file exists {} in directory {} cannot write ".format(
+                        new_fname, wdir
+                    )
                 )
-            )
-            anum+=1
+            anum += 1
         else:
             if verbose:
                 print("writing {} to {}".format(new_fname, wdir))
             dset = open_dataset(
                 os.path.join(tdir, fname), gridspace=gridspace, correct_parallax=True
             )
-            newname = os.path.join(wdir,new_fname)
-            #print('wdir {}'.format(newname))
+            newname = os.path.join(wdir, new_fname)
+            # print('wdir {}'.format(newname))
             dset.to_netcdf(newname)
             if not os.path.isfile(os.path.join(wdir, new_fname)):
-                logger.warning('Warning: file did not write {} {}'.format(wdir,new_fname))
-            else:  
-                logger.info('file did write {} {}'.format(wdir,new_fname))
-    #print('Number of files which were already written {}'.format(anum))
+                logger.warning(
+                    "Warning: file did not write {} {}".format(wdir, new_fname)
+                )
+            else:
+                logger.info("file did write {} {}".format(wdir, new_fname))
+    # print('Number of files which were already written {}'.format(anum))
+
 
 def find_volcat(
     tdir, vid=None, daterange=None, return_val=2, verbose=False, include_last=False
@@ -346,12 +370,16 @@ def find_volcat(
         if daterange and include_last:
             if vn.image_date < daterange[0] or vn.image_date > daterange[1]:
                 if verbose:
-                    print("date not in range", vn.image_date, daterange[0], daterange[1])
+                    print(
+                        "date not in range", vn.image_date, daterange[0], daterange[1]
+                    )
                 continue
         elif daterange and not include_last:
             if vn.image_date < daterange[0] or vn.image_date >= daterange[1]:
                 if verbose:
-                    print("date not in range", vn.image_date, daterange[0], daterange[1])
+                    print(
+                        "date not in range", vn.image_date, daterange[0], daterange[1]
+                    )
                 continue
         if vid and vn.vhash["volcano id"] != vid:
             continue
@@ -427,7 +455,6 @@ class VolcatName:
     def make_datekeys(self):
         self.datekeys = [3, 4, 10, 11]
 
-
     def make_keylist(self):
         self.keylist = ["algorithm name"]
         self.keylist.append("satellite platform")
@@ -497,8 +524,8 @@ class VolcatName:
 
     def parse(self, fname):
         # if full_disk in filename replace with fulldisk because _ is used as separator
-        fname = fname.replace('Full_Disk', 'FullDisk')
-        fname = fname.replace('FULL_DISK', 'FullDisk')
+        fname = fname.replace("Full_Disk", "FullDisk")
+        fname = fname.replace("FULL_DISK", "FullDisk")
         temp = fname.split("_")
         if "pc" in temp[-1]:
             self.pc_corrected = True
@@ -515,14 +542,18 @@ class VolcatName:
             jjj += 1
         # Image date marks date of the data collection
         dk = self.datekeys
-        dstr = "{}_{}".format(self.vhash[self.keylist[dk[0]]], self.vhash[self.keylist[dk[1]]])
+        dstr = "{}_{}".format(
+            self.vhash[self.keylist[dk[0]]], self.vhash[self.keylist[dk[1]]]
+        )
         self.image_date = datetime.datetime.strptime(dstr, self.image_dtfmt)
         # Event date is start of event
         dstr = "{}_{}".format(
             self.vhash[self.keylist[dk[2]]], self.vhash[self.keylist[dk[3]]]
         )
         self.event_date = datetime.datetime.strptime(dstr, self.event_dtfmt)
-        self.vhash[self.keylist[dk[3]]] = self.vhash[self.keylist[dk[3]]].replace(".nc", "")
+        self.vhash[self.keylist[dk[3]]] = self.vhash[self.keylist[dk[3]]].replace(
+            ".nc", ""
+        )
 
         self.vhash["idate"] = self.image_date
         self.vhash["edate"] = self.event_date
@@ -536,7 +567,6 @@ class VolcatName:
         return -1
 
 
-
 def bbox(darray, fillvalue):
     """Returns bounding box around data
     Input: Must be dataarray
@@ -547,7 +577,7 @@ def bbox(darray, fillvalue):
     try:
         arr = darray[0, :, :].values
     except:
-        print('arr failed', darray)
+        print("arr failed", darray)
     if fillvalue:
         a = np.where(arr != fillvalue)
     else:
@@ -608,10 +638,10 @@ def get_data(dset, vname, clip=True):
         try:
             box = bbox(gen, fillvalue)
         except:
-            print('volcat get_data bbox for clipping failed')
+            print("volcat get_data bbox for clipping failed")
             status = False
         if status:
-            gen = gen[:, box[0][0]: box[1][0], box[0][1]: box[1][1]]
+            gen = gen[:, box[0][0] : box[1][0], box[0][1] : box[1][1]]
             if "_FillValue" in gen.attrs:
                 gen = gen.where(gen != fillvalue)
             else:
@@ -639,7 +669,6 @@ def check_names(dset, vname, checklist, clip=True):
         if val in dset.data_vars:
             return get_data(dset, val, clip=clip)
     return xr.DataArray()
-
 
 
 def get_pc_latitude(dset, vname=None, clip=True):
@@ -678,10 +707,10 @@ def check_total_mass(dset):
     # 1e6 to convert are to m2
     # 1e-9 to convert g to Tg
     masstot = mass * area * 1e-6
-    masstot = masstot.sum().values  
+    masstot = masstot.sum().values
     # return unit is in Tg
-    return  masstot
-   
+    return masstot
+
 
 def get_total_mass(dset):
     # unit is in Tg.
@@ -725,7 +754,7 @@ def get_atherr(dset):
     return height_err
 
 
-def __matchvals(pclat, pclon, massra, height,area):
+def __matchvals(pclat, pclon, massra, height, area):
     # pclat : xarray DataArray
     # pclon : xarray DataArray
     # mass  : xarray DataArray
@@ -737,7 +766,7 @@ def __matchvals(pclat, pclon, massra, height,area):
     mass = massra.values.flatten()
     height = height.values.flatten()
     area = area.values.flatten()
-    tlist = list(zip(pclat, pclon, mass, height,area))
+    tlist = list(zip(pclat, pclon, mass, height, area))
     # only return tuples in which mass has a valid value
     if "_FillValue" in massra.attrs:
         fill = massra.attrs["_FillValue"]
@@ -750,6 +779,7 @@ def __matchvals(pclat, pclon, massra, height,area):
 
 def determine_pc_grid_space():
     return 1
+
 
 # Notes
 # to improve speed of parallax correction
@@ -771,7 +801,7 @@ def correct_pc(dset, gridspace=None):
     # 06/02/2021 amc commented out use of the ashdet field.
     # AMR: Added ability to grid parallax corrected data to regular grid
     # 2023 Jan 14 (amc) make sure grids stay in range -180,180 and -90,90.
-    # 2023 Jan 14 (amc) replace np.arange with np.linspace 
+    # 2023 Jan 14 (amc) replace np.arange with np.linspace
 
     mass = get_mass(dset, clip=False)
     height = get_height(dset, clip=False)
@@ -792,71 +822,74 @@ def correct_pc(dset, gridspace=None):
         # if this is not the case, need to adjust this portion of the function
         # maybe loop through the variables to calculate max,min?
         # NEED to make this more general, for various grid spaces
-        #latmin = round(mass.latitude.values.min())
-        #latmax = round(mass.latitude.values.max()) + 1.0
-        #lonmin = round(mass.longitude.values.min())
-        #lonmax = round(mass.longitude.values.max()) + 1.0
+        # latmin = round(mass.latitude.values.min())
+        # latmax = round(mass.latitude.values.max()) + 1.0
+        # lonmin = round(mass.longitude.values.min())
+        # lonmax = round(mass.longitude.values.max()) + 1.0
         # some files had nan's at the edges for lat/lon values
         # so change to using this.
         latmin = np.nanmin(mass.latitude.values)
         latmax = np.nanmax(mass.latitude.values) + 1.0
         lonmin = np.nanmin(mass.longitude.values)
         lonmax = np.nanmax(mass.longitude.values) + 1.0
-  
+
         latmin = int(np.floor(latmin))
-        latmax =  int(np.ceil(latmax))
+        latmax = int(np.ceil(latmax))
         lonmin = int(np.floor(lonmin))
         lonmax = int(np.ceil(lonmax))
-        if latmax > 90.0: latmax = 90
-        if latmin < -90.0: latmin = -90
-        if lonmax > 180.0: lonmax = 180
-        if lonmin < -180.0: lonmin = -180
+        if latmax > 90.0:
+            latmax = 90
+        if latmin < -90.0:
+            latmin = -90
+        if lonmax > 180.0:
+            lonmax = 180
+        if lonmin < -180.0:
+            lonmin = -180
 
         # --------------------------------------------
-        def set_array(lmin,lmax,ddd,tp): 
+        def set_array(lmin, lmax, ddd, tp):
             # would like to decrease res but linspace
             res = 0.001
-            if tp=='latitude':
-               tmax = 90.0
-               tmin = -90
+            if tp == "latitude":
+                tmax = 90.0
+                tmin = -90
             else:
-               tmax =  180.0
-               tmin = -180.0
-            numd = int(np.ceil((lmax-lmin)/ddd))
-            
+                tmax = 180.0
+                tmin = -180.0
+            numd = int(np.ceil((lmax - lmin) / ddd))
+
             # linspace was giving step sizes of 0.101.
-            outra,step = np.linspace(lmin,lmax,num=numd,retstep=True)
+            outra, step = np.linspace(lmin, lmax, num=numd, retstep=True)
 
             if step - ddd > res:
-                print('WARNING  spacing not correct')
-                print(outra[1]-outra[0], ddd)
-                print(lmin,lmax,numd)
+                print("WARNING  spacing not correct")
+                print(outra[1] - outra[0], ddd)
+                print(lmin, lmax, numd)
                 print(outra)
-            
-            if outra[-1] > tmax+res: 
-                print('WARNING, value greater than max')
+
+            if outra[-1] > tmax + res:
+                print("WARNING, value greater than max")
                 print(outra[-10:])
             return outra
+
         # --------------------------------------------
 
-        lats = set_array(latmin,latmax,gridspace,'latitude')
-        lons = set_array(lonmin,lonmax,gridspace,'longitude')
+        lats = set_array(latmin, latmax, gridspace, "latitude")
+        lons = set_array(lonmin, lonmax, gridspace, "longitude")
 
-        #lats = np.arange(latmin, latmax, gridspace)
-        #lats = np.arange(latmax, latmin, gridspace * -1)
-        #lons = np.arange(lonmin, lonmax, gridspace)
-        #lons = [x for x in lons if x<=180.001]
+        # lats = np.arange(latmin, latmax, gridspace)
+        # lats = np.arange(latmax, latmin, gridspace * -1)
+        # lons = np.arange(lonmin, lonmax, gridspace)
+        # lons = [x for x in lons if x<=180.001]
         lon, lat = np.meshgrid(lons, lats)
-        #lon = longitude
-        #lat = latitude
+        # lon = longitude
+        # lat = latitude
         tmp = np.zeros_like(lat)
         # Making zeros like arrays
         das = xr.DataArray(
             data=tmp,
             dims=["y", "x"],
-            coords=dict(
-                latitude=(["y", "x"], lat), longitude=(["y", "x"], lon)
-            ),
+            coords=dict(latitude=(["y", "x"], lat), longitude=(["y", "x"], lon)),
         )
         newmass = das.copy()
         newhgt = das.copy()
@@ -870,19 +903,18 @@ def correct_pc(dset, gridspace=None):
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
-    tlist = np.array(__matchvals(pclon, pclat, mass, height,area))
+    tlist = np.array(__matchvals(pclon, pclat, mass, height, area))
 
     indexlist = []
     prev_point = 0
 
-
     def check_compat(t1, t2):
-        if not np.array_equal(t1.longitude.values,t2.longitude.values,equal_nan=True):
-           return False
+        if not np.array_equal(t1.longitude.values, t2.longitude.values, equal_nan=True):
+            return False
         else:
-           return True
+            return True
 
-    newmass,newhgt,newrad = __pc_loop(tlist,newmass,newhgt,newrad)
+    newmass, newhgt, newrad = __pc_loop(tlist, newmass, newhgt, newrad)
 
     # TODO currently the fill value is 0.
     # possibly change to nan or something else?
@@ -898,31 +930,31 @@ def correct_pc(dset, gridspace=None):
     newhgt = newhgt.transpose("time", "y", "x", transpose_coords=True)
     newrad = newrad.transpose("time", "y", "x", transpose_coords=True)
     # keep original names for mass and height.
- 
+
     # ---------------------------------------
     # this block resets the longitude and latitude values
     # becase they are floats they change in the pc_loop function
-    # slightly and the the Dataset creation throws an error. 
+    # slightly and the the Dataset creation throws an error.
     newmass = newmass.drop("longitude")
     newhgt = newhgt.drop("longitude")
-    newrad = newrad.drop("longitude") 
+    newrad = newrad.drop("longitude")
     newmass = newmass.drop("latitude")
     newhgt = newhgt.drop("latitude")
-    newrad = newrad.drop("latitude") 
+    newrad = newrad.drop("latitude")
 
-    newmass = newmass.assign_coords(longitude=(("y","x"),lon))
-    newmass = newmass.assign_coords(latitude=(("y","x"),lat))
-    newhgt = newhgt.assign_coords(longitude=(("y","x"),lon))
-    newhgt = newhgt.assign_coords(latitude=(("y","x"),lat))
-    newrad = newrad.assign_coords(longitude=(("y","x"),lon))
-    newrad = newrad.assign_coords(latitude=(("y","x"),lat))
+    newmass = newmass.assign_coords(longitude=(("y", "x"), lon))
+    newmass = newmass.assign_coords(latitude=(("y", "x"), lat))
+    newhgt = newhgt.assign_coords(longitude=(("y", "x"), lon))
+    newhgt = newhgt.assign_coords(latitude=(("y", "x"), lat))
+    newrad = newrad.assign_coords(longitude=(("y", "x"), lon))
+    newrad = newrad.assign_coords(latitude=(("y", "x"), lat))
 
     # adjust the mass to mass loading by dividing by new area.
-    newmass = xr.where(newmass>0, newmass/newarea, newmass)
-    newmass = xr.where(newmass==0, np.nan, newmass)
+    newmass = xr.where(newmass > 0, newmass / newarea, newmass)
+    newmass = xr.where(newmass == 0, np.nan, newmass)
 
     if not check_compat(newmass, newhgt):
-       print('warning: coordinate values are not the same')
+        print("warning: coordinate values are not the same")
     # ---------------------------------------
 
     dnew = xr.Dataset(
@@ -941,36 +973,36 @@ def correct_pc(dset, gridspace=None):
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.effective_radius_of_ash.attrs.update(dset.effective_radius_of_ash.attrs)
     dnew.time.attrs.update({"standard_name": "time"})
-    #dnew.latitude.attrs.update({"standard_name": "latitude"})
-    #dnew.longitude.attrs.update({"standard_name": "longitude"})
-    #dnew = dnew.assign_attrs(dset.attrs)
+    # dnew.latitude.attrs.update({"standard_name": "latitude"})
+    # dnew.longitude.attrs.update({"standard_name": "longitude"})
+    # dnew = dnew.assign_attrs(dset.attrs)
 
     checklon = dnew.isel(y=0).longitude.values
     if np.any(checklon > 180.001):
-       print('warning longitude values above 180 found')
+        print("warning longitude values above 180 found")
     if np.any(checklon < -180.001):
-       print('warning longitude values below -180 found')
-
+        print("warning longitude values below -180 found")
 
     return dnew
 
-def __pc_loop(tlist,newmass,newhgt,newrad):
+
+def __pc_loop(tlist, newmass, newhgt, newrad):
     testmass = newmass.copy()
     indexhash = {}
     hthash = {}
-    #aratio = 1
+    # aratio = 1
     for point in tlist:
         lon = point[0]
-        if lon>180.0001: 
-           print('changing lon', lon, lon-360.0)
-           lon=lon-360.0
+        if lon > 180.0001:
+            print("changing lon", lon, lon - 360.0)
+            lon = lon - 360.0
         iii = newmass.monet.nearest_ij(lat=point[1], lon=point[0])
         area = point[4]
         hgt = point[3]
         totmass = point[2] * area
         if iii in indexhash.keys():
             indexhash[iii] += totmass
-            hthash[iii] = np.max((hthash[iii],hgt))
+            hthash[iii] = np.max((hthash[iii], hgt))
         else:
             indexhash[iii] = totmass
             hthash[iii] = hgt
@@ -992,12 +1024,12 @@ def __pc_loop(tlist,newmass,newhgt,newrad):
             point[3],
             newrad,
         )
-    return newmass,newhgt, newrad
+    return newmass, newhgt, newrad
 
 
 def combine_regridded(vlist):
     """
-    vlist : list of xarray DataArray or DataSet. 
+    vlist : list of xarray DataArray or DataSet.
             volcat data which has been regridded onto
             regular lat-lon grid.
             Each object needs to have the same grid spacing.
@@ -1029,56 +1061,56 @@ def combine_regridded(vlist):
         lonra = das.isel(y=0).longitude.values
         small = np.min(lonra)
         large = np.max(lonra)
-        minlon = np.min([minlon,small])
-        maxlon = np.max([maxlon,large])
+        minlon = np.min([minlon, small])
+        maxlon = np.max([maxlon, large])
 
         temp = das.copy()
-        xval = temp.x.values+1
-        yval = temp.y.values+1
-        temp = temp.assign_coords(x=("x",xval))
-        temp = temp.assign_coords(y=("y",yval))
+        xval = temp.x.values + 1
+        yval = temp.y.values + 1
+        temp = temp.assign_coords(x=("x", xval))
+        temp = temp.assign_coords(y=("y", yval))
         atemp = hysplit_gridutil.find_grid_specs(temp)
-        dlat.append(atemp['Latitude Spacing'])
-        dlon.append(atemp['Longitude Spacing'])
+        dlat.append(atemp["Latitude Spacing"])
+        dlon.append(atemp["Longitude Spacing"])
 
     # ----------------------------------
     # set corner longitude accordingly
     # should be -180 to -180
     # crnrlon should always be -180.
-    # TODO - this block can be streamlined. 
+    # TODO - this block can be streamlined.
     if maxlon <= 180.0:
-       crnrlon = -180
-    elif minlon >=0 and maxlon <=360:
-       print('warning lon points > 180 detected')
-       crnrlon = -180
+        crnrlon = -180
+    elif minlon >= 0 and maxlon <= 360:
+        print("warning lon points > 180 detected")
+        crnrlon = -180
     else:
-       print('grids not using same longitude range')
-       print('longitudes from {} to {}'.format(minlon, maxlon))
-       #print('warning: cannot combine')
-       crnrlon = -180
-       #return emptyvalue
+        print("grids not using same longitude range")
+        print("longitudes from {} to {}".format(minlon, maxlon))
+        # print('warning: cannot combine')
+        crnrlon = -180
+        # return emptyvalue
     # ----------------------------------
 
     # check that all grids have same spacing.
     tol = 0.01
     dlat.sort()
-    check1 = dlat[-1]-dlat[0]<=tol 
+    check1 = dlat[-1] - dlat[0] <= tol
     if not check1:
-       print('Grids do not have the same spacing')
-       print(str.join(' ',[str(x) for x in dlat]))
-       print('warning: cannot combine')
-       return emptyvalue
+        print("Grids do not have the same spacing")
+        print(str.join(" ", [str(x) for x in dlat]))
+        print("warning: cannot combine")
+        return emptyvalue
     dlon.sort()
-    check2 = dlon[-1]-dlon[0]<=tol 
+    check2 = dlon[-1] - dlon[0] <= tol
     if not check2:
-       print('Grids do not have the same spacing')
-       print(str.join(' ',[str(x) for x in dlon]))
-       print('warning: cannot combine')
-       return emptyvalue
+        print("Grids do not have the same spacing")
+        print(str.join(" ", [str(x) for x in dlon]))
+        print("warning: cannot combine")
+        return emptyvalue
 
     dlat = dlat[0]
-    dlon = dlon[0] 
-    logger.info('grid spacing is {} {}'.format(dlat,dlon))
+    dlon = dlon[0]
+    logger.info("grid spacing is {} {}".format(dlat, dlon))
 
     # check if time is a dimension
 
@@ -1087,59 +1119,56 @@ def combine_regridded(vlist):
     for iii, das in enumerate(vlist):
 
         # check if time is a dimension
-        if 'time' in das.dims:
+        if "time" in das.dims:
             das = das.isel(time=0)
-            dimvalue.append(das.time.values) 
-            newdim = 'time' 
-        elif 'time' in das.coords:
             dimvalue.append(das.time.values)
-            newdim = 'time' 
+            newdim = "time"
+        elif "time" in das.coords:
+            dimvalue.append(das.time.values)
+            newdim = "time"
         else:
-            newdim = 'ens'
+            newdim = "ens"
             dimvalue.append(iii)
 
         # put in new x and y indices for global grid.
-        #latra = das.sel(x=1).latitude.values
-        #lonra = das.sel(y=1).longitude.values
-        #ynew, xnew =  hysplit_gridutil.get_new_indices(latra,lonra,attrs)
-        #das = das.assign_coords(y=ynew)
-        #das = das.assign_coords(x=xnew)
+        # latra = das.sel(x=1).latitude.values
+        # lonra = das.sel(y=1).longitude.values
+        # ynew, xnew =  hysplit_gridutil.get_new_indices(latra,lonra,attrs)
+        # das = das.assign_coords(y=ynew)
+        # das = das.assign_coords(x=xnew)
 
-        # create global grid and use that. 
+        # create global grid and use that.
         # this changes the x and y values that correspond to the lat lon values.
         # important because aligning with other grids is done with x and y since
         # they are integers. It is difficult to align with floats.
-        attrs = hysplit_gridutil.create_global_grid(dlat,dlon,crnrlon)
+        attrs = hysplit_gridutil.create_global_grid(dlat, dlon, crnrlon)
         try:
-            das = hysplit_gridutil.change_grid(das,attrs)
+            das = hysplit_gridutil.change_grid(das, attrs)
         except:
-            print('volcat not compatible with global grid: ', attrs)
+            print("volcat not compatible with global grid: ", attrs)
         rlist.append(das)
 
         # xnew will encompass areas of all the data-arrays.
-        if iii==0:
-           dnew = das.copy()
+        if iii == 0:
+            dnew = das.copy()
         else:
-           aaa, dnew = xr.align(das,dnew,join="outer")
-           dnew = dnew.fillna(0) 
-   
-    # now expand each array to size of xnew.   
+            aaa, dnew = xr.align(das, dnew, join="outer")
+            dnew = dnew.fillna(0)
+
+    # now expand each array to size of xnew.
     blist = []
     for iii, das in enumerate(rlist):
-        bbb, junk = xr.align(das,dnew,join="outer")
+        bbb, junk = xr.align(das, dnew, join="outer")
         bbb.expand_dims(newdim)
         bbb[newdim] = dimvalue[iii]
-        blist.append(bbb) 
+        blist.append(bbb)
     # concatenate the expanded arrays which all have same size.
-    newra = xr.concat(blist,newdim)
+    newra = xr.concat(blist, newdim)
     # add grid information to dataset
     newra.attrs.update(attrs)
     # if don't do this then some of the lat lon coords will be nan.
     newra = hysplit.reset_latlon_coords(newra)
-    if 'time' in newra.dims:
-        newra = newra.sortby('time',ascending=True)
+    if "time" in newra.dims:
+        newra = newra.sortby("time", ascending=True)
     hysplit.reset_latlon_coords(newra)
     return newra
-
- 
-
