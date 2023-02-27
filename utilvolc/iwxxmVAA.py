@@ -331,13 +331,19 @@ class WashingtonPage:
     Scrape the washington vaac page for xml file locations
     """
 
-    def __init__(self):
+    def __init__(self,year=None):
         #self.page = "https://www.ssd.noaa.gov/VAAC/messages.html"
         self.page = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/messages.html"
         self.xmlpage = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/volcanoes/xml_files/"
+        self.archivepage = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/"
+        if (isinstance(year,int)):
+           self.get_archive(year)
         self.hcontent = ""
         self.hcontent_loaded = False
         self.xlist = None
+
+    def get_archive(self, year):
+        self.page = '{}{}.html'.format(self.archivepage,year)
 
     def read(self):
         # read the web page
@@ -625,7 +631,7 @@ class iwxxmVAA:
             if verbose: print('-----')
         return mlist
 
-    def plot_vaa(self, ax=None):
+    def plot_vaa(self, ax=None, polylist=None, legend=True):
         """ """
         if not ax:
             fig = plt.figure(1)
@@ -639,12 +645,15 @@ class iwxxmVAA:
             tstr.append(str(ttt))
 
         clr = ["-k", "-r", "-b", "-c"]
+        plist = self.get_poly_list()
+        if not polylist: polylist = np.arange(0,len(plist))
         for iii, poly in enumerate(self.get_poly_list()):
+            if iii not in polylist: continue
             if not poly.is_empty:
                 ax.plot(*poly.exterior.xy, clr[iii], label=tstr[iii])
-        ax.plot(vlon, vlat, "^y", MarkerSize=10)
+        ax.plot(vlon, vlat, "^y", markersize=10)
         handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles, labels)
+        if legend: ax.legend(handles, labels)
 
     def get_vaaroot(self):
         vaa = self.root[0][0]

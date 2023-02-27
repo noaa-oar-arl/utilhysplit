@@ -31,10 +31,12 @@ logger = logging.getLogger(__name__)
  Issue = vl.get_files pauses and asks if you want to overwrite the logfiles.
  TODO  -  figure out what permissions need to be set for files.
  TODO  -  generation of parallax corrected files is slow.
+ TODO  - generate forecasts from TCM rather than a new run of HYSPLIT.
 """
 
 def workflow():
-    # Set the directories.
+    """
+     Set the directories.
         # inp = {}
         # inp['JPSS_DIR'] = '/pub/jpsss_upload'
         # inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
@@ -58,10 +60,14 @@ def workflow():
     #------------------------------------    
     # TYPES OF FILES
     #------------------------------------    
-    # Event summary files. SummaryFile class. json file. pushed to ARL.
-    # Event Files. EventFile class. json file. pulled.
+    # Event summary files. 
+            SummaryFile class. json file. pushed to ARL.
+    # Event Files. 
+            EventFile class. json file. pulled.
+    # Data Files. 
+            see classes and methods in volcat.py. netcdf files. pulled.  
     # 
-
+    """
     #------------------------------------    
     # COMPLETED:
     # done - check for event summary files and read
@@ -672,7 +678,7 @@ class Events:
             df2 = df2[df2["sensor_name"] == bysensor]
         flist = self.get_flist(df2,self.ndir)  # df2['event_file'].values
         das = volcat.get_volcat_list(
-            self.ndir, flist=flist, correct_parallax=False, verbose=verbose
+            self.ndir, flist=flist, decode_times=False,correct_parallax=False, verbose=verbose
         )
         if verbose:
             print("get_volcat_events {} {}".format(len(das),len(flist)))
@@ -976,8 +982,13 @@ class EventFile(VFile):
         if 'observation_time' not in df.columns:
            logger.warning('observation_time not found')
            return False
+
+        # format of the data is different in different files.
         dtfmt = "%Y-%m-%dT%H:%M:%SZ"
-        #dtfmt2 = "%Y-%m-%dT%H:%M:%S.0Z"
+        dtfmt2 = "%Y-%m-%dT%H:%M:%S.0Z"
+        ttest = df['observation_time'].values[0]
+        if ttest[-2:] == '0Z': dtfmt = dtfmt2
+ 
         dftemp2 = df.apply(
             lambda row: datetime.datetime.strptime(row["observation_time"], dtfmt),
             axis=1,
@@ -1146,7 +1157,7 @@ class WorkFlow:
 
 
 def file_progression():
-    import volcat_logic as vl
+    import qva_logic as vl
 
     # Step 0:
     df = vl.get_summary_file_df(fdir, hours=x)
@@ -1202,7 +1213,7 @@ def file_progression():
     # This is done using vl.list_times(). The figures are generated for the individual events
     # Step 4:
     events = vl.list_times(data_dir, volcano="volcano name", pc=True)
-    vl.write_emitimes(
+    vl.make_data_insertion(
         data_dir,
         volcano="volcano name",
         event_date=events.Event_Dates[i],
@@ -2327,7 +2338,7 @@ def write_emitimes(
     Return:
     None
     """
-    from utilvolc import write_emitimes as we
+    from utilvolc import make_data_insertion as mdi
 
     pollnum = 1
     pollpercents = [1]
@@ -2386,7 +2397,7 @@ def write_emitimes(
             filenames = dframe.loc[dframe["idate"] == idate, "filename"].tolist()
             date_time = pd.to_datetime(idate)
             # Initialize write_emitimes function
-            volcemit = we.InsertVolcat(
+            volcemit = mdi.InsertVolcat(
                 emit_dir,
                 volc_dir,
                 date_time,
