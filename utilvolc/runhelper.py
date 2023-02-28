@@ -283,6 +283,20 @@ class JobSetUp:
             return dir + os.sep
         return dir
 
+    def add_test_directories(self):
+        tdir = '/hysplit-users/alicec/'
+        self.inp['HYSPLIT_DIR'] = '{}hdev/'.format(tdir)
+        self.inp['MAP_DIR'] = '/hysplit-users/alicec/hdev/graphics/'
+        self.inp['WORK_DIR'] = '/hysplit-users/alicec/tmp/testing/'
+        self.inp['DATA_DIR'] = '/hysplit-users/alicec/utilhysplit/ashapp/'
+        self.inp['FILES_DIR'] = './'
+        self.inp['PYTHON_EXE'] = '/hyslit-users/alicec/anaconda3/envs/hysplit/bin/python/'
+        self.inp['forecastDirectory'] = '/pub/forecast/'
+        self.inp['archivesDirectory'] = '/pub/archives/'
+        self.inp['CONVERT_EXE'] = 'convert'      
+        self.inp['GHOSTSCRIPT_EXE'] = 'gs'      
+ 
+
     def add_directories(self, inp):
         self.inp["HYSPLIT_DIR"] = inp["readyProperties"]["directory"]["hysplit"]
         self.inp["MAP_DIR"] = inp["readyProperties"]["directory"]["map"]
@@ -315,11 +329,14 @@ class JobSetUp:
         self.inp["zip_compression_level"] = 3
 
     def make_test_inputs(self):
-        # vname = "Kilauea"
-        vname = "bezy"
+        vname = "Kilauea"
+        # vname = "bezy"
+        #vname = 'Reventador'
         self.inp["owner"] = "A. Person"
         self.inp["top"] = 20000
-        self.inp["durationOfSimulation"] = 36
+        self.inp["durationOfSimulation"] = 24
+        self.inp['rate'] = 1
+        self.inp['area'] = 1
         testdate = datetime.datetime.now() - datetime.timedelta(hours=24)
         # testdate = datetime.datetime(2020,10,10,11)
         testminutes = 15

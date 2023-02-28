@@ -7,6 +7,8 @@
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
 # 09 DEC 2022 (AMC) - changed latspan to 180 and lonspan to 360 for global grid.
 # 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired.
+# 28 FEB 2023 (AMC) - change to write_cxra so if netcdf file exists then set it as self.cxra
+# 28 FEB 2023 (AMC) - check attributes added as stand alone function but still kept as static method.
 #
 # -----------------------------------------------------------------------------
 # To run in offline mode use python ash_run.py -999
@@ -45,6 +47,16 @@ from utilvolc.volcMER import HT2unit
 # from locusts import LocustsFileNameComposer, Helper, LocustsSetUpParser, FlightPlannerFactory, \
 #                    SingleHeightSource, LocustSwarm
 logger = logging.getLogger(__name__)
+
+def check_attributes(atthash):
+    # when writing to netcdf file, attributes which are numpy arrays do not write properly.
+    # need to change them to lists.
+    for key in atthash.keys():
+        val = atthash[key]
+        if isinstance(val, np.ndarray):
+            newval = list(val)
+            atthash[key] = newval
+    return atthash
 
 
 def print_usage():
@@ -166,26 +178,40 @@ class AshRun:
         # convert to mg /m3
         fname = "xrfile.{}.nc".format(self.JOBID)
         mult = self.get_conc_multiplier()
+
+        # check if file exists
         if os.path.isfile(fname):
             logger.info("netcdf file exists. Opening {}".format(fname))
             cxra = xr.open_dataset(fname)
             # get first data variable
+            logger.info('data variable {}'.format(list(cxra.data_vars.keys())[0]))
             cxra = cxra[list(cxra.data_vars.keys())[0]]
-
             pmult = cxra.attrs["mult"]
+
+            # if it exists and multiplication factor hasn't changed then doing nothing more.
+            if np.isclose(pmult, mult, atol=0, rtol=0.1):
+               self.cxra = cxra
+               return []
+          
+            # if multiplication has changed then remove the old file and write new one.
+            logger.info('changing mult factor {} {}'.format(pmult, mult))
             cxra = mult * cxra / pmult
+            self.cxra = cxra
             # remove netcdf file so new one can be written.
             Helper.remove(os.path.join(self.inp["WORK_DIR"], fname))
+        # if file does not already exist then create it.
         else:
             logger.info("netcdf file does not exist. Creating {}".format(fname))
-            cxra = mult * self.get_cdump_xra()
-        cxra = cxra.assign_attrs({"mult": mult})
-        cxra = cxra.assign_attrs(self.inp2attr())
+            self.cxra = mult * self.get_cdump_xra()
+
+        self.cxra = self.cxra.assign_attrs({"mult": mult})
+        self.cxra = self.cxra.assign_attrs(self.inp2attr())
         logger.info("writing nc file {}".format(fname))
         # cxra.attrs.update(self.inp2attr())
 
         # need to change to dataset to add compression
-        self.write_with_compression(cxra, fname)
+        self.write_with_compression(self.cxra, fname)
+
         if not self.cxra.size > 1:
             logger.info(
                 "make_awips_netcdf: cxra empty. cannot create awips\
@@ -207,7 +233,7 @@ class AshRun:
     def write_with_compression(self, cxra, fname):
         atthash = self.check_attributes(cxra.attrs)
         cxra = cxra.assign_attrs(atthash)
-        cxra2 = cxra.to_dataset()
+        cxra2 = cxra.to_dataset(name='POL')
         ehash = {"zlib": True, "complevel": 9}
         vlist = [x for x in cxra2.data_vars]
         vhash = {}
@@ -569,7 +595,7 @@ class AshRun:
         self.create_maptext()
         Helper.move("MAPTEXT.CFG", self.filelocator.get_maptext_filename_for_zip())
         if self.awips:
-            logger.debug("creating netcdf files")
+            logger.debug("creating netcdf files for awips")
             awipsfiles = self.make_awips_netcdf()
 
     def cleanup(self):
@@ -882,7 +908,7 @@ class AshRun:
         done = False
         outputname = flout(stage, frame=jjj)
         # self.filelocator.get_concentration_montage_filename(stage,frame=jjj)
-        jlist, levlist = self.set_levels_A()
+        jlist, levlist = self.set_qva_levels()
         # rlist = []
         montage = self.inp["CONVERT_EXE"].replace("convert", "montage")
         c = [montage]
