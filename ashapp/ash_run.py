@@ -65,6 +65,7 @@ def create_run_instance(JOBID, inp):
     create the correct object for the type of run and return it.
     """
     logger.info('Creating run Instance')
+
     if inp["runflag"] == "dispersion":
         if inp["meteorologicalData"].lower() == "gefs":
             from ashensemble import EnsembleAshRun
@@ -72,6 +73,7 @@ def create_run_instance(JOBID, inp):
         else:
             from ashbase import AshRun
             arun = AshRun(JOBID)
+
     elif inp["runflag"] == "inverse":
         from ashinverse import InverseAshRun
         arun = InverseAshRun(JOBID)
@@ -81,15 +83,21 @@ def create_run_instance(JOBID, inp):
         from ashdatainsertion import DataInsertionRun
         arun = DataInsertionRun(JOBID)
         logger.info('Data Insertion')
+
     elif inp["runflag"] == "BackTrajectory":
         from backtraj import BackTraj
         arun = BackTraj(JOBID)
         logger.info('Back Trajectory')
 
-    else: # Trajectory run
-        from ashtrajectory import TrajectoryAshRun
-        arun = TrajectoryAshRun(JOBID)
-        logger.info('Trajectory')
+    elif inp["runflag"] == "trajectory":
+        if inp["meteorologicalData"].lower() == "gefs":
+            from enstrajectory import EnsTrajectoryRun
+            arun = EnsTrajectoryRun(JOBID)
+            logger.info('Ensemble Trajectory')
+        else:
+            from ashtrajectory import TrajectoryAshRun
+            arun = TrajectoryAshRun(JOBID)
+            logger.info('Trajectory')
 
     arun.add_inputs(inp)
     return arun
