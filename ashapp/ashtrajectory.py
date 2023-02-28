@@ -1,10 +1,10 @@
-#!/opt/Tools/anaconda3/envs/hysplit/bin/python
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
 # ashtrajectory.py - run HYSPLIT model on web and create plots
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
+# 28 FEB 2023 (AMC) - default is for 10 evenly spaced trajectories from vent to top height.
 # -----------------------------------------------------------------------------
 # To run in offline mode use python ash_run.py -777
 # -----------------------------------------------------------------------------
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def print_usage():
     print(
         """\
-USAGE: TrajectoryAshRun 
+USAGE: to test use python ash_run.py run -777
 """
     )
 
@@ -47,15 +47,14 @@ class TrajectoryAshRun(AshRun):
         lat = self.inp["latitude"]
         lon = self.inp["longitude"]
         control.remove_locations()
-        # plist = list(range(0, 26000, 1000))
-        height_list = list(np.arange(vent, height, 500))
-        # height_list = [x for x in plist if x > vent and x < height]
+        # 10 evenly spaced levels between vent and top height.
+        height_list = np.linspace(vent, height, 10)
 
         # This returns list of FL every FL50. 12 levels total.
         # height_list,rlist = self.set_levels_A()
         # For trajectory every FL100 is sufficient
         # height_list = height_list[::2]
-        if not height_list:
+        if not isinstance(height_list, (list,np.ndarray,tuple)):
             logger.info(
                 "No height found between vent {} and top height"
                 " {}. Using Default heights".format(vent, height)
