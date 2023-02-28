@@ -1,45 +1,57 @@
+""" manipulating xarray objects with dimensions of lat,lon,time,ens,source,z(optional)
+FUNCTIONS
+The functions in this file are for manipulating xarray objects with concentration or mass loading information.
+
+ATL       : applied threshold level
+ATLra     : applied threshold level
+
+APL       : applied percentile level
+APLra     : applied percentile level
+
+ens_cdf   : cumulative distribution functions.
+plot_cdf  : plots outputs from ens_cdf
+
+preprocess : stacks ens and source dimensions
+
+listvals : returns 1d list of values in data-array
+
+get_pixel_match : finds threshold which would result in same number of pixels in two input arrays.
+
+
+
+# Needs documentation 
+    plot_ens_area
+    plot_ens_accuracy
+    ens_boxplot
+
+# Needs checking
+    topheight : returns height of level
+
+Commented out
+    volcATL
+    make_ATL_hysp
+
+
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import xarray as xr
 from utilhysplit.evaluation import hysplit_boxplots
-from utilhysplit.evaluation.statmain import (cdf, get_pixel_matching_threshold,
-                                             pixel_matched_cdf)
-
-"""
-FUNCTIONS
-The functions in this file are for
-manipulating concentration xarray objects which have dimensions of lat,lon,z,time,ens,source
-manipulating massloading   xarray objects which have dimensions of lat,lon,time,ens,source
-
-ATL       : applied threshold level
-APLra     : applied percentile level
-APL       : applied percentile level
-ens_cdf   : cumulative distribution functions.
-
-
-# Needs more work:
-make_ATL_hysp:
-topheight : returns height of level
-
-"""
+from utilhysplit.evaluation.statmain import (
+    cdf,
+    get_pixel_matching_threshold,
+    pixel_matched_cdf,
+)
 
 # _______________________________________________________________________
 
 # 2021 Jun 2  amc some functions moved to ensemble_tools_plotting.py
 # 2021 Jun 2  amc replaced choose_and_stack function with preprocess.
 # 2022 Jan 10 amc moved functions for fss and afss to ensemble_stat.py to remove dependency on plume_stat.py
-
-
-#def forecast(indra,levs=[0.2,2,5,10,10000])
-
-#def make_forecast(cdump,tii=0):
-#    threshlist = [0.2,2,5,10]
-#    rtot = ATL(aeval 
-     
-
-
+# 2023 Feb 28 commented out volcATL and make_ATL_hysp
 
 def APL(indra, problev=50, enslist=None, sourcelist=None):
     """
@@ -94,11 +106,10 @@ def APLra(indra, enslist=None, sourcelist=None):
     return newra
 
 
-def volcATL(indra):
-    # 2021 Jun 2 amc was returning ATL(indra) instead of ATL(newra)
-    newra = indra.MER * indra
-    return ATL(newra)
-
+# def volcATL(indra):
+#    # 2021 Jun 2 amc was returning ATL(indra) instead of ATL(newra)
+#    newra = indra.MER * indra
+#    return ATL(newra)
 
 
 def preprocess(indra, enslist=None, sourcelist=None):
@@ -110,12 +121,11 @@ def preprocess(indra, enslist=None, sourcelist=None):
     Returns:
     dra : xarray datatArray: same dimensions as indra except will stack 'source' and 'ens'
           dimensions if both present.
-    dim : str : indicates whether 'ens' or 'source' dimension is to be used.
     """
-
 
     dra = indra.copy()
 
+    # dim : str : indicates whether 'ens' or 'source' dimension is to be used.
     # handle whether using 'ens' dimension, 'source' dimension or both.
     dim = "ens"
 
@@ -125,7 +135,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
         pass
     # if no sourcelist is passed and source dimension is only length 1,
     # then 'squeeze' it rather than stack it.
-    elif "source" in dra.dims and len(dra.source.values)==1:
+    elif "source" in dra.dims and len(dra.source.values) == 1:
         dra = dra.isel(source=0)
     elif "source" in dra.dims and not sourcelist:
         sourcelist = dra.source.values
@@ -134,12 +144,12 @@ def preprocess(indra, enslist=None, sourcelist=None):
         pass
     # if no enslist is passed and source dimension is only length 1,
     # then 'squeeze' it rather than stack it.
-    elif "ens" in dra.dims and len(dra.ens.values)==1:
+    elif "ens" in dra.dims and len(dra.ens.values) == 1:
         dra = dra.isel(ens=0)
     elif "ens" in dra.dims and not enslist:
         enslist = dra.ens.values
     if "source" in dra.dims and "ens" in dra.dims:
-        dra = dra.rename({'ens':'metens'})
+        dra = dra.rename({"ens": "metens"})
         dra = dra.sel(metens=enslist)
         dra = dra.sel(source=sourcelist)
         dra = dra.stack(ens=("metens", "source"))
@@ -149,103 +159,106 @@ def preprocess(indra, enslist=None, sourcelist=None):
     elif "ens" in dra.dims:
         dra = dra.sel(ens=enslist)
     else:
-        #print("Warning: could not find source or ens dimension")
+        # print("Warning: could not find source or ens dimension")
         dim = None
     return dra, dim
 
 
+def ATLra(
+    indra, enslist, sourcelist, threshlist, norm=True, weights=None, include_zero=False
+):
 
-def ATLra(indra,enslist,sourcelist,threshlist,norm=True,weights=None,
-          include_zero=False):
-
-    #------------------------------------------------
+    # ------------------------------------------------
     # making frequency of exceedances
     atl_list = []
     for thresh in threshlist:
-        temp = ATL(indra,enslist,sourcelist,thresh,norm,weights,include_zero)
+        temp = ATL(indra, enslist, sourcelist, thresh, norm, weights, include_zero)
         temp = temp.assign_coords(thresh=thresh)
-        temp = temp.expand_dims('thresh')
+        temp = temp.expand_dims("thresh")
         atl_list.append(temp)
-    new = xr.concat(atl_list, dim='thresh')
+    new = xr.concat(atl_list, dim="thresh")
 
     atthash = {}
-    atthash['Description'] = 'Ensemble relative frequency of exceedance'
-    atthash['thresh unit'] = 'mg/m3'
-    atthash['unit'] = 'percent of ensemble members above threshold'
+    atthash["Description"] = "Ensemble relative frequency of exceedance"
+    atthash["thresh unit"] = "mg/m3"
+    atthash["unit"] = "percent of ensemble members above threshold"
     new.attrs.update(atthash)
 
-    #------------------------------------------------
+    # ------------------------------------------------
     # making gridded concentration
-    problev=50
-    apl = APL(indra,problev=problev)
-    descrip = 'Concentrations at {} percentile level'.format(problev) 
-    atthash={}
-    atthash['Description'] = descrip
-    atthash['units'] = 'mg/m3'
+    problev = 50
+    apl = APL(indra, problev=problev)
+    descrip = "Concentrations at {} percentile level".format(problev)
+    atthash = {}
+    atthash["Description"] = descrip
+    atthash["units"] = "mg/m3"
     apl.attrs.update(atthash)
 
-    
-    #------------------------------------------------
+    # ------------------------------------------------
     # making dataset
     dhash = {}
-    dhash['FrequencyOfExceedance'] = new
-    dhash['Concentration'] = apl
-    dset = xr.Dataset(data_vars = dhash)
+    dhash["FrequencyOfExceedance"] = new
+    dhash["Concentration"] = apl
+    dset = xr.Dataset(data_vars=dhash)
 
     nhash = {}
-    nhash['Model'] = 'HYSPLIT'
-    nhash['Meteorological model'] = 'GFS'
-    nhash['VAAC'] = 'TEST'
-    nhash['Volcano'] = 'Popocetepetl' 
+    nhash["Model"] = "HYSPLIT"
+    nhash["Meteorological model"] = "GFS"
+    nhash["VAAC"] = "TEST"
+    nhash["Volcano"] = "Popocetepetl"
 
     dset.attrs.update(nhash)
 
     return dset
 
 
-
-def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None,
-        include_zero=False):
+def ATL(
+    indra,
+    enslist=None,
+    sourcelist=None,
+    thresh=0,
+    norm=True,
+    weights=None,
+    include_zero=False,
+):
     """
-     Applied Threshold Level (also ensemble frequency of exceedance).
+    Applied Threshold Level (also ensemble frequency of exceedance).
 
-     indra: xr dataarray produced by combine_dataset or by hysp_massload
-            it must have 'ens' dimension, 'source' dimension or both.
-            time and z dimensions are optional.
+    indra: xr dataarray produced by combine_dataset or by hysp_massload
+           it must have 'ens' dimension, 'source' dimension or both.
+           time and z dimensions are optional.
 
-     enslist : list of values to use for 'ens' coordinate
-     sourcelist : list of values to use for 'source' coordinate
+    enslist : list of values to use for 'ens' coordinate
+    sourcelist : list of values to use for 'source' coordinate
 
-     thresh : int or float. If 0 then use > for test. otherwise use >=.
-     thresh : list or npndarray of 2 floats. Number of ensemble members between the two values.
+    thresh : int or float. If 0 then use > for test. otherwise use >=.
+    thresh : list or npndarray of 2 floats. Number of ensemble members between the two values.
 
-     include_zero : boolean. If true then use >= when threshold is zero.
-     weights : numpy array of same length as enslist + sourcelist containing weight for
-               each member.
+    include_zero : boolean. If true then use >= when threshold is zero.
+    weights : numpy array of same length as enslist + sourcelist containing weight for
+              each member.
 
-     Returns array with number of ensemble members above
-     given threshold at each location.
-     dimensions will be same as input except no 'ens' or 'source' dimension.
+    Returns array with number of ensemble members above
+    given threshold at each location.
+    dimensions will be same as input except no 'ens' or 'source' dimension.
 
-     norm : boolean
-            if True return percentage of members.
-            if False return number of members.
-            using norm is same as applying uniform weighting.
-            should not be used with weights.
+    norm : boolean
+           if True return percentage of members.
+           if False return number of members.
+           using norm is same as applying uniform weighting.
+           should not be used with weights.
 
-     """
+    """
     # handle whether using 'ens' dimension, 'source' dimension or both.
 
     if isinstance(weights, (list, np.ndarray)):
-       norm=False
+        norm = False
 
     dra, dim = preprocess(indra, enslist, sourcelist)
 
-
-
     # allow for multiple category forecasts.
     # probability that value is between two values.
-    if isinstance(thresh,list) or isinstance(thresh,np.ndarray):
+    if isinstance(thresh, list) or isinstance(thresh, np.ndarray):
         threshmax = float(thresh[1])
         thresh = float(thresh[0])
     else:
@@ -257,7 +270,7 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None,
         dra2 = xr.where(dra >= thresh, 1, 0)
     else:
         dra2 = xr.where(dra >= thresh, 1, 0)
-    
+
     # if this threshold is not None.
     if threshmax:
         # place ones where below max threshold.
@@ -279,6 +292,7 @@ def ATL(indra, enslist=None, sourcelist=None, thresh=0, norm=True, weights=None,
         dra2 = dra2 / nmembers
     return dra2
 
+
 def listvals(dra):
     """
     returns 1d list of values in the data-array
@@ -288,13 +302,14 @@ def listvals(dra):
     vshape = np.array(vals.shape)
     return vals.reshape(np.prod(vshape))
 
+
 def get_pixel_match(indra, obsra, thresh, return_binary=False):
     """
     Counts how many above threshold values in obsra.
     Sorts indra values form least to greatest.
     Finds threshold for indra ense members  which would result in same number of
     above threshold values as in obsra.
-    
+
     Stores this threshold value in matchra and returns.
     applies thresholds to indra to return matchra which have same number of
     above threshold pixels as obsra.
@@ -302,110 +317,119 @@ def get_pixel_match(indra, obsra, thresh, return_binary=False):
     Inputs:
     Outputs:
     threshra : xarray dataArray with threshold for each ensemble value.
-    matchra  : indra with 
+    matchra  : indra with
     """
     dra, dim = preprocess(indra)
     threshlist = []
     if dim:
-        for ens in dra[dim].values: 
+        for ens in dra[dim].values:
             if dim == "ens":
                 subdra = dra.sel(ens=ens)
             elif dim == "source":
                 subdra = dra.sel(source=ens)
-            pm_thresh = get_pixel_matching_threshold(obsra,subdra,thresh)
+            pm_thresh = get_pixel_matching_threshold(obsra, subdra, thresh)
             threshlist.append(pm_thresh)
     else:
         subdra = dra
-        pm_thresh = get_pixel_matching_threshold(obsra,subdra,thresh)
+        pm_thresh = get_pixel_matching_threshold(obsra, subdra, thresh)
         threshlist.append(pm_thresh)
     threshra = xr.DataArray(threshlist, dims=dim)
     if return_binary:
-        matchra = xr.where(indra >= threshra,1,0)
+        matchra = xr.where(indra >= threshra, 1, 0)
     else:
-        matchra = xr.where(indra>=threshra,indra,0)
+        matchra = xr.where(indra >= threshra, indra, 0)
     return threshra, matchra
 
 
-def plot_ens_area(ensdfin,ax=None,plotmean=False,legend=False,clrlist=None,enslist=None):
+# used in Bezy project
+def plot_ens_area(
+    ensdfin, ax=None, plotmean=False, legend=False, clrlist=None, enslist=None
+):
     sns.set()
     sns.set_style("whitegrid")
     if not ax:
-        fig, ax = plt.subplots(1,1)
-    sns.set_style('whitegrid')
-    ensdf = ensdfin.copy() 
-    if 'time' in ensdf.columns:
-        val = ensdf.pivot(columns='ens',values='area_fc',index='time')
-        if isinstance(enslist,list): val = val[enslist]
-        obs = ensdf.pivot(columns='ens',values='area_obs',index='time')
+        fig, ax = plt.subplots(1, 1)
+    sns.set_style("whitegrid")
+    ensdf = ensdfin.copy()
+    if "time" in ensdf.columns:
+        val = ensdf.pivot(columns="ens", values="area_fc", index="time")
+        if isinstance(enslist, list):
+            val = val[enslist]
+        obs = ensdf.pivot(columns="ens", values="area_obs", index="time")
         obs = obs[obs.columns[0]]
-        ax.plot(obs.index.values,obs.values, linestyle='--', linewidth=10,alpha=0.5,label='obs')
+        ax.plot(
+            obs.index.values,
+            obs.values,
+            linestyle="--",
+            linewidth=10,
+            alpha=0.5,
+            label="obs",
+        )
         if not clrlist:
-            val.plot(ax=ax,legend=None,colormap='tab20') 
+            val.plot(ax=ax, legend=None, colormap="tab20")
         else:
-            val.plot(ax=ax,legend=None,color=clrlist,alpha=0.5) 
-        #if 'mean' in val.columns and plotmean: 
+            val.plot(ax=ax, legend=None, color=clrlist, alpha=0.5)
+        # if 'mean' in val.columns and plotmean:
         #    val.plot(ax=ax, y='mean', legend=None, linewidth=5,colormap='winter')
     else:
-        val = ensdf.pivot(columns='ens',values=cname,index='time')
-        val = ensdf.pivot(columns='ens',values=cname,index='time')
-    ax.set_ylabel('Area (number of pixels)')
+        val = ensdf.pivot(columns="ens", values=cname, index="time")
+        val = ensdf.pivot(columns="ens", values=cname, index="time")
+    ax.set_ylabel("Area (number of pixels)")
     if legend:
-       handles, labels = ax.get_legend_handles_labels()
-       ax.legend(handles,labels)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles, labels)
     return ax
 
-def plot_ens_accuracy(ensdfin,cname='MAE',
-                      plotmean=True,
-                      legend=False,
-                      clrlist=None,
-                      enslist=None):
-    if cname == 'RMSE':
-       rvalue = 'RMSE'
-       cname = 'MSE'
+# used in Bezy project
+def plot_ens_accuracy(
+    ensdfin, cname="MAE", plotmean=True, legend=False, clrlist=None, enslist=None
+):
+    if cname == "RMSE":
+        rvalue = "RMSE"
+        cname = "MSE"
     else:
-       rvalue = cname
+        rvalue = cname
     ensdf = ensdfin.copy()
     sns.set()
     sns.set_style("whitegrid")
-    fig, ax = plt.subplots(1,1)
-    sns.set_style('whitegrid')
-    if 'time' in ensdf.columns:
-        val = ensdf.pivot(columns='ens',values=cname,index='time')
+    fig, ax = plt.subplots(1, 1)
+    sns.set_style("whitegrid")
+    if "time" in ensdf.columns:
+        val = ensdf.pivot(columns="ens", values=cname, index="time")
         # this is for re-ordering the columns.
-        if isinstance(enslist,list): val = val[enslist]
-        if rvalue == 'RMSE':
-           val = val**0.5
+        if isinstance(enslist, list):
+            val = val[enslist]
+        if rvalue == "RMSE":
+            val = val ** 0.5
         if clrlist:
-            val.plot(ax=ax,legend=None,color=clrlist) 
+            val.plot(ax=ax, legend=None, color=clrlist)
         else:
-            val.plot(ax=ax,legend=None,colormap='tab20') 
-        #if 'mean' in val.columns and plotmean: 
+            val.plot(ax=ax, legend=None, colormap="tab20")
+        # if 'mean' in val.columns and plotmean:
         #    val.plot(ax=ax, y='mean', legend=None, linewidth=5,colormap='winter')
-         
+
     else:
-        val = ensdf.pivot(columns='ens',values=cname,index='time')
-        val = ensdf.pivot(columns='ens',values=cname,index='time')
+        val = ensdf.pivot(columns="ens", values=cname, index="time")
+        val = ensdf.pivot(columns="ens", values=cname, index="time")
     ax.set_ylabel(rvalue)
     if legend:
-       handles, labels = ax.get_legend_handles_labels()
-       ax.legend(handles,labels)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles, labels)
     return ax
 
 
-       
-    
 def ens_boxplot(
     indra,
     enslist=None,
     sourcelist=None,
     timelist=None,
     threshold=0,
-    #plot=True,
+    # plot=True,
     pixel_match=None,
     clist=None
-    #xscale='log',
-    #colors=None,
-    #label='time'
+    # xscale='log',
+    # colors=None,
+    # label='time'
 ):
     if "source" in indra.dims:
         sourcekey = True
@@ -421,25 +445,26 @@ def ens_boxplot(
         elif dim == "source":
             subdra = dra.sel(source=ens)
         # check if time is a dimension.
-        if not isinstance(timelist, (list, np.ndarray)) and 'time' in subdra.dims:
+        if not isinstance(timelist, (list, np.ndarray)) and "time" in subdra.dims:
             timelist = subdra.time.values
-        elif 'time' not in subdra.dims:
+        elif "time" not in subdra.dims:
             timelist = [0]
         # loop through times. If no time, then just go through once.
         for tm in timelist:
             # check if time is a dimension.
-            if 'time' in subdra.dims:
+            if "time" in subdra.dims:
                 tvals = subdra.sel(time=tm)
             else:
-                tvals = subdra 
+                tvals = subdra
             # create list of above threshold values.
             vdata.append([x for x in listvals(tvals) if x > threshold])
             # create cdf from highest pixel_match values.
-            #else:
+            # else:
             #    sdata, y = pixel_matched_cdf(listvals(tvals), pixel_match)
-        print('boxplot', len(vdata), len(timelist))
-        dj = hysplit_boxplots.prepare_boxplotdata(timelist,vdata) 
-        hysplit_boxplots.make_boxplot(dj,cols=clist)
+        print("boxplot", len(vdata), len(timelist))
+        dj = hysplit_boxplots.prepare_boxplotdata(timelist, vdata)
+        hysplit_boxplots.make_boxplot(dj, cols=clist)
+
 
 def ens_cdf(
     indra,
@@ -449,9 +474,9 @@ def ens_cdf(
     threshold=0,
     plot=True,
     pixel_match=None,
-    xscale='log',
+    xscale="log",
     colors=None,
-    label='time'
+    label="time",
 ):
     """
     produces plots of cumulative distribution functions.
@@ -460,7 +485,7 @@ def ens_cdf(
     threshold : float : produce CDF for values > threshold.
     pixel_match : Number of pixels in observation.
                   if not None then will use this instead of threshold.
-                  Cut length of modeled data to same length as observed. 
+                  Cut length of modeled data to same length as observed.
     Returns:
     cdfhash : dictionary. key is the time. value is a tuple of the CDF (x,y)
     """
@@ -474,7 +499,7 @@ def ens_cdf(
     if plot:
         fig = plt.figure(1)
         ax = fig.add_subplot(1, 1, 1)
-    
+
     # loop through ens/source members
     for ens in dra[dim].values:
         if dim == "ens":
@@ -483,18 +508,18 @@ def ens_cdf(
             subdra = dra.sel(source=ens)
 
         # check if time is a dimension.
-        if not isinstance(timelist, (list, np.ndarray)) and 'time' in subdra.dims:
+        if not isinstance(timelist, (list, np.ndarray)) and "time" in subdra.dims:
             timelist = subdra.time.values
-        elif 'time' not in subdra.dims:
+        elif "time" not in subdra.dims:
             timelist = [0]
 
         # loop through times. If no time, then just go through once.
         for tm in timelist:
             # check if time is a dimension.
-            if 'time' in subdra.dims:
+            if "time" in subdra.dims:
                 tvals = subdra.sel(time=tm)
             else:
-                tvals = subdra 
+                tvals = subdra
             # create cdf from values above threshold
             if not pixel_match:
                 sdata, y = cdf([x for x in listvals(tvals) if x > threshold])
@@ -509,64 +534,66 @@ def ens_cdf(
                 key = (tm, ens)
             cdfhash[key] = (sdata, y)
     if plot:
-        plot_cdf(ax, cdfhash,xscale,clrs=colors,label=label)
+        plot_cdf(ax, cdfhash, xscale, clrs=colors, label=label)
     return cdfhash
 
 
-def plot_cdf(ax1, cdfhash,xscale='log',clrs=None, label='time'):
+def plot_cdf(ax1, cdfhash, xscale="log", clrs=None, label="time"):
     """
     Plots output from ens_cdf
     """
-    if isinstance(clrs,list):
+    if isinstance(clrs, list):
         clrs = clrs
     else:
         clrs = ["r", "y", "g", "c", "b", "k"]
     for iii, key in enumerate(cdfhash.keys()):
         if iii > len(clrs) - 1:
             clrs.extend(clrs)
-        if label=='time': lname = key[0]
-        elif label=='ens': lname = key[1]
-        ax1.step(cdfhash[key][0], cdfhash[key][1], ls='-',color=clrs[iii],label=lname)
+        if label == "time":
+            lname = key[0]
+        elif label == "ens":
+            lname = key[1]
+        ax1.step(cdfhash[key][0], cdfhash[key][1], ls="-", color=clrs[iii], label=lname)
     ax1.set_xscale(xscale)
     return ax1
 
 
-def make_ATL_hysp(xra, variable="p006", threshold=0.0, MER=None):
-    # amr version. maybe not needed now that ATL has been modified.
-    """
-    Uses threshold value to make binary field of ensemble members.
-    For use in statistics calculations. Based on mass loading, no vertical component
-    Inputs:
-    xra: xarray dataset - netcdf files from hysplit.combine_dataset
-    variable: variable name (string) from xra
-    threshold: ash threshold - default=0. (float/integer)
-    MER: mass eruption rate - default is Mastin equation MER from xra attributes, units are  (float/integer)
-    Output:
-    xrabin: binary xarray dataarray (source, x, y)
-    """
-
-    xra2 = (
-        xra[variable] * 1000.0
-    )  # Each vertical layer is 1000m - MAY WANT TO ALLOW INPUT
-    xra2 = xra2.sum(dim="z")  # Summing along z makes the units g/m^2
-    # May want to add loops for time and ensemble dimension in the future
-    # MER must used for two ensemble members
-    if not MER:
-        MER = xra.attrs[
-            "Fine Ash MER"
-        ]  # Allowing for MER input - default is Mastin equation MER
-
-    xra3 = xra2
-    a = 0
-    while a < len(xra2.source):
-        if xra2[a, :, :].source in ("CylinderSource", "LineSource"):
-            xra3[a, :, :] = xra2[a, :, :] * MER
-        else:
-            xra3[a, :, :] = xra2[a, :, :]
-        a += 1
-
-    xrabin = xr.where(xra3 >= threshold, 1.0, 0.0)
-    return xrabin
+# def make_ATL_hysp(xra, variable="p006", threshold=0.0, MER=None):
+# amr version. maybe not needed now that ATL has been modified.
+#    """
+#    Uses threshold value to make binary field of ensemble members.
+#    For use in statistics calculations. Based on mass loading, no vertical component
+#    Inputs:
+#    xra: xarray dataset - netcdf files from hysplit.combine_dataset
+#    variable: variable name (string) from xra
+#    threshold: ash threshold - default=0. (float/integer)
+#    MER: mass eruption rate - default is Mastin equation MER from xra attributes, units are  (float/integer)
+#    Output:
+#    xrabin: binary xarray dataarray (source, x, y)
+#    """
+#
+#    xra2 = (
+#        xra[variable] * 1000.0
+#    )  # Each vertical layer is 1000m - MAY WANT TO ALLOW INPUT
+#    xra2 = xra2.sum(dim="z")  # Summing along z makes the units g/m^2
+#    # May want to add loops for time and ensemble dimension in the future
+#    # MER must used for two ensemble members
+#    if not MER:
+#        MER = xra.attrs[
+#            "Fine Ash MER"
+#        ]  # Allowing for MER input - default is Mastin equation MER
+#
+#    xra3 = xra2
+#    a = 0
+#    while a < len(xra2.source):
+#        if xra2[a, :, :].source in ("CylinderSource", "LineSource"):
+#            xra3[a, :, :] = xra2[a, :, :] * MER
+#        else:
+#            xra3[a, :, :] = xra2[a, :, :]
+#        a += 1
+#
+#    xrabin = xr.where(xra3 >= threshold, 1.0, 0.0)
+#    return xrabin
 
 
 def topheight(draash, time, ens, level, thresh=0.01):
