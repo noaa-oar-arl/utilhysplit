@@ -16,7 +16,7 @@ from utilvolc.runhelper import make_dir
 from utilvolc import volcat
 from utilhysplit.runhandler import ProcessList
 from utilhysplit.plotutils import map_util
-from ashapp import ashapp_plotting
+import utilhysplit.evaluation.web_ensemble_plots as wep
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
  Workflow for creating QVA (quantitative volcanic ash) forecasts
 
  Changelog
- 2022 Dec 8 AMC  added date input to function get_summary_file_df
+ 2022 Dec 8  AMC  added date input to function get_summary_file_df
+ 2023 Feb 28 AMC  added error checking for empty files to get_summary_file_df
 
 
 
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
  TODO  -  generation of parallax corrected files is slow.
  TODO  - generate forecasts from TCM rather than a new run of HYSPLIT.
 """
+
+# Prata 2018 uses dosage 
+
 
 def workflow():
     """
@@ -180,6 +184,9 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate = datetime.datetime
     fdir : str : location of summary files
     Returns
     sumdf : pandas dataframe with information from all the summary files.
+
+    prints an error if one of the files cannot be read
+
     """
 
     vlist = []
@@ -205,7 +212,11 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate = datetime.datetime
                 continue
         else:
             continue
-        vlist.append(sfn.open_dataframe())
+        try:
+            vlist.append(sfn.open_dataframe())
+        except Exception as eee:
+            print('ERROR READING', fln,  eee)
+             
         # df = sfn.open_dataframe()
     sumdf = pd.concat(vlist)
     return sumdf
@@ -754,7 +765,7 @@ class Events:
             #ax2 = fig.add_subplot(1, 2, 2)
             #ax = map_util.draw_map(1,ax)
             #ax2 = map_util.draw_map(1,ax2)
-            transform = ashapp_plotting.get_transform(central_longitude=-180)
+            transform = wep.get_transform(central_longitude=-180)
             fig,axarr = plt.subplots(nrows=1,ncols=2,figsize=(10,5),
                                      constrained_layout=False,
                                      subplot_kw={"projection":transform})
@@ -796,9 +807,9 @@ class Events:
             if vloc[0] != -999:
                 ax2.plot(vloc[1], vloc[0], "m^", markersize=5)
             #ax = plt.gca()
-            transform = ashapp_plotting.get_transform()
-            ashapp_plotting.format_plot(ax,transform)
-            ashapp_plotting.format_plot(ax2,transform)
+            transform = wep.get_transform()
+            wep.format_plot(ax,transform)
+            wep.format_plot(ax2,transform)
 
             plt.tight_layout()
             plt.show()
