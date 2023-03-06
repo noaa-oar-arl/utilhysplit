@@ -431,11 +431,11 @@ class VolcatName:
 
     def __init__(self, fname):
         # if full directory path is input then just get the filename
-        if "/" in fname:
-            temp = fname.split("/")
-            self.fname = temp[-1]
-        else:
-            self.fname = fname
+        self.fname = fname 
+        if isinstance(fname, str):
+            if "/" in fname:
+                temp = fname.split("/")
+                self.fname = temp[-1]
         self.vhash = {}
         self.date = None
         self.image_date = None
@@ -540,20 +540,24 @@ class VolcatName:
                     continue
             self.vhash[key] = val
             jjj += 1
+
         # Image date marks date of the data collection
         dk = self.datekeys
-        dstr = "{}_{}".format(
-            self.vhash[self.keylist[dk[0]]], self.vhash[self.keylist[dk[1]]]
-        )
-        self.image_date = datetime.datetime.strptime(dstr, self.image_dtfmt)
+        if  isinstance(dk[0],int) and isinstance(dk[1],int):
+            dstr = "{}_{}".format(
+                self.vhash[self.keylist[dk[0]]], self.vhash[self.keylist[dk[1]]]
+            )
+            self.image_date = datetime.datetime.strptime(dstr, self.image_dtfmt)
+
         # Event date is start of event
-        dstr = "{}_{}".format(
-            self.vhash[self.keylist[dk[2]]], self.vhash[self.keylist[dk[3]]]
-        )
-        self.event_date = datetime.datetime.strptime(dstr, self.event_dtfmt)
-        self.vhash[self.keylist[dk[3]]] = self.vhash[self.keylist[dk[3]]].replace(
-            ".nc", ""
-        )
+        if  isinstance(dk[2],int) and isinstance(dk[3],int):
+            dstr = "{}_{}".format(
+                self.vhash[self.keylist[dk[2]]], self.vhash[self.keylist[dk[3]]]
+            )
+            self.event_date = datetime.datetime.strptime(dstr, self.event_dtfmt)
+            self.vhash[self.keylist[dk[3]]] = self.vhash[self.keylist[dk[3]]].replace(
+                ".nc", ""
+            )
 
         self.vhash["idate"] = self.image_date
         self.vhash["edate"] = self.event_date

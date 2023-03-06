@@ -7,14 +7,15 @@ import os
 import time
 
 import numpy as np
+# import xarray as xr
 
-import xarray as xr
 # import hysplit
 from monetio.models import hysplit
-from utilvolc import write_emitimes as vwe
-from ashapp.ashbase import AshRun
 from utilhysplit.emitimes import EmiTimes
 from utilhysplit.runhandler import ProcessList
+
+from ashapp.ashbase import AshRun
+from utilvolc import make_data_insertion as mdi
 from utilvolc.runhelper import AshDINameComposer
 
 # from hysplitdata.traj import model
@@ -27,11 +28,12 @@ logger = logging.getLogger(__name__)
 def print_usage():
     print(
         """\
-USAGE: ashensemble.py JOBID
+Run through the ash_run.py executable.
 
-The following environment variables must be set prior to calling this script:
-    RUN_API_KEY         - secret key to access Locusts web APIs.
-    RUN_URL             - URL to the Locusts web application."""
+Assumes that emit-times file generated from VOLCAT data has been
+generated.
+
+"""
     )
 
 
@@ -44,23 +46,25 @@ def find_cdump_df(wdir, daterange):
 
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
-    edf = vwe.get_emit_name_df(wdir)
-    edf = edf[edf["algorithm name"] == ftype]
+    edf = mdi.get_emit_name_df(wdir)
+    edf = edf[edf["file descriptor"] == ftype]
     edf = edf[edf["idate"] >= daterange[0]]
     edf = edf[edf["idate"] <= daterange[1]]
     # elist = glob(os.path.join(wdir,'EMIT_*'))
     elist = edf["filename"].values
     if rtype == "fname":
-        rval =  elist
+        rval = elist
     elif rtype == "dataframe":
         rval = edf
     return rval
 
+
 class DataInsertionRun(AshRun):
-    #def __init__(self, JOBID):
+    # def __init__(self, JOBID):
     #    super().__init__(JOBID)
 
     def add_inputs(self, inp):
+        inp["DIrunHours"] = inp["emissionHours"]
         inp["emissionHours"] = 0
         inp["samplingIntervalHours"] = 1
         inp["WORK_DIR"] = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "emitimes/")
@@ -79,15 +83,16 @@ class DataInsertionRun(AshRun):
 
     def get_cdump_xra(self):
         edate = self.inp["start_date"] + datetime.timedelta(
-            hours=self.inp["durationOfSimulation"]
+            hours=self.inp["DIrunHours"]
         )
         cdf = find_cdump_df(self.inp["WORK_DIR"], [self.inp["start_date"], edate])
         blist = list(cdf["filename"].values)
         alist = []
-        if not blist:
-            logger.warning("No cdump files found")
-            return xr.Dataset()
+        # if not blist:
+        #    logger.warning("No cdump files found")
+        #    return xr.Dataset()
         for fname in blist:
+            logger.info("Adding to netcdf file {}".format(fname))
             alist.append((fname, fname, self.inp["meteorologicalData"]))
         century = 100 * (int(self.inp["start_date"].year / 100))
         cdumpxra = hysplit.combine_dataset(
@@ -164,8 +169,14 @@ class DataInsertionRun(AshRun):
         return 1
 
     def after_run_check(self, update):
+        logger.warning("after run check")
         edate = self.inp["start_date"] + datetime.timedelta(
-            hours=self.inp["durationOfSimulation"]
+            hours=self.inp["DIrunHours"]
+        )
+        logger.warning(
+            "after run check {} {} {}".format(
+                self.inp["start_date"], edate, self.inp["DIrunHours"]
+            )
         )
         rlist = []
         rval = True
@@ -173,12 +184,13 @@ class DataInsertionRun(AshRun):
             self.inp["WORK_DIR"], [self.inp["start_date"], edate]
         ):
             rval = super().after_run_check(stage=emitfile, update=update)
+            logger.warning("Looking for {} {}".format(emitfile, rval))
             rlist.append(rval)
         return np.all(rlist)
 
     def run_model(self):
         edate = self.inp["start_date"] + datetime.timedelta(
-            hours=self.inp["durationOfSimulation"]
+            hours=self.inp["DIrunHours"]
         )
         processhandler = ProcessList()
         processhandler.pipe_stdout()
@@ -186,9 +198,9 @@ class DataInsertionRun(AshRun):
         for emitfile in find_emit_file(
             self.inp["WORK_DIR"], [self.inp["start_date"], edate]
         ):
-            fn = self.filelocator.get_cdump_filename(stage=emitfile)
-            if os.path.exists(fn):
-                logger.info("cdump exists {} continuing to next run".format(fn))
+            fnn = self.filelocator.get_cdump_filename(stage=emitfile)
+            if os.path.exists(fnn):
+                logger.info("cdump exists {} continuing to next run".format(fnn))
                 continue
             # make control and setup files
             self.compose_control(stage=emitfile, rtype="dispersion")

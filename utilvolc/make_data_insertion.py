@@ -49,18 +49,54 @@ class EmitName(VolcatName):
         super().__init__(fname)
 
     def make_datekeys(self):
-        self.datekeys = [1, 2, 4, 5]
+        #self.datekeys = [1, 2, 4, 5]
+        self.datekeys = [2,3,None,None]
+
+    def parse(self,fname):
+        #fname = self.fname.replace('EMIT_','')
+        #fname = self.fname.replace('cdump_','')
+        #print('zzzzzzzzzzzzzzzzzz', fname)
+        super().parse(fname)
 
     def make_keylist(self):
-        self.keylist = ["algorithm name"]
+        self.keylist = ["file descriptor"]
+        self.keylist.append("algorithm name")
         self.keylist.append("image date")  # should be image date (check)
         self.keylist.append("image time")
         self.keylist.append("volcano id")
-        self.keylist.append("event date")  # should be event date (check)
-        self.keylist.append("event time")
+        # may not need the event date in filename
+        #self.keylist.append("event date")  # should be event date (check)
+        #self.keylist.append("event time")
+        self.keylist.append("satellite platform")
+        self.keylist.append("feature id")
         self.keylist.append("layer")
         self.keylist.append("particles")
 
+    def make_filename(self,volcat_fname, prefix, suffix):
+        """Makes unique string for various filenames from volcat filename
+        Inputs:
+        fname: name of volcat file - just volcat file, not full path (string)
+        prefix : str
+        suffix : str
+        Outputs:
+        match: (string) of important identifiying information"""
+        # Parse filename for image datetime, event datetime, and volcano id
+        vname = VolcatName(volcat_fname)
+        pidlist = [prefix]
+        for key in self.keylist:
+            if key in vname.vhash.keys():
+               if key == 'edate':
+                  mstr = vname.vhash["edate"].strftime(vname.event_dtfmt)
+                  pidlist.append(mstr)
+               elif key == 'idate':
+                  mstr = vname.vhash["idate"].strftime(vname.image_dtfmt)
+                  pidlist.append(mstr)
+               else: 
+                  mstr = vname.vhash[key]  
+                  pidlist.append(mstr)
+        pidlist.append(suffix)
+        match = str.join('_',pidlist)  
+        return match
 
 def find_emit(tdir):
     """
@@ -77,7 +113,8 @@ def find_emit(tdir):
     for fln in os.listdir(tdir):
         try:
             vn = EmitName(fln)
-        except:
+        except Exception as eee:
+            #print('find_emit error {} {}'.format(fln, eee))
             continue
         vnlist.append(vn)
     return vnlist
@@ -110,33 +147,38 @@ def get_emit_name_df(tdir):
 #    return filename
 
 
-def make_filename(volcat_fname, prefix, suffix):
-    """Makes unique string for various filenames from volcat filename
-    Inputs:
-    fname: name of volcat file - just volcat file, not full path (string)
-    Outputs:
-    match: (string) of important identifiying information"""
-    # Parse filename for image datetime, event datetime, and volcano id
-    vname = VolcatName(volcat_fname)
-    pid1 = vname.vhash["idate"].strftime(vname.image_dtfmt)
-    pid2 = vname.vhash["volcano id"]
-    pid3 = vname.vhash["edate"].strftime(vname.event_dtfmt)
-    match = "{}_{}_{}".format(pid1, pid2, pid3)
+# switch to using make_filename method in EmitName class.
+#def make_filename_old(volcat_fname, prefix, suffix):
+#    """Makes unique string for various filenames from volcat filename
+#    Inputs:
+#    fname: name of volcat file - just volcat file, not full path (string)
+#    Outputs:
+#    match: (string) of important identifiying information"""
+#    # Parse filename for image datetime, event datetime, and volcano id
+#    vname = VolcatName(volcat_fname)
+#    #pid1 = vname.vhash["idate"].strftime(vname.image_dtfmt)
+#    pid2 = vname.vhash["volcano id"]
+#    pid3 = vname.vhash["edate"].strftime(vname.event_dtfmt)
+#    pid4 = vname.vhash['satellite platform']
+#    pid5 = vname.vhash['feature id']
+#    match = "{}_{}_{}_{}".format(pid2, pid3, pid4, pid5)
     # parsedf = volcat_fname.split('_')
     # match = parsedf[4]+'_'+parsedf[5]+'_'+parsedf[7]+'_'+parsedf[12]+'_'+parsedf[13]
-    filename = "{}_{}_{}".format(prefix, match, suffix)
-    return filename
+#    filename = "{}_{}_{}".format(prefix, match, suffix)
+#    return filename
 
 
 # species tag could be p006p001p002p003 for multiple particle sizes
 def make_cdump_filename(volcat_fname, speciestag, layertag):
     suffix = "{}_{}".format(layertag, speciestag)
-    return make_filename(volcat_fname, prefix="CDUMP", suffix=suffix)
+    enn = EmitName(None)
+    return enn.make_filename(volcat_fname, prefix="CDUMP", suffix=suffix)
 
 
 def make_emit_filename(volcat_fname, speciestag, layertag):
     suffix = "{}_{}".format(layertag, speciestag)
-    return make_filename(volcat_fname, prefix="EMIT", suffix=suffix)
+    enn = EmitName(None)
+    return enn.make_filename(volcat_fname, prefix="EMIT", suffix=suffix)
 
 
 def parse_filename(ename):
