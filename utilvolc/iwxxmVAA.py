@@ -570,7 +570,6 @@ class iwxxmVAA:
         areas = []
         plist = self.get_poly_list()
         for iii, poly in enumerate(plist):
-            print(iii, plist)
             area = 0
             for ppp in poly:
                 if not ppp.is_empty:
@@ -703,18 +702,39 @@ class iwxxmVAA:
         for key in self.details:
             rstr += "{} : {}".format(key, self.details[key])
             rstr += spc
-        rstr += "Observation ---------------------------\n"
-        for key in self.obs:
-            rstr += "{} : {}".format(key, self.obs[key])
-            rstr += spc
+        rstr += "Observation---------\n"
+        for key in ['date','numpoly','poly']:
+            if key not in self.obs: continue
+            if key=='poly':
+               polygons = self.obs[key]
+               for poly in polygons:
+                   for pkey in poly:
+                       rstr += "{} : {}".format(pkey, poly[pkey])
+                       rstr += spc
+                   rstr += '\n'
+            else:        
+                rstr += "{} : {}".format(key, self.obs[key])
+                rstr += spc
         rstr += "---------------------------------------\n"
         for key in self.forecast:
+            print('HERE', key)
             if isinstance(self.forecast[key], dict):
-                rstr += "{} -------------".format(key)
-                rstr += spc
-                for key2 in self.forecast[key]:
-                    rstr += "{} : {}".format(key2, self.forecast[key][key2])
-                    rstr += spc
+              rstr += "{} -------------\n".format(key)
+              f1 = self.forecast[key]
+              for key2 in ['date','numpoly','poly']:
+                 if key2 not in f1: continue
+                 if key2 == 'poly':
+                   polygons = f1[key2]
+                   for poly in polygons:
+                      for pkey in poly:
+                         rstr += "{} : {}".format(pkey, poly[pkey])
+                         rstr += spc
+                      rstr += '\n'
+                 else:
+                   rstr += "{} : {}".format(key2, f1[key2])
+                   rstr += spc
+ 
+              rstr += '\n'
         rstr += "REMARKS: {}".format(self.remarks)
 
         return rstr
@@ -879,7 +899,7 @@ class iwxxmVAA:
         except:
             return fhash
         forecastlist = listfindel(findel(forecast, ss2), ss2b)
-        fhash['polynum'] = len(forecastlist)
+        fhash['numpoly'] = len(forecastlist)
         for child in forecastlist:
             print('getting this forecast ')
             f2 = findel(child,ss3b)
