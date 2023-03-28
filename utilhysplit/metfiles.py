@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 #TODO
 # if using archived gdas1, does not figure out
 # how many files to use correctly.
-    
+   
+# 2023 Jan 15 (amc) in MetFileFinder split mstr attribute into forecast_mstr and archive_mstr.
+# 2023 Jan 15 (amc) added some logger debug statements.
+# 2023 Jan 15 (amc) added a catch to find_mdt method to not allow mdt greater than 7*24 h
+ 
 
 def gefs_suffix_list():
     base0 = 'gec'
@@ -35,27 +39,34 @@ class MetFileFinder:
    """
    METHODS
    set_forecast_directory
+   set_archive_directory
    find_forecast_cycle
    find_forecast
    """
-   def  __init__(self, metid):
+   def  __init__(self, metid,fdir='/pub/forecast',adir='pub/archive'):
        self.metid = metid
-       self.forecast_directory = '/pub/forecast'
-       self.archive_directory = '/pub/archive'
-       self.mstr = get_forecast_str(self.metid, self.forecast_directory)
+       self.forecast_directory = fdir
+       self.archive_directory =  adir
+       self.forecast_mstr = get_forecast_str(self.metid, self.forecast_directory)
+       self.archive_mstr = get_forecast_str(self.metid, self.forecast_directory)
  
    def set_forecast_directory(self, dpath):
+       logger.debug('set_forecast_directory')
        self.forecast_directory = dpath 
-       self.mstr = get_forecast_str(self.metid, self.forecast_directory)
-
+       self.forecast_mstr = get_forecast_str(self.metid, self.forecast_directory)
+ 
    def set_archives_directory(self, dpath):
+       logger.debug('set_archives_directory')
        self.archive_directory = dpath 
-       #self.mstr = get_archive_str(self.metid, self.forecast_directory)
+       self.archive_mstr = get_archive_str(self.metid, self.archive_directory)
 
    def set_ens_member(self, suffix):
-       self.mstr = get_forecast_str(self.metid, self.forecast_directory)
-       self.mstr += suffix
-       logger.info('Setting mstr for ensemble {}'.format(self.mstr)) 
+       logger.debug('set_ens_member')
+       self.forecast_mstr = get_forecast_str(self.metid, self.forecast_directory)
+       self.forecast_mstr += suffix
+       self.archive_mstr = get_forecast_str(self.metid, self.forecast_directory)
+       self.archive_mstr += suffix
+       logger.info('Setting mstr for ensemble {}'.format(self.forecast_mstr)) 
 
    def find_forecast_cycle(self,dstart,duration,cycle):
        """
@@ -63,10 +74,11 @@ class MetFileFinder:
        return files in a particular forecast cycle.
        backward runs don't work quite right.
        """
+       logger.debug('find_forecast_cycle')
        forecast_info = get_forecast_info(self.metid)
        cycle_time = forecast_info['cycle_time']
        forecast_length = forecast_info['forecast_length']
-       mstr = self.mstr.replace('%H',cycle)
+       mstr = self.forecast_mstr.replace('%H',cycle)
        # e.g.
        # if using the 12z and dstart is before 12 then must
        # get the previous day. 
@@ -93,16 +105,17 @@ class MetFileFinder:
        iii=0
        while not files:
           newdate = newdate - datetime.timedelta(hours=cycle_time * iii)
-          files = mf.make_file_list(newdate, runtime)
+          files = mf.make_file_list(newdate, runtime,warn=False)
           if cycle_time *iii > forecast_length: break
           iii += 1
        return files    
 
 
    def find(self, dstart, duration,hours=-1):
+       logger.debug('find')
        # look for forecast first.
-       self.mstr = get_forecast_str(self.metid, self.archive_directory)
-       metfiles = self.find_forecast(dstart,duration)
+       #self.mstr = get_forecast_str(self.metid, self.forecast_directory)
+       metfiles = self.find_forecast(dstart,duration,warn=False)
        # if not found then use archive
        if not metfiles:
            logger.info('Looking in archive for met files')
@@ -113,12 +126,13 @@ class MetFileFinder:
        return metfiles
 
    def find_archive(self, dstart, duration,hours=-1):
-       self.mstr = get_archive_str(self.metid, self.archive_directory)
-       mf = MetFiles(self.mstr,hours=hours)
+       logger.debug('find archive')
+       mf = MetFiles(self.archive_mstr,hours=hours)
+       print(self.archive_mstr)
        mfiles = mf.get_files(dstart, duration)
        return  mfiles
 
-   def find_forecast(self, dstart, duration):
+   def find_forecast(self, dstart, duration,warn=True):
        """
        dstart : datetime object.
        duration : integer. can be positive or negative
@@ -126,10 +140,12 @@ class MetFileFinder:
        Returns: 
        list of files that cover dstart to dstart +/- duration.
        """
+       logger.debug('find forecast')
        forecast_info = get_forecast_info(self.metid)
        cycle_time = forecast_info['cycle_time']
        forecast_length = forecast_info['forecast_length']
-       mstr = self.mstr
+       mstr = self.forecast_mstr
+       logger.debug('mstr{} is '.format(mstr))
        mf = MetFiles(mstr,hours=cycle_time)
        files = []
        iii=0
@@ -138,7 +154,7 @@ class MetFileFinder:
           # keep going back 6 hours until find first cycle that covers
           # the time period.
           newdate = dstart - datetime.timedelta(hours=cycle_time * iii)
-          files = mf.make_file_list(newdate, duration)
+          files = mf.make_file_list(newdate, duration,warn=warn)
           # double check that start of first files is before start date.
           if files:
               metdate = datetime.datetime.strptime(files[0],mstr)
@@ -147,9 +163,9 @@ class MetFileFinder:
           if cycle_time *iii > forecast_length: break
           iii += 1
        if not files:
-          logger.warning('No meteorological files found {}'.format(mstr))
+          if warn: logger.warning('No FORECAST meteorological files found {}'.format(mstr))
           return files
-       files = weed_files(files,dstart,duration,self.metid,self.mstr)
+       files = weed_files(files,dstart,duration,self.metid,self.forecast_mstr)
        return process(files)   
 
 def weed_files(metfiles,dstart,duration,metid,metstr):
@@ -244,7 +260,7 @@ def get_forecast_str(metid, FCTDIR='/pub/forecast'):
     if 'gfs' in metid.lower():
         metfilename += 'f'
         #metfilename = 'hysplit.' + metime.strftime('t%Hz') + '.' + met
-    return metdir + metfilename
+    return metdir +  metfilename
 
 def getmetfiles(strfmt, sdate, runtime,
                 altstrfmt):
@@ -309,7 +325,7 @@ class MetFiles:
         RETURNS :
         list of tuples (directory, filename)
         """
-        nlist = self.make_file_list(sdate, runtime)
+        nlist = self.make_file_list(sdate, runtime,warn=False)
         return process(nlist)
 
     @staticmethod
@@ -381,10 +397,14 @@ class MetFiles:
             if iii >= len(mdtlist):
                 done = True
         ##AMC ADDED TEMP
-        #dttt=datetime.timedelta(hours=24)
+        if dttt > datetime.timedelta(hours=24*7):
+           logger.warning('find mdt method: mdt exceeding {} changing to {}'.format(24*7, 24))
+           logger.warning('strfmt {}'.format(self.strfmt))
+           dttt = datetime.timedelta(hours=24)
+        # dttt=datetime.timedelta(hours=24)
         return dttt
 
-    def make_file_list(self, sdate, runtime):
+    def make_file_list(self, sdate, runtime,warn=False):
         """
         INPUTS
         sdate : datetime.datetime ojbect
@@ -415,7 +435,6 @@ class MetFiles:
                 temp = parse_week(self.strfmt, edate)
             else:
                 temp = edate.strftime(self.strfmt)
-
             # this is beginning of forecast in the file.
             mdate = datetime.datetime.strptime(temp,self.strfmt)
             # end time of this particular file.
@@ -426,13 +445,12 @@ class MetFiles:
             #print('-------------')
 
             #temp = temp.lower()
-            #print('MDT', self.mdt) 
             # also need to increment the edate to get next possible file name 
             edate = edate + self.mdt
             #if not path.isfile(temp):
             #    temp = temp.lower()
             if not path.isfile(temp):
-                logger.info("INFO " +  temp + " forecast meteorological file does not exist")
+                if warn: logger.info("INFO " +  temp + " forecast meteorological file does not exist")
                 #print("WARNING " +  temp + " meteorological file does not exist")
                 #pass
                 #logger.debug("WARNING " +  temp + " meteorological file does not exist")

@@ -1,4 +1,8 @@
-# -----------------------------------------------------------------------------
+"""
+classes
+EnsembleAshRun
+"""
+
 
 # from abc import ABC, abstractmethod
 import datetime
@@ -6,68 +10,75 @@ import logging
 import os
 import time
 
-import ashapp_plotting
+from monetio.models import hysplit
 
 # import hysplit
 from utilhysplit import metfiles
+
+# import ashapp_plotting
+from utilhysplit.evaluation import web_ensemble_plots as wep
+from utilhysplit.runhandler import ProcessList
+
 from ashbase import AshRun
 from cdump2xml import HysplitKml
-from monetio.models import hysplit
-from utilhysplit.runhandler import ProcessList
 from utilvolc.runhelper import Helper
-
-
 
 logger = logging.getLogger(__name__)
 
 
-#def print_usage():
+# def print_usage():
 #    print(
 #        """\
 #    )
-"""
-classes
-ConProbThresholds
-"""
+
+# test using python ash_run.py run -888
+# can change test by editing runhelper module
 
 # CHANGE LOG
-# 2022 Dec 8 (AMC) changed name of ensemble_tools to ashapp_plotting
+# 2022 Dec 8  (AMC) changed name of ensemble_tools to ashapp_plotting
+# 2023 Feb 27 (AMC) ashapp_plotting moved to web_ensemble_plots
+# 2023 Feb 27 (AMC) added a 0.1 level to the ensenble relative frequency of exceedance maps
+# 2023 Feb 27 (AMC) fixed the create_plots function
+# 2023 Feb 27 (AMC) no longer use conprob utility so remove conprob_thresholds attribute
 
 
-class ConProbThresholds:
-    """ """
+#class ConProbThresholds:
+#    """ To be used with conprob utility """
+#
+#    def __init__(self, mass_converter):
+#        # find probability of exceedence for the following levels.
+#        self.conc_levels = [0.2, 2, 10]  # in mg
+#        # this is how much 1 unit mass is in grams.
+#        self.mass_converter = mass_converter
+#
+#    def get_unit_levels(self):
+#        # this sets the levels in unit mass.
+#        unit_levels = [x / self.mass_converter / 1e3 for x in self.conc_levels]
+#        return unit_levels
+#
+#    def __str__(self):
+#        unit_levels = self.get_unit_levels()
+#        str_unit_levels = ["{:1.1e}".format(x) for x in unit_levels]
+#        return ":".join(str_unit_levels)
 
-    def __init__(self, mass_converter):
-        # find probability of exceedence for the following levels.
-        self.conc_levels = [0.2, 2, 10]  # in mg
-        # this is how much 1 unit mass is in grams.
-        self.mass_converter = mass_converter
-
-    def get_unit_levels(self):
-        # this sets the levels in unit mass.
-        unit_levels = [x / self.mass_converter / 1e3 for x in self.conc_levels]
-        return unit_levels
-
-    def __str__(self):
-        unit_levels = self.get_unit_levels()
-        str_unit_levels = ["{:1.1e}".format(x) for x in unit_levels]
-        return ":".join(str_unit_levels)
-
-    def __repr__(self):
-        unit_levels = self.get_unit_levels()
-        str_unit_levels = ["{:1.1e}".format(x) for x in unit_levels]
-        return ":".join(str_unit_levels)
+#    def __repr__(self):
+#        unit_levels = self.get_unit_levels()
+#        str_unit_levels = ["{:1.1e}".format(x) for x in unit_levels]
+#        return ":".join(str_unit_levels)
 
 
 class EnsembleAshRun(AshRun):
     def __init__(self, JOBID):
         super().__init__(JOBID)
         self.ens_suffix_list = None
-        self.conprob_thresholds = None
+        #self.conprob_thresholds = None
         self.number_of_members = 0
         self.awips = True
 
     def plot_massload(self):
+        """
+        plots ensemble mean
+        """
         if self.cxra.size <= 1:
             logger.info("plot_massload cxra is empty")
             return False
@@ -79,10 +90,9 @@ class EnsembleAshRun(AshRun):
         )
         flin = flin.replace("999", "zzz")
         # flin = flin.replace('gif','pdf')
-        logger.debug("Massloading FILENAME{}".format(flin))
-        fignamelist = ashapp_plotting.massload_plot(
-            self.cxra, enslist, vlist=vlist, name=flin
-        )
+        logger.debug("Massloading FILENAME {}".format(flin))
+        # massload_plot plots the ensemble mean.
+        fignamelist = wep.massload_plot(self.cxra, enslist, vlist=vlist, name=flin)
         # list of figure names generated.
         return fignamelist
 
@@ -97,7 +107,7 @@ class EnsembleAshRun(AshRun):
         # convert to g/m2
         mxra = mxra.isel(source=0).mean(dim="ens") / 1000.0
         attrs = self.cxra.attrs
-        levels = ashapp_plotting.set_levels(mxra)
+        levels = wep.set_levels(mxra)
         h2xml = HysplitKml(
             levels=levels,
             sourcehash=self.inp,
@@ -134,7 +144,6 @@ class EnsembleAshRun(AshRun):
             logger.info("plot_ATL cxra is empty")
             return False
         enslist = self.cxra.ens.values
-        level = self.cxra.z.values
         thresh = 0.2
         # location of volcano
         vlist = [self.inp["longitude"], self.inp["latitude"]]
@@ -142,17 +151,16 @@ class EnsembleAshRun(AshRun):
         flin = flin.replace("999", "zzz")
         flin = flin.replace("gif", "png")
         logger.debug("NEW FILENAME{}".format(flin))
-        clevels = [5, 20, 40, 60, 80, 95]
+        clevels = [0.1, 5, 20, 40, 60, 80, 95]
         title = "HYSPLIT ensemble relative frequency exceeding {:0.2f}mg/m3".format(
             thresh
         )
         title += "\n GEFS {} members".format(len(enslist))
 
-        fignamelist = ashapp_plotting.ATLtimeloop(
+        fignamelist = wep.ATLtimeloop(
             self.cxra,
             enslist,
             thresh,
-            level,
             vlist,
             name=flin,
             norm=True,
@@ -164,7 +172,8 @@ class EnsembleAshRun(AshRun):
 
     def get_cdump_xra(self):
         blist = []
-        if self.cxra.ndim==0:
+        if self.cxra.ndim == 0:
+            # ------------------------------------------------------------------------
             def make_tuple(inval):
                 source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
                 suffix = inval[1]
@@ -175,6 +184,8 @@ class EnsembleAshRun(AshRun):
                 met_tag = suffix
                 logger.info("adding to netcdf file :{} {}".format(met_tag, cdumpname))
                 return (cdumpname, source_tag, met_tag)
+
+            # ------------------------------------------------------------------------
 
             blist = [make_tuple(x) for x in enumerate(self.ens_suffix_list)]
             century = 100 * (int(self.inp["start_date"].year / 100))
@@ -190,9 +201,9 @@ class EnsembleAshRun(AshRun):
         logger.info("adding ensemble inputs")
         super().add_inputs(inp)
         if inp["meteorologicalData"].lower() == "gefs":
-            self.ens_suffix_list = metfile.gefs_suffix_list()
+            self.ens_suffix_list = metfiles.gefs_suffix_list()
         self.number_of_members = len(self.ens_suffix_list)
-        self.conprob_thresholds = ConProbThresholds(self.get_conc_multiplier())
+        #self.conprob_thresholds = ConProbThresholds(self.get_conc_multiplier())
         self.maptexthash = self.get_maptext_info()
 
     def get_maptext_info(self):
@@ -208,19 +219,18 @@ class EnsembleAshRun(AshRun):
         #    run_suffix = self.filelocator.get_control_suffix(stage)
 
     def run_model(self):
-        stage = 1
         processhandler = ProcessList()
         # redirect stdout and stderr
         processhandler.pipe_stdout()
         processhandler.pipe_stderr()
         # start all the runs
         for stage, suffix in enumerate(self.ens_suffix_list):
-            logger.debug("Working on {}".format(suffix))
+            logger.info("Working on {}".format(suffix))
             self.metfilefinder.set_ens_member("." + suffix)
-            self.compose_control(stage, rtype="dispersion")
-            self.compose_setup(stage)
+            self.compose_control(stage + 1, rtype="dispersion")
+            self.compose_setup(stage + 1)
             # start run and wait for it to finish..
-            run_suffix = self.filelocator.get_control_suffix(stage)
+            run_suffix = self.filelocator.get_control_suffix(stage + 1)
             cproc = [
                 os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
                 run_suffix,
@@ -300,18 +310,22 @@ class EnsembleAshRun(AshRun):
 
         # make the awips2 files.
         # this will also load the data from cdump files into an xarray.
-        logger.debug("creating netcdf files")
-        awipsfiles = self.make_awips_netcdf()
-        return -1
+        # logger.info("creating netcdf files for awips")
+        # awipsfiles = self.make_awips_netcdf()
+        # return -1
         # create probability of exceedence plot.
+        logger.info("creating prob of exceedance plot")
         # self.create_prob_plot()
         # logger.debug("RUNNING plot_ATL")
-        # ATL_fignamelist = self.plot_ATL()
+        ATL_fignamelist = self.plot_ATL()
         # creates kml and kmz  using cdump2xml module.
+
+        logger.info("creating kml files")
         self.make_kml()
         # create massloading plots.
-        # mass_fignamelist = self.plot_massload()
-
+        logger.info("creating mass loading plots")
+        mass_fignamelist = self.plot_massload()
+        return -1
         # create parxplot for one ensemble member
         # stage would give ensemble member to use.
         self.maptexthash[
@@ -320,8 +334,8 @@ class EnsembleAshRun(AshRun):
                                           member"
         self.create_maptext()
         # particle plots do not need to be re-drawn when unit mass changed.
-        if not redraw:
-            self.create_parxplot(stage=1)
+        # if not redraw:
+        #   self.create_parxplot(stage=1)
 
         flist = []
         iii = 0

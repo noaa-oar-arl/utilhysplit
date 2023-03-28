@@ -21,6 +21,8 @@ csv file can be generated from the VOLCAT data.
 
 def combine_traj(fnames, csvfile=None):
     """
+    fnames  : list of str. trajectory file names. full path.
+    csvfile : csv file output by sample_and_write which contains weighting information.
     combined trajectories in different files into one dataframe.
     """
     trajlist = []
@@ -32,17 +34,22 @@ def combine_traj(fnames, csvfile=None):
         except:
             print('Failed {}'.format(fnn))
             continue
+        # get trajectory number from the file name
         temp = fnn.split(".")
         trajnum = int(temp[-1])
+        # add new column to dataframe with trajectory number
         df1["traj_num"] = trajnum
-        print('TRAJNUM', trajnum)
+        #print('TRAJNUM', trajnum)
+        # add weight information from csvfile to the dataframe
         if csvfile:
             temp = weightcsv.loc[trajnum]
             weight = temp.massI
         else:
             weight = 1
         df1["weight"] = weight
+   
         trajlist.append(df1.copy())
+    # concatenate the trajectories into one dataframe.
     trajdf = pd.concat(trajlist)
     return trajdf
 
@@ -86,6 +93,9 @@ class BackTraj(TrajectoryAshRun):
         processhandler.pipe_stderr()
         self.read_obsdf()
         max_procs = 10
+         
+        maxtime = 5*700
+        test_time=0
         tdumplist = []
         for iii, row in enumerate(self.obsdf.iterrows()):
             tdumpfile = "tdump.{}".format(iii)
@@ -118,9 +128,13 @@ class BackTraj(TrajectoryAshRun):
                 print("tdump file already exists {}".format(tdumpfile))
             num_procs = processhandler.checkprocs()
             while num_procs >= max_procs:
-                print("in loop {}".format(num_procs))
+                num_procs = processhandler.checkprocs()
+                logger.info("in loop {}".format(num_procs))
                 time.sleep(5)
-
+                test_time += 5
+                if test_time>maxtime: 
+                   logger.warning('Number of processes timed out {}'.format(maxtime))
+                   break 
         # wait for runs to finish
         done = False
         seconds_to_wait = 30
@@ -151,20 +165,25 @@ class BackTraj(TrajectoryAshRun):
 
     def after_run_check(self, update=False):
         # Check for the tdump/cdump file
+        self.read_obsdf()
         rval = True
         # fn = self.filelocator.get_tdump_filename(stage=0)
-        fn = "tdump.0"
-        logger.debug("Looking for tdump file " + fn)
-        if not os.path.exists(fn):
-            rval = False
-            if update:
-                logger.error(
-                    "******************************************************************************"
-                )
-                logger.error(
-                    "The model has crashed. Check the HYSPLIT Message file for further information."
-                )
-                logger.error(
-                    "******************************************************************************"
-                )
+        #fn = "tdump.0"
+        #logger.debug("Looking for tdump file " + fn)
+        for iii, row in enumerate(self.obsdf.iterrows()):
+            tdumpfile = self.inp["WORK_DIR"] + "tdump.{}".format(iii)
+            #tdumplist.append(tdumpfile)
+            if not os.path.isfile(tdumpfile):
+               if update: logger.warning('file not found {}'.format(tdumpfile))
+               rval = False
+        if update and not rval:
+            logger.error(
+                "******************************************************************************"
+            )
+            logger.error(
+                "The model has crashed. Check the HYSPLIT Message file for further information."
+            )
+            logger.error(
+                "******************************************************************************"
+            )
         return rval

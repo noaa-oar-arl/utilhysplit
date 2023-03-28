@@ -21,12 +21,31 @@ class iwxxmFile: loads the iwxxm file from url
 class iwxxmVAA:  parses the iwxxm file stores information in object attributes.
 class WashingtonPage: gets url location of iwxxm file
 class iwxxmCollection: processes collections of iwxxmVAA
+
+2023 22 MAR  (AMC) added support for multiple polygons in obs or forecast.
+
 """
 
 
 # ---------------------------------------------------------------
 ## Helper functions for iwxxmVAA class to parse the xml format.
 # ---------------------------------------------------------------
+
+def etree_to_dict(t):
+    """
+    This works as long as all children have unique keys.
+    If they don't, then they will be overwritten.
+    This occurrs when there are multiple polygons. 
+    """
+    if type(t) is ET.ElementTree: return etree_to_dict(t.getroot())
+    ## concatenates 3 dictionaries together.
+    return {
+        **t.attrib,
+        'attribute_text': t.text,
+        **{e.tag: etree_to_dict(e) for e in t}
+    }
+
+
 def testel(root):
     try:
         for child in root:
@@ -36,12 +55,14 @@ def testel(root):
     return True
 
 def listel(root):
+    clist = []
     try:
         for child in root:
             print("tag", child.tag, "text", child.text)
+            clist.append(child)
     except:
         print("cannot list for", type(root))
-
+    return clist
 
 def findel(root, tag, verbose=False):
     for child in root:
@@ -331,11 +352,19 @@ class WashingtonPage:
     Scrape the washington vaac page for xml file locations
     """
 
-    def __init__(self):
-        self.page = "https://www.ssd.noaa.gov/VAAC/messages.html"
+    def __init__(self,year=None):
+        #self.page = "https://www.ssd.noaa.gov/VAAC/messages.html"
+        self.page = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/messages.html"
+        self.xmlpage = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/volcanoes/xml_files/"
+        self.archivepage = "https://www.ospo.noaa.gov/Products/atmosphere/vaac/"
+        if (isinstance(year,int)):
+           self.get_archive(year)
         self.hcontent = ""
         self.hcontent_loaded = False
         self.xlist = None
+
+    def get_archive(self, year):
+        self.page = '{}{}.html'.format(self.archivepage,year)
 
     def read(self):
         # read the web page
@@ -349,6 +378,20 @@ class WashingtonPage:
         return hcode
 
     def find_xml(self):
+        flist = []
+        rlist = []
+        for match in re.finditer("\.xml", self.hcontent):
+            end = match.end()
+            #print(self.hcontent[match.start():match.end()])
+            substr = self.hcontent[end - 180 : end]
+            submatch = re.search("FV", substr)
+            xmlfile = self.xmlpage +  substr[submatch.start() :]
+            rlist.append(substr[0 : submatch.start()])
+            flist.append(xmlfile)
+        self.xlist = list(zip(rlist, flist))
+
+    # the web page changed in January 2022. this no longer works.
+    def find_xml_old(self):
         flist = []
         rlist = []
         for match in re.finditer("\.xml", self.hcontent):
@@ -525,27 +568,26 @@ class iwxxmVAA:
         to get real areas.
         """
         areas = []
-        poly0 = get_poly(self.obs)
-        poly1 = get_poly(self.forecast["Forecast0"])
-        poly2 = get_poly(self.forecast["Forecast1"])
-        poly3 = get_poly(self.forecast["Forecast2"])
-        for iii, poly in enumerate([poly0, poly1, poly2, poly3]):
-            if not poly.is_empty:
-                areas.append(poly.area)
-            else:
-                areas.append(0)
+        plist = self.get_poly_list()
+        for iii, poly in enumerate(plist):
+            area = 0
+            for ppp in poly:
+                if not ppp.is_empty:
+                    area += ppp.area
+            areas.append(area)
         return areas
 
     def get_poly_list(self):
-        poly0 = get_poly(self.obs)
-        poly1 = get_poly(self.forecast["Forecast0"])
-        poly2 = get_poly(self.forecast["Forecast1"])
-        poly3 = get_poly(self.forecast["Forecast2"])
-        return [poly0, poly1, poly2, poly3]
+        """
+        returns list of lists.
+        """
+        keylist = ['Forecast0','Forecast1','Forecast2']
+        plist = [[get_poly(x) for x in self.obs['poly']]]
+        for key in keylist:
+            plist.append([get_poly(x) for x in self.forecast[key]['poly']])
+        return plist
 
     
-
-
     def get_height(self):
         def FL2m(fhash):
             value = fhash['value']
@@ -572,6 +614,9 @@ class iwxxmVAA:
         alist = []
         mindiff=10
         for poly in plist:
+            # if multiple polygons just use first one.
+            if isisntance(poly,list):
+               poly = poly[0]
             bearing = 0
             aaa = 400
             iii=0
@@ -599,6 +644,8 @@ class iwxxmVAA:
         pnt = sgeo.Point(self.volcano['longitude'],self.volcano['latitude'])
         mlist = []
         for poly in plist:
+            # if multiple just use first one)
+            if isinstance(poly,list): poly=poly[0]
             maxdiff = 0
             for coord in poly.exterior.coords:
                 pnt2 = sgeo.Point(coord[0],coord[1])
@@ -609,7 +656,7 @@ class iwxxmVAA:
             if verbose: print('-----')
         return mlist
 
-    def plot_vaa(self, ax=None):
+    def plot_vaa(self, ax=None, polylist=None, legend=True):
         """ """
         if not ax:
             fig = plt.figure(1)
@@ -623,12 +670,18 @@ class iwxxmVAA:
             tstr.append(str(ttt))
 
         clr = ["-k", "-r", "-b", "-c"]
+        plist = self.get_poly_list()
+        if not polylist: polylist = np.arange(0,len(plist))
         for iii, poly in enumerate(self.get_poly_list()):
-            if not poly.is_empty:
-                ax.plot(*poly.exterior.xy, clr[iii], label=tstr[iii])
-        ax.plot(vlon, vlat, "^y", MarkerSize=10)
+            if iii not in polylist: continue
+            for jjj, ppp in enumerate(poly):
+                if not ppp.is_empty:
+                    if jjj==0: lbl = tstr[iii]
+                    else: lbl=None
+                    ax.plot(*ppp.exterior.xy, clr[iii], label=lbl)
+        ax.plot(vlon, vlat, "^y", markersize=10)
         handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles, labels)
+        if legend: ax.legend(handles, labels)
 
     def get_vaaroot(self):
         vaa = self.root[0][0]
@@ -649,18 +702,39 @@ class iwxxmVAA:
         for key in self.details:
             rstr += "{} : {}".format(key, self.details[key])
             rstr += spc
-        rstr += "Observation ---------------------------\n"
-        for key in self.obs:
-            rstr += "{} : {}".format(key, self.obs[key])
-            rstr += spc
+        rstr += "Observation---------\n"
+        for key in ['date','numpoly','poly']:
+            if key not in self.obs: continue
+            if key=='poly':
+               polygons = self.obs[key]
+               for poly in polygons:
+                   for pkey in poly:
+                       rstr += "{} : {}".format(pkey, poly[pkey])
+                       rstr += spc
+                   rstr += '\n'
+            else:        
+                rstr += "{} : {}".format(key, self.obs[key])
+                rstr += spc
         rstr += "---------------------------------------\n"
         for key in self.forecast:
+            print('HERE', key)
             if isinstance(self.forecast[key], dict):
-                rstr += "{} -------------".format(key)
-                rstr += spc
-                for key2 in self.forecast[key]:
-                    rstr += "{} : {}".format(key2, self.forecast[key][key2])
-                    rstr += spc
+              rstr += "{} -------------\n".format(key)
+              f1 = self.forecast[key]
+              for key2 in ['date','numpoly','poly']:
+                 if key2 not in f1: continue
+                 if key2 == 'poly':
+                   polygons = f1[key2]
+                   for poly in polygons:
+                      for pkey in poly:
+                         rstr += "{} : {}".format(pkey, poly[pkey])
+                         rstr += spc
+                      rstr += '\n'
+                 else:
+                   rstr += "{} : {}".format(key2, f1[key2])
+                   rstr += spc
+ 
+              rstr += '\n'
         rstr += "REMARKS: {}".format(self.remarks)
 
         return rstr
@@ -682,15 +756,31 @@ class iwxxmVAA:
                 return child.text
         return None
 
+    @staticmethod
+    def parse_name(name):
+        """
+        split the name field into volcano name and volcano id.
+        """
+        temp = name.text.split()
+        nlen = len(temp)
+        # volcano id should be last part of name
+        vid = temp[-1]
+        vname = temp[0:nlen-1]
+        return str.join(' ',vname), vid
+
     def get_volcano(self, verbose=False):
+        """
+        get information on volcano
+        """
         # strfmt = "%Y-%m-%dT%H:%M:%SZ"
         vhash = {}
         vaa = self.vaaroot
         volcano = findel(findel(vaa, "volcano"), "EruptingVolcano")
 
         name = findel(volcano, "name")
-        vhash["name"] = name.text.split()[0]
-        vhash["volcanoID"] = name.text.split()[1]
+        vhash['name'], vhash['volcanoID'] = self.parse_name(name)
+        #vhash["name"] = name.text.split()[0]
+        #vhash["volcanoID"] = name.text.split()[1]
 
         position = findel(findel(findel(volcano, "position"), "Point"), "pos")
         vhash["position"] = position.text
@@ -757,6 +847,7 @@ class iwxxmVAA:
 
     def get_forecast(self, forecast, verbose=False):
         fhash = {}
+        fhash['poly'] = []
         ss2 = "VolcanicAshForecastConditions"
         if verbose:
             print("\n {}".format(ss2))
@@ -804,16 +895,25 @@ class iwxxmVAA:
             except:
                 pass
         try:
-            forecast = findel(findel(findel(forecast, ss2), ss2b), ss3b)
+            f1 = findel(findel(findel(forecast, ss2), ss2b), ss3b)
         except:
             return fhash
-        fhash2 = self.subfunc(forecast, verbose=verbose)
-        fhash.update(fhash2)
+        forecastlist = listfindel(findel(forecast, ss2), ss2b)
+        fhash['numpoly'] = len(forecastlist)
+        for child in forecastlist:
+            print('getting this forecast ')
+            f2 = findel(child,ss3b)
+            fhash2 = self.subfunc(f2, verbose=verbose)
+            fhash['poly'].append(fhash2)
         return fhash
 
     def get_obs(self, verbose=False):
         vaa = self.vaaroot
         fhash = {}
+        # list of polygons
+        fhash['poly'] = []
+        fhash2 = {}
+        fhash3 = {}
         ss1 = "observation"
         ss2 = "VolcanicAshObservedOrEstimatedConditions"
 
@@ -845,32 +945,38 @@ class iwxxmVAA:
             listel(tempa)
             if testel(tempa):
                 print("\n {}".format(ss4a))
-                tempa = findel(tempa, ss4a)
-                listel(tempa)
+                tempalist = listfindel(tempa, ss4a)
 
-        tempb = findel(findel(findel(vaa, ss1), ss2), ss3a)
-        testb = testel(tempb)
-        if not testb:
-            return fhash
-        tempa = findel(tempb, ss4a)
-        # tempa = findel(findel(findel(findel(vaa,ss1),ss2),ss3a),ss4a)
-        # ------------------------------------------------------------------------------
-        ss5a = "directionOfMotion"
-        motion = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3a), ss4a), ss5a)
-        fhash[ss5a] = {"value": float(motion.text), "uom": motion.attrib["uom"]}
 
-        # ------------------------------------------------------------------------------
-        ss5a = "speedOfMotion"
-        motion = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3a), ss4a), ss5a)
-        if verbose:
-            print(type(motion))
-        fhash[ss5a] = {"value": float(motion.text), "uom": motion.attrib["uom"]}
+        tempblist = listfindel(findel(findel(vaa, ss1), ss2), ss3a)
+        fhash['numpoly'] = len(tempblist) 
+        for tempb in tempblist:
 
-        # ------------------------------------------------------------------------------
-        fhash2 = self.subfunc(tempa, verbose)
-        fhash.update(fhash2)
+            testb = testel(tempb)
+            if not testb:
+               continue 
+            tempa = findel(tempb, ss4a)
+            # tempa = findel(findel(findel(findel(vaa,ss1),ss2),ss3a),ss4a)
+            # ------------------------------------------------------------------------------
+            ss5a = "directionOfMotion"
+            motion = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3a), ss4a), ss5a)
+            fhash2[ss5a] = {"value": float(motion.text), "uom": motion.attrib["uom"]}
 
-        return fhash
+            # ------------------------------------------------------------------------------
+            ss5a = "speedOfMotion"
+            motion = findel(findel(findel(findel(findel(vaa, ss1), ss2), ss3a), ss4a), ss5a)
+            if verbose:
+                print(type(motion))
+            fhash2[ss5a] = {"value": float(motion.text), "uom": motion.attrib["uom"]}
+
+            # ------------------------------------------------------------------------------
+            fhash3 = self.subfunc(tempa, verbose)
+            fhash['poly'].append({**fhash3,**fhash2}) 
+            #print('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')
+            #print(fhash2)
+            #print('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')
+ 
+        return  fhash
 
     def subfunc(self, vaa, verbose=False):
         fhash = {}

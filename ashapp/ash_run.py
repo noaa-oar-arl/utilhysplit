@@ -52,9 +52,6 @@ python ash_run.py test JOBID
 The program will look for a file with the name config.JOBID.txt and read it for inputs.
 Examples are provided.
 """
-
-
-
     )
 
 
@@ -67,6 +64,7 @@ def create_run_instance(JOBID, inp):
     """
     create the correct object for the type of run and return it.
     """
+    logger.info('Creating run Instance')
 
     if inp["runflag"] == "dispersion":
         if inp["meteorologicalData"].lower() == "gefs":
@@ -79,23 +77,32 @@ def create_run_instance(JOBID, inp):
     elif inp["runflag"] == "inverse":
         from ashinverse import InverseAshRun
         arun = InverseAshRun(JOBID)
+        logger.info('Inversion')
 
     elif inp["runflag"] == "DataInsertion":
         from ashdatainsertion import DataInsertionRun
         arun = DataInsertionRun(JOBID)
+        logger.info('Data Insertion')
 
     elif inp["runflag"] == "BackTrajectory":
         from backtraj import BackTraj
         arun = BackTraj(JOBID)
+        logger.info('Back Trajectory')
 
-    else: # Trajectory run
-        from ashtrajectory import TrajectoryAshRun
-        arun = TrajectoryAshRun(JOBID)
+    elif inp["runflag"] == "trajectory":
+        if inp["meteorologicalData"].lower() == "gefs":
+            from enstrajectory import EnsTrajectoryRun
+            arun = EnsTrajectoryRun(JOBID)
+            logger.info('Ensemble Trajectory')
+        else:
+            from ashtrajectory import TrajectoryAshRun
+            arun = TrajectoryAshRun(JOBID)
+            logger.info('Trajectory')
 
     arun.add_inputs(inp)
     return arun
 
-def choosetest(JOBID,setup):
+def choosetest(JOBID,setup,inp):
     if JOBID == "-446":
         # test inverse dispersion run.
         # currently
@@ -114,10 +121,12 @@ def choosetest(JOBID,setup):
         # test ensemble dispersion run.
         inp["meteorologicalData"] = "GEFS"
         arun = create_run_instance("1001", inp)
+        logger.info("GEFS run")
     elif JOBID == "-777":
         # test trajectory  run.
         inp["runflag"] = "trajectory"
         arun = create_run_instance("1003", inp)
+        logger.info("trajectory run")
     else:
         # test regular dispersion run.
         inp["runflag"] = "dispersion"
@@ -126,7 +135,8 @@ def choosetest(JOBID,setup):
 
 if __name__ == "__main__":
     # Configure the logger so that log messages appears in the "Model Status" text box.
-    setup_logger(level=logging.DEBUG)
+    #setup_logger(level=logging.DEBUG)
+    setup_logger()
 
     if len(sys.argv) != 3:
         print_usage()
@@ -151,7 +161,7 @@ if __name__ == "__main__":
         inp = setup.inp
         if inp["meteorologicalData"].lower() == "gefs":
             for suffix in gefs_suffix_list():
-                tdir = "/hysplit-users/alicec/utilhysplit/utilvolc/ashapp/"
+                tdir = "/hysplit-users/alicec/utilhysplit/ashapp/"
                 setup = make_inputs_from_file(tdir, configname)
                 setup.add_inverse_params()
                 inp = setup.inp
@@ -170,11 +180,11 @@ if __name__ == "__main__":
         # config file should be called config.jobid.txt
         logging.getLogger().setLevel(20)
         logging.basicConfig(stream=sys.stdout)
-        # inp = setup.make_test_inputs()
-        configname = "config.{}.txt".format(JOBID)
-        logger.info("CONFIG FILE {}".format(configname))
-        setup = make_inputs_from_file("./", configname)
-        inp = setup.inp
+        inp = setup.make_test_inputs()
+        # configname = "config.{}.txt".format(JOBID)
+        # logger.info("CONFIG FILE {}".format(configname))
+        # setup = make_inputs_from_file("./", configname)
+        #inp = setup.inp
         # inp = setup.make_test_inputs()
         arun=choosetest(JOBID,setup,inp)
         arun.doit()

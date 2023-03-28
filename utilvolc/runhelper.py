@@ -3,12 +3,17 @@
 #
 # runhelper.py -
 #
+# Classes
 # Helper class contains functions for executing commands.
 # JobSetUp class setups the dictionary which contains information for ash runs.
 # Job and JobFileNameComposer class create filenames.
+# ConcplotColors class
 
-#  make_inputs_from_file . returns an instance of JobSetUp class.
-#
+# Functions
+# make_inputs_from_file . returns an instance of JobSetUp class.
+# make_dir
+# list_dirs 
+
 # 18 APR 2020 (SYZ) - Initial.
 # 15 Jun 2020 (AMC) - Adapted from locusts.py
 # -----------------------------------------------------------------------------
@@ -91,9 +96,13 @@ class Helper:
         if stdoutdata is not None:
             logger.info(stdoutdata)
             print(stdoutdata)
+        else:
+            logger.info('executed with no stdout data')
         if stderrdata is not None:
             logger.error(stderrdata)
             print(stderrdata)
+        else:
+            logger.info('executed with no stderr data')
 
     def execute(cmd, **kwargs):
         """
@@ -153,8 +162,13 @@ def make_inputs_from_file(wdir, config_file="ash_config.txt"):
     config.read()
 
     # convert dates to datetime objects.
-    temp = list(map(int, config.nlist["start_date"].split(":")))
-    config.nlist["start_date"] = datetime.datetime(temp[0], temp[1], temp[2], temp[3])
+    #temp = list(map(int, config.nlist["start_date"].split(":")))
+    if not 'start_date' in config.nlist.keys():
+        print('cannot find start_date {}'.format(config.nlist.keys()))
+        sys.exit()
+    else:
+        temp = list(map(int, config.nlist["start_date"].split(":")))
+        config.nlist["start_date"] = datetime.datetime(temp[0], temp[1], temp[2], temp[3])
 
     # convert values to floats where possible.
     for key in config.nlist.keys():
@@ -269,6 +283,20 @@ class JobSetUp:
             return dir + os.sep
         return dir
 
+    def add_test_directories(self):
+        tdir = '/hysplit-users/alicec/'
+        self.inp['HYSPLIT_DIR'] = '{}hdev/'.format(tdir)
+        self.inp['MAP_DIR'] = '/hysplit-users/alicec/hdev/graphics/'
+        self.inp['WORK_DIR'] = '/hysplit-users/alicec/tmp/testing/'
+        self.inp['DATA_DIR'] = '/hysplit-users/alicec/utilhysplit/ashapp/'
+        self.inp['FILES_DIR'] = './'
+        self.inp['PYTHON_EXE'] = '/hyslit-users/alicec/anaconda3/envs/hysplit/bin/python/'
+        self.inp['forecastDirectory'] = '/pub/forecast/'
+        self.inp['archivesDirectory'] = '/pub/archives/'
+        self.inp['CONVERT_EXE'] = 'convert'      
+        self.inp['GHOSTSCRIPT_EXE'] = 'gs'      
+ 
+
     def add_directories(self, inp):
         self.inp["HYSPLIT_DIR"] = inp["readyProperties"]["directory"]["hysplit"]
         self.inp["MAP_DIR"] = inp["readyProperties"]["directory"]["map"]
@@ -301,11 +329,14 @@ class JobSetUp:
         self.inp["zip_compression_level"] = 3
 
     def make_test_inputs(self):
-        # vname = "Kilauea"
-        vname = "bezy"
+        vname = "Kilauea"
+        # vname = "bezy"
+        #vname = 'Reventador'
         self.inp["owner"] = "A. Person"
         self.inp["top"] = 20000
-        self.inp["durationOfSimulation"] = 36
+        self.inp["durationOfSimulation"] = 24
+        self.inp['rate'] = 1
+        self.inp['area'] = 1
         testdate = datetime.datetime.now() - datetime.timedelta(hours=24)
         # testdate = datetime.datetime(2020,10,10,11)
         testminutes = 15

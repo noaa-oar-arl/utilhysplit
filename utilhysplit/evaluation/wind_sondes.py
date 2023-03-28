@@ -8,6 +8,7 @@ import os
 import sys
 
 from utilhysplit.evaluation import reliability
+from utilhysplit.evaluation import statmain
 
 # 01/05/2022
 # read files for wind sonde comparison from Binyu.
@@ -247,6 +248,47 @@ class Comparison:
 
         self.recalc(wspd=wspd)
 
+    def check_stat(self, ax=None, val='rmse', make_plots=False):
+        ahash = {}
+        for iii, prss in enumerate(self.dfallhash.keys()):
+            temp = self.dfallhash[prss]
+            enslist = temp.ens.unique()
+            rmselist = []
+            rhash = {}
+            for ens in enslist:
+                temp2 = temp[temp['ens']==ens]
+                mdata = statmain.MatchedData(temp2['O_SPEED'],temp2['F_SPEED'],stn=self.tag)
+                shash = mdata.find_stats()
+                rhash[ens] = shash    
+                rframe = pd.DataFrame.from_dict(rhash)
+                rmselist.append(shash[val])
+            ahash[prss] = rframe
+        self.ahash = ahash
+        if make_plots:
+           self.plot_stat(ahash,ax,val)
+        return ahash
+
+    def plot_stat(self, ahash, ax=None, val='rmse', sym='o', label='',legend=False):
+        sns.set_style('whitegrid')
+        if not ax:
+            fig = plt.figure(1)
+            ax = fig.add_subplot(1,1,1)
+        clr = ['y','b','r']
+        for iii, prss in enumerate(ahash.keys()):
+            temp = ahash[prss]
+            temp2 = temp.T
+            lbl = '{} {} {}'.format(self.tag, prss, label)
+            temp2[val].plot(marker=sym,linewidth=0,color=clr[iii],label=lbl,alpha=0.5)
+        handles, labels = ax.get_legend_handles_labels()
+        if legend: ax.legend(handles, labels, loc='upper center')
+        ax.set_ylabel('{} wind speed'.format(val))
+        ax.set_xlabel('ensemble member')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        #figlegend = plt.figure(20)
+        #axg = figlegend.add_subplot(1,1,1)
+        #axg.legend(handles,labels,loc='center',fontsize=20)
+        #axg.axis("off")
 
     def recalc(self,wspd):
         self.dfhash = {}  # wind direction with obs added
@@ -289,17 +331,29 @@ class Comparison:
         return pressure
 
 
-    def plot_diff(self,fignum=1):
+
+
+    def plot_diff(self,fignum=1, pressure=None):
         cmap = 'viridis'
         bins=[25,72]
         yyy = 15 
-        pressure = self._return_plist()
-        fig = plt.figure(fignum,figsize=[10,15])
+        fs = 18
+        if not pressure:
+            pressure = self._return_plist()
+            fig = plt.figure(fignum,figsize=[10,15])
+            fs = 12
+            ms=10
+            ax1 = fig.add_subplot(3,1,1)
+            ax2 = fig.add_subplot(3,1,2)
+            ax3 = fig.add_subplot(3,1,3)
+            axlist = [ax1,ax2,ax3]
+        else:
+            fig = plt.figure(fignum,figsize=[8,3])
+            fs = 15
+            ms=15
+            ax1 = fig.add_subplot(1,1,1)
+            axlist = [ax1]
         sns.set_style('whitegrid')
-        ax1 = fig.add_subplot(3,1,1)
-        ax2 = fig.add_subplot(3,1,2)
-        ax3 = fig.add_subplot(3,1,3)
-        axlist = [ax1,ax2,ax3]
         label_list = ['(a)','(b)','(c)']
         xll = 0
         for iii, prss in enumerate(pressure):
@@ -314,13 +368,13 @@ class Comparison:
             #axlist[iii].colorbar(cb)
             plbl = prss.replace('P','') + ' mb'
             label_list[iii] += '{}'.format(plbl)
-        axlist[-1].set_xlabel('Observed wind speed (m/s)')
-        axlist[-1].set_ylabel('Wind Direction error', fontsize=10)
+        axlist[-1].set_xlabel('Observed wind speed (m/s)',fontsize=fs)
+        axlist[-1].set_ylabel('Wind Direction error', fontsize=fs)
         plt.tight_layout()
         for iii, ax in enumerate(axlist):
             ms=10
             lbl = label_list[iii]
-            ax.set_ylabel('Wind Direction error', fontsize=10)
+            ax.set_ylabel('Wind Direction error', fontsize=fs)
             ax.text(0.01,1.01,lbl,va='bottom',ha='left',rotation='horizontal',transform=ax.transAxes,size=ms)
             ax.plot([0,xll],[yyy,yyy],'--w',linewidth=1)
             ax.plot([0,xll],[-yyy,-yyy],'--w',linewidth=1)
@@ -561,7 +615,13 @@ class Comparison:
             fig.savefig(os.path.join(self.tdir,fname))
         return fig, axlist
 
-            
+def plot_legend(handles,labels):
+    figlegend = plt.figure(20)
+    axg = figlegend.add_subplot(1,1,1)
+    axg.legend(handles,labels,loc='center',fontsize=20)
+    axg.axis("off")
+    return axg    
+        
 if __name__=="__main__":
    
    tdir = sys.argv[1]
@@ -575,8 +635,7 @@ if __name__=="__main__":
    fig.clear()
 
    fig = station.plot_boxA(fname='default')
-   fig.clear()
- 
+   fig.clear() 
 
    df = station.dfallhash['P200']
    dates=df['date'].values 

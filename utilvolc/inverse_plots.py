@@ -9,9 +9,7 @@ from utilhysplit.plotutils import colormaker
 
 """
 
-
 """
-
 
 def getlabels(subdirlist):
     labels = []

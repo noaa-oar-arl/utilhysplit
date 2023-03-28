@@ -31,43 +31,49 @@ class matchplots:
     def __init__(self, df, fignum=1):
         self.df = df
         self.fignum = 1
-        self.set_axis(fignum)
+        #self.set_axis(fignum)
 
     def set_axis(self, fignum=1):
         sns.set_style("whitegrid")
         sns.set_context("paper")
-        self.fig = plt.figure(fignum)
-        self.ax = self.fig.add_subplot(1, 1, 1)
+        fig = plt.figure(fignum)
+        ax = fig.add_subplot(1, 1, 1)
+        return fig,ax
 
     def plot_residual(self):
+        fig,ax = self.set_axis(1)
         df2 = pd.pivot_table(self.df, values="residual", index="time", columns="ens")
-        df2.plot(ax=self.ax, legend=False)
-        self.ax.set_ylabel("Residual")
-        self.fig.autofmt_xdate()
+        df2.plot(ax=ax, legend=False)
+        ax.set_ylabel("Residual")
+        fig.autofmt_xdate()
 
     def plot_intercept(self):
+        fig,ax = self.set_axis(fignum=2)
         df2 = pd.pivot_table(self.df, values="intercept", index="time", columns="ens")
-        df2.plot(ax=self.ax, legend=False, alpha=0.8)
-        self.ax.set_ylabel("Intercept")
-        self.fig.autofmt_xdate()
+        df2.plot(ax=ax, legend=False, alpha=0.8)
+        ax.set_ylabel("Intercept")
+        fig.autofmt_xdate()
         mean = pd.pivot_table(self.df, values="intercept", index="time", aggfunc="mean")
-        mean.plot(ax=self.ax, alpha=0.5, LineWidth=10, color="k", legend=False)
+        mean.plot(ax=ax, alpha=0.5, linewidth=10, color="k", legend=False)
+        return ax
 
     def plot_one(self, ens):
-        ax = self.set_axis(1)
+        fig, ax = self.set_axis(1)
         df2 = self.df[self.df["ens"] == ens]
         df2["intercept"].plot(ax=ax)
-        ax2 = self.set_axis(2)
+        fig2, ax2 = self.set_axis(2)
         df2["slope"].plot(ax=ax2)
 
     def plot_slope(self):
+        fig, ax = self.set_axis(4)
+        self.set_axis(fignum=1)
         df2 = pd.pivot_table(self.df, values="slope", index="time", columns="ens")
-        df2.plot(ax=self.ax, legend=False)
-        self.ax.set_ylabel("Slope")
-        self.fig.autofmt_xdate()
+        df2.plot(ax=ax, legend=False)
+        ax.set_ylabel("Slope")
+        fig.autofmt_xdate()
         mean = pd.pivot_table(self.df, values="slope", index="time", aggfunc="mean")
-        mean.plot(ax=self.ax, alpha=0.5, LineWidth=10, color="k", legend=False)
-
+        mean.plot(ax=ax, alpha=0.5, linewidth=10, color="k", legend=False)
+        return ax
 
 def cdf_match(aeval, tiilist, enslist, pfit=1, thresh=0.1):
     """
@@ -138,6 +144,7 @@ class AshEval(InverseAsh):
         configfile=None,
         verbose=False,
         ensdim="ens",
+        model=None
     ):
         super().__init__(tdir, fname, vdir, vid, configdir, configfile, verbose, ensdim)
         self.evaldf = pd.DataFrame()
@@ -236,7 +243,7 @@ class AshEval(InverseAsh):
                 lw = 3
             else:
                 lw = 1
-            ax.step(sdata, y, clr[jjj % len(clr)], LineWidth=lw)
+            ax.step(sdata, y, clr[jjj % len(clr)], linewidth=lw)
             ax.set_xscale("log")
             ax.set_xlabel("Mass Loading")
 
@@ -273,7 +280,7 @@ class AshEval(InverseAsh):
                 # print('here')
             else:
                 lw = 1
-            ax.step(sdata, y, clr[jjj % len(clr)], LineWidth=lw)
+            ax.step(sdata, y, clr[jjj % len(clr)], linewidth=lw)
 
     def pixel_matching(time, enslist=None, threshold=0):
         mass = self.massload.sel(time=time)
@@ -362,7 +369,7 @@ class AshEval(InverseAsh):
             cdfhash.update(cdhash)
             # plot the volcat data
             ax = plt.gca()
-            ax.step(sdata, y, "--k", LineWidth=2)
+            ax.step(sdata, y, "--k", linewidth=2)
             if not plotdiff:
                 continue
             # compute the ks value.
@@ -661,8 +668,12 @@ class AshEval(InverseAsh):
                         evals,
                         norm=norm,
                         cmap=cmap,
+                        linewidths=5,
                         shading="nearest",
                         ) 
+                if include=='all':
+                    ax1.grid(visible=True,axis='both',which='major')
+                ax2.grid(visible=True,axis='both',which='major')
                 if not logscale:
                    vals = np.log10(evals)
                 else:

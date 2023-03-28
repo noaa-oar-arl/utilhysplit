@@ -1,10 +1,10 @@
-#!/opt/Tools/anaconda3/envs/hysplit/bin/python
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
 # ashtrajectory.py - run HYSPLIT model on web and create plots
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
+# 28 FEB 2023 (AMC) - default is for 10 evenly spaced trajectories from vent to top height.
 # -----------------------------------------------------------------------------
 # To run in offline mode use python ash_run.py -777
 # -----------------------------------------------------------------------------
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def print_usage():
     print(
         """\
-USAGE: TrajectoryAshRun 
+USAGE: to test use python ash_run.py run -777
 """
     )
 
@@ -38,7 +38,6 @@ class TrajectoryAshRun(AshRun):
         control : HycsControl object
         stage : int or str
         """
-        logger.error("running additional control setup")
         # for dispersion control
         # add location of eruption
         # trajectories every 2 km
@@ -47,26 +46,27 @@ class TrajectoryAshRun(AshRun):
         lat = self.inp["latitude"]
         lon = self.inp["longitude"]
         control.remove_locations()
-        # plist = list(range(0, 26000, 1000))
-        height_list = list(np.arange(vent, height, 500))
-        # height_list = [x for x in plist if x > vent and x < height]
+        # 10 evenly spaced levels between vent and top height.
+        # rvent = int(vent/100)*100
+        height_list = np.linspace(vent, height, 10)
 
         # This returns list of FL every FL50. 12 levels total.
         # height_list,rlist = self.set_levels_A()
         # For trajectory every FL100 is sufficient
         # height_list = height_list[::2]
-        if not height_list:
+        if not isinstance(height_list, (list,np.ndarray,tuple)):
             logger.info(
                 "No height found between vent {} and top height"
                 " {}. Using Default heights".format(vent, height)
             )
             height_list = list(range(5000, 25000, 5000))
-        logger.error("{} to {} height list {}".format(vent, height, height_list))
+        #logger.error("{} to {} height list {}".format(vent, height, height_list))
         [control.add_location((lat, lon), ht) for ht in height_list]
         control.outdir = self.inp["WORK_DIR"]
         control.outfile = self.filelocator.get_tdump_filename(stage)
 
     def run_model(self):
+        logger.info('Running model for trajectory')
         # make control and setup files
         self.compose_control(stage=0, rtype="trajectory")
         self.compose_setup(stage=0)
@@ -85,14 +85,15 @@ class TrajectoryAshRun(AshRun):
         """
         return None
 
-    def add_inputs(self, inp):
-        super().add_inputs(inp)
+    #def add_inputs(self, inp):
+    #    super().add_inputs(inp)
         # if GEFS picked and trajectory then just use one member.
         # TO DO - add ensemble runs for trajectories.
         # need to figure out how to display output.
-        if inp["meteorologicalData"].lower() == "gefs":
-            self.metfilefinder.set_ens_member(".gep05")
-            logger.debug("Picking one GEFS ensemble member for trajectory run")
+    #    if inp["meteorologicalData"].lower() == "gefs":
+    #        logger.info('using one membe of GEFS')
+    #        self.metfilefinder.set_ens_member(".gep05")
+    #        logger.info("Picking one GEFS ensemble member for trajectory run")
 
     def after_run_check(self, update=False):
         # Check for the tdump/cdump file
