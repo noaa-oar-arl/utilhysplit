@@ -42,9 +42,11 @@ def find_emit_file(wdir, daterange, retype="fname"):
 
 
 def find_cdump_df(wdir, jobid, daterange):
-    ftype = 'cdump_{}'.format(jobid)
-    return find_di_file(wdir, daterange, ftype, rtype="dataframe")
-
+    ftype = 'cdump'
+    # this finds all the cdump files.
+    dset = find_di_file(wdir, daterange, ftype, rtype="dataframe")
+    # return only cdump files with the jobid in the name.
+    return dset[dset.apply(lambda row: jobid in row['filename'],axis=1)]
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
     edf = mdi.get_emit_name_df(wdir,ftype)
@@ -229,13 +231,15 @@ class DataInsertionRun(AshRun):
             # make control and setup files
             self.compose_control(stage=stage, rtype="dispersion")
             self.compose_setup(stage=stage)
-            run_suffix = self.filelocator.get_control_suffix(emitfile)
+            run_suffix = self.filelocator.get_control_suffix(stage)
             # start run and wait for it to finish..
             cproc = [
                 os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
                 str(run_suffix),
             ]
+            #import sys
             logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
+            #sys.exit()
             processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=run_suffix)
             # wait 5 seconds between run starts to avoid
             # runs trying to access ASCDATA.CFG at the same time.

@@ -63,6 +63,17 @@ Examples are provided.
 def create_run_instance(JOBID, inp):
     """
     create the correct object for the type of run and return it.
+    The system currently supports the following types of runs.
+
+    dispersion deterministic : creates forward dispersion runs
+    dispersion gefs : creates forward dispersion runs for each gefs member
+    inverse : creates a set of unit source forward runs for creating TCM
+    inverse  gefs: creates a set of unit source forward runs for creating TCM for each gefs member.
+    DataInsertion : uses previously created  emit-times files to create runs
+    BackTrajectory : runs back trajectories using a csv file which has information about starting points.
+    trajectory : deterministic : runs forward trajectories at predetermined set of heights
+    trajectory : gefs : runs forward trajectories at predetermined set of heights for each GEFS ensemble member. 
+
     """
     logger.info('Creating run Instance')
 
@@ -159,7 +170,14 @@ if __name__ == "__main__":
            setup.add_inverse_params()
            logger.info("Inverse run")
         inp = setup.inp
-        if inp["meteorologicalData"].lower() == "gefs":
+        ## TO DO - the regular dispersion run with AshEnsemble class iterates itself through
+        ## the different GEFS members so that is why the check for runflag not equal dispersion.
+        ## may want to change this so that AshEnsemble follows the logic of the other
+        ## types of runs.
+        ## one challenge is that currently the other types of runs produce one netcdf file
+        ## for each ensemble member. This is what we want for the inversion source term runs.
+        ## however data insertion runs probably should be all together.
+        if inp["meteorologicalData"].lower() == "gefs" and inp['runflag']!='dispersion':
             for suffix in gefs_suffix_list():
                 tdir = "/hysplit-users/alicec/utilhysplit/ashapp/"
                 setup = make_inputs_from_file(tdir, configname)
@@ -170,6 +188,7 @@ if __name__ == "__main__":
                 inp["gefsmember"] = suffix
                 arun = create_run_instance(JOBIDens, inp)
                 arun.doit()
+        
         else:
             arun = create_run_instance(JOBID, inp)
             arun.doit()
