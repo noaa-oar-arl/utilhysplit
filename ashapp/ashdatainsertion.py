@@ -41,12 +41,13 @@ def find_emit_file(wdir, daterange, retype="fname"):
     return find_di_file(wdir, daterange, "EMIT")
 
 
-def find_cdump_df(wdir, daterange):
-    return find_di_file(wdir, daterange, "cdump", rtype="dataframe")
+def find_cdump_df(wdir, jobid, daterange):
+    ftype = 'cdump_{}'.format(jobid)
+    return find_di_file(wdir, daterange, ftype, rtype="dataframe")
 
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
-    edf = mdi.get_emit_name_df(wdir)
+    edf = mdi.get_emit_name_df(wdir,ftype)
     edf = edf[edf["file descriptor"] == ftype]
     edf = edf[edf["idate"] >= daterange[0]]
     edf = edf[edf["idate"] <= daterange[1]]
@@ -56,20 +57,39 @@ def find_di_file(wdir, daterange, ftype, rtype="fname"):
         rval = elist
     elif rtype == "dataframe":
         rval = edf
+    #print('FIND DI FILE', wdir, daterange, ftype, edf, rval)
     return rval
 
 
 class DataInsertionRun(AshRun):
+    """
+    INPUTS
+    DIrunHours is set to inp['emissionHours']
+    The inp['emissionHours'] set to 0. 
+
+    WORK_DIR is set to the input work directory + volcano name + emitimes
+             This may need to be changed.
+
+    """
+
+
     # def __init__(self, JOBID):
     #    super().__init__(JOBID)
 
     def add_inputs(self, inp):
+        # this start date is the time that the data insertion runs begin.
+        # later start_date will be used for the start time of each individual run.
+        inp["DI_start_date"] = inp['start_date'] 
         inp["DIrunHours"] = inp["emissionHours"]
         inp["emissionHours"] = 0
         inp["samplingIntervalHours"] = 1
         inp["WORK_DIR"] = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "emitimes/")
         logger.info("Working directory set {}".format(inp["WORK_DIR"]))
         super().add_inputs(inp)
+        if inp["meteorologicalData"].lower() == "gefs":
+            logger.info("ens member {}".format(inp["gefsmember"]))
+            self.metfilefinder.set_ens_member("." + inp["gefsmember"])
+        self.awips = False
         self.filelocator = AshDINameComposer(
             self.inp["WORK_DIR"], self.JOBID, self.inp["jobname"]
         )
@@ -82,10 +102,12 @@ class DataInsertionRun(AshRun):
         return maptexthash
 
     def get_cdump_xra(self):
-        edate = self.inp["start_date"] + datetime.timedelta(
+        import sys
+        edate = self.inp["DI_start_date"] + datetime.timedelta(
             hours=self.inp["DIrunHours"]
         )
-        cdf = find_cdump_df(self.inp["WORK_DIR"], [self.inp["start_date"], edate])
+        logger.warning('DATES {} {} {}'.format(self.inp['DI_start_date'], edate, self.inp['DIrunHours']))
+        cdf = find_cdump_df(self.inp["WORK_DIR"], self.JOBID, [self.inp["start_date"], edate])
         blist = list(cdf["filename"].values)
         alist = []
         # if not blist:
@@ -94,7 +116,7 @@ class DataInsertionRun(AshRun):
         for fname in blist:
             logger.info("Adding to netcdf file {}".format(fname))
             alist.append((fname, fname, self.inp["meteorologicalData"]))
-        century = 100 * (int(self.inp["start_date"].year / 100))
+        century = 100 * (int(self.inp["DI_start_date"].year / 100))
         cdumpxra = hysplit.combine_dataset(
             alist, century=century, sample_time_stamp="start"
         )
@@ -148,7 +170,7 @@ class DataInsertionRun(AshRun):
         return setup
 
     def setup_basic_control(self, stage="emitfile", rtype="dispersion"):
-        self.read_emittimes(stage)
+        self.read_emittimes(stage.replace('_' + self.JOBID,''))
         control = super().setup_basic_control(stage=stage, rtype=rtype)
         return control
 
@@ -183,8 +205,9 @@ class DataInsertionRun(AshRun):
         for emitfile in find_emit_file(
             self.inp["WORK_DIR"], [self.inp["start_date"], edate]
         ):
-            rval = super().after_run_check(stage=emitfile, update=update)
-            logger.warning("Looking for {} {}".format(emitfile, rval))
+            logger.warning("Looking for {}".format(emitfile))
+            rval = super().after_run_check(stage='{}_{}'.format(emitfile,self.JOBID), update=update)
+            logger.warning("FOUND {}".format(rval))
             rlist.append(rval)
         return np.all(rlist)
 
@@ -198,13 +221,14 @@ class DataInsertionRun(AshRun):
         for emitfile in find_emit_file(
             self.inp["WORK_DIR"], [self.inp["start_date"], edate]
         ):
-            fnn = self.filelocator.get_cdump_filename(stage=emitfile)
+            stage = '{}_{}'.format(emitfile,self.JOBID)
+            fnn = self.filelocator.get_cdump_filename(stage=stage)
             if os.path.exists(fnn):
                 logger.info("cdump exists {} continuing to next run".format(fnn))
                 continue
             # make control and setup files
-            self.compose_control(stage=emitfile, rtype="dispersion")
-            self.compose_setup(stage=emitfile)
+            self.compose_control(stage=stage, rtype="dispersion")
+            self.compose_setup(stage=stage)
             run_suffix = self.filelocator.get_control_suffix(emitfile)
             # start run and wait for it to finish..
             cproc = [
