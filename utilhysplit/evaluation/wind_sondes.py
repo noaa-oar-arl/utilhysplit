@@ -744,7 +744,8 @@ if __name__=="__main__":
    """
         First argument : directory where files are located
         The subdirectories should be named with the tag (e.g. SKBO)
-        The program will walk through the subdirectories.
+        The program will walk through the subdirectories and create plots for each one as well
+        as rmse plots for wind direction and wind speed for all the subdirectoris together.
         filenames in the subdirectories should be ensid.com.p*.txt where p* indicates 
         the pressure level. See Comparison class for pressure levels.
    """ 
