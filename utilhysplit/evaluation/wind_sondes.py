@@ -230,6 +230,8 @@ class Comparison:
         tdir : directory where files are located
         tag  : site identifier
         plist : filenames should be ensid.com.p*.txt where p* indicates the pressure                level. plist gives the pressure levels to use.
+        wspd : threshold of windspeed to use. If non zero removes 
+
         """
         self.tag = tag
         self.tdir = tdir
@@ -246,7 +248,7 @@ class Comparison:
 
         self.dfallhash = {} # 
 
-        self.recalc(wspd=wspd)
+        success = self.recalc(wspd=wspd)
 
     def check_stat(self, ax=None, val='rmse', make_plots=False):
         ahash = {}
@@ -300,11 +302,14 @@ class Comparison:
         self.srankhash = {} # rank histograms for wind speed
 
         self.dfallhash = {} # 
-  
+        found=False 
         for pressure in self.plist:
-            fff = '/*.com.{}.txt'.format(pressure)
-            self.filehash[pressure] = glob.glob(self.tdir + fff) 
-
+            fff = self.tdir + '/*.com.{}.txt'.format(pressure)
+            self.filehash[pressure] = glob.glob(fff) 
+            if len(self.filehash[pressure]) < 1:
+               print('cannot find files {}'.format(fff))
+               continue
+            found = True
             self.dfallhash[pressure] = process_files(self.filehash[pressure])
 
    
@@ -320,7 +325,7 @@ class Comparison:
             self.spdhash[pressure] = get_wspd_df(self.filehash[pressure],
                                              addobs=True,
                                              wspd=wspd) 
-
+        return found
 
 
     def _return_plist(self,pressure=None):
@@ -621,34 +626,164 @@ def plot_legend(handles,labels):
     axg.legend(handles,labels,loc='center',fontsize=20)
     axg.axis("off")
     return axg    
+
+
+def plotA(station_hash, tdir='./',slist=None,thresh=None):
+    from utilhysplit.plotutils import colormaker
+    if not slist:
+       slist = list(station_hash.keys())
+
+    cmake = colormaker.ColorMaker('viridis',len(slist),ctype='rgb')
+    clrs = cmake()
+
+    sns.set_style('whitegrid')
+    marker = ['o','+','^']
+    #clrs = ['--ko','--ks','k--^','-k*','--ro','--rs','--r^','-r*','--bo','--bs','--b^','-b*']
+    fig = plt.figure(figsize=(10,3))
+    def findwerr(odir,fdir):
+        cw =  cw_diff(odir,fdir)
+        ccw = ccw_diff(odir,fdir)
+        if cw < ccw:
+            return cw**2
+        else:
+            return ccw**2
+    thresh=10
+    thresh=None
+    prss='P300'
+    for jjj, prss in enumerate(['P200','P300','P500']):
+        for iii, station in enumerate(slist):
+            print(iii, jjj)
+            temp = station_hash[station].dfallhash[prss]
+            if thresh:
+                temp = temp[temp['O_SPEED']>thresh]
+            temp['direction_err_sq'] = temp.apply(lambda row: findwerr(row['ODIR'],row['FDIR']),axis=1)
+            temp2 = temp.pivot(index='date',columns='ens',values='direction_err_sq')
+            rmse = temp2.mean()
+            
+            temp3 = temp.pivot(index='ens',columns='date',values='direction_err_sq')
+            rmse_min= temp3.min().mean()
+            
+            
+            plt.plot(rmse.index.values, np.sqrt(rmse.values), 
+                     marker = marker[jjj],color=clrs[iii],
+                     label =slist[iii] + ' ' + prss)
+            print('Wind direction Using best RMSE', prss, station, rmse_min**0.5)
+            
+    tlen = len(rmse.index.values)
+    plt.xticks(rotation=45,fontsize=15)
+    plt.xticks(np.arange(0,tlen,5))
+    ax = plt.gca()
+    handles, labels = ax.get_legend_handles_labels()
+
+    ax.set_xlabel('Ensemble member',fontsize=15)
+    ax.set_ylabel('RMSE wind \n direction (degrees)',fontsize=15)
+    plt.tight_layout()
+    plt.savefig(os.path.join(tdir,'rmse_wind_direction.png'))
+
+    plot_legend(handles,labels)
+    plt.tight_layout()
+    plt.savefig(os.path.join(tdir,'rmse_wind_direction_legend.png'))
+
+
+
+def plotB(station_hash, tdir='./',slist=None,thresh=None):
+    from utilhysplit.plotutils import colormaker
+    if not slist:
+       slist = list(station_hash.keys())
+
+    cmake = colormaker.ColorMaker('viridis',len(slist),ctype='rgb')
+    clrs = cmake()
+
+    sns.set_style('whitegrid')
+    marker = ['o','+','^']
+    fig = plt.figure(figsize=(10,3))
+    def findwerr(odir,fdir):
+        cw =  cw_diff(odir,fdir)
+        ccw = ccw_diff(odir,fdir)
+        if cw < ccw:
+            return cw**2
+        else:
+            return ccw**2
+    for jjj, prss in enumerate(['P200','P300','P500']):
+        for iii, station in enumerate(slist):
+            print(iii, jjj)
+            temp = station_hash[station].dfallhash[prss]
+            if thresh:
+                temp = temp[temp['O_SPEED']>thresh]
+            temp['speed_err_sq'] = (temp['F_SPEED'] - temp['O_SPEED'])**2
+            temp2 = temp.pivot(index='date',columns='ens',values='speed_err_sq')
+            rmse = temp2.mean()
+            
+            temp3 = temp.pivot(index='ens',columns='date',values='speed_err_sq')
+            rmse_min= temp3.min().mean()
+            
+            plt.plot(rmse.index.values, np.sqrt(rmse.values), 
+                     marker = marker[jjj],color=clrs[iii],
+                     label =slist[iii] + ' ' + prss)
+            print('Wind speed Using best RMSE', prss, station, rmse_min**0.5)
+            
+    tlen = len(rmse.index.values)
+    plt.xticks(rotation=45,fontsize=15)
+    plt.xticks(np.arange(0,tlen,5))
+    ax = plt.gca()
+    handles, labels = ax.get_legend_handles_labels()
+
+    ax.set_xlabel('Ensemble member',fontsize=15)
+    ax.set_ylabel('RMSE wind \n speed (m/s))',fontsize=15)
+    plt.tight_layout()
+    plt.savefig(os.path.join(tdir,'rmse_wind_speed.png'))
+
+    plot_legend(handles,labels)
+    plt.tight_layout()
+    plt.savefig(os.path.join(tdir,'rmse_wind_speed_legend.png'))
+
+
+
         
 if __name__=="__main__":
+   """
+        First argument : directory where files are located
+        The subdirectories should be named with the tag (e.g. SKBO)
+        The program will walk through the subdirectories.
+        filenames in the subdirectories should be ensid.com.p*.txt where p* indicates 
+        the pressure level. See Comparison class for pressure levels.
+   """ 
+
+   topdir = sys.argv[1]
+   print('TDIR', topdir)
+   station_hash = {}
+   subdirlist = [x[0] for x in os.walk(topdir)][1:]
    
-   tdir = sys.argv[1]
-   tag = sys.argv[2]
-   station = Comparison(tdir,tag=tag)
+   for tdir in subdirlist:
+       tag = tdir.split('/')[-1]
+       print('working on {}'.format(tdir))
+       station = Comparison(tdir,tag=tag)
+       station_hash[tag] = station
 
-   fig, axlist = station.calc_rank_diagram(fname='default')  
-   fig.clear()
 
-   fig = station.plot_hist_spread(fname='default')
-   fig.clear()
+       fig, axlist = station.calc_rank_diagram(fname='default')  
+       fig.clear()
 
-   fig = station.plot_boxA(fname='default')
-   fig.clear() 
+       fig = station.plot_hist_spread(fname='default')
+       fig.clear()
 
-   df = station.dfallhash['P200']
-   dates=df['date'].values 
-   d1 = pd.to_datetime(dates[0])
-   d2 = d1 + datetime.timedelta(hours=30*24)
-   print('MAX date', np.max(dates))
-   df2 = station.dfhash['P200']
-   print('sIZE', df2.shape)
-   station.plot_boxB(daterange=[d1,d2],fname='default')
-   fig.clear()
+       fig = station.plot_boxA(fname='default')
+       fig.clear() 
 
-   fig = station.plot_diff()
-   fig.clear() 
-   station.plot_mindiffhist(binwidth=5)
+       df = station.dfallhash['P200']
+       dates=df['date'].values 
+       d1 = pd.to_datetime(dates[0])
+       d2 = d1 + datetime.timedelta(hours=30*24)
+       print('MAX date', np.max(dates))
+       df2 = station.dfhash['P200']
+       print('size', df2.shape)
+       station.plot_boxB(daterange=[d1,d2],fname='default')
+       fig.clear()
 
+       fig = station.plot_diff()
+       fig.clear() 
+       station.plot_mindiffhist(binwidth=5)
+   plotA(station_hash,tdir=topdir)
+   plotB(station_hash,tdir=topdir)
+ 
 
