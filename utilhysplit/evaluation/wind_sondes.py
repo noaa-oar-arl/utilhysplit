@@ -336,8 +336,6 @@ class Comparison:
         return pressure
 
 
-
-
     def plot_diff(self,fignum=1, pressure=None):
         cmap = 'viridis'
         bins=[25,72]
@@ -400,9 +398,6 @@ class Comparison:
             plt.title(self.tag + ' ' + prss)
             plt.xticks(rotation=45)
             plt.show()
-
-
-
 
     def plot_hist_spread(self,pressure=None,fname=None,fignum=2):
         pressure = self._return_plist(pressure)
@@ -629,6 +624,10 @@ def plot_legend(handles,labels):
 
 
 def plotA(station_hash, tdir='./',slist=None,thresh=None):
+    """
+    Plots RMSE of wind direction for different stations.
+    station_hash : dictionary where key is tag and value is an object of Comarison class
+    """
     from utilhysplit.plotutils import colormaker
     if not slist:
        slist = list(station_hash.keys())
@@ -687,6 +686,11 @@ def plotA(station_hash, tdir='./',slist=None,thresh=None):
 
 
 def plotB(station_hash, tdir='./',slist=None,thresh=None):
+    """
+    Plots RMSE of wind speed for different stations.
+    Plots RMSE of wind direction for different stations.
+    station_hash : dictionary where key is tag and value is an object of Comarison class
+    """
     from utilhysplit.plotutils import colormaker
     if not slist:
        slist = list(station_hash.keys())
