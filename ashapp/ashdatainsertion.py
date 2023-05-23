@@ -5,7 +5,6 @@ import datetime
 import logging
 import os
 import time
-
 import numpy as np
 # import xarray as xr
 
@@ -36,10 +35,21 @@ generated.
 """
     )
 
+def find_emit_file_alt(wdir):
+    """
+    Find all files which start with EMIT in the directory
+    """
+    import glob
+    efile = glob.glob(wdir + '/EMIT*') 
+    efile = [x.split('/')[-1] for x in efile]
+    return efile
 
-def find_emit_file(wdir, daterange, retype="fname"):
-    return find_di_file(wdir, daterange, "EMIT")
-
+def find_emit_file(wdir, daterange, rtype="fname"):
+    # first look for files with volcat naming convention.
+    elist =  find_di_file(wdir, daterange, "EMIT", rtype=rtype)
+    if not(list(elist)):
+       elist = find_emit_file_alt(wdir)      
+    return elist
 
 def find_cdump_df(wdir, jobid, daterange):
     ftype = 'cdump'
@@ -50,6 +60,8 @@ def find_cdump_df(wdir, jobid, daterange):
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
     edf = mdi.get_emit_name_df(wdir,ftype)
+    if 'file descriptor' not in edf.columns:
+        return []
     edf = edf[edf["file descriptor"] == ftype]
     edf = edf[edf["idate"] >= daterange[0]]
     edf = edf[edf["idate"] <= daterange[1]]
@@ -224,7 +236,10 @@ class DataInsertionRun(AshRun):
             self.inp["WORK_DIR"], [self.inp["start_date"], edate]
         ):
             stage = '{}_{}'.format(emitfile,self.JOBID)
+            #stage = stage.replace('.','')
             fnn = self.filelocator.get_cdump_filename(stage=stage)
+            logger.info("cdump filename {}".format(stage))
+            logger.info("stage {}".format(stage))
             if os.path.exists(fnn):
                 logger.info("cdump exists {} continuing to next run".format(fnn))
                 continue

@@ -58,10 +58,14 @@ def make_dir(data_dir, newdir="pc_corrected", verbose=False):
     """Create new directory if it does not exist.
     Inputs:
     datadir: Directory in which to create new directory (string)
-    newdir: name of new directory (string)
+    newdir: name of new directory (string). If none then will just use datadir.
     """
-    # Make sure data_dir ends with '/'
-    new_data_dir = os.path.join(data_dir, newdir)
+    if not isinstance(data_dir,str):
+       data_dir = str(data_dir)
+    if isinstance(newdir,str):
+        new_data_dir = os.path.join(data_dir, newdir)
+    else:
+        new_data_dir = data_dir
     # Go in to given directory, create create new directory if not already there
     if not os.path.exists(new_data_dir):
         orig_umask = os.umask(0)
@@ -167,7 +171,12 @@ def make_inputs_from_file(wdir, config_file="ash_config.txt"):
         print('cannot find start_date {}'.format(config.nlist.keys()))
         sys.exit()
     else:
-        temp = list(map(int, config.nlist["start_date"].split(":")))
+        try:
+            temp = list(map(int, config.nlist["start_date"].split(":")))
+        except Exception as eee:
+            logger.warning(eee)
+            logger.warning('start date not in right format {}'.format(config.nlist["start_date"]))
+            sys.exit() 
         config.nlist["start_date"] = datetime.datetime(temp[0], temp[1], temp[2], temp[3])
 
     # convert values to floats where possible.
@@ -184,6 +193,18 @@ def make_inputs_from_file(wdir, config_file="ash_config.txt"):
     # puts in defaults if not in the config.nlist
     jobsetup.add_optional_params(config.nlist)
     return jobsetup
+
+
+class EventSetUp:
+
+    def __init__(self):
+       self.inp = {}
+       self.set_directories()
+
+    def set_directories(self):
+       self.inp['JPSS_DIR'] = '/pub/jpsss_upload'
+       self.inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+       self.inp['VOLCAT_DIR']= '/pub/ECMWF/JPSS/VOLCAT/Files/'
 
 
 class JobSetUp:
@@ -290,7 +311,7 @@ class JobSetUp:
         self.inp['WORK_DIR'] = '/hysplit-users/alicec/tmp/testing/'
         self.inp['DATA_DIR'] = '/hysplit-users/alicec/utilhysplit/ashapp/'
         self.inp['FILES_DIR'] = './'
-        self.inp['PYTHON_EXE'] = '/hyslit-users/alicec/anaconda3/envs/hysplit/bin/python/'
+        self.inp['PYTHON_EXE'] = '/hysplit-users/alicec/anaconda3/envs/hysplit/bin/python'
         self.inp['forecastDirectory'] = '/pub/forecast/'
         self.inp['archivesDirectory'] = '/pub/archives/'
         self.inp['CONVERT_EXE'] = 'convert'      
@@ -386,7 +407,8 @@ class JobSetUp:
             self.inp["longitude"] = -153.54
             self.inp["bottom"] = 7021
         if vname.lower() == "kilauea":
-            self.inp["meteorologicalData"] = "NAMHHI"
+            #self.inp["meteorologicalData"] = "NAMHHI"
+            self.inp["meteorologicalData"] = "GFS0p25"
             self.inp["VolcanoName"] = "Kilauea"
             self.inp["latitude"] = 19.421
             self.inp["longitude"] = -155.28
@@ -460,6 +482,7 @@ class JobFileNameComposer:
         return fname.split(".")[-1]
 
     def get_control_filename(self, stage=0):
+        print('GETTING FILENAME HERE')
         if stage != 0:
             # return '{}_CONTROL.{}.txt'.format(self.job, stage)
             return "CONTROL.{}_{}".format(self.job, stage)
@@ -686,16 +709,23 @@ class JobFileNameComposer:
 
 class AshDINameComposer(JobFileNameComposer):
     def get_cdump_filename(self, stage="EMIT_0"):
-        stage = str(stage)
-        cdumpfilename = stage.replace("EMIT", "cdump")
+        cdumpfilename = self.get_di_filename(stage,'cdump.')
         return cdumpfilename
 
-    def get_control_filename(self, stage="EMIT_0"):
+    def get_di_filename(self,stage,cstr):
         stage = str(stage)
-        controlfilename = stage.replace("EMIT_", "CONTROL.")
+        if 'EMIT_' in stage:
+            filename = stage.replace("EMIT_", cstr)
+        elif 'EMITIMES' in stage:
+            filename = stage.replace("EMITIMES", cstr)
+        elif 'EMIT' in stage:
+            filename = stage.replace("EMIT", cstr)
+        return filename
+
+    def get_control_filename(self, stage="EMIT_0"):
+        controlfilename = self.get_di_filename(stage,'CONTROL.')
         return controlfilename
 
     def get_setup_filename(self, stage=0):
-        stage = str(stage)
-        filename = stage.replace("EMIT_", "SETUP.")
-        return filename
+        setupfilename = self.get_di_filename(stage,'SETUP.')
+        return setupfilename
