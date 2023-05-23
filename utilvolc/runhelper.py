@@ -716,10 +716,14 @@ class AshDINameComposer(JobFileNameComposer):
         stage = str(stage)
         if 'EMIT_' in stage:
             filename = stage.replace("EMIT_", cstr)
-        elif 'EMITIMES' in stage:
+        elif 'EMITIMES_' in stage:
             filename = stage.replace("EMITIMES", cstr)
+        elif 'EMITIMES' in stage:
+            filename = stage.replace("EMITIMES_", cstr)
         elif 'EMIT' in stage:
             filename = stage.replace("EMIT", cstr)
+        else:
+            filename = '{}.{}'.format(cstr,stage)
         return filename
 
     def get_control_filename(self, stage="EMIT_0"):

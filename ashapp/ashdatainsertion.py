@@ -6,6 +6,7 @@ import logging
 import os
 import time
 import numpy as np
+import pandas as pd
 # import xarray as xr
 
 # import hysplit
@@ -29,8 +30,20 @@ def print_usage():
         """\
 Run through the ash_run.py executable.
 
-Assumes that emit-times file generated from VOLCAT data has been
+Assumes that emit-times file generated from VOLCAT data (or other data) has been
 generated.
+
+Looks for a directory comprised of the following from the configuration file
+/wdir/volcanoname/emitimes/
+
+In this directory, look for emit-times files. Naming convention for emitimes files should
+be EMITIMES_suffix, or EMIT_suffix.
+
+If naming convention is according to volcat then will also use the dates in the 
+configuration file to only create runs for those filenames with dates between start_date
+and start_date +  emissionHours.
+
+If different naming convention then will simply create runs for all EMIT files in the directory.
 
 """
     )
@@ -51,10 +64,29 @@ def find_emit_file(wdir, daterange, rtype="fname"):
        elist = find_emit_file_alt(wdir)      
     return elist
 
+def find_cdump_df_alt(wdir, jobid):
+    efile = find_emit_file_alt(wdir)
+    filelocator = AshDINameComposer(
+                  wdir,jobid,jobid)
+    cnames = []
+
+    for eff in efile:
+        stage = '{}_{}'.format(eff,jobid)
+        cfile = filelocator.get_cdump_filename(stage)
+        print('find cdump', eff, cfile)
+        cnames.append(cfile)
+    df = pd.DataFrame(cnames,columns=['filename'])
+    df['file descriptor'] = 'cdump'
+    df["volcano id"] = 'unknown'
+    df['layer'] = 'unknown'
+    return df 
+
 def find_cdump_df(wdir, jobid, daterange):
     ftype = 'cdump'
     # this finds all the cdump files.
     dset = find_di_file(wdir, daterange, ftype, rtype="dataframe")
+    if isinstance(dset,list):
+       dset = find_cdump_df_alt(wdir,jobid)
     # return only cdump files with the jobid in the name.
     return dset[dset.apply(lambda row: jobid in row['filename'],axis=1)]
 
@@ -139,6 +171,10 @@ class DataInsertionRun(AshRun):
         cdumpxra.attrs["layer"] = cdf["layer"].unique()[0]
         cdumpxra.attrs["mult"] = 1
         return cdumpxra
+
+    def create_plots(self, redraw=False, stage=0):
+        # TODO currently no plots automatically created.
+        return True 
 
     def read_emittimes(self, emitfile):
         """

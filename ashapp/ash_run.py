@@ -6,6 +6,7 @@
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
 # 15 NOV 2022 (AMC) - updated how tests can be run
+# 23 May 2023 (AMC) - made data insertion runs more flexible
 # -----------------------------------------------------------------------------
 # To run in offline mode standard dispersion run  python ash_run.py -999
 # To run in offline mode standard trajectory run  python ash_run.py -777
@@ -51,6 +52,27 @@ python ash_run.py test JOBID
 
 The program will look for a file with the name config.JOBID.txt and read it for inputs.
 Examples are provided.
+In the configuration file, the runtype is specified. 
+Further documentation for some run types is below.
+
+------------------------------------------------------------------------------------
+DATAINSERTION
+Assumes that emit-times file generated from VOLCAT data (or other data) has been
+generated.
+
+Looks for a directory comprised of the following from the configuration file
+/wdir/volcanoname/emitimes/
+
+In this directory, look for emit-times files. Naming convention for emitimes files should
+be EMITIMES_suffix, or EMIT_suffix.
+
+If naming convention is according to volcat then will also use the dates in the 
+configuration file to only create runs for those filenames with dates between start_date
+and start_date +  emissionHours.
+
+If different naming convention then will simply create runs for all EMIT files in the directory.
+
+
 """
     )
 
