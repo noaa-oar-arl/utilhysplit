@@ -717,9 +717,9 @@ class AshDINameComposer(JobFileNameComposer):
         if 'EMIT_' in stage:
             filename = stage.replace("EMIT_", cstr)
         elif 'EMITIMES_' in stage:
-            filename = stage.replace("EMITIMES", cstr)
-        elif 'EMITIMES' in stage:
             filename = stage.replace("EMITIMES_", cstr)
+        elif 'EMITIMES' in stage:
+            filename = stage.replace("EMITIMES", cstr)
         elif 'EMIT' in stage:
             filename = stage.replace("EMIT", cstr)
         else:
