@@ -13,6 +13,9 @@ from utilhysplit.evaluation import statmain
 # 01/05/2022
 # read files for wind sonde comparison from Binyu.
 
+# 2023 24 May (AMC) modified so can work when siteid (SID) column is present.
+
+
 def test1(wmax):
     ddd = 5
     wmin = 320
@@ -142,6 +145,10 @@ def process_files(flist, addobs=None,wspd=None):
     dfall = pd.concat(dflist)
     if wspd:
        dfall = dfall[dfall['O_SPEED']>wspd]
+    if 'SID' in dfall.columns:
+       ccc = ['date','SID']
+    else:
+       ccc = ['date']
 
     # creates dataframe with only three columns, date, speed or direction, ensid.
     if isinstance(addobs,str):
@@ -149,24 +156,30 @@ def process_files(flist, addobs=None,wspd=None):
            print('addobs not recognized {}'.format(addobs))
         else:   
            dfnew = readfile(flist[0])
-           obs = dfnew[['date',addobs]].copy()
+           ccc.append(addobs)
+           obs = dfnew[ccc].copy()
            obs = obs.drop_duplicates()
            obs['ens'] = 'obs'
-
+ 
            if addobs=='ODIR': new='FDIR'
            elif addobs=='O_SPEED': new = 'F_SPEED'
-
-           obs.columns = ['date',new,'ens']
-        dfall = dfall[['date',new,'ens']]
-        dfall = pd.concat([dfall,obs])
-
+           ccc[ccc.index(addobs)] = new
+           #ccc.append(new)
+           ccc.append('ens')
+           obs.columns = ccc
+           dfall = dfall[ccc]
+           dfall = pd.concat([dfall,obs])
     return dfall
 
 def get_wspd_df(flist, addobs=True,addspread=False,wspd=None):
     if addobs: aaa = 'O_SPEED'
     else: aaa=None
     dfall = process_files(flist,addobs=aaa,wspd=wspd)
-    dfwdir = pd.pivot(dfall, columns = 'ens', values='F_SPEED', index='date')
+    if 'SID' in dfall.columns:
+        index = ['date','SID']
+    else:
+        index = ['date']
+    dfwdir = pd.pivot(dfall, columns = 'ens', values='F_SPEED', index=index)
     return dfwdir
 
 def get_wdir_df(flist, addobs=True,addspread=True,wspd=None):
@@ -185,7 +198,11 @@ def get_wdir_df(flist, addobs=True,addspread=True,wspd=None):
     if addobs: aaa = 'ODIR'
     else: aaa = None
     dfall = process_files(flist,addobs=aaa,wspd=wspd)
-    dfwdir = pd.pivot(dfall, columns = 'ens', values='FDIR', index='date')
+    if 'SID' in dfall.columns:
+        index = ['date','SID']
+    else:
+        index = ['date']
+    dfwdir = pd.pivot(dfall, columns = 'ens', values='FDIR', index=index)
     if addspread:
         dfwdir = add_spread(dfwdir)
     return dfwdir
@@ -193,13 +210,14 @@ def get_wdir_df(flist, addobs=True,addspread=True,wspd=None):
 def add_spread(dfwdirin):
     dfwdir = dfwdirin.copy()
     dftemp = dfwdir.apply(lambda row: spread(row), axis=1)
-    dftemp = dftemp.to_frame().reset_index()
-    dftemp.columns = ['date','temp']
+    dftemp = dftemp.to_frame()
+    dftemp.columns = ['temp']
     dftemp['spread'] = dftemp.apply(lambda row: row['temp'][2],axis=1)
     dftemp['start']  = dftemp.apply(lambda row: row['temp'][0],axis=1)
     dftemp['stop']  = dftemp.apply(lambda row: row['temp'][1],axis=1)
-    dftemp = dftemp[['date','spread','start','stop']]
-    dfwdir = pd.concat([dfwdirin, dftemp.set_index('date')], axis=1)
+    ccc = ['spread','start','stop']
+    dftemp = dftemp[ccc]
+    dfwdir = pd.concat([dfwdirin, dftemp], axis=1)
     return dfwdir
 
 
@@ -249,6 +267,7 @@ class Comparison:
         self.dfallhash = {} # 
 
         success = self.recalc(wspd=wspd)
+        self.index = ['date']
 
     def check_stat(self, ax=None, val='rmse', make_plots=False):
         ahash = {}
@@ -291,6 +310,10 @@ class Comparison:
         #axg = figlegend.add_subplot(1,1,1)
         #axg.legend(handles,labels,loc='center',fontsize=20)
         #axg.axis("off")
+    def get_files(self,pressure):
+        fff = self.tdir + '/*.com.{}.txt'.format(pressure)
+        files = glob.glob(fff) 
+        return files
 
     def recalc(self,wspd):
         self.dfhash = {}  # wind direction with obs added
@@ -304,15 +327,19 @@ class Comparison:
         self.dfallhash = {} # 
         found=False 
         for pressure in self.plist:
-            fff = self.tdir + '/*.com.{}.txt'.format(pressure)
-            self.filehash[pressure] = glob.glob(fff) 
+         
+            #fff = self.tdir + '/*.com.{}.txt'.format(pressure)
+            self.filehash[pressure] =  self.get_files(pressure)
+            
             if len(self.filehash[pressure]) < 1:
                print('cannot find files {}'.format(fff))
                continue
             found = True
             self.dfallhash[pressure] = process_files(self.filehash[pressure])
 
-   
+            if 'SID' in self.dfallhash[pressure].columns:
+                self.index = ['date','SID']
+            
             self.dfhash[pressure] = get_wdir_df(self.filehash[pressure],
                                              addobs=True,
                                              addspread=True,
@@ -383,8 +410,8 @@ class Comparison:
             ax.plot([0,xll],[-yyy,-yyy],'--w',linewidth=1)
             ax.set_xlim(0,xll)
         fname = '{}_directionerr_vs_ospeed.png'.format(self.tag)
-        fig.savefig(os.path.join(self.tdir,fname))
-        return fig
+        fname = os.path.join(self.tdir,fname)
+        savefig(fname)
 
     def plotspread(self,pressure=None):
         pressure = self._return_plist(pressure)
@@ -444,7 +471,8 @@ class Comparison:
         if isinstance(fname,str):
             if fname=='default':
                fname = '{}_SpreadHist.png'.format(self.tag)
-            fig.savefig(os.path.join(self.tdir,fname))
+            fname = os.path.join(self.tdir,fname)
+            savefig(fname)
         return fig
 
 
@@ -487,10 +515,13 @@ class Comparison:
             ax.text(0.70,0.90,lbl,va='bottom',ha='left',rotation='horizontal',transform=ax.transAxes,size=ms)
         ax1.set_ylabel('percent in bin')
         fname = '{}_mindiffhist_wspd.png'.format(self.tag)
-        fig.savefig(os.path.join(self.tdir,fname))
+        fname = os.path.join(self.tdir,fname)
+        savefig(fname)
 
 
     def plot_boxB(self,daterange,fname=None,spd=True,fignum=3):
+        ## TO DO need to handle when multiple site id's.
+
         fig = plt.figure(fignum,figsize=[12,12])
         ax1 = fig.add_subplot(3,1,1)
         ax2 = fig.add_subplot(3,1,2)
@@ -501,12 +532,15 @@ class Comparison:
         for iii, prss in enumerate(pressure):
             sns.set_style('whitegrid')
             temp = self.spdhash[prss].reset_index()
+            #print(temp)
+            print('ZZZZZZ', daterange)
             temp = temp[temp.date >= daterange[0]]    
             temp = temp[temp.date <= daterange[1]]    
-            temp = temp.set_index('date')
+            temp = temp.set_index(self.index)
             obs = temp['obs']
             temp = temp.drop(['obs'],axis=1)
             temp = temp.T
+            print(temp)
             sns.boxplot(data=temp,color='grey',saturation=0.5,ax=axlist[iii])
             xxx = [str(pd.to_datetime(x)) for x in obs.index.values]
             axlist[iii].plot(xxx,obs.values,'ro',markersize=5)
@@ -530,7 +564,8 @@ class Comparison:
                dstr = '%Y%m%d'
                ddd = '{}_{}'.format(daterange[0].strftime(dstr), daterange[1].strftime(dstr))
                fname = '{}_BoxPlotB_{}_{}.png'.format(self.tag,sss,ddd)
-            fig.savefig(os.path.join(self.tdir,fname))
+            fname = os.path.join(self.tdir,fname)
+            savefig(fname)
         return fig
 
     def plot_boxA(self,pressure=None,fname=None,spd=True,fignum=4):
@@ -566,7 +601,8 @@ class Comparison:
                if spd: sss = 'WSPD'
                else: sss='WDIR'
                fname = '{}_BoxPlot_{}.png'.format(self.tag,sss)
-            fig.savefig(os.path.join(self.tdir,fname))
+            fname = os.path.join(self.tdir,fname)
+            savefig(fname)
         return fig
 
     def get_axlist(self,fig):
@@ -612,7 +648,8 @@ class Comparison:
         if isinstance(fname,str):
             if fname=='default':
                fname = '{}_RankHistogram.png'.format(self.tag)
-            fig.savefig(os.path.join(self.tdir,fname))
+            try: fig.savefig(os.path.join(self.tdir,fname))
+            except: pass
         return fig, axlist
 
 def plot_legend(handles,labels):
@@ -649,24 +686,27 @@ def plotA(station_hash, tdir='./',slist=None,thresh=None):
     thresh=10
     thresh=None
     prss='P300'
+   
     for jjj, prss in enumerate(['P200','P300','P500']):
         for iii, station in enumerate(slist):
             print(iii, jjj)
             temp = station_hash[station].dfallhash[prss]
+            if 'SID' in temp: index = ['SID','date']
+            else: index = ['date']
             if thresh:
                 temp = temp[temp['O_SPEED']>thresh]
             temp['direction_err_sq'] = temp.apply(lambda row: findwerr(row['ODIR'],row['FDIR']),axis=1)
-            temp2 = temp.pivot(index='date',columns='ens',values='direction_err_sq')
+            temp2 = temp.pivot(index=index,columns='ens',values='direction_err_sq')
             rmse = temp2.mean()
             
-            temp3 = temp.pivot(index='ens',columns='date',values='direction_err_sq')
-            rmse_min= temp3.min().mean()
+            #temp3 = temp.pivot(index='ens',columns='date',values='direction_err_sq')
+            #rmse_min= temp3.min().mean()
             
             
             plt.plot(rmse.index.values, np.sqrt(rmse.values), 
                      marker = marker[jjj],color=clrs[iii],
                      label =slist[iii] + ' ' + prss)
-            print('Wind direction Using best RMSE', prss, station, rmse_min**0.5)
+            #print('Wind direction Using best RMSE', prss, station, rmse_min**0.5)
             
     tlen = len(rmse.index.values)
     plt.xticks(rotation=45,fontsize=15)
@@ -677,13 +717,22 @@ def plotA(station_hash, tdir='./',slist=None,thresh=None):
     ax.set_xlabel('Ensemble member',fontsize=15)
     ax.set_ylabel('RMSE wind \n direction (degrees)',fontsize=15)
     plt.tight_layout()
-    plt.savefig(os.path.join(tdir,'rmse_wind_direction.png'))
-
+    fname = os.path.join(tdir,'rmse_wind_direction.png')
+    savefig(fname)
     plot_legend(handles,labels)
     plt.tight_layout()
-    plt.savefig(os.path.join(tdir,'rmse_wind_direction_legend.png'))
+    fname = os.path.join(tdir,'rmse_wind_direction_legend.png')
+    savefig(fname)
 
 
+def savefig(fname):
+    fig = plt.gcf()
+    plt.tight_layout()
+    try: 
+        fig.savefig(fname)
+    except Exception as eee:
+        print('Could not save {}'.format(eee))
+        plt.show()
 
 def plotB(station_hash, tdir='./',slist=None,thresh=None):
     """
@@ -712,19 +761,24 @@ def plotB(station_hash, tdir='./',slist=None,thresh=None):
         for iii, station in enumerate(slist):
             print(iii, jjj)
             temp = station_hash[station].dfallhash[prss]
+            if 'SID' in temp.columns:
+                index = ['date','SID']
+            else:
+                index = ['date']
             if thresh:
                 temp = temp[temp['O_SPEED']>thresh]
             temp['speed_err_sq'] = (temp['F_SPEED'] - temp['O_SPEED'])**2
-            temp2 = temp.pivot(index='date',columns='ens',values='speed_err_sq')
+            temp2 = temp.pivot(index=index,columns='ens',values='speed_err_sq')
             rmse = temp2.mean()
-            
-            temp3 = temp.pivot(index='ens',columns='date',values='speed_err_sq')
-            rmse_min= temp3.min().mean()
+           
+            # TODO fix for when diffrent SITEID 
+            #temp3 = temp.pivot(index='ens',columns=index,values='speed_err_sq')
+            #rmse_min= temp3.min().mean()
             
             plt.plot(rmse.index.values, np.sqrt(rmse.values), 
                      marker = marker[jjj],color=clrs[iii],
                      label =slist[iii] + ' ' + prss)
-            print('Wind speed Using best RMSE', prss, station, rmse_min**0.5)
+            #print('Wind speed Using best RMSE', prss, station, rmse_min**0.5)
             
     tlen = len(rmse.index.values)
     plt.xticks(rotation=45,fontsize=15)
@@ -741,24 +795,8 @@ def plotB(station_hash, tdir='./',slist=None,thresh=None):
     plt.tight_layout()
     plt.savefig(os.path.join(tdir,'rmse_wind_speed_legend.png'))
 
-
-
-        
-if __name__=="__main__":
-   """
-        First argument : directory where files are located
-        The subdirectories should be named with the tag (e.g. SKBO)
-        The program will walk through the subdirectories and create plots for each one as well
-        as rmse plots for wind direction and wind speed for all the subdirectoris together.
-        filenames in the subdirectories should be ensid.com.p*.txt where p* indicates 
-        the pressure level. See Comparison class for pressure levels.
-   """ 
-
-   topdir = sys.argv[1]
-   print('TDIR', topdir)
+def mainfunc(subdirlist):   
    station_hash = {}
-   subdirlist = [x[0] for x in os.walk(topdir)][1:]
-   
    for tdir in subdirlist:
        tag = tdir.split('/')[-1]
        print('working on {}'.format(tdir))
@@ -782,13 +820,32 @@ if __name__=="__main__":
        print('MAX date', np.max(dates))
        df2 = station.dfhash['P200']
        print('size', df2.shape)
-       station.plot_boxB(daterange=[d1,d2],fname='default')
-       fig.clear()
+       #station.plot_boxB(daterange=[d1,d2],fname='default')
+       #fig.clear()
 
-       fig = station.plot_diff()
-       fig.clear() 
-       station.plot_mindiffhist(binwidth=5)
+       #fig = station.plot_diff()
+       #fig.clear() 
+       #station.plot_mindiffhist(binwidth=5)
+   return station_hash
+
+        
+if __name__=="__main__":
+   """
+        First argument : directory where files are located
+        The subdirectories should be named with the tag (e.g. SKBO)
+        The program will walk through the subdirectories and create plots for each one as well
+        as rmse plots for wind direction and wind speed for all the subdirectoris together.
+        filenames in the subdirectories should be ensid.com.p*.txt where p* indicates 
+        the pressure level. See Comparison class for pressure levels.
+   """ 
+
+   topdir = sys.argv[1]
+   print('TDIR', topdir)
+   station_hash = {}
+   subdirlist = [x[0] for x in os.walk(topdir)][1:]
+
+   stationhash = mainfunc(subdirlist)
    plotA(station_hash,tdir=topdir)
    plotB(station_hash,tdir=topdir)
- 
+
 
