@@ -20,7 +20,7 @@ import sys
 Classes to read output files from the HYSPLIT trajectory. 
 
 """
-# Function of distances between trajectories and volcano
+# Function of calculating the distances between trajectories and volcano
 def trajvold(volcano, df):
     dist = []
     for i in range(len(df)):
