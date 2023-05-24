@@ -40,7 +40,12 @@ class volcatSO2L3:
         else:
             mass = pframe.massI.values
              
-        cb = plt.scatter(lon,lat,c=mass,s=0.1,cmap=cmap)
+        cb = plt.scatter(lon,lat,c=mass,s=0.1,cmap=cmap,
+        #bavands
+        vmin=0.0, vmax=2.0)
+        plt.xlim(120, 195), plt.ylim(-35, -5)
+        plt.plot(-175.38+360, -20.57, 'g*')
+        #bavande
         plt.colorbar(cb) 
         plt.tight_layout()
 
