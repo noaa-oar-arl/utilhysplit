@@ -8,14 +8,10 @@ import sys
 from monetio.models import hytraj
 from utilhysplit import hcontrol
 from utilhysplit.runhandler import ProcessList
-<<<<<<< HEAD
-#bavands
-#from utilvolc.utiltraj import combine_traj
-#bavande
-=======
-from utilvolc.utiltraj  import combine_traj
->>>>>>> upstream/clean
 from ashapp.ashtrajectory import TrajectoryAshRun
+
+#from ashapp.backtraj import combine_traj
+from utilvolc.utiltraj import combine_traj
 
 logger = logging.getLogger(__name__)
 

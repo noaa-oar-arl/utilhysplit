@@ -28,18 +28,18 @@ def combine_traj(fnames, csvfile=None):
         else:
             weight = 1
         df1["weight"] = weight
-<<<<<<< HEAD
+#<<<<<<< HEAD
 
-=======
+#=======
    
->>>>>>> upstream/clean
-        trajlist.append(df1.copy())
+#>>>>>>> upstream/clean
+#        trajlist.append(df1.copy())
     # concatenate the trajectories into one dataframe.
-    trajdf = pd.concat(trajlist)
-    return trajdf
+#    trajdf = pd.concat(trajlist)
+#    return trajdf
 
-<<<<<<< HEAD
-=======
+#<<<<<<< HEAD
+#=======
 
 
->>>>>>> upstream/clean
+#>>>>>>> upstream/clean
