@@ -5,8 +5,8 @@ import datetime
 import logging
 import os
 import time
-
 import numpy as np
+import pandas as pd
 # import xarray as xr
 
 # import hysplit
@@ -30,23 +30,70 @@ def print_usage():
         """\
 Run through the ash_run.py executable.
 
-Assumes that emit-times file generated from VOLCAT data has been
+Assumes that emit-times file generated from VOLCAT data (or other data) has been
 generated.
+
+Looks for a directory comprised of the following from the configuration file
+/wdir/volcanoname/emitimes/
+
+In this directory, look for emit-times files. Naming convention for emitimes files should
+be EMITIMES_suffix, or EMIT_suffix.
+
+If naming convention is according to volcat then will also use the dates in the 
+configuration file to only create runs for those filenames with dates between start_date
+and start_date +  emissionHours.
+
+If different naming convention then will simply create runs for all EMIT files in the directory.
 
 """
     )
 
+def find_emit_file_alt(wdir):
+    """
+    Find all files which start with EMIT in the directory
+    """
+    import glob
+    efile = glob.glob(wdir + '/EMIT*') 
+    efile = [x.split('/')[-1] for x in efile]
+    return efile
 
-def find_emit_file(wdir, daterange, retype="fname"):
-    return find_di_file(wdir, daterange, "EMIT")
+def find_emit_file(wdir, daterange, rtype="fname"):
+    # first look for files with volcat naming convention.
+    elist =  find_di_file(wdir, daterange, "EMIT", rtype=rtype)
+    if not(list(elist)):
+       elist = find_emit_file_alt(wdir)      
+    return elist
 
+def find_cdump_df_alt(wdir, jobid):
+    efile = find_emit_file_alt(wdir)
+    filelocator = AshDINameComposer(
+                  wdir,jobid,jobid)
+    cnames = []
 
-def find_cdump_df(wdir, daterange):
-    return find_di_file(wdir, daterange, "cdump", rtype="dataframe")
+    for eff in efile:
+        stage = '{}_{}'.format(eff,jobid)
+        cfile = filelocator.get_cdump_filename(stage)
+        print('find cdump', eff, cfile)
+        cnames.append(cfile)
+    df = pd.DataFrame(cnames,columns=['filename'])
+    df['file descriptor'] = 'cdump'
+    df["volcano id"] = 'unknown'
+    df['layer'] = 'unknown'
+    return df 
 
+def find_cdump_df(wdir, jobid, daterange):
+    ftype = 'cdump'
+    # this finds all the cdump files.
+    dset = find_di_file(wdir, daterange, ftype, rtype="dataframe")
+    if isinstance(dset,list):
+       dset = find_cdump_df_alt(wdir,jobid)
+    # return only cdump files with the jobid in the name.
+    return dset[dset.apply(lambda row: jobid in row['filename'],axis=1)]
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
-    edf = mdi.get_emit_name_df(wdir)
+    edf = mdi.get_emit_name_df(wdir,ftype)
+    if 'file descriptor' not in edf.columns:
+        return []
     edf = edf[edf["file descriptor"] == ftype]
     edf = edf[edf["idate"] >= daterange[0]]
     edf = edf[edf["idate"] <= daterange[1]]
@@ -56,20 +103,39 @@ def find_di_file(wdir, daterange, ftype, rtype="fname"):
         rval = elist
     elif rtype == "dataframe":
         rval = edf
+    #print('FIND DI FILE', wdir, daterange, ftype, edf, rval)
     return rval
 
 
 class DataInsertionRun(AshRun):
+    """
+    INPUTS
+    DIrunHours is set to inp['emissionHours']
+    The inp['emissionHours'] set to 0. 
+
+    WORK_DIR is set to the input work directory + volcano name + emitimes
+             This may need to be changed.
+
+    """
+
+
     # def __init__(self, JOBID):
     #    super().__init__(JOBID)
 
     def add_inputs(self, inp):
+        # this start date is the time that the data insertion runs begin.
+        # later start_date will be used for the start time of each individual run.
+        inp["DI_start_date"] = inp['start_date'] 
         inp["DIrunHours"] = inp["emissionHours"]
         inp["emissionHours"] = 0
         inp["samplingIntervalHours"] = 1
         inp["WORK_DIR"] = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "emitimes/")
         logger.info("Working directory set {}".format(inp["WORK_DIR"]))
         super().add_inputs(inp)
+        if inp["meteorologicalData"].lower() == "gefs":
+            logger.info("ens member {}".format(inp["gefsmember"]))
+            self.metfilefinder.set_ens_member("." + inp["gefsmember"])
+        self.awips = False
         self.filelocator = AshDINameComposer(
             self.inp["WORK_DIR"], self.JOBID, self.inp["jobname"]
         )
@@ -82,10 +148,12 @@ class DataInsertionRun(AshRun):
         return maptexthash
 
     def get_cdump_xra(self):
-        edate = self.inp["start_date"] + datetime.timedelta(
+        import sys
+        edate = self.inp["DI_start_date"] + datetime.timedelta(
             hours=self.inp["DIrunHours"]
         )
-        cdf = find_cdump_df(self.inp["WORK_DIR"], [self.inp["start_date"], edate])
+        logger.warning('DATES {} {} {}'.format(self.inp['DI_start_date'], edate, self.inp['DIrunHours']))
+        cdf = find_cdump_df(self.inp["WORK_DIR"], self.JOBID, [self.inp["start_date"], edate])
         blist = list(cdf["filename"].values)
         alist = []
         # if not blist:
@@ -94,7 +162,7 @@ class DataInsertionRun(AshRun):
         for fname in blist:
             logger.info("Adding to netcdf file {}".format(fname))
             alist.append((fname, fname, self.inp["meteorologicalData"]))
-        century = 100 * (int(self.inp["start_date"].year / 100))
+        century = 100 * (int(self.inp["DI_start_date"].year / 100))
         cdumpxra = hysplit.combine_dataset(
             alist, century=century, sample_time_stamp="start"
         )
@@ -103,6 +171,10 @@ class DataInsertionRun(AshRun):
         cdumpxra.attrs["layer"] = cdf["layer"].unique()[0]
         cdumpxra.attrs["mult"] = 1
         return cdumpxra
+
+    def create_plots(self, redraw=False, stage=0):
+        # TODO currently no plots automatically created.
+        return True 
 
     def read_emittimes(self, emitfile):
         """
@@ -148,7 +220,7 @@ class DataInsertionRun(AshRun):
         return setup
 
     def setup_basic_control(self, stage="emitfile", rtype="dispersion"):
-        self.read_emittimes(stage)
+        self.read_emittimes(stage.replace('_' + self.JOBID,''))
         control = super().setup_basic_control(stage=stage, rtype=rtype)
         return control
 
@@ -183,8 +255,9 @@ class DataInsertionRun(AshRun):
         for emitfile in find_emit_file(
             self.inp["WORK_DIR"], [self.inp["start_date"], edate]
         ):
-            rval = super().after_run_check(stage=emitfile, update=update)
-            logger.warning("Looking for {} {}".format(emitfile, rval))
+            logger.warning("Looking for {}".format(emitfile))
+            rval = super().after_run_check(stage='{}_{}'.format(emitfile,self.JOBID), update=update)
+            logger.warning("FOUND {}".format(rval))
             rlist.append(rval)
         return np.all(rlist)
 
@@ -198,20 +271,26 @@ class DataInsertionRun(AshRun):
         for emitfile in find_emit_file(
             self.inp["WORK_DIR"], [self.inp["start_date"], edate]
         ):
-            fnn = self.filelocator.get_cdump_filename(stage=emitfile)
+            stage = '{}_{}'.format(emitfile,self.JOBID)
+            #stage = stage.replace('.','')
+            fnn = self.filelocator.get_cdump_filename(stage=stage)
+            logger.info("cdump filename {}".format(stage))
+            logger.info("stage {}".format(stage))
             if os.path.exists(fnn):
                 logger.info("cdump exists {} continuing to next run".format(fnn))
                 continue
             # make control and setup files
-            self.compose_control(stage=emitfile, rtype="dispersion")
-            self.compose_setup(stage=emitfile)
-            run_suffix = self.filelocator.get_control_suffix(emitfile)
+            self.compose_control(stage=stage, rtype="dispersion")
+            self.compose_setup(stage=stage)
+            run_suffix = self.filelocator.get_control_suffix(stage)
             # start run and wait for it to finish..
             cproc = [
                 os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
                 str(run_suffix),
             ]
+            #import sys
             logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
+            #sys.exit()
             processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=run_suffix)
             # wait 5 seconds between run starts to avoid
             # runs trying to access ASCDATA.CFG at the same time.

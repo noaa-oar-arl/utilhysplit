@@ -6,6 +6,7 @@
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
 # 15 NOV 2022 (AMC) - updated how tests can be run
+# 23 May 2023 (AMC) - made data insertion runs more flexible
 # -----------------------------------------------------------------------------
 # To run in offline mode standard dispersion run  python ash_run.py -999
 # To run in offline mode standard trajectory run  python ash_run.py -777
@@ -51,6 +52,27 @@ python ash_run.py test JOBID
 
 The program will look for a file with the name config.JOBID.txt and read it for inputs.
 Examples are provided.
+In the configuration file, the runtype is specified. 
+Further documentation for some run types is below.
+
+------------------------------------------------------------------------------------
+DATAINSERTION
+Assumes that emit-times file generated from VOLCAT data (or other data) has been
+generated.
+
+Looks for a directory comprised of the following from the configuration file
+/wdir/volcanoname/emitimes/
+
+In this directory, look for emit-times files. Naming convention for emitimes files should
+be EMITIMES_suffix, or EMIT_suffix.
+
+If naming convention is according to volcat then will also use the dates in the 
+configuration file to only create runs for those filenames with dates between start_date
+and start_date +  emissionHours.
+
+If different naming convention then will simply create runs for all EMIT files in the directory.
+
+
 """
     )
 
@@ -63,6 +85,17 @@ Examples are provided.
 def create_run_instance(JOBID, inp):
     """
     create the correct object for the type of run and return it.
+    The system currently supports the following types of runs.
+
+    dispersion deterministic : creates forward dispersion runs
+    dispersion gefs : creates forward dispersion runs for each gefs member
+    inverse : creates a set of unit source forward runs for creating TCM
+    inverse  gefs: creates a set of unit source forward runs for creating TCM for each gefs member.
+    DataInsertion : uses previously created  emit-times files to create runs
+    BackTrajectory : runs back trajectories using a csv file which has information about starting points.
+    trajectory : deterministic : runs forward trajectories at predetermined set of heights
+    trajectory : gefs : runs forward trajectories at predetermined set of heights for each GEFS ensemble member. 
+
     """
     logger.info('Creating run Instance')
 
@@ -159,7 +192,14 @@ if __name__ == "__main__":
            setup.add_inverse_params()
            logger.info("Inverse run")
         inp = setup.inp
-        if inp["meteorologicalData"].lower() == "gefs":
+        ## TO DO - the regular dispersion run with AshEnsemble class iterates itself through
+        ## the different GEFS members so that is why the check for runflag not equal dispersion.
+        ## may want to change this so that AshEnsemble follows the logic of the other
+        ## types of runs.
+        ## one challenge is that currently the other types of runs produce one netcdf file
+        ## for each ensemble member. This is what we want for the inversion source term runs.
+        ## however data insertion runs probably should be all together.
+        if inp["meteorologicalData"].lower() == "gefs" and inp['runflag']!='dispersion':
             for suffix in gefs_suffix_list():
                 tdir = "/hysplit-users/alicec/utilhysplit/ashapp/"
                 setup = make_inputs_from_file(tdir, configname)
@@ -170,6 +210,7 @@ if __name__ == "__main__":
                 inp["gefsmember"] = suffix
                 arun = create_run_instance(JOBIDens, inp)
                 arun.doit()
+        
         else:
             arun = create_run_instance(JOBID, inp)
             arun.doit()
