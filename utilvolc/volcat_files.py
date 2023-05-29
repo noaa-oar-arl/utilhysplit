@@ -10,6 +10,7 @@ import glob
 import time
 import monet
 import sys
+from utilvolc.ashutil import fix_volc_name
 from utilvolc.runhelper import Helper
 from utilvolc.runhelper import list_dirs
 from utilvolc.runhelper import make_dir
@@ -26,15 +27,23 @@ logger = logging.getLogger(__name__)
  Classes and functions for working with VOLCAT alerts and log files
 
  Classes
-   EventFile
-   SummaryFile
    VFile (base class)
+     EventFile
+     SummaryFile
 
  Functions
+   check_dirs
+   check_file
+   delete_old
+   determine_change
+   get_nc
    get_summary_file_df 
+   num_files
    open_json
    open_dataframe
 """
+
+
 
 
 def get_summary_file_df(fdir, verbose=False, hours=48, edate = datetime.datetime.now()):
@@ -70,7 +79,6 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate = datetime.datetime
           if sdate > edate:  done=True
           iii+=1
           if iii>10: done=True
-          print('HERE', sdate,edate, s_str, flist)
     for fln in flist:
        try:
            sfn = SummaryFile(fln, fdir)
@@ -216,38 +224,6 @@ class SummaryFile(VFile):
         df = open_dataframe(fname, varname="VOLCANOES")
         self.df = df
 
-
-def flist2eventdf(flist,inphash):
-    """
-    create a dataframe from list of volcat filenames
-    inphash contains additional information should be in following format
-    VOLCANO_NAME : str
-    """
-    # example usage in Raikoke2023Volcat
-    vlist = []
-    for fle in flist:
-        try:
-            temp = volcat.VolcatName(fle)
-        except:
-            continue
-        vlist.append(temp.vhash)
-    vframe = pd.DataFrame.from_dict(vlist)
-    cols = vframe.columns
-    # rename columns which need to be renamed.
-    cols = [x if x != 'satellite platform' else 'sensor_name' for x in cols]
-    cols = [x if x != 'idate' else 'observation_date' for x in cols]
-    cols = [x if x != 'filename' else 'event_file' for x in cols]
-    cols = [x if x != 'WMO satellite id' else 'SENSOR_WMO_ID_INITIAL' for x in cols]
-    cols = [x if x != 'feature id' else 'FEATURE_ID' for x in cols]
-    vframe.columns = cols
-    checklist = ['VOLCANO_NAME', 'VOLCANO_LAT', 'VOLCANO_LON']
-    for key in checklist:
-        if key in inphash.keys():
-           vframe[key.lower()] = inphash[key] 
-        if key.lower() in inphash.keys():
-           vframe[key.lower()] = inphash[key] 
-
-    return vframe
 
 class EventFile(VFile):
     """
@@ -813,17 +789,6 @@ def record_missing(mlist, mdir, mfile="missing_files.txt", verbose=False):
     return None
 
 
-def fix_volc_name(volcname):
-    """Fixes the volcano name if a comma, or space appear in the name"""
-    if "," in volcname:
-        s = volcname.find(",")
-        tmp = volcname[:s]
-        tmp2 = volcname[s + 2 :]
-        volcname = tmp2 + "_" + tmp
-    if " " in volcname:
-        volcname = volcname.replace(" ", "_")
-    return volcname
-
 
 def make_volcdir(data_dir, fname, verbose=False):
     """Finds volcano name from json event log file.
@@ -932,6 +897,21 @@ def num_files(data_dir, verbose=False):
     data_dir: directory path of parent string()
     outputs:
     dirs_num: pandas DataFrame with directories and number of volcat files within
+
+    -------------------------------------------------------------------------------
+    Example usage:
+
+    numfiles('/topdir/VOLCAT/Files/')
+
+    Example output:
+
+        Volcano Name    Num Files
+    0   Abu            17
+    1   Adatarayama    1
+    2   Agua           8
+    3   Agung          110
+    4   Aira           104
+
     """
     import pandas as pd
 
@@ -951,16 +931,6 @@ def num_files(data_dir, verbose=False):
     return dirs_num
 
 
-def get_latlon(data_dir):
-    """Read csv file containing volcano name, latitude, longitude
-    Inputs:
-    data_dir: directory where Volcanoes.csv is located
-    Outputs:
-    volcdf: pandas dataframe of volcanos, latitude, longitude
-    """
-    import pandas as pd
-    volcdf = pd.read_csv(data_dir + "Volcanoes.csv", sep=",")
-    return volcdf
 
 
 

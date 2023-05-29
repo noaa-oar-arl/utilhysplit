@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 # 2022 Nov 17 AMC updated open_dataset
 # 2022 Nov 22 AMC correct_pc need to use np.nanmin to get min values
 # 2023 Feb 27 AMC moved some functions to volcat_legacy.py
+# 2023 Mar 05 AMC update __pc__loop to use np.nanmax instead of np.max for heights
+# 2023 Mar 05 AMC fixed bug in calculation of numd in  set_array function inside correct_pc function
 
 
 """
@@ -49,7 +51,7 @@ Regridding and parallax correction
 
 Helper functions
     __pc_loop
-    __matchvals:
+    matchvals:
     _get_time: set time dimension for VOLCAT data
     _get_time2: set time dimension for VOLCAT data
     _get_latlon: rename lat/lon, set coordinates of VOLCAT data
@@ -148,6 +150,37 @@ def open_dataset(
     else:
         dset.attrs.update({"parallax corrected coordinates": "False"})
     return dset
+
+def flist2eventdf(flist,inphash):
+    """
+    create a dataframe from list of volcat filenames
+    inphash contains additional information should be in following format
+    VOLCANO_NAME : str
+    """
+    # example usage in Raikoke2023Volcat
+    vlist = []
+    for fle in flist:
+        try:
+            temp = volcat.VolcatName(fle)
+        except:
+            continue
+        vlist.append(temp.vhash)
+    vframe = pd.DataFrame.from_dict(vlist)
+    cols = vframe.columns
+    # rename columns which need to be renamed.
+    cols = [x if x != 'satellite platform' else 'sensor_name' for x in cols]
+    cols = [x if x != 'idate' else 'observation_date' for x in cols]
+    cols = [x if x != 'filename' else 'event_file' for x in cols]
+    cols = [x if x != 'WMO satellite id' else 'SENSOR_WMO_ID_INITIAL' for x in cols]
+    cols = [x if x != 'feature id' else 'FEATURE_ID' for x in cols]
+    vframe.columns = cols
+    checklist = ['VOLCANO_NAME', 'VOLCANO_LAT', 'VOLCANO_LON']
+    for key in checklist:
+        if key in inphash.keys():
+           vframe[key.lower()] = inphash[key] 
+        if key.lower() in inphash.keys():
+           vframe[key.lower()] = inphash[key] 
+    return vframe
 
 
 def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=False):
@@ -292,7 +325,6 @@ def write_parallax_corrected_files(
         vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
 
     for iii, val in enumerate(vlist):
-        print(type(val))
         if verbose:
             print("working on {}".format(val))
         if isinstance(val, str):
@@ -303,13 +335,13 @@ def write_parallax_corrected_files(
         newname = os.path.join(wdir, new_fname)
         # print('wdir {}'.format(newname))
         if os.path.isfile(os.path.join(wdir, new_fname)):
+            anum += 1
             if verbose:
                 print(
                     "Netcdf file exists {} in directory {} cannot write ".format(
                         new_fname, wdir
                     )
                 )
-            anum += 1
         else:
             if verbose:
                 print("writing {} to {}".format(new_fname, wdir))
@@ -325,7 +357,7 @@ def write_parallax_corrected_files(
                 )
             else:
                 logger.info("file did write {} {}".format(wdir, new_fname))
-    # print('Number of files which were already written {}'.format(anum))
+    #print('Number of files which were already written {}'.format(anum))
 
 
 def find_volcat(
@@ -409,7 +441,7 @@ def test_volcat(tdir, daterange=None, verbose=True):
     for key in vnlist.keys():
         vname = vnlist[key].fname
         dset = open_dataset(os.path.join(tdir, vname), pc_correct=False)
-        if np.max(dset.pc_latitude) > 0:
+        if np.nanmax(dset.pc_latitude) > 0:
             print("passed")
         else:
             print("failed")
@@ -559,7 +591,9 @@ class VolcatName:
                 ".nc", ""
             )
 
+        # this is the date associated with the data
         self.vhash["idate"] = self.image_date
+        # this date may be the same as the image date or earlier
         self.vhash["edate"] = self.event_date
         self.date = self.image_date
         return self.vhash
@@ -586,13 +620,13 @@ def bbox(darray, fillvalue):
         a = np.where(arr != fillvalue)
     else:
         a = np.where(~np.isnan(arr))
-    if np.min(a[0]) != 0.0 and np.min(a[1]) != 0.0:
+    if np.nanmin(a[0]) != 0.0 and np.nanmin(a[1]) != 0.0:
         bbox = (
-            [np.min(a[0] - 3), np.min(a[1]) - 3],
-            [np.max(a[0] + 3), np.max(a[1]) + 3],
+            [np.nanmin(a[0] - 3), np.nanmin(a[1]) - 3],
+            [np.nanmax(a[0] + 3), np.nanmax(a[1]) + 3],
         )
     else:
-        bbox = ([np.min(a[0]), np.min(a[1])], [np.max(a[0]), np.max(a[1])])
+        bbox = ([np.nanmin(a[0]), np.nanmin(a[1])], [np.nanmax(a[0]), np.nanmax(a[1])])
     return bbox
 
 
@@ -603,27 +637,38 @@ def _get_latlon(dset, name1="latitude", name2="longitude"):
 
 def _get_time(dset):
     import pandas as pd
+    
+    #temp2 = dset.full_image_start_time.values
+    # scan start and end times
+    temp2 = dset.time_bounds.values[0]
 
-    temp = dset.attrs["time_coverage_start"]
-    time = pd.to_datetime(temp)
+    # full image stat. this corresponds to the idate.
+    #temp2 = dset.full_image_start_time.values
+
+    #temp2 = dset.attrs["event_observation_time"]
+    #temp3 = dset.attrs["time_coverage_end"]
+    #if temp1 != temp2:
+    #   logger.warning('Different times in volcat {} {}'.format(temp1,temp2,temp3)) 
+    time = pd.to_datetime(temp2)
     dset["time"] = time
     dset = dset.expand_dims(dim="time")
     dset = dset.set_coords(["time"])
     return dset
 
 
-def _get_time2(dset):
-    import pandas as pd
-
-    date = "20" + str(dset.attrs["Image_Date"])[1:]
-    time1 = str(dset.attrs["Image_Time"])
-    if len(time1) == 5:
-        time1 = "0" + str(dset.attrs["Image_Time"])
-    time = pd.to_datetime(date + time1, format="%Y%j%H%M%S", errors="ignore")
-    dset["time"] = time
-    dset = dset.expand_dims(dim="time")
-    dset = dset.set_coords(["time"])
-    return dset
+# no longer valid
+#def _get_time2(dset)
+#    import pandas as pd
+#
+#    date = "20" + str(dset.attrs["Image_Date"])[1:]
+#    time1 = str(dset.attrs["Image_Time"])
+#    if len(time1) == 5:
+#        time1 = "0" + str(dset.attrs["Image_Time"])
+#    time = pd.to_datetime(date + time1, format="%Y%j%H%M%S", errors="ignore")
+#    dset["time"] = time
+#    dset = dset.expand_dims(dim="time")
+#    dset = dset.set_coords(["time"])
+#    return dset
 
 
 # Extracting variables
@@ -674,6 +719,15 @@ def check_names(dset, vname, checklist, clip=True):
             return get_data(dset, val, clip=clip)
     return xr.DataArray()
 
+
+def check_pc(dset):
+    checklist = ["pc_latitude","pc_longitude"]
+    count = 0
+    for val in checklist:
+        if val in dset.data_vars:
+           count +=1
+    if count == 2: return True
+    else: return False
 
 def get_pc_latitude(dset, vname=None, clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
@@ -758,7 +812,7 @@ def get_atherr(dset):
     return height_err
 
 
-def __matchvals(pclat, pclon, massra, height, area):
+def matchvals(pclat, pclon, massra, height, area):
     # pclat : xarray DataArray
     # pclon : xarray DataArray
     # mass  : xarray DataArray
@@ -777,6 +831,7 @@ def __matchvals(pclat, pclon, massra, height, area):
         tlist = [x for x in tlist if x[2] != fill]
     else:
         # get rid of Nans.
+        # todo - may be faster to use ma.compressed?
         tlist = [x for x in tlist if ~np.isnan(x[2])]
     return tlist
 
@@ -860,7 +915,7 @@ def correct_pc(dset, gridspace=None):
             else:
                 tmax = 180.0
                 tmin = -180.0
-            numd = int(np.ceil((lmax - lmin) / ddd))
+            numd = int(np.ceil((lmax - lmin + ddd) / ddd))
 
             # linspace was giving step sizes of 0.101.
             outra, step = np.linspace(lmin, lmax, num=numd, retstep=True)
@@ -870,7 +925,7 @@ def correct_pc(dset, gridspace=None):
                 print(outra[1] - outra[0], ddd)
                 print(lmin, lmax, numd)
                 print(outra)
-
+                sys.exit()
             if outra[-1] > tmax + res:
                 print("WARNING, value greater than max")
                 print(outra[-10:])
@@ -907,7 +962,7 @@ def correct_pc(dset, gridspace=None):
     time = mass.time
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
-    tlist = np.array(__matchvals(pclon, pclat, mass, height, area))
+    tlist = np.array(matchvals(pclon, pclat, mass, height, area))
 
     indexlist = []
     prev_point = 0
@@ -1006,7 +1061,7 @@ def __pc_loop(tlist, newmass, newhgt, newrad):
         totmass = point[2] * area
         if iii in indexhash.keys():
             indexhash[iii] += totmass
-            hthash[iii] = np.max((hthash[iii], hgt))
+            hthash[iii] = np.nanmax((hthash[iii], hgt))
         else:
             indexhash[iii] = totmass
             hthash[iii] = hgt
@@ -1063,10 +1118,10 @@ def combine_regridded(vlist):
     dlon = []
     for iii, das in enumerate(vlist):
         lonra = das.isel(y=0).longitude.values
-        small = np.min(lonra)
-        large = np.max(lonra)
-        minlon = np.min([minlon, small])
-        maxlon = np.max([maxlon, large])
+        small = np.nanmin(lonra)
+        large = np.nanmax(lonra)
+        minlon = np.nanmin([minlon, small])
+        maxlon = np.nanmax([maxlon, large])
 
         temp = das.copy()
         xval = temp.x.values + 1
