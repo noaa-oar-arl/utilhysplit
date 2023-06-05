@@ -11,9 +11,10 @@ utils.setup_logger()
 
 class AshAttributes:
 
-    def __init__(self, attr={}):
-        self._attr = check_attributes(attr)
-        self._dstr = "%Y-%m-%d %H:%M:%S"
+    def __init__(self, attr={},dstr="%Y-%m-%d %H:%M:%S"):
+        self.dstr = dstr
+        self.attr = attr
+        #self._attr = check_attributes(attr,dstr=self.dstr)
         self._keylist = ['mult',
                         'meteorological data',
                         'jobname',
@@ -37,14 +38,15 @@ class AshAttributes:
     @dstr.setter
     def dstr(self,indstr):
         testdate = datetime.datetime(2020,2,1,0)
-        default = self._dstr
+        default = indstr
         self._dstr = indstr
         # make sure it is valid
         try:
-           testdate.strftime(indstr)
-        except:
-           logger.warning('dstr not valid') 
+           tstr = testdate.strftime(indstr)
+           test = datetime.datetime.strptime(tstr,self._dstr) 
+        except ValueError:
            self._dstr = default  
+           raise ValueError('invalid input for dstr') 
 
     @property
     def attr(self):
@@ -53,13 +55,26 @@ class AshAttributes:
     @attr.setter
     def attr(self,inp):
         if not isinstance(inp,dict):
-           logger.warning('attr must be a dictionary')
-        inp2 = check_attributes(inp)
+           logger.warning('input should be a dictionary. converting to dictionary.')
+           temp = {}
+           temp['INPUT1'] = inp
+           inp = temp
+        inp2 = check_attributes(inp,self.dstr)
         self._attr=inp2
 
     def update(self,inp):
-        print('UDPATE')
-        inp2 = check_attributes(inp)
+        if not isinstance(inp,dict):
+           logger.warning('input should be a dictionary. converting to dictionary.')
+           temp = {}
+           keys = self.attr.keys()
+           iii = 1
+           newkey = 'INPUT1'
+           while newkey in keys:
+                 newkey = 'INPUT{}'.format(iii)
+                 iii+=1
+           temp[newkey] = inp
+           inp = temp
+        inp2 = check_attributes(inp,self.dstr)
         self._attr.update(inp2) 
 
     def reset(self):
@@ -119,7 +134,7 @@ def check_attributes(atthashin,dstr="%Y-%m-%d %H:%M:%S"):
             newval = val.strftime(dstr)
             atthash[key] = newval  
         elif isinstance(val,dict):
-            newval = check_attributes(val)
+            newval = check_attributes(val,dstr)
             atthash[key] = newval  
     return atthash
 
