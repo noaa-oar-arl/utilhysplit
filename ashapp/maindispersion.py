@@ -16,8 +16,6 @@
 #
 # -----------------------------------------------------------------------------
 
-
-# from abc mport ABC, abstractmethod
 import datetime
 import glob
 import logging
@@ -36,6 +34,10 @@ from utilhysplit import hcontrol
 import utilhysplit.metfiles as metfile
 from utilvolc.runhelper import ConcplotColors, Helper, JobFileNameComposer
 from ashapp.ashruninterface import MainRunInterface
+from ashapp.rundispersion import RunDispersion
+from ashapp.graphicsdispersion import GraphicsDispersion
+from ashapp.outputdispersion import OutputDispersion
+from ashapp import utils
 #from ashapp import  utils
 #from ashapp.ashnetcdf import HYSPLITAshNetcdf
 
@@ -49,13 +51,13 @@ class MainDispersion(MainRunInterface):
 
     def __init__(self, inp, JOBID):
 
-        self.JOBID = str(JOBID)  # string
+        self.JOBID = JOBID  # string
 
         self.ilist = ['MAP_DIR','WORK_DIR','CONVERT_EXE',
                       'GHOSTSCRIPT_EXE','PYTHON_EXE']
 
+        inp['jobid'] = JOBID
         self.inp = inp  # dictionary from JobSetUP
-        self.modelrun = inp
         self.apistr = None
         self.urlstr = None
         self.headerstr = None
@@ -64,14 +66,24 @@ class MainDispersion(MainRunInterface):
         self.maptexthash = {}
         self.awips = True
        
-        self._modeloutput = DispersionOutput(inp,[]) 
-        self._modelgraphics = DispersionOutput(inp,[]) 
+        self._modelrun = RunDispersion(inp)
+        self._modeloutput = OutputDispersion(inp,[]) 
+        self._modelgraphics = GraphicsDispersion(inp) 
 
         # read cdump file into this xarray.
         #self._cxra = xr.DataArray()
 
         self.so2 = False
         utils.setup_logger()
+
+    @property
+    def JOBID(self):
+        return self._JOBID
+
+    @JOBID.setter
+    def JOBID(self,JOBID):
+        self._JOBID = str(JOBID)
+
 
     @property
     def inp(self):
@@ -93,9 +105,8 @@ class MainDispersion(MainRunInterface):
         return self._modelrun
 
     @modelrun.setter
-    def modelrun(self, inp):
-        inp['jobid'] = self.JOBID
-        self._modelrun = DispersionRun(inp)  
+    def modelrun(self, mrun):
+        self._modelrun = mrun 
 
     @property
     def modeloutput(self):

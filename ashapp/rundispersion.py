@@ -2,18 +2,16 @@
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# ash_run.py - run HYSPLIT model on web and create plots
+# rundispersion.py - run HYSPLIT dispersion model 
 #
-# 01 JUN 2020 (AMC) - adapted from locusts-run.py
-# 09 DEC 2022 (AMC) - changed latspan to 180 and lonspan to 360 for global grid.
-# 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired.
-# 28 FEB 2023 (AMC) - change to write_cxra so if netcdf file exists then set it as self.cxra
-# 28 FEB 2023 (AMC) - check attributes added as stand alone function but still kept as static method.
+# 05 Jun  2023 (AMC) - 
 #
 # -----------------------------------------------------------------------------
-# To run in offline mode use python ash_run.py -999
+# Run specifically for traditional volcanic ash with line source from vent
+# to input plume height.
 #
-#
+# TODO - look at how SO2 functionality is incoporated. This needs to be updated.
+# TODO - update how vertical levels are specified.
 # -----------------------------------------------------------------------------
 
 
