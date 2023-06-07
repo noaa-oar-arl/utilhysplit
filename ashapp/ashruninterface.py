@@ -1,18 +1,11 @@
-#!/opt/Tools/anaconda3/envs/hysplit/bin/python
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# ash_run.py - run HYSPLIT model on web and create plots
+# ashruninterface.py - run HYSPLIT model on web and create plots
 #
-# 01 JUN 2020 (AMC) - adapted from locusts-run.py
-# 09 DEC 2022 (AMC) - changed latspan to 180 and lonspan to 360 for global grid.
-# 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired.
-# 28 FEB 2023 (AMC) - change to write_cxra so if netcdf file exists then set it as self.cxra
-# 28 FEB 2023 (AMC) - check attributes added as stand alone function but still kept as static method.
 #
 # -----------------------------------------------------------------------------
-# To run in offline mode use python ash_run.py -999
-#
+# Provides class interfaces
 #
 # -----------------------------------------------------------------------------
 
@@ -21,7 +14,7 @@ from abc import ABC, abstractmethod
 
 
 class ModelRunCollection(ABC):
-
+         
     @property
     @abstractmethod
     def inp(self):
@@ -38,13 +31,13 @@ class ModelRunCollection(ABC):
       """
       pass
 
-    @property
-    @abstractmethod
-    def model_list(self):
-      """
-      list of  ModelRunInterface objects
-      """
-      pass
+    #@property
+    #@abstractmethod
+    #def model_list(self):
+    #  """
+    #  list of  ModelRunInterface objects
+    #  """
+    #  pass
 
     @abstractmethod
     def run_model(self):
@@ -59,8 +52,9 @@ class ModelRunInterface(ABC):
     # CONTROL file
     # SETUP file
     # metfilefinder
-    # filelocator
+    # filelocator/filename composer
     # dictionary of inputs
+    # 
 
     @abstractmethod
     def compose_control(stage,rtype):
@@ -86,16 +80,25 @@ class ModelRunInterface(ABC):
     @abstractmethod
     def run_model(self):
       """
-      Run the model
+      complete setup for model to run.
       """
       pass
 
     # Properties.
+
     @property
     @abstractmethod
-    def metfilefinder(self):
+    def control(self):
       """
-      MetFileFinder object
+      control file hcontrol.HycsControl object
+      """
+      pass
+
+    @property
+    @abstractmethod
+    def filelist(self):
+      """
+      list of names of  files created
       """
       pass
 
@@ -117,18 +120,9 @@ class ModelRunInterface(ABC):
 
     @property
     @abstractmethod
-    def filelist(self):
+    def metfilefinder(self):
       """
-      list of names of  files created
-      """
-      pass
-
-
-    @property
-    @abstractmethod
-    def control(self):
-      """
-      control file hcontrol.HycsControl object
+      MetFileFinder object
       """
       pass
 
@@ -140,6 +134,18 @@ class ModelRunInterface(ABC):
       """
       pass
 
+    @property
+    @abstractmethod
+    def status(self):
+      """
+      returns tuple of (str, list)
+      str indicates current status
+          values can be INITIALIZED, FAILED, or COMPLETE
+      list is a list of strings with history of
+          status and other actions.
+
+      """
+      pass
 
 class ModelOutputInterface(ABC):
 
