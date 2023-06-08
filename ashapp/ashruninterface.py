@@ -13,7 +13,25 @@ from abc import ABC, abstractmethod
 
 
 
-class ModelRunCollection(ABC):
+class ModelCollectionInterface(ABC):
+
+
+    @property
+    @abstractmethod
+    def filehash(self):
+      """
+      More comprehensive list of files
+      """
+      pass
+
+    @property
+    @abstractmethod
+    def filelist(self):
+      """
+      List of main outputs (cdump files)
+      """
+      pass
+
          
     @property
     @abstractmethod
@@ -25,11 +43,19 @@ class ModelRunCollection(ABC):
 
     @property
     @abstractmethod
-    def processhandler(self):
+    def status(self):
       """
-      ProcessList class
+      status
       """
       pass
+
+    #@property
+    #@abstractmethod
+    #def processhandler(self):
+    #  """
+    #  ProcessList class
+    #  """
+    #  pass
 
     #@property
     #@abstractmethod
@@ -40,7 +66,14 @@ class ModelRunCollection(ABC):
     #  pass
 
     @abstractmethod
-    def run_model(self):
+    def setup(self):
+      """
+      Run the model
+      """
+      pass
+
+    @abstractmethod
+    def run(self):
       """
       Run the model
       """
