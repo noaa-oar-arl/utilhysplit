@@ -4,6 +4,40 @@ import os
 import pytest
 from utilhysplit import metfiles
 
+def test_001():
+
+    mf = metfiles.MetFileFinder(metid='GEFS')
+    mf.set_ens_member('gec00')
+    d1 = datetime.datetime.now()
+    d1 = datetime.datetime(d1.year, d1.month, d1.day, 0,0)
+    duration = 1
+    test = mf.find_forecast(d1,duration)
+    a1 = d1.strftime('/pub/forecast/%Y%m%d/')
+    a2 = 'hysplit.t00z.gefs.gec00'
+    assert test == [(a1,a2)]
+  
+    d1 = d1 - datetime.timedelta(hours=24) 
+    d1 = datetime.datetime(d1.year, d1.month, d1.day, 6,0)
+    test = mf.find_forecast(d1,duration)
+    a1 = d1.strftime('/pub/forecast/%Y%m%d/')
+    a2 = 'hysplit.t06z.gefs.gec00'
+    assert test == [(a1,a2)]
+
+    d1 = d1 - datetime.timedelta(hours=24) 
+    d1 = datetime.datetime(d1.year, d1.month, d1.day, 12,0)
+    test = mf.find_forecast(d1,duration)
+    a1 = d1.strftime('/pub/forecast/%Y%m%d/')
+    a2 = 'hysplit.t12z.gefs.gec00'
+    assert test == [(a1,a2)]
+
+    d1 = d1 - datetime.timedelta(hours=24) 
+    d1 = datetime.datetime(d1.year, d1.month, d1.day, 18,0)
+    test = mf.find_forecast(d1,duration)
+    answer = d1.strftime('/pub/forecast/%Y%m%d/hysplit.t18z.gefs.gec00')
+    a1 = d1.strftime('/pub/forecast/%Y%m%d/')
+    a2 = 'hysplit.t18z.gefs.gec00'
+    assert test == [(a1,a2)]
+
 
 def test_002():
     # tests for gfs0p25 archive data
@@ -57,7 +91,7 @@ def test_002():
 #    suffix='gfsf'
 
 
-def test_001():
+def test_003():
     # tests for forecast data
     fdir = "/pub/forecast/"
 
