@@ -121,8 +121,10 @@ class AshAttributes:
 
 def check_attributes(atthashin,dstr="%Y-%m-%d %H:%M:%S"):
     """
+    Make sure all attributes have forms that can be written to netcdf well.
     convert all np.ndarray to lists.
-    convert all datetimes to strings
+    convert all datetimes to strings.
+    convert booleans to strings.
     """
     atthash = atthashin.copy()
     for key in atthash.keys():
@@ -132,6 +134,9 @@ def check_attributes(atthashin,dstr="%Y-%m-%d %H:%M:%S"):
             atthash[key] = newval
         elif isinstance(val,datetime.datetime):
             newval = val.strftime(dstr)
+            atthash[key] = newval  
+        elif isinstance(val,bool):
+            newval = str(val)
             atthash[key] = newval  
         elif isinstance(val,dict):
             newval = check_attributes(val,dstr)
@@ -227,10 +232,12 @@ class HYSPLITAshNetcdf:
               self.remove()
         if not self._fexists:
             cxra2 = self._cxra.to_dataset(name=self._datasetname)
+            print(cxra2)
             ehash = {"zlib": True, "complevel": 9}
             vlist = [x for x in cxra2.data_vars]
             vhash = {}
             for vvv in vlist:
                 vhash[vvv] = ehash
+            print(vhash)
             cxra2.to_netcdf(self.fname, encoding=vhash)
 
