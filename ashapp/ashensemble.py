@@ -20,6 +20,7 @@ from utilhysplit.evaluation import web_ensemble_plots as wep
 from utilhysplit.runhandler import ProcessList
 
 from ashbase import AshRun
+from ashruninterface import ModelRunCollection, ModelRunInterface
 from cdump2xml import HysplitKml
 from utilvolc.runhelper import Helper
 
@@ -66,8 +67,53 @@ logger = logging.getLogger(__name__)
 #        str_unit_levels = ["{:1.1e}".format(x) for x in unit_levels]
 #        return ":".join(str_unit_levels)
 
+class EnsembleAshRun(ModelRunCollection):
 
-class EnsembleAshRun(AshRun):
+    
+
+
+    def run_model(self):
+        processhandler = ProcessList()
+        # redirect stdout and stderr
+        processhandler.pipe_stdout()
+        processhandler.pipe_stderr()
+        # start all the runs
+        for stage, suffix in enumerate(self.ens_suffix_list):
+            logger.info("Working on {}".format(suffix))
+            self.metfilefinder.set_ens_member("." + suffix)
+            self.compose_control(stage + 1, rtype="dispersion")
+            self.compose_setup(stage + 1)
+            # start run and wait for it to finish..
+            run_suffix = self.filelocator.get_control_suffix(stage + 1)
+            cproc = [
+                os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
+                run_suffix,
+            ]
+            logger.info("Running {} with job id {}".format("hycs_std", cproc[1]))
+            processhandler.startnew(cproc, self.inp["WORK_DIR"], descrip=suffix)
+            # wait 5 seconds between run starts to avoid
+            # runs trying to access ASCDATA.CFG at the same time.
+            time.sleep(5)
+        # wait for runs to finish
+        done = False
+        seconds_to_wait = 30
+        total_time = 0
+        # 60 minutes.
+        max_time = 60 * 60
+        # max_time = 0.5*60
+        while not done:
+            num_proces = processhandler.checkprocs()
+            if num_proces == 0:
+                done = True
+            time.sleep(seconds_to_wait)
+            total_time += seconds_to_wait
+            if total_time > max_time:
+                processhandler.checkprocs()
+                processhandler.killall()
+                logger.warning("HYSPLIT run Timed out")
+                done = True
+
+class EnsembleAshRunOLD(AshRun):
     def __init__(self, JOBID):
         super().__init__(JOBID)
         self.ens_suffix_list = None

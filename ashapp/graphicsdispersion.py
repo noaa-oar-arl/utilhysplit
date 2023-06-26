@@ -4,10 +4,8 @@
 #
 # graphicsdispersion.py - 
 #
-# 28 FEB 2023 (AMC) - check attributes added as stand alone function but still kept as static method.
-#
+# TODO - THIS IS UNFINISHED AND NEEDS TO COPY GRAPHICS GENERATION IN ashbase.py
 # -----------------------------------------------------------------------------
-# To run in offline mode use python ash_run.py -999
 #
 #
 # -----------------------------------------------------------------------------
@@ -27,7 +25,7 @@ import numpy as np
 import requests
 import xarray as xr
 
-from utilvolc.runhelper import ConcplotColors, Helper, JobFileNameComposer
+from utilvolc.runhelper import Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelOutputInterface
 
 

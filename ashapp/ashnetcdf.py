@@ -232,12 +232,10 @@ class HYSPLITAshNetcdf:
               self.remove()
         if not self._fexists:
             cxra2 = self._cxra.to_dataset(name=self._datasetname)
-            print(cxra2)
             ehash = {"zlib": True, "complevel": 9}
             vlist = [x for x in cxra2.data_vars]
             vhash = {}
             for vvv in vlist:
                 vhash[vvv] = ehash
-            print(vhash)
             cxra2.to_netcdf(self.fname, encoding=vhash)
 

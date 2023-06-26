@@ -187,7 +187,12 @@ class RunDispersion(ModelRunInterface):
     @property
     def filelist(self):
         cdump = self._filehash["cdump"]
-        self._filelist = [cdump]
+        
+        metfile = self._metfilefinder.metid
+        if isinstance(self._metfilefinder.suffix,str):
+           metfile +=  self._metfilefinder.suffix
+        source = 'Line to {:1.0f} km'.format(self.inp['top']/1000.0)
+        self._filelist = [(cdump,source,metfile)]
         return self._filelist
 
     @property
@@ -254,8 +259,11 @@ class RunDispersion(ModelRunInterface):
 
     def run(self, overwrite=False):
         command = self.run_model(overwrite=overwrite)
-        logger.info("execute {}".format(command))
-        Helper.execute(command)
+        if isinstance(command,list):
+            logger.info("execute {}".format(type(command)))
+            Helper.execute(command)
+        else:
+            logger.info("No run to execture")
 
     def run_model(self, overwrite=False):
         # make control and setup files

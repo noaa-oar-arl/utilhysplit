@@ -199,6 +199,10 @@ class MainDispersion(MainRunInterface):
 
 class MainEnsemble(MainDispersion):
     def __init__(self, inp, JOBID):
+        """
+        modelrun attribute is the EnsembleDispersion class.
+        """
+
 
         self.JOBID = JOBID  # string
 
