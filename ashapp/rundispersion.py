@@ -2,9 +2,9 @@
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# rundispersion.py - run HYSPLIT dispersion model 
+# rundispersion.py - run HYSPLIT dispersion model
 #
-# 05 Jun  2023 (AMC) - 
+# 05 Jun  2023 (AMC) -
 #
 # -----------------------------------------------------------------------------
 # Run specifically for traditional volcanic ash with line source from vent
@@ -19,18 +19,17 @@
 import datetime
 import logging
 import os
-import subprocess
-import sys
 
 import numpy as np
 
 from utilhysplit import hcontrol
 from utilhysplit.metfiles import MetFileFinder
-from utilvolc.runhelper import  Helper, JobFileNameComposer
+from utilvolc.runhelper import Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
 
 # from runhandler import ProcessList
-from utilvolc.volcMER import HT2unit
+# from utilvolc.volcMER import HT2unit
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,52 +46,69 @@ def make_chemrate(wdir):
     with open(fpath, "w") as fid:
         fid.write(fstr)
 
-class RunDispersion(ModelRunInterface):
 
+class RunDispersion(ModelRunInterface):
     def __init__(self, inp):
 
-        self.JOBID = '999'
+        # 16 instance attributes  may be too many?
+
+        self.JOBID = "999"
         # list of keywords the inp dictionary should contain.
-        self._ilist = ['meteorologicalData','forecastDirectory','archivesDirectory',
-                 'WORK_DIR','HYSPLIT_DIR','jobname','durationOfSimulation','latitude',
-                 'longitude','bottom','top','emissionHours','rate','area','start_date',
-                 'samplingIntervalHours','jobid']
+        self._ilist = [
+            "meteorologicalData",
+            "forecastDirectory",
+            "archivesDirectory",
+            "WORK_DIR",
+            "HYSPLIT_DIR",
+            "jobname",
+            "durationOfSimulation",
+            "latitude",
+            "longitude",
+            "bottom",
+            "top",
+            "emissionHours",
+            "rate",
+            "area",
+            "start_date",
+            "samplingIntervalHours",
+            "jobid",
+        ]
 
         self._inp = {}
         self.inp = inp
 
-        self._status = 'Initialized'
+        self._status = "Initialized"
         self._history = [self._status]
 
-        self.default_control = 'CONTROL.default'
-        self.default_setup =  'SETUP.default'
+        self.default_control = "CONTROL.default"
+        self.default_setup = "SETUP.default"
         self.set_default_control()
         self.set_default_setup()
         self._control = hcontrol.HycsControl(
             fname=self.default_control,
             working_directory=self.inp["DATA_DIR"],
-            rtype='dispersion',
+            rtype="dispersion",
         )
         self._setup = hcontrol.NameList(
-            fname=self.default_setup, 
-            working_directory=self.inp["DATA_DIR"]
+            fname=self.default_setup, working_directory=self.inp["DATA_DIR"]
         )
         self._metfilefinder = MetFileFinder(inp["meteorologicalData"])
         self._metfilefinder.set_forecast_directory(inp["forecastDirectory"])
         self._metfilefinder.set_archives_directory(inp["archivesDirectory"])
 
-        # self._filehash and self_filelist are  
+        # self._filehash and self_filelist are
         # set in the filelocator setter method.
         self._filehash = {}
         self._filelist = []
         self.filelocator = inp
         self.so2 = False
 
-    def help(self):
+    @staticmethod
+    def help():
         helphash = {}
-        helphash['jobname'] = 'str : user input string to identify run'
-        helphash['jobid'] = 'usually an integer assigned by the system for the job'
-        helphash['emissionHours'] = 'int : time for emissions to last '
+        helphash["jobname"] = "str : user input string to identify run"
+        helphash["jobid"] = "usually an integer assigned by the system for the job"
+        helphash["emissionHours"] = "int : time for emissions to last "
 
     # no setter
     @property
@@ -109,174 +125,155 @@ class RunDispersion(ModelRunInterface):
     def setup(self):
         return self._setup
 
-
     @property
     def inp(self):
         return self._inp
 
     @inp.setter
-    def inp(self,inp):
+    def inp(self, inp):
         self._inp.update(inp)
         complete = True
         for iii in self._ilist:
-            if iii not in self._inp.keys(): 
-               logger.warning('Input does not contain {}'.format(iii))
-               complete=False
-        if 'jobid' in self._inp.keys():
-            self.JOBID = self._inp['jobid'] 
+            if iii not in self._inp.keys():
+                logger.warning("Input does not contain {}".format(iii))
+                complete = False
+        if "jobid" in self._inp.keys():
+            self.JOBID = self._inp["jobid"]
         self.set_default_control()
         self.set_default_setup()
-        if complete: logger.info('Input contains all fields')
-        #self._inp.update(inp)
-
+        if complete:
+            logger.info("Input contains all fields")
+        # self._inp.update(inp)
 
     @property
     def filelocator(self):
         self._filelist = list(set(self._filelist))
-        return self._filelocator        
+        return self._filelocator
 
     @filelocator.setter
-    def filelocator(self,finp):
+    def filelocator(self, finp):
         """
         input dictionary  with WORK_DIR, jobid, jobname
         or MetFileFinder object.
         """
-        if isinstance(finp,dict):
+        if isinstance(finp, dict):
             self._filelocator = JobFileNameComposer(
-                finp["WORK_DIR"], finp['jobid'],  finp["jobname"]
+                finp["WORK_DIR"], finp["jobid"], finp["jobname"]
             )
         else:
             # TO DO? add test for type.
-            filelocator = inp
-         # after the filelocator is set, need to redo the filenames
+            self._filelocator = finp
+        # after the filelocator is set, need to redo the filenames
         self._get_filenames()
 
     @property
     def metfilefinder(self):
-        return self._metfilefinder         
+        return self._metfilefinder
 
     @metfilefinder.setter
-    def metfilefinder(self,metinp):
+    def metfilefinder(self, metinp):
         """
         input dictionary with meteorologicalData, forecastDirectory, archivesDirectory
         or MetFileFinder object.
         """
-        if isinstance(metinp,dict):
-            self._metfilefinder = metfile.MetFileFinder(inp["meteorologicalData"])
-            self._metfilefinder.set_forecast_directory(inp["forecastDirectory"])
-            self._metfilefinder.set_archives_directory(inp["archivesDirectory"])
+        if isinstance(metinp, dict):
+            self._metfilefinder = MetFileFinder(metinp["meteorologicalData"])
+            self._metfilefinder.set_forecast_directory(metinp["forecastDirectory"])
+            self._metfilefinder.set_archives_directory(metinp["archivesDirectory"])
         else:
             # TO DO? add test for type.
             self._metfilefinder = metinp
 
     @property
     def filelist(self):
-        cdump = self._filehash['cdump']
+        cdump = self._filehash["cdump"]
         self._filelist = [cdump]
         return self._filelist
-   
+
     @property
     def filehash(self):
-        return self._filehash 
+        return self._filehash
 
     def _get_filenames(self):
         fhash = {}
-        fhash['control'] = self.filelocator.get_control_filename()
-        fhash['setup'] = self.filelocator.get_setup_filename()
-        fhash['pardump'] = self.filelocator.get_pardump_filename()
-        fhash['cdump'] = self.filelocator.get_cdump_filename()
+        fhash["control"] = self.filelocator.get_control_filename()
+        fhash["setup"] = self.filelocator.get_setup_filename()
+        fhash["pardump"] = self.filelocator.get_pardump_filename()
+        fhash["cdump"] = self.filelocator.get_cdump_filename()
         self._filehash = fhash
-        
 
     def set_default_setup(self):
         if "setup" in self.inp.keys():
             self.default_setup = self.inp["setup"]
-        #else:
+        # else:
         #    self.default_setup = 'SETUP.default'
-        #logger.warning("Using setup {}".format(self.default_setup))
+        # logger.warning("Using setup {}".format(self.default_setup))
 
     def set_default_control(self):
         if "control" in self.inp.keys():
             self.default_control = self.inp["control"]
-        #else:
+        # else:
         #    self.default_control = 'CONTROL.default'
-        #logger.warning("Using control {}".format(self.default_control))
- 
-    def compose_control(self,rtype):
-        self.setup_basic_control()
-        self.additional_control_setup()
-        cdumpfiles = [x.outfile for x in  self.control.concgrids]
+        # logger.warning("Using control {}".format(self.default_control))
+
+    def compose_control(self, rtype):
+        self._setup_basic_control()
+        self._additional_control_setup()
+        cdumpfiles = [x.outfile for x in self.control.concgrids]
         self.control.write()
-        if os.path.isfile(self.filehash['control']):
-           self._history.append('CONTROL exists')
+        if os.path.isfile(self.filehash["control"]):
+            self._history.append("CONTROL exists")
         else:
-           self._status = 'FAILED to write control file'
-           self._history.append(self._status)
+            self._status = "FAILED to write control file"
+            self._history.append(self._status)
         return cdumpfiles
 
     def compose_setup(self):
         self._setup = self.setup_setup()
         self._setup.write(verbose=False)
-        if os.path.isfile(self.filehash['setup']):
-           self._history.append('SETUP exists')
+        if os.path.isfile(self.filehash["setup"]):
+            self._history.append("SETUP exists")
         else:
-           self._status = 'FAILED to write setup file'
-           self._history.append(self._status)
-        return cdumpfiles
-
-    def compose_setup(self):
-        self._setup = self.setup_setup()
-        self._setup.write(verbose=False)
-        if os.path.isfile(self.filehash['setup']):
-           self._history.append('SETUP exists')
-        return -1
+            self._status = "FAILED to write setup file"
+            self._history.append(self._status)
+        # return cdumpfiles
 
     def create_run_command(self):
-        c = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), str(self.JOBID)]
-        return c
-
-    def run_model(self,overwrite=False):
-        # make control and setup files
-        cdumpfiles = self.compose_control(rtype="dispersion")
-        self.compose_setup()
-        # start run and wait for it to finish..
-        run=False
-        command = None
-        for cdump in cdumpfiles:
-            if not os.path.isfile(cdump): 
-               run=True
-               break
-            logger.warning('CDUMP file already created {}'.format(cdump))
-            if not overwrite: 
-               self._status = 'COMPLETE cdump exists'
-               self._history.append(self._status)
-        if run or overwrite:
-            command = self.create_run_command()
-            #logger.info("Running {} with job id {}".format("hycs_std", c[1]))
+        command = [
+            os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
+            str(self.filelocator.job),
+        ]
         return command
 
-    def create_run_command(self):
-        c = [os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"), str(self.JOBID)]
-        return c
+    def check_status(self):
+        if os.path.isfile(self.filelist["cdump"]):
+            complete = "COMPLETE cdump exists"
+            self._status = complete
+            if self._history[-1] != complete:
+                self._history.append(self._status)
 
-    def run_model(self,overwrite=False):
+    def run(self, overwrite=False):
+        command = self.run_model(overwrite=overwrite)
+        logger.info("execute {}".format(command))
+        Helper.execute(command)
+
+    def run_model(self, overwrite=False):
         # make control and setup files
         cdumpfiles = self.compose_control(rtype="dispersion")
         self.compose_setup()
         # start run and wait for it to finish..
-        run=False
+        run = False
         command = None
         for cdump in cdumpfiles:
-            if not os.path.isfile(cdump): 
-               run=True
-               break
-            logger.warning('CDUMP file already created {}'.format(cdump))
-            self._status = 'FINISHED cdump exists'
-            self._history.append(self._status)
+            if not os.path.isfile(cdump):
+                run = True
+                break
+            logger.warning("CDUMP file already created {}".format(cdump))
+            if not overwrite:
+                self._status = "COMPLETE cdump exists"
+                self._history.append(self._status)
         if run or overwrite:
             command = self.create_run_command()
-            #logger.info("Running {} with job id {}".format("hycs_std", c[1]))
-            #Helper.execute(c)
         return command
 
     # Additional methods below.
@@ -287,10 +284,11 @@ class RunDispersion(ModelRunInterface):
             fname=self.default_setup, working_directory=self.inp["DATA_DIR"]
         )
         setup.read(case_sensitive=False)
-       
-        setup.rename(name=self.filehash['setup'], 
-                     working_directory=self.inp["WORK_DIR"])
-        setup.add("poutf", self.filehash['pardump'])
+
+        setup.rename(
+            name=self.filehash["setup"], working_directory=self.inp["WORK_DIR"]
+        )
+        setup.add("poutf", self.filehash["pardump"])
 
         # setup.add("numpar", "2000")
         # setup.add("numpar", "20000")
@@ -317,8 +315,7 @@ class RunDispersion(ModelRunInterface):
                 self.so2 = True
         return setup
 
-
-    def setup_basic_control(self, rtype="dispersion"):
+    def _setup_basic_control(self, rtype="dispersion"):
         """
         inp : dictionary with inputs
         used for both dispersion and trajectory runs.
@@ -329,30 +326,29 @@ class RunDispersion(ModelRunInterface):
         self._control = hcontrol.HycsControl(
             fname=self.default_control,
             working_directory=self.inp["DATA_DIR"],
-            rtype='dispersion',
+            rtype=rtype,
         )
         self._control.read()
-        self._control.rename(self.filehash['control'], 
-                             self.inp["WORK_DIR"])
+        self._control.rename(self.filehash["control"], self.inp["WORK_DIR"])
         # set start date
         self._control.date = stime
 
         # add met files
         self._control.remove_metfile(rall=True)
-        #metfiles = self.metfilefinder.find(stime, duration)
+        # metfiles = self.metfilefinder.find(stime, duration)
         for mfile in metfiles:
             logger.debug(os.path.join(mfile[0], mfile[1]))
             self._control.add_metfile(mfile[0], mfile[1])
         if not metfiles:
             logger.warning("TERMINATED. missing met files")
-            self._status = 'FAILED. missing meteorological files'
+            self._status = "FAILED. missing meteorological files"
             self._history.append(self._status)
-            #self.update_run_status(self.JOBID, "TERMINATED. missing met files")
+            # self.update_run_status(self.JOBID, "TERMINATED. missing met files")
         # add duration of simulation
         self._control.add_duration(duration)
         return self._control
 
-    def additional_control_setup(self):
+    def _additional_control_setup(self):
         # for dispersion control file
         # if setting levels here then need to use the set_levels
         # function and also adjust the labeling for the levels.
@@ -374,8 +370,8 @@ class RunDispersion(ModelRunInterface):
         self._control.add_location((lat, lon), height, rate=0.0001, area=area)
         # rename cdump file
         self._control.concgrids[0].outdir = self.inp["WORK_DIR"]
-        self._control.concgrids[0].outfile = self.filehash['cdump']
-        logger.info("{}".format(self._control.concgrids[0].outfile))
+        self._control.concgrids[0].outfile = self.filehash["cdump"]
+        logger.info("output file set as {}".format(self._control.concgrids[0].outfile))
         # center concentration grid near the volcano
         self._control.concgrids[0].centerlat = int(lat)
         self._control.concgrids[0].centerlon = int(lon)
@@ -415,7 +411,8 @@ class RunDispersion(ModelRunInterface):
         self._control.concgrids[0].interval = (self.inp["samplingIntervalHours"], 0)
         self._control.concgrids[0].sampletype = -1
 
-    def set_qva_levels(self):
+    @staticmethod
+    def set_qva_levels():
         # every 5000 ft (FL50 chunks)
         # Approx 1.5 km.
         levlist_fl = range(50, 650, 50)
@@ -432,5 +429,6 @@ class RunDispersion(ModelRunInterface):
     def set_levels(self, cgrid):
         levlist, rlist = self.set_qva_levels()
         cgrid.set_levels(levlist)
+
 
 
