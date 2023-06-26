@@ -26,6 +26,7 @@ import requests
 from ashapp.ashruninterface import MainRunInterface
 from ashapp.rundispersion import RunDispersion
 from ashapp.ensembledispersion import EnsembleDispersion
+from ashapp.collectemittimes import CollectEmitTimes
 from ashapp.graphicsdispersion import GraphicsDispersion
 from ashapp.outputdispersion import OutputDispersion
 from ashapp import utils
@@ -152,6 +153,13 @@ class MainDispersion(MainRunInterface):
         # self.modelrun.run_model(overwrite=False)
         self.modelrun.run(overwrite=False)
 
+        logger.info(self.modelrun.status) 
+
+        if not(self.modelrun.filelist):
+           logger.warning('No model files produced. exiting')
+           self.update_run_status(self.JOBID, "FAILED")
+           return
+
         # make the model output.
         self.modeloutput.inputlist = self.modelrun.filelist
         self.modeloutput.postprocess()
@@ -195,6 +203,39 @@ class MainDispersion(MainRunInterface):
         #    )
         #    self.handle_crash(stage=0)
         # return rval
+
+class MainEmitTimes(MainDispersion):
+    def __init__(self, inp, JOBID):
+        """
+        modelrun attribute is the EnsembleDispersion class.
+        """
+
+
+        self.JOBID = JOBID  # string
+
+        self.ilist = [
+            "MAP_DIR",
+            "WORK_DIR",
+            "CONVERT_EXE",
+            "GHOSTSCRIPT_EXE",
+            "PYTHON_EXE",
+        ]
+
+        inp["jobid"] = JOBID
+        self.inp = inp  # dictionary from JobSetUP
+        self.apistr = None
+        self.urlstr = None
+        self.headerstr = None
+
+        self.filelocator = None
+        self.maptexthash = {}
+        self.awips = True
+
+        self._modelrun = CollectEmitTimes(inp, self.JOBID)
+        self._modeloutput = OutputDispersion(inp, [])
+        self._modelgraphics = GraphicsDispersion(inp)
+
+        utils.setup_logger()
 
 
 class MainEnsemble(MainDispersion):
