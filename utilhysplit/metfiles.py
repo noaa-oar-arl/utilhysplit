@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # 2023 Jan 15 (amc) added a catch to find_mdt method to not allow mdt greater than 7*24 h
 # 2023 JuN 07 (amc) fixed bug in finding GEFS files.
 # 2023 Jun 26 (amc) added suffix as an attribute to MetFileFinder
+# 2023 Jun 27 (amc) MetFileFinder can now use gefsgec00 for metid to get a specific member.
 
 
 def gefs_suffix_list():
@@ -40,6 +41,9 @@ def gefs_suffix_list():
 
 class MetFileFinder:
     """
+    INPUT
+    metid : str
+
     METHODS
     set_forecast_directory
     set_archive_directory
@@ -49,7 +53,7 @@ class MetFileFinder:
 
     def __init__(self, metid, fdir="/pub/forecast", adir="pub/archive"):
         self.metid = metid
-        self.suffix = None
+        self.suffix = check_for_suffix(metid)
         self.forecast_directory = fdir
         self.archive_directory = adir
         self.forecast_mstr = get_forecast_str(self.metid, self.forecast_directory)
@@ -68,10 +72,10 @@ class MetFileFinder:
     def set_ens_member(self, suffix):
         self.suffix = suffix
         logger.debug("set_ens_member")
-        self.forecast_mstr = get_forecast_str(self.metid, self.forecast_directory)
-        self.forecast_mstr += "." + suffix
-        self.archive_mstr = get_forecast_str(self.metid, self.forecast_directory)
-        self.archive_mstr += "." + suffix
+        self.forecast_mstr = get_forecast_str(self.metid+suffix, self.forecast_directory)
+        #self.forecast_mstr += "." + suffix
+        self.archive_mstr = get_forecast_str(self.metid+suffix, self.forecast_directory)
+        #self.archive_mstr += "." + suffix
         logger.info("Setting mstr for ensemble {}".format(self.forecast_mstr))
 
     def find_forecast_cycle(self, dstart, duration, cycle):
@@ -246,6 +250,16 @@ def get_archive_str(metid, ARCDIR="/pub/archive"):
     return path.join(ARCDIR, metstr)
 
 
+def check_for_suffix(metid):
+    suffix=None
+    if "gefs" in metid.lower():
+        met = "gefs"
+        for suffix in gefs_suffix_list():
+            if suffix in metid.lower():
+               return suffix
+    return suffix
+
+
 def get_forecast_str(metid, FCTDIR="/pub/forecast"):
     """Finds forecast meteorology data files
     dstart : datetime object of start date
@@ -261,6 +275,9 @@ def get_forecast_str(metid, FCTDIR="/pub/forecast"):
         met = "namsf"
     elif "gefs" in metid.lower():
         met = "gefs"
+        suffix = check_for_suffix(metid)
+        if suffix:  
+           met = 'gefs.{}'.format(suffix)
     else:
         logger.warning("Did not recognize MET name {}.".format(metid))
         logger.warning("Using GFS")
@@ -268,7 +285,7 @@ def get_forecast_str(metid, FCTDIR="/pub/forecast"):
     # metnamefinal = 'No data found'
     #        metime = dtm
     metdir = path.join(FCTDIR, "%Y%m%d/")
-    metfilename = "hysplit.t%Hz." + met
+    metfilename = "hysplit.t%Hz." + met 
     if "gfs" in metid.lower():
         metfilename += "f"
         # metfilename = 'hysplit.' + metime.strftime('t%Hz') + '.' + met
