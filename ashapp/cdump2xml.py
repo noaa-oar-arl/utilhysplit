@@ -101,7 +101,7 @@ def generate_kmz(filenames, kmz_filename, compression_level):
 def make_legend(colors, levels, name, unit="g/m$^2$", date="", label=""):
     for val in zip(colors, levels):
         lstr = ">{} {}".format(val[1], unit)
-        plt.plot(1, 1, color="#" + val[0], label=lstr, LineWidth=15)
+        plt.plot(1, 1, color="#" + val[0], label=lstr, linewidth=15)
     ax = plt.gca()
     handles, labels = ax.get_legend_handles_labels()
     plt.close()

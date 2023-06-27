@@ -55,7 +55,6 @@ class RunDispersion(ModelRunInterface):
         A volcanic ash run from inputs
         """
 
-
         # 16 instance attributes  may be too many?
 
         self.JOBID = "999"
@@ -78,7 +77,7 @@ class RunDispersion(ModelRunInterface):
             "start_date",
             "samplingIntervalHours",
             "jobid",
-            "source description"
+            "source description",
         ]
 
         self._inp = {}
@@ -141,9 +140,9 @@ class RunDispersion(ModelRunInterface):
         self._inp.update(inp)
         complete = True
 
-        if 'source description' not in self._inp.keys():
-             source = 'Line to {:1.0f} km'.format(self.inp['top']/1000.0)
-             self._inp['source description'] = source
+        if "source description" not in self._inp.keys():
+            source = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
+            self._inp["source description"] = source
 
         for iii in self._ilist:
             if iii not in self._inp.keys():
@@ -200,13 +199,13 @@ class RunDispersion(ModelRunInterface):
     @property
     def filelist(self):
         cdump = self._filehash["cdump"]
-        
+
         metfile = self._metfilefinder.metid
-        if isinstance(self._metfilefinder.suffix,str):
-           if self.metfilefinder.suffix not in metfile:
-               metfile +=  self._metfilefinder.suffix
-        source = self.inp['source description']
-        self._filelist = [(cdump,source,metfile)]
+        if isinstance(self._metfilefinder.suffix, str):
+            if self.metfilefinder.suffix not in metfile:
+                metfile += self._metfilefinder.suffix
+        source = self.inp["source description"]
+        self._filelist = [(cdump, source, metfile)]
         return self._filelist
 
     @property
@@ -273,7 +272,7 @@ class RunDispersion(ModelRunInterface):
 
     def run(self, overwrite=False):
         command = self.run_model(overwrite=overwrite)
-        if isinstance(command,list):
+        if isinstance(command, list):
             logger.info("execute {}".format(type(command)))
             Helper.execute(command)
         else:
@@ -451,6 +450,3 @@ class RunDispersion(ModelRunInterface):
     def set_levels(self, cgrid):
         levlist, rlist = self.set_qva_levels()
         cgrid.set_levels(levlist)
-
-
-

@@ -88,14 +88,16 @@ class EnsembleDispersion(ModelCollectionInterface):
             run = RunDispersion(inp)
             run.metfilefinder.set_ens_member(suffix)
             command = run.run_model(overwrite=False)
+            self._filehash[suffix] = run.filehash
+            logger.info("ADDING {}".format(run.filelist))
+            self._filelist.extend(run.filelist)
+
             self._status[suffix] = run.status
             if "FAILED" in run.status[0] or "COMPLETE" in run.status[0]:
                 logger.warning(run.status)
                 continue
             if command:
                 command_list.append(command)
-            self._filehash[suffix] = run.filehash
-            self._filelist.extend(run.filelist)
             del run
         return command_list
 
