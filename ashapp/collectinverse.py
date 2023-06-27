@@ -8,15 +8,14 @@ from utilhysplit.metfiles import gefs_suffix_list
 from utilhysplit.runhandler import ProcessList
 import ashapp.utildatainsertion as udi
 
+from utilvolc.invhelper import inverse_get_suffix_list
+
 logger = logging.getLogger(__name__)
 
 
-class CollectEmitTimes(ModelCollectionInterface):
+class CollectInverse(ModelCollectionInterface):
     """
-    Runs regular dispersion runs with GEFS.
-    TODO - will this also handle other types of runs with GEFS?
-           This could be done just by replacing the RunDispersion class
-           with a different  ModelRunInterface class.
+    Runs unit source runs for volcanic ash inversion
     """
 
     def __init__(self, inp, jobid):
@@ -35,6 +34,7 @@ class CollectEmitTimes(ModelCollectionInterface):
             "bottom",
             "top",
             "emissionHours",
+            "timeres",
             "rate",
             "area",
             "start_date",
@@ -66,6 +66,22 @@ class CollectEmitTimes(ModelCollectionInterface):
     def inp(self, inp):
         self._inp.update(inp)
         complete = True
+       
+        # inversion has a time resolution 
+        if 'timeres' not in self._inp.keys():
+            logger.info('setting default time resolution {}h'.format(1))
+            self._inp['timeres']=1  
+
+        # inversion also has a vertical resolution
+        # this is used as input into the 
+        if 'inv_vertical_resolution' not in self._inp.keys():
+            logger.info('setting default time resolution {}m'.format(1000))
+            self._inp['inv_vertical_resolution']=1000  
+
+        logger.info('setting rate to {}'.format(1))
+        self._inp['rate'] = 1
+
+        #inverse_hash = inverse_get_suffix_list(inp)
         for iii in self._ilist:
             if iii not in self._inp.keys():
                 logger.warning("Input does not contain {}".format(iii))
@@ -88,30 +104,31 @@ class CollectEmitTimes(ModelCollectionInterface):
         self._status = status
 
     def setup(self, overwrite):
-        from ashapp.runemittimes import RunEmitTimes
+        from ashapp.rundispersion import RunDispersion
 
         inp = self.inp.copy()
 
-        edir_alt = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "emitimes/")
+        edir_alt = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "inverse/")
         if os.path.isdir(edir_alt):
             inp["WORK_DIR"] = edir_alt
 
-        edate = inp["start_date"] + datetime.timedelta(hours=inp["emissionHours"])
-        drange = [inp["start_date"], edate]
+        #edate = inp["start_date"] + datetime.timedelta(hours=inp["emissionHours"])
+        #drange = [inp["start_date"], edate]
         command_list = []
 
-        emitlist = udi.find_emit_file(inp["WORK_DIR"], drange)
-        if not emitlist:
-            logger.warning("No EMITTIMES files found in {}".format(inp["WORK_DIR"]))
-            self.status = "FAILED no emittimes files found to create runs from"
+        suffix_hash = inverse_get_suffix_list(self.inp,suffix_type='date')
+        for key in suffix_hash.keys(): print(suffix_hash[key])
+        #import sys
+        #sys.exit()
 
-        for iii, emitfile in enumerate(emitlist):
-            suffix = emitfile.split("/")[-1]
-            suffix = suffix.replace("EMIT_", "")
-            suffix = suffix.replace("EMIT", "")
+        for iii, suffix in enumerate(suffix_hash.keys()):
             inp["jobid"] = "{}_{}".format(self.JOBID, suffix)
-            inp["emitfile"] = emitfile
-            run = RunEmitTimes(inp)
+            inp.update(suffix_hash[suffix])
+
+            inp['emissionHours'] = self.inp['timeres']
+            inp['start_date']  = suffix_hash[suffix]['sdate']
+
+            run = RunDispersion(inp)
             command = run.run_model(overwrite=False)
             self._filehash[suffix] = run.filehash
             logger.info("ADDING {}".format(run.filelist))
@@ -160,45 +177,3 @@ class CollectEmitTimes(ModelCollectionInterface):
                 done = True
 
 
-class GEFSEmitTimes(CollectEmitTimes):
-    def setup(self, overwrite):
-        from ashapp.runemittimes import RunEmitTimes
-
-        inp = self.inp.copy()
-
-        edir_alt = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "emitimes/")
-        if os.path.isdir(edir_alt):
-            inp["WORK_DIR"] = edir_alt
-
-        edate = inp["start_date"] + datetime.timedelta(hours=inp["emissionHours"])
-        drange = [inp["start_date"], edate]
-        command_list = []
-
-        emitlist = udi.find_emit_file(inp["WORK_DIR"], drange)
-        if not emitlist:
-            logger.warning("No EMITTIMES files found in {}".format(inp["WORK_DIR"]))
-            self.status = "FAILED no emittimes files found to create runs from"
-
-        for metsuffix in gefs_suffix_list():
-
-            for iii, emitfile in enumerate(emitlist):
-                suffix = emitfile.split("/")[-1]
-                suffix = suffix.replace("EMIT_", "")
-                suffix = suffix.replace("EMIT", "")
-                inp["jobid"] = "{}_{}_{}".format(self.JOBID, suffix, metsuffix)
-                inp["emitfile"] = emitfile
-                run = RunEmitTimes(inp)
-                run.metfilefinder.set_ens_member(metsuffix)
-                command = run.run_model(overwrite=False)
-                self._filehash[suffix] = run.filehash
-                logger.info("ADDING {}".format(run.filelist))
-                self._filelist.extend(run.filelist)
-
-                self._status[suffix] = run.status
-                if "FAILED" in run.status[0] or "COMPLETE" in run.status[0]:
-                    logger.warning(run.status)
-                    continue
-                if command:
-                    command_list.append(command)
-                del run
-        return command_list
