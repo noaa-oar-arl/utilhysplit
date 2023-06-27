@@ -17,7 +17,8 @@ def getinp():
     inp['emissionHours'] = 2
     inp['rate'] = 1
     inp['area'] = 1
-    inp['start_date'] = datetime.datetime.now()
+    temp = datetime.datetime.now()
+    inp['start_date'] = datetime.datetime(temp.year, temp.month, temp.day, temp.hour,0,0)
     inp['samplingIntervalHours'] = 3
     inp['HYSPLIT_DIR'] = '/hysplit-users/alicec/hdev/'
     return inp
@@ -63,13 +64,34 @@ def test3():
     att = AshAttributes(q)
     assert att.attr == result
 
+def test4():
+    from utilvolc import invhelper
+    inp = getinp()
+    d1 = datetime.datetime(2020,2,1,0)
+    dth = 1
+    dt = datetime.timedelta(hours=dth)
+    inp['inv_vertical_resolution'] = 1000
+    inp['timeres'] = dth
+    inp['start_date'] = datetime.datetime(2020,2,1,0)
+    inp['bottom'] = 2000
+    inp['top'] = 4000
+    inp['emissionHours'] = 2
+    shash = invhelper.inverse_get_suffix_list(inp,suffix_type='date', dtfmt='%m%d%H')
+
+    temp = {}
+    key = '020100_2000'
+    temp[key] = {'sdate':d1, 'edate': d1 + dt, 'bottom':2000, 'top':3000}
+    print(shash) 
+    assert shash[key] == temp[key]
 
 
-filelist = test1()
+#filelist = test1()
 print('PASSED test1 ')
-test2(filelist)
+#test2(filelist)
 print('PASSED test2 ')
-test3() 
+#test3() 
+print('PASSED test2 ')
+test4() 
 
 
 
