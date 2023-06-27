@@ -48,9 +48,11 @@ def make_chemrate(wdir):
         fid.write(fstr)
 
 
-class RunEmitTImes(ModelRunInterface):
+class RunEmitTimes(ModelRunInterface):
     def __init__(self, inp):
-
+    """
+    Build a run based on an emittimes file and inputs
+    """
         # 16 instance attributes  may be too many?
 
         self.JOBID = "999"

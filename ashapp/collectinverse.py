@@ -124,6 +124,7 @@ class CollectInverse(ModelCollectionInterface):
         for iii, suffix in enumerate(suffix_hash.keys()):
             inp["jobid"] = "{}_{}".format(self.JOBID, suffix)
             inp.update(suffix_hash[suffix])
+            inp['source description'] = suffix
 
             inp['emissionHours'] = self.inp['timeres']
             inp['start_date']  = suffix_hash[suffix]['sdate']
@@ -150,7 +151,6 @@ class CollectInverse(ModelCollectionInterface):
         processhandler = ProcessList()
         processhandler.pipe_stdout()
         processhandler.pipe_stderr()
-        # suffix = gefs_suffix_list()
         for iii, command in enumerate(command_list):
             logger.info("Runnning {} with job id{}".format("hycs_std", command[1]))
             processhandler.startnew(command, self.inp["WORK_DIR"], descrip=str(iii))
@@ -175,5 +175,6 @@ class CollectInverse(ModelCollectionInterface):
                 processhandler.killall()
                 logger.warning("HYSPLIT run Timed out")
                 done = True
+
 
 

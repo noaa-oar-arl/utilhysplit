@@ -105,15 +105,31 @@ def create_run_instance(JOBID, inp):
             from maindispersion import MainEnsemble
 
             arun = MainEnsemble(inp, JOBID)
+            logger.info("Dispersion GEFS")
         else:
             from maindispersion import MainDispersion
 
             arun = MainDispersion(inp, JOBID)
+            logger.info("Dispersion")
 
-    # elif inp["runflag"] == "inverse":
-    #    from ashinverse import InverseAshRun
-    #    arun = InverseAshRun(JOBID)
-    #    logger.info('Inversion')
+    elif inp["runflag"].lower() == "datainsertion":
+        # This handles GEFS as well as deterministic runs.
+        from maindispersion import MainEmitTimes
+
+        arun = MainEmitTimes(inp, JOBID)
+        logger.info("Use EmitTimes files")
+
+    elif inp["runflag"] == "inverse":
+        if inp["meteorologicalData"].lower() == "gefs":
+            # this one generates a separate netcdf file
+            # for each gefs member
+            from maindispersion import MainGEFSInverse
+            arun = MainGEFSInverse(inp, JOBID)
+        else:
+            from maindispersion import MainInverse
+
+            arun = MainInverse(inp, JOBID)
+        logger.info("Inversion")
 
     # elif inp["runflag"] == "DataInsertion":
     #    from ashdatainsertion import DataInsertionRun

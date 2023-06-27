@@ -5,6 +5,8 @@
 # rundispersion.py - run HYSPLIT dispersion model
 #
 # 05 Jun  2023 (AMC) -
+# 27 Jun  2023 (AMC) - Added 'source description' to inp hash for more flexibility in
+#                      labeling the source. Added particularly for inversion runs.
 #
 # -----------------------------------------------------------------------------
 # Run specifically for traditional volcanic ash with line source from vent
@@ -49,6 +51,10 @@ def make_chemrate(wdir):
 
 class RunDispersion(ModelRunInterface):
     def __init__(self, inp):
+        """
+        A volcanic ash run from inputs
+        """
+
 
         # 16 instance attributes  may be too many?
 
@@ -72,6 +78,7 @@ class RunDispersion(ModelRunInterface):
             "start_date",
             "samplingIntervalHours",
             "jobid",
+            "source description"
         ]
 
         self._inp = {}
@@ -133,10 +140,16 @@ class RunDispersion(ModelRunInterface):
     def inp(self, inp):
         self._inp.update(inp)
         complete = True
+
+        if 'source description' not in self._inp.keys():
+             source = 'Line to {:1.0f} km'.format(self.inp['top']/1000.0)
+             self._inp['source description'] = source
+
         for iii in self._ilist:
             if iii not in self._inp.keys():
                 logger.warning("Input does not contain {}".format(iii))
                 complete = False
+
         if "jobid" in self._inp.keys():
             self.JOBID = self._inp["jobid"]
         self.set_default_control()
@@ -190,8 +203,9 @@ class RunDispersion(ModelRunInterface):
         
         metfile = self._metfilefinder.metid
         if isinstance(self._metfilefinder.suffix,str):
-           metfile +=  self._metfilefinder.suffix
-        source = 'Line to {:1.0f} km'.format(self.inp['top']/1000.0)
+           if self.metfilefinder.suffix not in metfile:
+               metfile +=  self._metfilefinder.suffix
+        source = self.inp['source description']
         self._filelist = [(cdump,source,metfile)]
         return self._filelist
 
