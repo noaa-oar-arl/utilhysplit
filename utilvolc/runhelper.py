@@ -16,6 +16,7 @@
 
 # 18 APR 2020 (SYZ) - Initial.
 # 15 Jun 2020 (AMC) - Adapted from locusts.py
+# 07 Jun 2023 (AMC) - move ConcplotColors to utilhysplit.plotutils directory
 # -----------------------------------------------------------------------------
 
 # from abc import ABC, abstractmethod
@@ -33,25 +34,6 @@ import sys
 from utilhysplit.hcontrol import NameList
 
 logger = logging.getLogger(__name__)
-
-
-class ConcplotColors:
-    def __init__(self):
-        colorhash = {}
-        colorhash["yellow"] = "242236051"
-        colorhash["orange"] = "235137052"
-        colorhash["red"] = "161024014"
-        colorhash["blue"] = "070051242"
-        colorhash["green"] = "147219121"
-        colorhash["magenta"] = "194056143"
-        colorhash["purple"] = "107023156"
-        colorhash["cyan"] = "075201199"
-        colorhash["grey"] = "150150150"
-        colorhash["tan"] = "163145131"
-        self.colorhash = colorhash
-
-    def get(self, color):
-        return self.colorhash[color]
 
 
 def make_dir(data_dir, newdir="pc_corrected", verbose=False):
@@ -73,7 +55,10 @@ def make_dir(data_dir, newdir="pc_corrected", verbose=False):
         os.umask(orig_umask)
         if verbose:
             logger.info("Directory created {}".format(new_data_dir))
-
+    if os.path.exists(new_data_dir):
+       return True
+    else:
+       return False
 
 def list_dirs(data_dir):
     """Lists subdirectories within give directory
@@ -446,7 +431,6 @@ class Job:
 
 
 class JobFileNameComposer:
-    # amc : changed control and setup file naming.
 
     def __init__(self, workDir, jobId, jobname):
         self.workDirectory = workDir
@@ -475,18 +459,17 @@ class JobFileNameComposer:
         if stage != 0:
             # return '{}_SETUP.{}.txt'.format(self.job, stage)
             return "SETUP.{}_{}".format(self.job, stage)
-        return "SETUP.{}".format(self.job.JOBID)
+        return "SETUP.{}".format(self.job)
 
     def get_control_suffix(self, stage=0):
         fname = self.get_control_filename(stage=stage)
         return fname.split(".")[-1]
 
     def get_control_filename(self, stage=0):
-        print('GETTING FILENAME HERE')
         if stage != 0:
             # return '{}_CONTROL.{}.txt'.format(self.job, stage)
             return "CONTROL.{}_{}".format(self.job, stage)
-        return "CONTROL.{}".format(self.job.JOBID)
+        return "CONTROL.{}".format(self.job)
 
     def get_message_filename(self, stage=0):
         if stage > 0:
