@@ -12,6 +12,7 @@
 #
 # TODO - look at how SO2 functionality is incoporated. This needs to be updated.
 # TODO - update how vertical levels are specified.
+# 2023 June 28 (amc) added logic on how to set numpar and maxpar based on emit-times
 # -----------------------------------------------------------------------------
 
 
@@ -50,9 +51,9 @@ def make_chemrate(wdir):
 
 class RunEmitTimes(ModelRunInterface):
     def __init__(self, inp):
-    """
-    Build a run based on an emittimes file and inputs
-    """
+        """
+        Build a run based on an emittimes file and inputs
+        """
         # 16 instance attributes  may be too many?
 
         self.JOBID = "999"
@@ -104,6 +105,8 @@ class RunEmitTimes(ModelRunInterface):
         self._filelist = []
         self.filelocator = inp
         self.so2 = False
+        inp2 = utildi.read_emittimes(self.inp['emitfile'])
+        self._inp.update(inp2)
 
     @staticmethod
     def help():
@@ -312,10 +315,39 @@ class RunEmitTimes(ModelRunInterface):
         )
         setup.add("poutf", self.filehash["pardump"])
 
-        # setup.add("numpar", "2000")
-        # setup.add("numpar", "20000")
-        setup.add("numpar", "10000")
-        # setup.add("maxpar", "500000")
+        # set numpar and maxpar based on number of
+        # emission cycles in the emit-times files.
+        # make numpar smaller when large number of emission cycles.
+
+        # this is the total number of locations HYSPLIT needs
+        # to allocate particles for. 
+        totpts = self.inp['ncycles'] * self.inp['nlocs']
+
+        #Assume each location should get
+        # at least 100 particles.
+        # optimum maxpar is about 1e4.
+        # do not let simulations use more than 1e6!
+
+        numpar_target = 100
+        maxpar = 1e4
+        numpar = np.floor(maxpar/totpts)
+        while numpar < numpar_target:
+           maxpar = maxpar*1.5
+           numpar = np.floor(maxpar/totpts)
+           if maxpar>1e6: break         
+        numpar = int(numpar)
+        maxpar = int(maxpar) + 500
+
+        logger.info('Running with maxpar {} numpar {} for {} release times at {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
+
+        if numpar <= 10:
+            logger.warning('LOW PARTICLES with maxpar {} numpar {} for {} release times at {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
+
+
+        setup.add("numpar", str(numpar))
+        setup.add("maxpar", str(maxpar))
+            
+
 
         # base frequency of pardump output on length of simulation.
         if duration < 6:
@@ -347,8 +379,8 @@ class RunEmitTimes(ModelRunInterface):
         inp : dictionary with inputs
         used for both dispersion and trajectory runs.
         """
-        inp = utildi.read_emittimes(self.inp['emitfile'])
-        self._inp.update(inp)
+        #inp = utildi.read_emittimes(self.inp['emitfile'])
+        #self._inp.update(inp)
 
         duration = self.inp["durationOfSimulation"]
         stime = self.inp["start_date"]

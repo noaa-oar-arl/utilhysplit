@@ -262,6 +262,8 @@ class ConcGrid:
         )
         if pnotes:
             note = "  #Directory to write concentration output file"
+      
+        if self.outdir[-1]!='/': self.outdir += '/'
         returnstr += self.outdir + note + "\n"
         if pnotes:
             note = "  #Filename for trajectory output"
