@@ -261,6 +261,16 @@ class VolcatHysplit(PairedDataInterface):
         for time in timelist:
             print(time.strftime("%Y %m %d %H:%Mz"))
 
+    def get_times(self):
+        """
+        tii : integer
+        """
+        # TODO check whether time is beginning or end of averaging period.
+        timelist = [pd.to_datetime(x) for x in self.cdump.time.values]
+        dt = timelist[1] - timelist[0]
+        tlist = [[x,x+dt] for x in timelist] 
+        return tlist
+
     def get_time(self, tii):
         """
         tii : integer
@@ -779,6 +789,25 @@ class VolcatHysplit(PairedDataInterface):
             self.cdump_hash[key] = c2
             self.volcat_hash[key] = v2
 
+    def clear_one_time(self, daterange, tii=None):
+        """
+        remove entry from paired dictionary
+        """
+
+        if not isinstance(tii,int):
+            if self.get_sampling_time() == "start":
+                # use first date in daterange list
+                model_tii = 0
+            elif self.get_sampling_time() == "end":
+                # use second date in daterange list
+                model_tii = 1
+            tii = self.time_index(daterange[model_tii])
+        if tii in self.cdump_hash.keys():
+            del self.cdump_hash[tii]
+        if tii in self.volcat_hash.keys():
+            del self.volcat_hash[tii]
+
+
     def prepare_one_time(self, daterange, htoptions=0, zvals=None, verbose=False):
         """
         daterange : list of datetime objects
@@ -791,7 +820,6 @@ class VolcatHysplit(PairedDataInterface):
         self.volcat_avg_hash[tii] = avra
         self.volcat_ht_hash[tii] = maxvhra
         """
-
         # currently must coarsen all data at the same time.
         if self.coarsen:
             print(
@@ -815,7 +843,7 @@ class VolcatHysplit(PairedDataInterface):
 
         if tii in self.cdump_hash.keys():
            print('Time {} already prepared'.format(tii))
-           return cdump_hash[tii], volcat_hash[tii]
+           return self.cdump_hash[tii], self.volcat_hash[tii]
 
         if not isinstance(tii, int):
             print("No time found for {}".format(daterange[0]))

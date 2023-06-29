@@ -101,7 +101,10 @@ class CollectEmitTimes(ModelCollectionInterface):
         command_list = []
 
         emitlist = udi.find_emit_file(inp["WORK_DIR"], drange)
-        if not emitlist:
+        # emitlist is np.ndarray and using not to test a full np.ndarray
+        # gives an error that truth value of array with more than one element is ambiguous.
+        # however can test a regular list like this.
+        if not list(emitlist):
             logger.warning("No EMITTIMES files found in {}".format(inp["WORK_DIR"]))
             self.status = "FAILED no emittimes files found to create runs from"
 
@@ -111,7 +114,7 @@ class CollectEmitTimes(ModelCollectionInterface):
             suffix = suffix.replace("EMIT", "")
             inp["jobid"] = "{}_{}".format(self.JOBID, suffix)
             inp["emitfile"] = emitfile
-            run = RunEmitTimes(inp)
+            run = RunEmitTimes(inp.copy())
             command = run.run_model(overwrite=False)
             self._filehash[suffix] = run.filehash
             logger.info("ADDING {}".format(run.filelist))
@@ -128,8 +131,7 @@ class CollectEmitTimes(ModelCollectionInterface):
 
     def run(self, overwrite=False):
         import time
-
-        command_list = self.setup(overwrite=overwrite)
+        command_list = self.setup(overwrite)
         processhandler = ProcessList()
         processhandler.pipe_stdout()
         processhandler.pipe_stderr()
@@ -161,6 +163,7 @@ class CollectEmitTimes(ModelCollectionInterface):
 
 
 class GEFSEmitTimes(CollectEmitTimes):
+
     def setup(self, overwrite):
         from ashapp.runemittimes import RunEmitTimes
 
@@ -175,7 +178,10 @@ class GEFSEmitTimes(CollectEmitTimes):
         command_list = []
 
         emitlist = udi.find_emit_file(inp["WORK_DIR"], drange)
-        if not emitlist:
+        # emitlist is np.ndarray and using not to test a full np.ndarray
+        # gives an error that truth value of array with more than one element is ambiguous.
+        # however can test a regular list like this.
+        if  not list(emitlist):
             logger.warning("No EMITTIMES files found in {}".format(inp["WORK_DIR"]))
             self.status = "FAILED no emittimes files found to create runs from"
 

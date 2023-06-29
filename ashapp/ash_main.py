@@ -2,20 +2,23 @@
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# ash_run.py - run HYSPLIT model on web (or offline) and create plots
+# ash_main.py - run HYSPLIT model on web (or offline) and create plots
 #
 # 01 JUN 2020 (AMC) - adapted from locusts-run.py
 # 15 NOV 2022 (AMC) - updated how tests can be run
 # 23 May 2023 (AMC) - made data insertion runs more flexible
+# 29 JUN 2023 (AMC) - modified ash_run into ash_main.
+#                     refactored code for more object comoposition and less inheritance.
 # -----------------------------------------------------------------------------
-# To run in offline mode standard dispersion run  python ash_run.py -999
-# To run in offline mode standard trajectory run  python ash_run.py -777
-# To run in offline mode ensemble dispersion run  python ash_run.py -888
 #
-# TODO To run in offline mode ensemble trajectory run  python ash_run.py -555
-#
-#
-# -----------------------------------------------------------------------------
+# EMAIL 6/2/2023 from Sonny
+# -s good to talk with you yesterday about the changes for the volcanic ash web app.
+# After the meeting, it occurred to me that we would need an additional web endpoint
+# for a python script to call to create/update a volcano event for the data insertion
+# feature. The endpoint will need to store volcano events to a database table which
+# will provide information needed for data insertion later. Let's circle back in a
+# few weeks
+# ----------------------------------------------------------------------------
 
 # import json
 import logging
@@ -23,13 +26,14 @@ import os
 import sys
 import traceback
 
-# from abc import ABC, abstractmethod
-
 import requests
 
-from utilhysplit.metfiles import gefs_suffix_list
-from utilvolc.runhelper import JobSetUp, make_inputs_from_file
 from utils import setup_logger
+from utilvolc.runhelper import JobSetUp, make_inputs_from_file
+
+# from abc import ABC, abstractmethod
+
+#pylint: disable-msg=C0103
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,7 @@ logger = logging.getLogger(__name__)
 def print_usage():
     print(
         """\
-USAGE: ash_run.py RUNTYPE JOBID
+USAGE: ash_main.py RUNTYPE JOBID
 
 where RUNTYPE is either 'run' or 'redraw' or 'test' (without quotations) and JOBID
 is the job identification number.
@@ -47,17 +51,18 @@ The following environment variables must be set prior to calling this script:
     VOLCANICASH_API_KEY         - secret key to access the hysplitash web APIs.
     VOLCANICASH_URL             - URL to the hysplitash web application.
 
-If using 'test' then a configuration file is read. 
+If using 'test' then a configuration file is read.
 The call should be of the form
 python ash_run.py test JOBID
 
 The program will look for a file with the name config.JOBID.txt and read it for inputs.
 Examples are provided.
-In the configuration file, the runtype is specified. 
+In the configuration file, the runtype is specified.
 Further documentation for some run types is below.
 
 ------------------------------------------------------------------------------------
-DATAINSERTION
+Runs from EmitTimes files
+
 Assumes that emit-times file generated from VOLCAT data (or other data) has been
 generated.
 
@@ -67,7 +72,7 @@ Looks for a directory comprised of the following from the configuration file
 In this directory, look for emit-times files. Naming convention for emitimes files should
 be EMITIMES_suffix, or EMIT_suffix.
 
-If naming convention is according to volcat then will also use the dates in the 
+If naming convention is according to volcat then will also use the dates in the
 configuration file to only create runs for those filenames with dates between start_date
 and start_date +  emissionHours.
 
@@ -77,82 +82,77 @@ If different naming convention then will simply create runs for all EMIT files i
 """
     )
 
-
-# Base class is AshRun
-# EnsembleAshRun inherits from AshRun
-# TrajectoryAshRun inherits from AshRun
-
-
-def create_run_instance(JOBID, inp):
+def create_run_instance(jid, runinp):
     """
     create the correct object for the type of run and return it.
     The system currently supports the following types of runs.
 
-    dispersion deterministic : creates forward dispersion runs
-    dispersion gefs : creates forward dispersion runs for each gefs member
+    dispersion: creates forward dispersion runs
     inverse : creates a set of unit source forward runs for creating TCM
-    inverse  gefs: creates a set of unit source forward runs for creating TCM for each gefs member.
     DataInsertion : uses previously created  emit-times files to create runs
-    BackTrajectory : runs back trajectories using a csv file which has information about starting points.
-    trajectory : deterministic : runs forward trajectories at predetermined set of heights
-    trajectory : gefs : runs forward trajectories at predetermined set of heights for each GEFS ensemble member.
 
+    BackTrajectory : runs back trajectories using a csv file which has information
+                     about starting points.
+    trajectory : deterministic : runs forward trajectories at predetermined
+                 set of heights
+    trajectory : gefs : runs forward trajectories at predetermined set of heights
+                 for each GEFS ensemble member.
     """
     logger.info("Creating run Instance")
 
-    if inp["runflag"] == "dispersion":
-        if inp["meteorologicalData"].lower() == "gefs":
+    if runinp["runflag"] == "dispersion":
+        if runinp["meteorologicalData"].lower() == "gefs":
             from maindispersion import MainEnsemble
-
-            arun = MainEnsemble(inp, JOBID)
+            crun = MainEnsemble(runinp, jid)
             logger.info("Dispersion GEFS")
         else:
             from maindispersion import MainDispersion
 
-            arun = MainDispersion(inp, JOBID)
+            crun = MainDispersion(runinp, jid)
             logger.info("Dispersion")
 
-    elif inp["runflag"].lower() == "datainsertion":
+    elif runinp["runflag"].lower() == "datainsertion":
         # This handles GEFS as well as deterministic runs.
         from maindispersion import MainEmitTimes
 
-        arun = MainEmitTimes(inp, JOBID)
+        crun = MainEmitTimes(runinp, jid)
         logger.info("Use EmitTimes files")
 
-    elif inp["runflag"] == "inverse":
-        if inp["meteorologicalData"].lower() == "gefs":
+    elif runinp["runflag"] == "inverse":
+        if runinp["meteorologicalData"].lower() == "gefs":
             # this one generates a separate netcdf file
             # for each gefs member
             from maindispersion import MainGEFSInverse
-            arun = MainGEFSInverse(inp, JOBID)
+
+            crun = MainGEFSInverse(runinp, jid)
         else:
             from maindispersion import MainInverse
 
-            arun = MainInverse(inp, JOBID)
+            crun = MainInverse(runinp, jid)
         logger.info("Inversion")
 
-    # elif inp["runflag"] == "DataInsertion":
+    # elif runinp["runflag"] == "DataInsertion":
     #    from ashdatainsertion import DataInsertionRun
-    #    arun = DataInsertionRun(JOBID)
+    #    crun = DataInsertionRun(jid)
     #    logger.info('Data Insertion')
 
-    # elif inp["runflag"] == "BackTrajectory":
+    # elif runinp["runflag"] == "BackTrajectory":
     #    from backtraj import BackTraj
-    #    arun = BackTraj(JOBID)
+    #    crun = BackTraj(jid)
     #    logger.info('Back Trajectory')
 
-    # elif inp["runflag"] == "trajectory":
-    #    if inp["meteorologicalData"].lower() == "gefs":
+    # elif runinp["runflag"] == "trajectory":
+    #    if runinp["meteorologicalData"].lower() == "gefs":
     #        from enstrajectory import EnsTrajectoryRun
-    #        arun = EnsTrajectoryRun(JOBID)
+    #        crun = EnsTrajectoryRun(jid)
     #        logger.info('Ensemble Trajectory')
     #    else:
     #        from ashtrajectory import TrajectoryAshRun
-    #        arun = TrajectoryAshRun(JOBID)
+    #        crun = TrajectoryAshRun(jid)
     #        logger.info('Trajectory')
 
-    # arun.inp = inp
-    return arun
+    # crun.inp = runinp
+    return crun
 
 
 if __name__ == "__main__":
@@ -175,12 +175,12 @@ if __name__ == "__main__":
         configname = "config.{}.txt".format(JOBID)
         logger.info("CONFIG FILE {}".format(configname))
         logger.info("TESTING")
-        setup = make_inputs_from_file("./", configname)
-        inp = setup.inp
+        finputs = make_inputs_from_file("./", configname)
+        inp = finputs.inp
         if inp["runflag"] == "inverse":
-            setup.add_inverse_params()
+            finputs.add_inverse_params()
             logger.info("Inverse run")
-        inp = setup.inp
+        inp = finputs.inp
 
         arun = create_run_instance(JOBID, inp)
         arun.doit()
@@ -198,20 +198,19 @@ if __name__ == "__main__":
                 # Update JOBID after obtaining the redraw input.
                 REDRAWID = sys.argv[2]
                 inputUrl = "{}/redrawinput/{}".format(RUN_URL, REDRAWID)
-                r = requests.get(inputUrl, headers={headerstr: API_KEY})
-                a = r.json()
-                JOBID = a["id"]
-            elif RUNTYEP == "dispersion":
+                rrr = requests.get(inputUrl, headers={headerstr: API_KEY})
+                aaa = rrr.json()
+                JOBID = aaa["id"]
+            elif RUNTYPE == "dispersion":
                 inputUrl = "{}/runinput/{}".format(RUN_URL, JOBID)
-                r = requests.get(inputUrl, headers={headerstr: API_KEY})
-                a = r.json()
-                a = r.json()
-            elif RUNTYEP == "datainsertion":
+                rrr = requests.get(inputUrl, headers={headerstr: API_KEY})
+                aaa = rrr.json()
+            elif RUNTYPE == "datainsertion":
                 inputUrl = "{}/datainsertion/{}".format(RUN_URL, JOBID)
-                r = requests.get(inputUrl, headers={headerstr: API_KEY})
-                a = r.json()
+                rrr = requests.get(inputUrl, headers={headerstr: API_KEY})
+                aaa = rrr.json()
             # print(json.dumps(a, indent=4))
-            inp = setup.parse_inputs(a)
+            inp = setup.parse_inputs(aaa)
             arun = create_run_instance(JOBID, inp)
             arun.add_api_info(apistr, urlstr, headerstr)
             arun.doit()

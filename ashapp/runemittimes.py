@@ -107,6 +107,7 @@ class RunEmitTimes(ModelRunInterface):
         self.so2 = False
         inp2 = utildi.read_emittimes(self.inp['emitfile'])
         self._inp.update(inp2)
+        logger.info('DATE UPDATED from EMITFILE'.format(self._inp['start_date']))
 
     @staticmethod
     def help():
@@ -283,7 +284,7 @@ class RunEmitTimes(ModelRunInterface):
             logger.info("No run to execture")
 
     def run_model(self, overwrite=False):
-        # make control and setup files
+        # make control and setup filee
         cdumpfiles = self.compose_control(rtype="dispersion")
         self.compose_setup()
         # start run and wait for it to finish..
@@ -383,7 +384,8 @@ class RunEmitTimes(ModelRunInterface):
         #self._inp.update(inp)
 
         duration = self.inp["durationOfSimulation"]
-        stime = self.inp["start_date"]
+        stime = self._inp["start_date"]
+        logger.info('Finding metfiles for {}'.format(stime))
         metfiles = self.metfilefinder.find(stime, duration)
         self._control = hcontrol.HycsControl(
             fname=self.default_control,
