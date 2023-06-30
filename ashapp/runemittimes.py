@@ -41,18 +41,19 @@ def FL2meters(flight_level):
     # return int(np.ceil(flight_level / 10.0) * 10)
 
 
-def make_chemrate(wdir):
-    fname = "CHEMRATE.TXT"
-    fstr = "1 2 0.01 1.0"
-    fpath = os.path.join(wdir, fname)
-    with open(fpath, "w") as fid:
-        fid.write(fstr)
+#def make_chemrate(wdir):
+#    fname = "CHEMRATE.TXT"
+#    fstr = "1 2 0.01 1.0"
+#    fpath = os.path.join(wdir, fname)
+#    with open(fpath, "w") as fid:
+#        fid.write(fstr)
 
 
 class RunEmitTimes(ModelRunInterface):
     def __init__(self, inp):
         """
-        Build a run based on an emittimes file and inputs
+        Build a run based on an emittimes file and inputs.
+        
         """
         # 16 instance attributes  may be too many?
 
@@ -66,8 +67,6 @@ class RunEmitTimes(ModelRunInterface):
             "HYSPLIT_DIR",
             "jobname",
             "durationOfSimulation",
-            "latitude",
-            "longitude",
             "emitfile",
             "emissionHours",
             "rate",
@@ -77,16 +76,16 @@ class RunEmitTimes(ModelRunInterface):
             "jobid",
         ]
 
+        self.default_control = "CONTROL.default"
+        self.default_setup = "SETUP.default"
+
+        # if default control or setup is in the inputs it will reset here.
         self._inp = {}
         self.inp = inp
 
         self._status = "Initialized"
         self._history = [self._status]
 
-        self.default_control = "CONTROL.default"
-        self.default_setup = "SETUP.default"
-        self.set_default_control()
-        self.set_default_setup()
         self._control = hcontrol.HycsControl(
             fname=self.default_control,
             working_directory=self.inp["DATA_DIR"],
@@ -105,6 +104,7 @@ class RunEmitTimes(ModelRunInterface):
         self._filelist = []
         self.filelocator = inp
         self.so2 = False
+
         inp2 = utildi.read_emittimes(self.inp['emitfile'])
         self._inp.update(inp2)
         logger.info('DATE UPDATED from EMITFILE'.format(self._inp['start_date']))
@@ -225,6 +225,10 @@ class RunEmitTimes(ModelRunInterface):
         fhash["cdump"] = self.filelocator.get_cdump_filename()
         self._filehash = fhash
 
+    def checkfile(self, ifile):
+        if os.path.isfile(ifile): return True
+        else: return False
+
     def set_default_setup(self):
         if "setup" in self.inp.keys():
             self.default_setup = self.inp["setup"]
@@ -234,10 +238,22 @@ class RunEmitTimes(ModelRunInterface):
 
     def set_default_control(self):
         if "control" in self.inp.keys():
-            self.default_control = self.inp["control"]
-        # else:
-        #    self.default_control = 'CONTROL.default'
-        # logger.warning("Using control {}".format(self.default_control))
+            default_control = self.inp["control"]
+        cfile = os.path.join(self.inp['DATA_DIR'],default_control)
+        # check that the file exists
+        if not os.path.isfile(cfile):
+           logger.warning('CONTROL FILE NOT FOUND {}'.format(cfile)
+           cfile = os.path.join(self.inp['DATA_DIR'],self.default_control)
+           # if it doesn't check that the previous default exists
+           self._status = "FAILED default control file not found {}".format(cfile)
+           self._history.append(self._status)
+           if not os.path.isfile(cfile):
+               logger.warning('CONTROL FILE NOT FOUND {}'.format(cfile)
+               self._status = "FAILED original default control file not found"
+               self._history.append(self._status)
+        # if it exists then use it as the default_control
+        else:
+           self.default_control = default_control
 
     def compose_control(self, rtype):
         self._setup_basic_control()
@@ -339,10 +355,12 @@ class RunEmitTimes(ModelRunInterface):
         numpar = int(numpar)
         maxpar = int(maxpar) + 500
 
-        logger.info('Running with maxpar {} numpar {} for {} release times at {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
 
+        logger.info('Running with maxpar {} numpar {} for {} release times at \
+                     {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
         if numpar <= 10:
-            logger.warning('LOW PARTICLES with maxpar {} numpar {} for {} release times at {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
+            logger.warning('LOW PARTICLES with maxpar {} numpar {} for {} release times at \
+                           {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
 
 
         setup.add("numpar", str(numpar))
@@ -387,6 +405,7 @@ class RunEmitTimes(ModelRunInterface):
         stime = self._inp["start_date"]
         logger.info('Finding metfiles for {}'.format(stime))
         metfiles = self.metfilefinder.find(stime, duration)
+
         self._control = hcontrol.HycsControl(
             fname=self.default_control,
             working_directory=self.inp["DATA_DIR"],

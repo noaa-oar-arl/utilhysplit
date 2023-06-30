@@ -138,6 +138,9 @@ def check_attributes(atthashin,dstr="%Y-%m-%d %H:%M:%S"):
         elif isinstance(val,bool):
             newval = str(val)
             atthash[key] = newval  
+        elif isinstance(val,type(None)):
+            newval = 'None'
+            atthash[key] = newval  
         elif isinstance(val,dict):
             newval = check_attributes(val,dstr)
             atthash[key] = newval  

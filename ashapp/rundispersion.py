@@ -7,6 +7,7 @@
 # 05 Jun  2023 (AMC) -
 # 27 Jun  2023 (AMC) - Added 'source description' to inp hash for more flexibility in
 #                      labeling the source. Added particularly for inversion runs.
+# 29 Jun  2023 (AMC) - Allow input area to be diameter in km.
 #
 # -----------------------------------------------------------------------------
 # Run specifically for traditional volcanic ash with line source from vent
@@ -383,6 +384,16 @@ class RunDispersion(ModelRunInterface):
         emission = self.inp["emissionHours"]
         rate = self.inp["rate"]
         area = self.inp["area"]
+        # assume that area is the diameter in km if it is smaller
+        # than 1000. 250000 = (0.5*1000)^2
+        # convert to square meters here.
+        if area < 1000:
+           area = np.pi * 250000 * area * area
+           diameter = area
+        else:
+           diameter = 2*np.sqrt(area*1e-3 / np.pi) 
+        logger.info('Area is set at {:0.3e} m^2'.format(area))
+        logger.info('Diameter at {} km'.format(diameter))
 
         # add location of eruption
         # with uniform vertical line source

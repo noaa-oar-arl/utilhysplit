@@ -187,6 +187,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # actual run from web api inputs
+
+    # API to save event information from summary files in database
+    # API to search or retrieve from that database.
+    # Inputs for the data insertion will come from that database as well as some user inputs.
+    # 
     else:
         apistr = "VOLCANICASH_API_KEY"
         urlstr = "VOLCANICASH_URL"
