@@ -321,3 +321,72 @@ class MainRunInterface(ABC):
         pass
 
 
+
+
+class ModelCollectionInterface(ABC):
+
+
+    @property
+    @abstractmethod
+    def filehash(self):
+      """
+      More comprehensive list of files
+      """
+      pass
+
+    @property
+    @abstractmethod
+    def filelist(self):
+      """
+      List of main outputs (cdump files)
+      """
+      pass
+
+         
+    @property
+    @abstractmethod
+    def inp(self):
+      """
+      dictionary with user inputs
+      """
+      pass
+
+    @property
+    @abstractmethod
+    def status(self):
+      """
+      status
+      """
+      pass
+
+    #@property
+    #@abstractmethod
+    #def processhandler(self):
+    #  """
+    #  ProcessList class
+    #  """
+    #  pass
+
+    #@property
+    #@abstractmethod
+    #def model_list(self):
+    #  """
+    #  list of  ModelRunInterface objects
+    #  """
+    #  pass
+
+    @abstractmethod
+    def setup(self):
+      """
+      Run the model
+      """
+      pass
+
+    @abstractmethod
+    def run(self,overwrite):
+      """
+      Run the model
+      """
+      pass
+
+

@@ -1,12 +1,13 @@
-import os
 import datetime
-
-
 import logging
+import os
+
+import ashapp.utildatainsertion as udi
 from ashapp.ashruninterface import ModelCollectionInterface
+from ashapp.runemittimes import RunEmitTimes
 from utilhysplit.metfiles import gefs_suffix_list
 from utilhysplit.runhandler import ProcessList
-import ashapp.utildatainsertion as udi
+from utilvolc.runhelper import is_input_complete
 
 logger = logging.getLogger(__name__)
 
@@ -19,28 +20,21 @@ class CollectEmitTimes(ModelCollectionInterface):
            with a different  ModelRunInterface class.
     """
 
+    # list of required (req) and optional (opt) inputs
+    ilist = [
+        ("WORK_DIR", "req"),
+        ("jobname", "req"),
+        ("HoursToEnd", "req"),
+        ("start_date", "req"),
+        ("jobid", "req"),
+        ("VolcanoName", "req"),
+    ]
+    ilist.extend(RunEmitTimes.ilist)
+    # these inputs will be created.
+    ilist.remove(("emitfile", "req"))
+
     def __init__(self, inp, jobid):
         self.JOBID = jobid
-
-        self._ilist = [
-            "meteorologicalData",
-            "forecastDirectory",
-            "archivesDirectory",
-            "WORK_DIR",
-            "HYSPLIT_DIR",
-            "jobname",
-            "durationOfSimulation",
-            "latitude",
-            "longitude",
-            "bottom",
-            "top",
-            "emissionHours",
-            "rate",
-            "area",
-            "start_date",
-            "samplingIntervalHours",
-            "jobid",
-        ]
 
         self._inp = {}
         self.inp = inp
@@ -65,19 +59,13 @@ class CollectEmitTimes(ModelCollectionInterface):
     @inp.setter
     def inp(self, inp):
         self._inp.update(inp)
-        complete = True
-        for iii in self._ilist:
-            if iii not in self._inp.keys():
-                logger.warning("Input does not contain {}".format(iii))
-                complete = False
+
         if "jobid" in self._inp.keys():
             self.JOBID = self._inp["jobid"]
-        if complete:
-            logger.info("Input contains all fields")
 
-    # TO DO make member generator it's own property?:q
-    # @property(self):
-    # def membergenerator(self):
+        complete = is_input_complete(self.ilist, self._inp)
+        if not complete:
+            self.status = "FAILED inputs incomplete"
 
     @property
     def status(self):
@@ -88,15 +76,17 @@ class CollectEmitTimes(ModelCollectionInterface):
         self._status = status
 
     def setup(self, overwrite):
-        from ashapp.runemittimes import RunEmitTimes
 
-        inp = self.inp.copy()
+        inp = self._inp
+
+        vals = [x[0] for x in RunEmitTimes.ilist]
+        newinp = dict((k, inp[k]) for k in vals if k in inp.keys())
 
         edir_alt = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "emitimes/")
         if os.path.isdir(edir_alt):
             inp["WORK_DIR"] = edir_alt
 
-        edate = inp["start_date"] + datetime.timedelta(hours=inp["emissionHours"])
+        edate = inp["start_date"] + datetime.timedelta(hours=inp["HoursToEnd"])
         drange = [inp["start_date"], edate]
         command_list = []
 
@@ -108,13 +98,13 @@ class CollectEmitTimes(ModelCollectionInterface):
             logger.warning("No EMITTIMES files found in {}".format(inp["WORK_DIR"]))
             self.status = "FAILED no emittimes files found to create runs from"
 
-        for iii, emitfile in enumerate(emitlist):
+        for emitfile in emitlist:
             suffix = emitfile.split("/")[-1]
             suffix = suffix.replace("EMIT_", "")
             suffix = suffix.replace("EMIT", "")
-            inp["jobid"] = "{}_{}".format(self.JOBID, suffix)
-            inp["emitfile"] = emitfile
-            run = RunEmitTimes(inp.copy())
+            newinp["jobid"] = "{}_{}".format(self.JOBID, suffix)
+            newinp["emitfile"] = emitfile
+            run = RunEmitTimes(newinp)
             command = run.run_model(overwrite=False)
             self._filehash[suffix] = run.filehash
             logger.info("ADDING {}".format(run.filelist))
@@ -131,6 +121,7 @@ class CollectEmitTimes(ModelCollectionInterface):
 
     def run(self, overwrite=False):
         import time
+
         command_list = self.setup(overwrite)
         processhandler = ProcessList()
         processhandler.pipe_stdout()
@@ -163,9 +154,7 @@ class CollectEmitTimes(ModelCollectionInterface):
 
 
 class GEFSEmitTimes(CollectEmitTimes):
-
     def setup(self, overwrite):
-        from ashapp.runemittimes import RunEmitTimes
 
         inp = self.inp.copy()
 
@@ -173,7 +162,7 @@ class GEFSEmitTimes(CollectEmitTimes):
         if os.path.isdir(edir_alt):
             inp["WORK_DIR"] = edir_alt
 
-        edate = inp["start_date"] + datetime.timedelta(hours=inp["emissionHours"])
+        edate = inp["start_date"] + datetime.timedelta(hours=inp["HoursToEnd"])
         drange = [inp["start_date"], edate]
         command_list = []
 
@@ -181,13 +170,13 @@ class GEFSEmitTimes(CollectEmitTimes):
         # emitlist is np.ndarray and using not to test a full np.ndarray
         # gives an error that truth value of array with more than one element is ambiguous.
         # however can test a regular list like this.
-        if  not list(emitlist):
+        if not list(emitlist):
             logger.warning("No EMITTIMES files found in {}".format(inp["WORK_DIR"]))
             self.status = "FAILED no emittimes files found to create runs from"
 
         for metsuffix in gefs_suffix_list():
 
-            for iii, emitfile in enumerate(emitlist):
+            for emitfile in emitlist:
                 suffix = emitfile.split("/")[-1]
                 suffix = suffix.replace("EMIT_", "")
                 suffix = suffix.replace("EMIT", "")

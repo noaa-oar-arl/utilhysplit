@@ -25,7 +25,7 @@ import numpy as np
 
 from utilhysplit import hcontrol
 from utilhysplit.metfiles import MetFileFinder
-from utilvolc.runhelper import Helper, JobFileNameComposer
+from utilvolc.runhelper import is_input_complete, Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
 import ashapp.utildatainsertion as utildi
 
@@ -50,6 +50,24 @@ def FL2meters(flight_level):
 
 
 class RunEmitTimes(ModelRunInterface):
+
+    # list of required (req) and optional (opt) inputs
+    ilist = [
+        ("meteorologicalData",'req'),
+        ("forecastDirectory",'req'),
+        ("archivesDirectory",'req'),
+        ("WORK_DIR",'req',),
+        ("DATA_DIR",'req',),
+        ("HYSPLIT_DIR",'req'),
+        ("jobname",'req'),
+        ("durationOfSimulation",'req'),
+        ("emitfile",'req'),
+        ("jobid",'req'),
+        ("samplingIntervalHours",'opt'), 
+        ("control",'opt'), 
+    ]
+
+
     def __init__(self, inp):
         """
         Build a run based on an emittimes file and inputs.
@@ -58,33 +76,18 @@ class RunEmitTimes(ModelRunInterface):
         # 16 instance attributes  may be too many?
 
         self.JOBID = "999"
-        # list of keywords the inp dictionary should contain.
-        self._ilist = [
-            "meteorologicalData",
-            "forecastDirectory",
-            "archivesDirectory",
-            "WORK_DIR",
-            "HYSPLIT_DIR",
-            "jobname",
-            "durationOfSimulation",
-            "emitfile",
-            "emissionHours",
-            "rate",
-            "area",
-            "start_date",
-            "samplingIntervalHours",
-            "jobid",
-        ]
-
-        self.default_control = "CONTROL.default"
-        self.default_setup = "SETUP.default"
 
         # if default control or setup is in the inputs it will reset here.
-        self._inp = {}
-        self.inp = inp
+        #self._inp = {}
+        #self.inp = inp
 
         self._status = "Initialized"
         self._history = [self._status]
+        self.default_control = "CONTROL.default"
+        self.default_setup = "SETUP.default"
+        self._inp = {}
+        self.inp = inp
+
 
         self._control = hcontrol.HycsControl(
             fname=self.default_control,
@@ -137,29 +140,22 @@ class RunEmitTimes(ModelRunInterface):
         self._inp.update(inp)
         complete = True
 
+
+        # OPTIONAL arguemnts filled in if not present.
+        add_inp={}
+        if 'samplingIntervalHours' not in inp: 
+           add_inp['samplingIntervalHours'] =  1
         if "jobid" in self._inp.keys():
             self.JOBID = self._inp["jobid"]
 
-        add_inp={}
-        if 'start_date' in inp and 'DI_start_date' not in inp:
-           add_inp['DI_start_date'] = inp['start_date'] 
-        if 'emissionHours' in inp and 'DIrunHours' not in inp:
-           add_inp['DIrunHours'] = inp['emissionHours'] 
-        if 'samplingIntervalHours' not in inp: 
-           add_inp['samplingIntervalHours'] =  1
         self._inp.update(add_inp)
-
-        for iii in self._ilist:
-            if iii not in self._inp.keys():
-                logger.warning("Input does not contain {}".format(iii))
-                complete = False
-
+        complete = is_input_complete(self.ilist, self._inp)
+        if not complete:
+           self._status('FAILED inputs incomplete')
+           self._history.append(self._status)
 
         self.set_default_control()
         self.set_default_setup()
-        if complete:
-            logger.info("Input contains all fields")
-        # self._inp.update(inp)
 
     @property
     def filelocator(self):
@@ -237,18 +233,19 @@ class RunEmitTimes(ModelRunInterface):
         # logger.warning("Using setup {}".format(self.default_setup))
 
     def set_default_control(self):
+        default_control = self.default_control
         if "control" in self.inp.keys():
             default_control = self.inp["control"]
         cfile = os.path.join(self.inp['DATA_DIR'],default_control)
         # check that the file exists
         if not os.path.isfile(cfile):
-           logger.warning('CONTROL FILE NOT FOUND {}'.format(cfile)
+           logger.warning('CONTROL FILE NOT FOUND {}'.format(cfile))
            cfile = os.path.join(self.inp['DATA_DIR'],self.default_control)
            # if it doesn't check that the previous default exists
            self._status = "FAILED default control file not found {}".format(cfile)
            self._history.append(self._status)
            if not os.path.isfile(cfile):
-               logger.warning('CONTROL FILE NOT FOUND {}'.format(cfile)
+               logger.warning('CONTROL FILE NOT FOUND {}'.format(cfile))
                self._status = "FAILED original default control file not found"
                self._history.append(self._status)
         # if it exists then use it as the default_control
@@ -352,13 +349,14 @@ class RunEmitTimes(ModelRunInterface):
            maxpar = maxpar*1.5
            numpar = np.floor(maxpar/totpts)
            if maxpar>1e6: break         
-        numpar = int(numpar)
+        # 
+        numpar = int(numpar) * self.inp['nlocs']
         maxpar = int(maxpar) + 500
 
 
         logger.info('Running with maxpar {} numpar {} for {} release times at \
                      {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
-        if numpar <= 10:
+        if numpar/self.inp['nlocs'] <= 10:
             logger.warning('LOW PARTICLES with maxpar {} numpar {} for {} release times at \
                            {} locations'.format(maxpar,numpar,self.inp['ncycles'], self.inp['nlocs']))
 
@@ -366,8 +364,6 @@ class RunEmitTimes(ModelRunInterface):
         setup.add("numpar", str(numpar))
         setup.add("maxpar", str(maxpar))
             
-
-
         # base frequency of pardump output on length of simulation.
         if duration < 6:
             setup.add("ncycl", "1")
