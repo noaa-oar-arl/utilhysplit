@@ -17,30 +17,29 @@ class CollectInverse(ModelCollectionInterface):
     """
     Runs unit source runs for volcanic ash inversion
     """
+    ilist = [
+        "meteorologicalData",
+        "forecastDirectory",
+        "archivesDirectory",
+        "WORK_DIR",
+        "HYSPLIT_DIR",
+        "jobname",
+        "durationOfSimulation",
+        "latitude",
+        "longitude",
+        "bottom",
+        "top",
+        "emissionHours",
+        "timeres",
+        "rate",
+        "area",
+        "start_date",
+        "samplingIntervalHours",
+        "jobid",
+    ]
 
     def __init__(self, inp, jobid):
         self.JOBID = jobid
-
-        self._ilist = [
-            "meteorologicalData",
-            "forecastDirectory",
-            "archivesDirectory",
-            "WORK_DIR",
-            "HYSPLIT_DIR",
-            "jobname",
-            "durationOfSimulation",
-            "latitude",
-            "longitude",
-            "bottom",
-            "top",
-            "emissionHours",
-            "timeres",
-            "rate",
-            "area",
-            "start_date",
-            "samplingIntervalHours",
-            "jobid",
-        ]
 
         self._inp = {}
         self.inp = inp
@@ -65,7 +64,6 @@ class CollectInverse(ModelCollectionInterface):
     @inp.setter
     def inp(self, inp):
         self._inp.update(inp)
-        complete = True
        
         # inversion has a time resolution 
         if 'timeres' not in self._inp.keys():
@@ -82,10 +80,8 @@ class CollectInverse(ModelCollectionInterface):
         self._inp['rate'] = 1
 
         #inverse_hash = inverse_get_suffix_list(inp)
-        for iii in self._ilist:
-            if iii not in self._inp.keys():
-                logger.warning("Input does not contain {}".format(iii))
-                complete = False
+        complete = is_input_complete(self.ilist,self._inp)
+
         if "jobid" in self._inp.keys():
             self.JOBID = self._inp["jobid"]
         if complete:
