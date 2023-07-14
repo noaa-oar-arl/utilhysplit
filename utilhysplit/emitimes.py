@@ -18,6 +18,9 @@ should it be an attribute of the classes or input into the add_record method?
 
 TO DO: Currently allows users to add emission cycles in any way they wish. For
 instance there can be emission cycles with duplicate or overlapping start times and durations.
+TO DO: Currently allows users to add emission cycles in any way they wish. For
+instance there can be emission cycles with duplicate or overlapping start times and durations.
+Also the emission cycles can be out of order.
 Also the emission cycles can be out of order. 
 
 """
@@ -278,6 +281,8 @@ class EmiTimes(object):
     def add_cycle(self, sdate, duration):
         """
         Adds information on a cycle to an EmiTimes object.
+        The cycles must be added in chronological order with
+        the earliest cycle added first. Cycles cannot be overlapping in time.
         sdate: datetime object
                start time of cycle.
         duration : integer
@@ -285,13 +290,22 @@ class EmiTimes(object):
         """
         # EmitTimes class
         self.ncycles += 1
+        if self.ncycles > 1:
+           ecprev = self.cycle_list[-1]
+           ec_sdate = ecprev.sdate
+           ec_edate = ec_sdate + ecprev.duration
+           if sdate < ec_edate:
+              print('EmitTimes cannot add cycle because it will overlap with previous cycle')
+              return False     
         ec = EmitCycle(sdate, duration)
+
         self.cycle_list.append(ec)
         d1 = sdate
         dt = datetime.timedelta(hours=int(duration))
         d2 = sdate + dt
         self.chash[self.ncycles - 1] = (d1, d2)
         self.sdatelist.append(sdate)
+        return True
 
     def filter_records(self, llcrnr, urcrnr):
         """ 
@@ -330,6 +344,8 @@ class EmiTimes(object):
             if date >= self.chash[ccc][0] and date < self.chash[ccc][1]:
                 cycle_number = ccc
         if cycle_number == -1:
+            print("WARNING: record could not be added. No cycle found") 
+            print(date.strftime("%Y %m/%d %H:%M "))
             rvalue = False
         else:
             self.cycle_list[cycle_number].add_record(
