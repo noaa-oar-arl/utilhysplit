@@ -2,17 +2,11 @@
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# rundispersion.py - run HYSPLIT dispersion model
+# runemittimes.py - run HYSPLIT dispersion model based on EMITTIMES files
 #
 # 05 Jun  2023 (AMC) -
 #
 # -----------------------------------------------------------------------------
-# Run specifically for traditional volcanic ash with line source from vent
-# to input plume height.
-#
-# TODO - look at how SO2 functionality is incoporated. This needs to be updated.
-# TODO - update how vertical levels are specified.
-# 2023 June 28 (amc) added logic on how to set numpar and maxpar based on emit-times
 # -----------------------------------------------------------------------------
 
 
@@ -29,8 +23,6 @@ from utilvolc.runhelper import is_input_complete, Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
 import ashapp.utildatainsertion as utildi
 
-# from runhandler import ProcessList
-# from utilvolc.volcMER import HT2unit
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +31,6 @@ def FL2meters(flight_level):
     meters = flight_level * 100 / 3.28084
     return int(meters)
     # return int(np.ceil(flight_level / 10.0) * 10)
-
-
-#def make_chemrate(wdir):
-#    fname = "CHEMRATE.TXT"
-#    fstr = "1 2 0.01 1.0"
-#    fpath = os.path.join(wdir, fname)
-#    with open(fpath, "w") as fid:
-#        fid.write(fstr)
 
 
 class RunEmitTimes(ModelRunInterface):

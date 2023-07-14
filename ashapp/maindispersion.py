@@ -1,18 +1,9 @@
-#!/opt/Tools/anaconda3/envs/hysplit/bin/python
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# ash_run.py - run HYSPLIT model on web and create plots
+# maind_dispersion.py - run HYSPLIT model
 #
-# 01 JUN 2020 (AMC) - adapted from locusts-run.py
-# 09 DEC 2022 (AMC) - changed latspan to 180 and lonspan to 360 for global grid.
-# 09 DEC 2022 (AMC) - changed numpar to 10000. this should not be hardwired.
-# 28 FEB 2023 (AMC) - change to write_cxra so if netcdf file exists then set it as self.cxra
-# 28 FEB 2023 (AMC) - check attributes added as stand alone function but still kept as static method.
-#
-# -----------------------------------------------------------------------------
-# To run in offline mode use python ash_run.py -999
-#
+# 14 JUL 2023 (AMC) updated ilist class attributes.
 #
 # -----------------------------------------------------------------------------
 
@@ -23,18 +14,17 @@ import shutil
 
 import requests
 
+from ashapp import utils
 from ashapp.ashruninterface import MainRunInterface
-from ashapp.rundispersion import RunDispersion
-from ashapp.ensembledispersion import EnsembleDispersion
+from ashapp.collectemittimes import CollectEmitTimes, GEFSEmitTimes
 from ashapp.collectinverse import CollectInverse
-from ashapp.collectemittimes import CollectEmitTimes
-from ashapp.collectemittimes import GEFSEmitTimes
+from ashapp.ensembledispersion import EnsembleDispersion
 from ashapp.graphicsdispersion import GraphicsDispersion
 from ashapp.outputdispersion import OutputDispersion
-from ashapp import utils
+from ashapp.rundispersion import RunDispersion
+from utilvolc.runhelper import complicated2str, is_input_complete
 
 # from ashapp import  utils
-# from ashapp.ashnetcdf import HYSPLITAshNetcdf
 
 # from utilvolc.volcMER import HT2unit
 
@@ -42,19 +32,20 @@ logger = logging.getLogger(__name__)
 
 
 class MainDispersion(MainRunInterface):
+
+    ilist = []
+    ilist.extend(RunDispersion.ilist)
+    ilist.extend(OutputDispersion.ilist)
+    # these are set in the main routines.
+    ilist.remove(("Use_Mastin_eq", "req"))
+    ilist.remove(("fraction_of_fine_ash", "req"))
+
     def __init__(self, inp, JOBID):
         # 14 instance attributes
         self.JOBID = JOBID  # string
 
-        self.ilist = [
-            "MAP_DIR",
-            "WORK_DIR",
-            "CONVERT_EXE",
-            "GHOSTSCRIPT_EXE",
-            "PYTHON_EXE",
-        ]
-
         inp["jobid"] = JOBID
+        self._inp = {}
         self.inp = inp  # dictionary from JobSetUP
         self.apistr = None
         self.urlstr = None
@@ -65,6 +56,8 @@ class MainDispersion(MainRunInterface):
         self.awips = True
 
         self._modelrun = RunDispersion(inp)
+        inp["Use_Mastin_eq"] = True
+        inp["fraction_of_fine_ash"] = 0.01
         self._modeloutput = OutputDispersion(inp, [])
         self._modelgraphics = GraphicsDispersion(inp)
 
@@ -84,14 +77,12 @@ class MainDispersion(MainRunInterface):
 
     @inp.setter
     def inp(self, inp):
-        complete = True
-        for iii in self.ilist:
-            if iii not in inp.keys():
-                logger.warning("Input does not contain {}".format(iii))
-                complete = False
-        if complete:
-            logger.info("Input contains all fields")
-        self._inp = inp
+        self._inp.update(inp)
+        complete = is_input_complete(self.ilist, self._inp)
+        if not complete:
+            logger.warning("Inputs not complete")
+        else:
+            logger.debug("Inputs complete")
 
     @property
     def modelrun(self):
@@ -109,7 +100,6 @@ class MainDispersion(MainRunInterface):
     def modeloutput(self, mout):
         self._modeloutput = mout
 
-
     @property
     def modelgraphics(self):
         return self._modelgraphics
@@ -124,7 +114,8 @@ class MainDispersion(MainRunInterface):
             API_KEY = os.environ[self.apistr]
             RUN_URL = os.environ[self.urlstr]
             statusUrl = "{}/status/{}/{}".format(RUN_URL, jobId, status)
-            r = requests.put(statusUrl, headers={self.headerstr: API_KEY})
+            req = requests.put(statusUrl, headers={self.headerstr: API_KEY})
+            logger.debug('Requests put {}'.format(req))
         else:
             logger.info("Running in offline test mode")
         logger.info("Posted status {} for job {}".format(status, jobId))
@@ -160,12 +151,12 @@ class MainDispersion(MainRunInterface):
         # self.modelrun.run_model(overwrite=False)
         self.modelrun.run(overwrite=False)
 
-        logger.info(self.modelrun.status) 
+        logger.info("STATUS {}".format(complicated2str(self.modelrun.status)))
 
-        if not(self.modelrun.filelist):
-           logger.warning('No model files produced. exiting')
-           self.update_run_status(self.JOBID, "FAILED")
-           return
+        if not self.modelrun.filelist:
+            logger.warning("No model files produced. exiting")
+            self.update_run_status(self.JOBID, "FAILED")
+            return
 
         # make the model output.
         self.modeloutput.inputlist = self.modelrun.filelist
@@ -211,24 +202,23 @@ class MainDispersion(MainRunInterface):
         #    self.handle_crash(stage=0)
         # return rval
 
+
 class MainEmitTimes(MainDispersion):
+
+    ilist = []
+    ilist.extend(CollectEmitTimes.ilist)
+    ilist.extend(OutputDispersion.ilist)
+
     def __init__(self, inp, JOBID):
+
         """
         modelrun attribute is the EnsembleDispersion class.
         """
 
-
         self.JOBID = JOBID  # string
 
-        self.ilist = [
-            "MAP_DIR",
-            "WORK_DIR",
-            "CONVERT_EXE",
-            "GHOSTSCRIPT_EXE",
-            "PYTHON_EXE",
-        ]
-
         inp["jobid"] = JOBID
+        self._inp = {}
         self.inp = inp  # dictionary from JobSetUP
         self.apistr = None
         self.urlstr = None
@@ -238,36 +228,36 @@ class MainEmitTimes(MainDispersion):
         self.maptexthash = {}
         self.awips = True
 
-        if inp['meteorologicalData'].lower() == 'gefs':
-            self._modelrun = GEFSEmitTimes(inp,self.JOBID)
-        else: 
+        if inp["meteorologicalData"].lower() == "gefs":
+            self._modelrun = GEFSEmitTimes(inp, self.JOBID)
+        else:
             self._modelrun = CollectEmitTimes(inp, self.JOBID)
+
+        inp["Use_Mastin_eq"] = False
+        inp["fraction_of_fine_ash"] = 1
         self._modeloutput = OutputDispersion(inp, [])
         self._modelgraphics = GraphicsDispersion(inp)
 
         utils.setup_logger()
 
 
-
 class MainInverse(MainDispersion):
+
+    ilist = []
+    ilist.extend(CollectInverse.ilist)
+    ilist.extend(OutputDispersion.ilist)
+
+
     def __init__(self, inp, JOBID):
         """
         modelrun attribute is the CollectInverse class.
         Run unit source runs for inversion
         """
 
-
         self.JOBID = JOBID  # string
 
-        self.ilist = [
-            "MAP_DIR",
-            "WORK_DIR",
-            "CONVERT_EXE",
-            "GHOSTSCRIPT_EXE",
-            "PYTHON_EXE",
-        ]
-
         inp["jobid"] = JOBID
+        self._inp = {}
         self.inp = inp  # dictionary from JobSetUP
         self.apistr = None
         self.urlstr = None
@@ -278,21 +268,26 @@ class MainInverse(MainDispersion):
         self.awips = True
 
         self._modelrun = CollectInverse(inp, self.JOBID)
+        inp["Use_Mastin_eq"] = False
+        inp["fraction_of_fine_ash"] = 1
         self._modeloutput = OutputDispersion(inp, [])
         self._modelgraphics = GraphicsDispersion(inp)
 
         utils.setup_logger()
 
+
 class MainGEFSInverse(MainInverse):
 
-    # needs a setter since reset the model output for each GEFS run.
-    #@modeloutput.setter
-    #def modeloutput(self, mout):
-    #    self._modeloutput = mout
+    # same as MainInverse but over-rides the doit method.
 
+    # needs a setter since reset the model output for each GEFS run.
+    # @modeloutput.setter
+    # def modeloutput(self, mout):
+    #    self._modeloutput = mout
 
     def doit(self):
         from utilhysplit.metfiles import gefs_suffix_list
+
         """
         The main workflow is implemented for each GEFS members
         """
@@ -307,26 +302,31 @@ class MainGEFSInverse(MainInverse):
 
         # run_model will check if the run has already been done.
         # self.modelrun.run_model(overwrite=False)
- 
+
         # create a separate netcdf file for each member?
+        inp = self.inp.copy()
+
         for metsuffix in gefs_suffix_list():
-            inp = self.inp.copy()
-            inp['jobid'] = "{}_{}".format(self.JOBID,metsuffix)
-            inp['meteorologicalData'] = 'gefs{}'.format(metsuffix)
-            self.modelrun = CollectInverse(inp, inp['jobid'])
+            inp["jobid"] = "{}_{}".format(self.JOBID, metsuffix)
+            inp["meteorologicalData"] = "gefs{}".format(metsuffix)
+            self.modelrun = CollectInverse(inp, inp["jobid"])
             self.modelrun.run(overwrite=False)
 
-            logger.info(self.modelrun.status) 
+            logger.info(self.modelrun.status)
 
-            if not(self.modelrun.filelist):
-               logger.warning('No model files produced. exiting')
-               self.update_run_status(self.JOBID, "FAILED")
-               return
+            if not self.modelrun.filelist:
+                logger.warning("No model files produced. exiting")
+                self.update_run_status(self.JOBID, "FAILED")
+                return
 
-            self.modeloutput = OutputDispersion(inp,[])
-        # make the model output.
+            inp["Use_Mastin_eq"] = False
+            inp["fraction_of_fine_ash"] = 1
+            self.modeloutput = OutputDispersion(inp, [])
+            # make the model output.
             self.modeloutput.inputlist = self.modelrun.filelist
             self.modeloutput.postprocess()
+            inp = inp.remove("Use_Mastin_eq")
+            inp = inp.remove("fraction_of_fine_ash")
 
         # make the graphics
         # if self.modeloutput.check():
@@ -340,9 +340,13 @@ class MainGEFSInverse(MainInverse):
         self.cleanup()
 
 
-
-
 class MainEnsemble(MainDispersion):
+ 
+    ilist = []
+    ilist.extend(EnsembleDispersion.ilist)
+    ilist.extend(OutputDispersion.ilist)
+
+
     def __init__(self, inp, JOBID):
         """
         modelrun attribute is the EnsembleDispersion class.
@@ -350,15 +354,9 @@ class MainEnsemble(MainDispersion):
 
         self.JOBID = JOBID  # string
 
-        self.ilist = [
-            "MAP_DIR",
-            "WORK_DIR",
-            "CONVERT_EXE",
-            "GHOSTSCRIPT_EXE",
-            "PYTHON_EXE",
-        ]
 
         inp["jobid"] = JOBID
+        self._inp = {}
         self.inp = inp  # dictionary from JobSetUP
         self.apistr = None
         self.urlstr = None
@@ -368,6 +366,8 @@ class MainEnsemble(MainDispersion):
         self.maptexthash = {}
         self.awips = True
 
+        inp["Use_Mastin_eq"] = True
+        inp["fraction_of_fine_ash"] = 0.05
         self._modelrun = EnsembleDispersion(inp, self.JOBID)
         self._modeloutput = OutputDispersion(inp, [])
         self._modelgraphics = GraphicsDispersion(inp)
