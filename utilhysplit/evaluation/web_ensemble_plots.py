@@ -43,6 +43,17 @@ from utilhysplit.plotutils.colormaker import ColorMaker
 
 logger = logging.getLogger(__name__)
 
+def setup_logger_warning(level=logging.WARNING):
+    MESSAGE_FORMAT_INFO = "%(asctime)s.%(msecs)03d %(levelname)s - %(message)s"
+    MESSAGE_FORMAT_DEBUG = \
+    "%(asctime)s.%(msecs)03d %(levelname)s %(name)s - %(message)s"
+    import sys
+    logging.basicConfig(
+            stream=sys.stdout,
+            level=level,
+            format=MESSAGE_FORMAT_INFO,
+            datefmt="%H:%M:%S")
+
 
 class LabelData:
     def __init__(self, time, descrip, units, source="", tag=""):
@@ -449,8 +460,9 @@ def reset_plots():
 
 
 def format_plot(ax, transform):
+    setup_logger_warning(level=logging.WARNING)
     # ax.add_feature(cartopy.feature.LAND)
-    ax.add_feature(cartopy.feature.BORDERS)
+    #ax.add_feature(cartopy.feature.BORDERS)
     ax.coastlines("50m")
     # This allows latitude and longitude axis
     # to have different scales.
@@ -460,10 +472,12 @@ def format_plot(ax, transform):
     # this will adjust axxes to  keep aspect ratio 1
     # when this is used, text is often mis-placed.
     # ax.set_aspect(1, adjustable='box')
+
     # don't use a different central_longitude when
     # making the tick labels.
+    #return 1
     gl = ax.gridlines(
-        crs=get_transform(),
+        crs=transform,
         draw_labels=True,
         linewidth=1,
         color="gray",
