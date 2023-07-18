@@ -48,12 +48,19 @@ def plotcdump(
     logscale=True,
     **kwargs
 ):
-    """ """
+    """cdump: xarray DataArray representing cdump file.
+              may be output of hysplit.open_dataset 
+       time_index: integer: index of time period to plot.
+
+       calculates mass loading for the given time period and plots."""
     figsize = [10, 10]
     transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
     vtransform = cartopy.crs.PlateCarree(central_longitude=0)
     sns.set()
+ 
+    # get the time period to plot for
     cdump = cdump.isel(time=time_index)
+    # get the massloading
     forecast = hysplit.hysp_massload(cdump)
 
     ncols = 1
