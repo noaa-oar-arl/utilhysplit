@@ -48,11 +48,12 @@ class RunTrajectory(ModelRunInterface):
     ]
 
 
-
-
     def __init__(self, inp):
         """
-        A trajectory run from inputs
+        A trajectory run from inputs.
+        inp['height'] may be a list of heights or a single height in meters.
+        durationOfSimulation is number or hours for simulation to run.
+                             A negative number will result in backwards trajectories.
         """
 
         # 16 instance attributes  may be too many?
@@ -171,14 +172,12 @@ class RunTrajectory(ModelRunInterface):
 
     @property
     def filelist(self):
-        cdump = self._filehash["cdump"]
-
+        tdump = self._filehash["tdump"]
         metfile = self._metfilefinder.metid
         if isinstance(self._metfilefinder.suffix, str):
             if self.metfilefinder.suffix not in metfile:
                 metfile += self._metfilefinder.suffix
-        source = self.inp["source description"]
-        self._filelist = [(cdump, source, metfile)]
+        self._filelist = [(tdump, metfile)]
         return self._filelist
 
     @property
@@ -189,7 +188,7 @@ class RunTrajectory(ModelRunInterface):
         fhash = {}
         fhash["control"] = self.filelocator.get_control_filename()
         fhash["setup"] = self.filelocator.get_setup_filename()
-        fhash["tdump"] = self.filelocator.get_cdump_filename()
+        fhash["tdump"] = self.filelocator.get_tdump_filename()
         self._filehash = fhash
 
     def set_default_setup(self):
@@ -215,7 +214,7 @@ class RunTrajectory(ModelRunInterface):
         else:
             self._status = "FAILED to write control file"
             self._history.append(self._status)
-        return self._control.outfile
+        return os.path.join(self._control.outdir, self._control.outfile)
 
     def compose_setup(self):
         self._setup = self.setup_setup()
@@ -322,10 +321,13 @@ class RunTrajectory(ModelRunInterface):
         lat = self.inp["latitude"]
         lon = self.inp["longitude"]
         height = self.inp["height"]
+        if not isinstance(height,(list,np.ndarray)):
+           height = [height]
         # assume that area is the diameter in km if it is smaller
         # than 1000. 250000 = (0.5*1000)^2
         # convert to square meters here.
         self._control.remove_locations()
-        self._control.add_location((lat, lon), height)
+        [self._control.add_location((lat, lon), x) for x in height]
+        self._control.outdir = self.inp['WORK_DIR']
         self._control.outfile = self.filelocator.get_tdump_filename(0)
 

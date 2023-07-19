@@ -22,13 +22,19 @@ from ashapp.ensembledispersion import EnsembleDispersion
 from ashapp.graphicsdispersion import GraphicsDispersion
 from ashapp.outputdispersion import OutputDispersion
 from ashapp.rundispersion import RunDispersion
+from ashapp.runtrajectory import RunTrajectory
+from ashapp.outputtrajectory import OutputTrajectory
+from ashapp.graphicstrajectory import GraphicsTrajectory
 from utilvolc.runhelper import complicated2str, is_input_complete
+
 
 # from ashapp import  utils
 
 # from utilvolc.volcMER import HT2unit
 
 logger = logging.getLogger(__name__)
+
+
 
 
 class MainDispersion(MainRunInterface):
@@ -52,7 +58,7 @@ class MainDispersion(MainRunInterface):
         self.headerstr = None
 
         self.filelocator = None
-        self.maptexthash = {}
+        #self.maptexthash = {}
         self.awips = True
 
         self._modelrun = RunDispersion(inp)
@@ -62,6 +68,8 @@ class MainDispersion(MainRunInterface):
         self._modelgraphics = GraphicsDispersion(inp)
 
         utils.setup_logger()
+
+ 
 
     @property
     def JOBID(self):
@@ -225,7 +233,7 @@ class MainEmitTimes(MainDispersion):
         self.headerstr = None
 
         self.filelocator = None
-        self.maptexthash = {}
+        #self.maptexthash = {}
         self.awips = True
 
         if inp["meteorologicalData"].lower() == "gefs":
@@ -264,7 +272,7 @@ class MainInverse(MainDispersion):
         self.headerstr = None
 
         self.filelocator = None
-        self.maptexthash = {}
+        #self.maptexthash = {}
         self.awips = True
 
         self._modelrun = CollectInverse(inp, self.JOBID)
@@ -363,8 +371,8 @@ class MainEnsemble(MainDispersion):
         self.headerstr = None
 
         self.filelocator = None
-        self.maptexthash = {}
-        self.awips = True
+        #self.maptexthash = {}
+        #self.awips = True
 
         inp["Use_Mastin_eq"] = True
         inp["fraction_of_fine_ash"] = 0.05
@@ -373,3 +381,30 @@ class MainEnsemble(MainDispersion):
         self._modelgraphics = GraphicsDispersion(inp)
 
         utils.setup_logger()
+
+
+class MainTrajectory(MainDispersion):
+
+    ilist = []
+    ilist.extend(RunTrajectory.ilist)
+    ilist.extend(OutputTrajectory.ilist)
+    # these are set in the main routines.
+
+    def __init__(self, inp, JOBID):
+        # 14 instance attributes
+        self.JOBID = JOBID  # string
+
+        inp["jobid"] = JOBID
+        self._inp = {}
+        self.inp = inp  # dictionary from JobSetUP
+        self.apistr = None
+        self.urlstr = None
+        self.headerstr = None
+
+        self.filelocator = None
+        #self.maptexthash = {}
+
+        self._modelrun = RunTrajectory(inp)
+        self._modeloutput = OutputTrajectory(inp, [])
+        self._modelgraphics = GraphicsTrajectory(inp)
+

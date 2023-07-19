@@ -33,7 +33,7 @@ from utilvolc.runhelper import JobSetUp, make_inputs_from_file
 
 # from abc import ABC, abstractmethod
 
-#pylint: disable-msg=C0103
+# pylint: disable-msg=C0103
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,7 @@ If different naming convention then will simply create runs for all EMIT files i
 """
     )
 
+
 def create_run_instance(jid, runinp):
     """
     create the correct object for the type of run and return it.
@@ -103,6 +104,7 @@ def create_run_instance(jid, runinp):
     if runinp["runflag"] == "dispersion":
         if runinp["meteorologicalData"].lower() == "gefs":
             from maindispersion import MainEnsemble
+
             crun = MainEnsemble(runinp, jid)
             logger.info("Dispersion GEFS")
         else:
@@ -131,17 +133,11 @@ def create_run_instance(jid, runinp):
             crun = MainInverse(runinp, jid)
         logger.info("Inversion")
 
-    # elif runinp["runflag"] == "DataInsertion":
-    #    from ashdatainsertion import DataInsertionRun
-    #    crun = DataInsertionRun(jid)
-    #    logger.info('Data Insertion')
+    elif runinp["runflag"] == "trajectory":
+        from maindispersion import MainTrajectory
 
-    # elif runinp["runflag"] == "BackTrajectory":
-    #    from backtraj import BackTraj
-    #    crun = BackTraj(jid)
-    #    logger.info('Back Trajectory')
-
-    # elif runinp["runflag"] == "trajectory":
+        crun = MainTrajectory(runinp, jid)
+        logger.info("Trajectory Run")
     #    if runinp["meteorologicalData"].lower() == "gefs":
     #        from enstrajectory import EnsTrajectoryRun
     #        crun = EnsTrajectoryRun(jid)
@@ -191,7 +187,7 @@ if __name__ == "__main__":
     # API to save event information from summary files in database
     # API to search or retrieve from that database.
     # Inputs for the data insertion will come from that database as well as some user inputs.
-    # 
+    #
     else:
         apistr = "VOLCANICASH_API_KEY"
         urlstr = "VOLCANICASH_URL"
