@@ -7,7 +7,8 @@ import numpy as np
 import numpy.ma as ma
 import pandas as pd
 
-import volcat
+from utilvolc import volcat
+from utilhysplit.plotutils import vtools
 
 # from pyresample.bucket import BucketResampler
 
@@ -25,6 +26,8 @@ plot_mass: plots ash mass loading from VOLCAT
 plot_gen: generates quick plot, not saved
 ------------
 """
+
+# 2023 19 July (amc) modified plot_gen to return axes and use the vtools formatting.
 
 
 def create_pc_plot(dset):
@@ -84,36 +87,36 @@ def plot_height(dset):
     Does not save figure - quick image creation"""
     fig = plt.figure("Ash_Top_Height")
     title = "Ash Top Height (km)"
-    ax = fig.add_subplot(1, 1, 1)
-    plot_gen(dset, ax, val="height", time=None, plotmap=True, title=title)
-
+    #ax = fig.add_subplot(1, 1, 1)
+    ax = plot_gen(dset, val="height", time=None, plotmap=True, title=title)
+    return ax
 
 def plot_radius(dset):
     """Plots ash effective radius from VOLCAT
     Does not save figure - quick image creation"""
-    fig = plt.figure("Ash_Effective_Radius")
+    #fig = plt.figure("Ash_Effective_Radius")
     title = "Ash effective radius ($\mu$m)"
-    ax = fig.add_subplot(1, 1, 1)
-    plot_gen(dset, ax, val="radius", time=None, plotmap=True, title=title)
+    #ax = fig.add_subplot(1, 1, 1)
+    ax = plot_gen(dset, val="radius", time=None, plotmap=True, title=title)
+    return ax
 
+def plot_mass(dset,central_logintude=0):
+    #fig = plt.figure("Ash_Mass_Loading")
+    #ax = fig.add_subplot(1, 1, 1)
+    ax = plot_gen(dset,  val="mass", time=None, plotmap=True, title="Ash_Mass_Loading",unit='g m$^{-2}$')
+    return ax
 
-def plot_mass(dset):
-    fig = plt.figure("Ash_Mass_Loading")
-    ax = fig.add_subplot(1, 1, 1)
-    plot_gen(dset, ax, val="mass", time=None, plotmap=True, title="Ash_Mass_Loading")
-
-
-def plot_gen(dset, ax, val="mass", time=None, plotmap=True, title=None):
+def plot_gen(dset, val="mass", time=None, plotmap=True, title=None, central_longitude=180,unit=None):
     """Plot ash mass loading from VOLCAT
     Does not save figure - quick image creation"""
     # lat=dset.latitude
     # lon=dset.longitude
     if val == "mass":
-        mass = get_mass(dset)
+        mass = volcat.get_mass(dset)
     elif val == "radius":
-        mass = get_radius(dset)
+        mass = volcat.get_radius(dset)
     elif val == "height":
-        mass = get_height(dset)
+        mass = volcat.get_height(dset)
     if time and "time" in mass.coords:
         mass = mass.sel(time=time)
     elif "time" in mass.coords:
@@ -121,13 +124,20 @@ def plot_gen(dset, ax, val="mass", time=None, plotmap=True, title=None):
     lat = mass.latitude
     lon = mass.longitude
     if plotmap:
-        m = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
-        m.add_feature(cfeat.LAND)
-        m.add_feature(cfeat.COASTLINE)
-        m.add_feature(cfeat.BORDERS)
-        plt.pcolormesh(lon, lat, mass, transform=ccrs.PlateCarree())
+        transform = ccrs.PlateCarree(central_longitude=central_longitude)
+        vtransform = ccrs.PlateCarree(central_longitude=0)
+        fig, axx = plt.subplots(1,1,subplot_kw={'projection':transform})
+        #m.add_feature(cfeat.LAND)
+        #m.add_feature(cfeat.COASTLINE)
+        #m.add_feature(cfeat.BORDERS)
+        cb = axx.pcolormesh(lon, lat, mass, transform=transform)
+        vtools.format_plot(axx,transform)
     else:
         plt.pcolormesh(lon, lat, mass)
-    plt.colorbar()
-    plt.title(title)
-    plt.show()
+    cb2 = plt.colorbar(cb)
+    if isinstance(unit,str): 
+       cb2.set_label(unit)
+    dstr = str(mass.time.values)
+    plt.title(title + ' ' + dstr[0:-8])
+    return axx
+    #plt.show()
