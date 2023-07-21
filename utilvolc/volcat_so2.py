@@ -99,6 +99,55 @@ class volcatSO2L3:
            pframe.to_csv(fname)
         return pframe
 
+# Bavand Sadeghi
+#BS Start code works
+    def sample_massaloc_and_write(self, nnn=100, fname=None):
+        pframe = self.pframe.copy()
+        pframe = pframe.sort_values(by=['lon','lat'])
+        nskp = int(np.ceil(len(pframe)/nnn))
+        pframe_massaloc = pframe.iloc[0::nskp,:].copy()
+#        pframe_massaloc['bavand'] = float('nan')
+#        pframe_massaloc['bavand'] = 1.5
+        pframe_massaloc = pframe_massaloc.reset_index(drop=True)
+
+
+#        if isinstance(fname,str):
+#            pframe_massaloc = pframe_massaloc.reset_index()
+#            pframe_massaloc = pframe_massaloc.drop(['index'],axis=1)
+#            pframe_massaloc.to_csv(fname)
+#BSEnd code works
+
+
+#            print('Salam Dobare!!!!!!')
+#            pframe_massaloc['bavand'] = 1.5
+#        print(pframe_massaloc)
+#        print('Salam Bavanddddd!!!!!!')
+        def calculate_sum_columns(row):
+            row_start = row.name * nskp
+            row_end = min(row_start + nskp, len(pframe))
+            print('**********************************')
+            row_indices = range(row_start, row_end)
+            print(row_start)
+            print(row_end)
+            print('**********************************')
+            sum_column = pframe.iloc[row_indices]['massI'].sum()
+            return sum_column
+#
+        pframe_massaloc['massIalloc'] = pframe_massaloc.apply(calculate_sum_columns, axis=1)
+#        print(pframe_massaloc)
+
+
+        if isinstance(fname,str):
+            pframe_massaloc = pframe_massaloc.reset_index()
+            pframe_massaloc = pframe_massaloc.drop(['index'],axis=1)
+            pframe_massaloc.to_csv(fname)
+        
+        print(pframe_massaloc)
+
+        return pframe_massaloc
+# Bavand end
+
+
     def points2frame(self):
         mass = self.mass.values.flatten()
         mass_interp = self.mass_interp.values.flatten()
