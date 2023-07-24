@@ -23,6 +23,7 @@ from ashapp.graphicsdispersion import GraphicsDispersion
 from ashapp.outputdispersion import OutputDispersion
 from ashapp.rundispersion import RunDispersion
 from ashapp.runtrajectory import RunTrajectory
+from ashapp.collecttraj import CollectTrajectory
 from ashapp.outputtrajectory import OutputTrajectory
 from ashapp.graphicstrajectory import GraphicsTrajectory
 from utilvolc.runhelper import complicated2str, is_input_complete
@@ -34,7 +35,19 @@ from utilvolc.runhelper import complicated2str, is_input_complete
 
 logger = logging.getLogger(__name__)
 
+"""
+These classes have interface MainRunInterface
+They all have a _modelrun, _modeloutput, _modelgraphics
+attribute which are different objects depending on the type of run.
+Thus all inherit from MainDispersion and only overwrite the __init__ method
+in order to instantiate the difference types of objects.
+They also all have their own ilist class attribute which gives information
+about what keys are expected to be found in the inp dictionary.
 
+the MainGEFSInverse inherits from MainInverse and overwrites the doit
+method in order to loop through all the GEFS members. 
+
+"""
 
 
 class MainDispersion(MainRunInterface):
@@ -391,6 +404,7 @@ class MainTrajectory(MainDispersion):
     # these are set in the main routines.
 
     def __init__(self, inp, JOBID):
+        from ashapp.trajectory_generators import generate_traj_from_config
         # 14 instance attributes
         self.JOBID = JOBID  # string
 
@@ -403,8 +417,13 @@ class MainTrajectory(MainDispersion):
 
         self.filelocator = None
         #self.maptexthash = {}
+        if self.inp['runflag'] == 'trajectory':
+            trajgenerator = generate_traj_from_config(inp)
+            self._modelrun = RunTrajectory(inp,trajgenerator)
+        elif self.inp['runflag'] == 'backtrajectoryfromobs':
+            self._modelrun = CollectTrajectory(inp,self.JOBID)
 
-        self._modelrun = RunTrajectory(inp)
+
         self._modeloutput = OutputTrajectory(inp, [])
         self._modelgraphics = GraphicsTrajectory(inp)
 
