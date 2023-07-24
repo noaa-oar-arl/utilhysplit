@@ -1,0 +1,426 @@
+12:47:05.260 INFO - CONFIG FILE config.btraj02kmASC.txt
+12:47:05.261 INFO - TESTING
+12:47:05.262 INFO - Creating run Instance
+12:47:05.268 INFO - Back Trajectory
+12:47:05.268 INFO - adding inputs
+12:47:05.268 WARNING - Did not recognize MET name merra2.
+12:47:05.268 WARNING - Using GFS
+12:47:05.269 WARNING - Did not recognize MET name merra2.
+12:47:05.269 WARNING - Using GFS
+12:47:05.269 WARNING - Did not recognize MET name merra2.
+12:47:05.269 WARNING - Using GFS
+12:47:05.270 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+12:47:05.270 WARNING - Using control CONTROL.default
+12:47:05.270 WARNING - Using setup SETUP.default
+12:47:05.270 INFO - Please wait for further information....
+12:47:05.270 INFO - Model submitted on 2023-07-24 12:47:05.270803
+GETTING FILENAME HERE
+12:47:05.282 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:05.284 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '0']
+12:47:06.287 INFO - number procs 1
+12:47:06.287 INFO - Status of 0 Running
+GETTING FILENAME HERE
+12:47:06.289 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:06.291 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '1']
+12:47:07.293 INFO - number procs 2
+12:47:07.293 INFO - Status of 0 Finished
+12:47:07.293 INFO - Status of 1 Finished
+GETTING FILENAME HERE
+12:47:07.295 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:07.298 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '2']
+12:47:08.300 INFO - number procs 1
+12:47:08.300 INFO - Status of 2 Running
+GETTING FILENAME HERE
+12:47:08.301 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:08.303 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '3']
+12:47:09.305 INFO - number procs 2
+12:47:09.305 INFO - Status of 2 Finished
+12:47:09.306 INFO - Status of 3 Finished
+GETTING FILENAME HERE
+12:47:09.307 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:09.309 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '4']
+12:47:10.311 INFO - number procs 1
+12:47:10.311 INFO - Status of 4 Finished
+GETTING FILENAME HERE
+12:47:10.313 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:10.315 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '5']
+12:47:11.316 INFO - number procs 1
+12:47:11.317 INFO - Status of 5 Finished
+GETTING FILENAME HERE
+12:47:11.318 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:11.320 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '6']
+12:47:12.322 INFO - number procs 1
+12:47:12.323 INFO - Status of 6 Finished
+GETTING FILENAME HERE
+12:47:12.324 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:12.326 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '7']
+12:47:13.328 INFO - number procs 1
+12:47:13.328 INFO - Status of 7 Finished
+GETTING FILENAME HERE
+12:47:13.330 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:13.344 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '8']
+12:47:14.346 INFO - number procs 1
+12:47:14.346 INFO - Status of 8 Finished
+GETTING FILENAME HERE
+12:47:14.348 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:14.350 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '9']
+12:47:15.352 INFO - number procs 1
+12:47:15.352 INFO - Status of 9 Finished
+GETTING FILENAME HERE
+12:47:15.354 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:15.356 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '10']
+12:47:16.357 INFO - number procs 1
+12:47:16.358 INFO - Status of 10 Finished
+GETTING FILENAME HERE
+12:47:16.359 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:16.361 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '11']
+12:47:17.363 INFO - number procs 1
+12:47:17.363 INFO - Status of 11 Finished
+GETTING FILENAME HERE
+12:47:17.365 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:17.367 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '12']
+12:47:18.369 INFO - number procs 1
+12:47:18.369 INFO - Status of 12 Finished
+GETTING FILENAME HERE
+12:47:18.371 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:18.394 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '13']
+12:47:19.397 INFO - number procs 1
+12:47:19.397 INFO - Status of 13 Finished
+GETTING FILENAME HERE
+12:47:19.399 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:19.401 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '14']
+12:47:20.403 INFO - number procs 1
+12:47:20.403 INFO - Status of 14 Finished
+GETTING FILENAME HERE
+12:47:20.405 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:20.407 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '15']
+12:47:21.409 INFO - number procs 1
+12:47:21.409 INFO - Status of 15 Finished
+GETTING FILENAME HERE
+12:47:21.410 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:21.412 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '16']
+12:47:22.414 INFO - number procs 1
+12:47:22.414 INFO - Status of 16 Finished
+GETTING FILENAME HERE
+12:47:22.416 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:22.418 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '17']
+12:47:23.420 INFO - number procs 1
+12:47:23.420 INFO - Status of 17 Finished
+GETTING FILENAME HERE
+12:47:23.422 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:23.424 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '18']
+12:47:24.425 INFO - number procs 1
+12:47:24.426 INFO - Status of 18 Finished
+GETTING FILENAME HERE
+12:47:24.428 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:24.430 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '19']
+12:47:25.432 INFO - number procs 1
+12:47:25.432 INFO - Status of 19 Finished
+GETTING FILENAME HERE
+12:47:25.434 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:25.437 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '20']
+12:47:26.439 INFO - number procs 1
+12:47:26.439 INFO - Status of 20 Finished
+GETTING FILENAME HERE
+12:47:26.440 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:26.443 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '21']
+12:47:27.445 INFO - number procs 1
+12:47:27.445 INFO - Status of 21 Finished
+GETTING FILENAME HERE
+12:47:27.447 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:27.449 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '22']
+12:47:28.452 INFO - number procs 1
+12:47:28.452 INFO - Status of 22 Finished
+GETTING FILENAME HERE
+12:47:28.454 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:28.456 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '23']
+12:47:29.458 INFO - number procs 1
+12:47:29.459 INFO - Status of 23 Finished
+GETTING FILENAME HERE
+12:47:29.460 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:29.462 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '24']
+12:47:30.464 INFO - number procs 1
+12:47:30.464 INFO - Status of 24 Finished
+GETTING FILENAME HERE
+12:47:30.466 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:30.468 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '25']
+12:47:31.470 INFO - number procs 1
+12:47:31.470 INFO - Status of 25 Finished
+GETTING FILENAME HERE
+12:47:31.472 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:31.474 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '26']
+12:47:32.476 INFO - number procs 1
+12:47:32.477 INFO - Status of 26 Finished
+GETTING FILENAME HERE
+12:47:32.478 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:32.481 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '27']
+12:47:33.483 INFO - number procs 1
+12:47:33.483 INFO - Status of 27 Finished
+GETTING FILENAME HERE
+12:47:33.485 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:33.487 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '28']
+12:47:34.489 INFO - number procs 1
+12:47:34.489 INFO - Status of 28 Finished
+GETTING FILENAME HERE
+12:47:34.491 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:34.493 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '29']
+12:47:35.495 INFO - number procs 1
+12:47:35.495 INFO - Status of 29 Finished
+GETTING FILENAME HERE
+12:47:35.497 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:35.499 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '30']
+12:47:36.501 INFO - number procs 1
+12:47:36.501 INFO - Status of 30 Finished
+GETTING FILENAME HERE
+12:47:36.503 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:36.505 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '31']
+12:47:37.507 INFO - number procs 1
+12:47:37.507 INFO - Status of 31 Finished
+GETTING FILENAME HERE
+12:47:37.509 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:37.511 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '32']
+12:47:38.513 INFO - number procs 1
+12:47:38.513 INFO - Status of 32 Finished
+GETTING FILENAME HERE
+12:47:38.515 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:38.536 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '33']
+12:47:39.537 INFO - number procs 1
+12:47:39.538 INFO - Status of 33 Finished
+GETTING FILENAME HERE
+12:47:39.539 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:39.541 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '34']
+12:47:40.543 INFO - number procs 1
+12:47:40.544 INFO - Status of 34 Finished
+GETTING FILENAME HERE
+12:47:40.545 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:40.548 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '35']
+12:47:41.550 INFO - number procs 1
+12:47:41.550 INFO - Status of 35 Finished
+GETTING FILENAME HERE
+12:47:41.551 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:41.554 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '36']
+12:47:42.556 INFO - number procs 1
+12:47:42.556 INFO - Status of 36 Finished
+GETTING FILENAME HERE
+12:47:42.558 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:42.560 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '37']
+12:47:43.562 INFO - number procs 1
+12:47:43.562 INFO - Status of 37 Finished
+GETTING FILENAME HERE
+12:47:43.564 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:43.566 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '38']
+12:47:44.568 INFO - number procs 1
+12:47:44.568 INFO - Status of 38 Finished
+GETTING FILENAME HERE
+12:47:44.570 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:44.572 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '39']
+12:47:45.574 INFO - number procs 1
+12:47:45.574 INFO - Status of 39 Finished
+GETTING FILENAME HERE
+12:47:45.576 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:45.579 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '40']
+12:47:46.580 INFO - number procs 1
+12:47:46.581 INFO - Status of 40 Finished
+GETTING FILENAME HERE
+12:47:46.582 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:46.585 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '41']
+12:47:47.587 INFO - number procs 1
+12:47:47.587 INFO - Status of 41 Finished
+GETTING FILENAME HERE
+12:47:47.588 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:47.593 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '42']
+12:47:48.595 INFO - number procs 1
+12:47:48.595 INFO - Status of 42 Finished
+GETTING FILENAME HERE
+12:47:48.597 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:48.599 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '43']
+12:47:49.601 INFO - number procs 1
+12:47:49.602 INFO - Status of 43 Finished
+GETTING FILENAME HERE
+12:47:49.603 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:49.606 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '44']
+12:47:50.608 INFO - number procs 1
+12:47:50.608 INFO - Status of 44 Finished
+GETTING FILENAME HERE
+12:47:50.610 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:50.612 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '45']
+12:47:51.614 INFO - number procs 1
+12:47:51.614 INFO - Status of 45 Finished
+GETTING FILENAME HERE
+12:47:51.616 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:51.618 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '46']
+12:47:52.620 INFO - number procs 1
+12:47:52.620 INFO - Status of 46 Running
+GETTING FILENAME HERE
+12:47:52.622 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:52.624 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '47']
+12:47:53.626 INFO - number procs 2
+12:47:53.626 INFO - Status of 46 Finished
+12:47:53.626 INFO - Status of 47 Running
+GETTING FILENAME HERE
+12:47:53.628 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:53.636 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '48']
+12:47:54.638 INFO - number procs 2
+12:47:54.638 INFO - Status of 47 Finished
+12:47:54.638 INFO - Status of 48 Running
+GETTING FILENAME HERE
+12:47:54.640 INFO - Looking in archive for met files
+/home/bavands/work-home/arl_mer2/merra2/MERRA2_%Y%m%d.ARL
+/hysplit-users/bavands/utilhysplit/ashapp/ SETUP.default
+dict_keys(['delt', 'initd', 'kblt', 'kdef', 'khmax', 'kmsl', 'maxpar', 'ncycl', 'ndump', 'numpar', 'ninit', 'area'])
+12:47:54.642 INFO - CALLSTRING['/hysplit-users/bavands/hysplit/exec/hyts_std', '49']
+12:47:55.644 INFO - number procs 2
+12:47:55.644 INFO - Status of 48 Finished
+12:47:55.644 INFO - Status of 49 Finished
+12:47:55.644 INFO - number procs 0
+WRITING csv file TRAJ_btraj02kmASC.csv
+12:48:26.076 INFO - Running in offline test mode
+12:48:26.076 INFO - Posted status COMPLETED for job btraj02kmASC

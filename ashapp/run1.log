@@ -1,0 +1,4 @@
+12:42:50.889 INFO - CONFIG FILE config.btraj02kmASC.txt
+12:42:50.889 INFO - TESTING
+12:42:50.889 WARNING - File cannot be opened ./config.btraj02kmASC.txt
+cannot find start_date dict_keys([])
