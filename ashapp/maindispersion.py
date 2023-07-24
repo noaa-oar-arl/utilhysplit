@@ -423,7 +423,7 @@ class MainTrajectory(MainDispersion):
         elif self.inp['runflag'] == 'backtrajectoryfromobs':
             self._modelrun = CollectTrajectory(inp,self.JOBID)
         else:
-            logger.warning('Unknown trajectory run type {}'.format(self.inp['runflag'])
+            logger.warning('Unknown trajectory run type {}'.format(self.inp['runflag']))
             logger.warning('Using regular trajectory run type ')
             trajgenerator = generate_traj_from_config(inp)
             self._modelrun = RunTrajectory(inp,trajgenerator)
