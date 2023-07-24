@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.colors import BoundaryNorm
-from utilhysplit.plotutils import vtools
 import utilhysplit.evaluation.web_ensemble_plots as wep
 
 from monetio.models import hysplit
@@ -55,7 +54,7 @@ def plotcdump(
        calculates mass loading for the given time period and plots."""
     figsize = [10, 10]
     transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
-    vtransform = cartopy.crs.PlateCarree(central_longitude=0)
+    #vtransform = cartopy.crs.PlateCarree(central_longitude=0)
     sns.set()
  
     # get the time period to plot for
@@ -100,6 +99,7 @@ def plotcdump(
         norm=norm,
         cmap=cmap,
         shading="nearest",
+        transform=transform 
     )
     plt.colorbar(cb2, ax=ax1, extend="max")
     # )
