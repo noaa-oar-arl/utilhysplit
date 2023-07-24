@@ -14,28 +14,31 @@ class EnsembleDispersion(ModelCollectionInterface):
            with a different  ModelRunInterface class.
     """
 
+    ilist = [
+        "meteorologicalData",
+        "forecastDirectory",
+        "archivesDirectory",
+        "WORK_DIR",
+        "HYSPLIT_DIR",
+        "jobname",
+        "durationOfSimulation",
+        "latitude",
+        "longitude",
+        "bottom",
+        "top",
+        "emissionHours",
+        "rate",
+        "area",
+        "start_date",
+        "samplingIntervalHours",
+        "jobid",
+    ]
+
+
+
+
     def __init__(self, inp, jobid):
         self.JOBID = jobid
-
-        self._ilist = [
-            "meteorologicalData",
-            "forecastDirectory",
-            "archivesDirectory",
-            "WORK_DIR",
-            "HYSPLIT_DIR",
-            "jobname",
-            "durationOfSimulation",
-            "latitude",
-            "longitude",
-            "bottom",
-            "top",
-            "emissionHours",
-            "rate",
-            "area",
-            "start_date",
-            "samplingIntervalHours",
-            "jobid",
-        ]
 
         self._inp = {}
         self.inp = inp
@@ -60,11 +63,9 @@ class EnsembleDispersion(ModelCollectionInterface):
     @inp.setter
     def inp(self, inp):
         self._inp.update(inp)
-        complete = True
-        for iii in self._ilist:
-            if iii not in self._inp.keys():
-                logger.warning("Input does not contain {}".format(iii))
-                complete = False
+
+        complete = is_input_complete(self.ilist,self._inp)
+
         if "jobid" in self._inp.keys():
             self.JOBID = self._inp["jobid"]
         if complete:
