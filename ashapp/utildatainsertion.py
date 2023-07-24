@@ -73,8 +73,8 @@ def find_di_file(wdir, daterange, ftype, rtype="fname"):
     if "file descriptor" not in edf.columns:
         return []
     edf = edf[edf["file descriptor"] == ftype]
-    edf = edf[edf["idate"] >= daterange[0]]
-    edf = edf[edf["idate"] <= daterange[1]]
+    edf = edf[edf["observation_date"] >= daterange[0]]
+    edf = edf[edf["observation_date"] <= daterange[1]]
     # elist = glob(os.path.join(wdir,'EMIT_*'))
     elist = edf["filename"].values
     if rtype == "fname":
@@ -122,17 +122,17 @@ def read_emittimes(emitfile):
     # print('ecycle', ecycle)
     # number of locations that need to be in CONTROL file.
     inp["nlocs"] = ecycle.nrecs
-
+    inp['ncycles'] = etf.ncycles
     # starting date of this cycle
     sdate = ecycle.sdate
     inp["start_date"] = sdate
     # duration of this cycle
     # cduration = ecycle.duration
-
+   
     # get first line locations
-    # erecord = ecycle.recordra[0]
-    # self.inp['latitude'] = erecord.lat
-    # self.inp['longitude'] = erecord.lon
+    erecord = ecycle.recordra[0]
+    inp['latitude'] = erecord.lat
+    inp['longitude'] = erecord.lon
 
     # set to 0 since these will be from emit-times
     inp["rate"] = 0
