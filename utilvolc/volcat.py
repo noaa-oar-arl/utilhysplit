@@ -727,7 +727,12 @@ def _get_time(dset):
     #temp3 = dset.attrs["time_coverage_end"]
     #if temp1 != temp2:
     #   logger.warning('Different times in volcat {} {}'.format(temp1,temp2,temp3)) 
-    time = datetime.datetime.strptime(temp2,"%Y-%m-%dT%H:%M:%SZ")
+    dstr = "%Y-%m-%dT%H:%M:%SZ"
+    # time string sometimes has seconds as a decimal which is not recognized by strptime. 
+    # Remove the decimal part.
+    iii = str.find(temp2,'.')
+    temp2 = temp2[0:iii] + 'Z'
+    time = datetime.datetime.strptime(temp2,dstr)
     dset["time"] = time
     dset = dset.set_coords(["time"])
     # expand_dims has been moved to the get_data function.
