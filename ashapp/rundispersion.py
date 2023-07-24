@@ -51,6 +51,30 @@ def make_chemrate(wdir):
 
 
 class RunDispersion(ModelRunInterface):
+    ilist = [
+        "meteorologicalData",
+        "forecastDirectory",
+        "archivesDirectory",
+        "WORK_DIR",
+        "HYSPLIT_DIR",
+        "jobname",
+        "durationOfSimulation",
+        "latitude",
+        "longitude",
+        "bottom",
+        "top",
+        "emissionHours",
+        "rate",
+        "area",
+        "start_date",
+        "samplingIntervalHours",
+        "jobid",
+        "source description",
+    ]
+
+
+
+
     def __init__(self, inp):
         """
         A volcanic ash run from inputs
@@ -60,26 +84,6 @@ class RunDispersion(ModelRunInterface):
 
         self.JOBID = "999"
         # list of keywords the inp dictionary should contain.
-        self._ilist = [
-            "meteorologicalData",
-            "forecastDirectory",
-            "archivesDirectory",
-            "WORK_DIR",
-            "HYSPLIT_DIR",
-            "jobname",
-            "durationOfSimulation",
-            "latitude",
-            "longitude",
-            "bottom",
-            "top",
-            "emissionHours",
-            "rate",
-            "area",
-            "start_date",
-            "samplingIntervalHours",
-            "jobid",
-            "source description",
-        ]
 
         self._inp = {}
         self.inp = inp
@@ -139,16 +143,14 @@ class RunDispersion(ModelRunInterface):
     @inp.setter
     def inp(self, inp):
         self._inp.update(inp)
-        complete = True
 
         if "source description" not in self._inp.keys():
             source = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
             self._inp["source description"] = source
 
-        for iii in self._ilist:
-            if iii not in self._inp.keys():
-                logger.warning("Input does not contain {}".format(iii))
-                complete = False
+        complete = is_input_complete(self._inp)
+            
+
 
         if "jobid" in self._inp.keys():
             self.JOBID = self._inp["jobid"]
@@ -156,6 +158,8 @@ class RunDispersion(ModelRunInterface):
         self.set_default_setup()
         if complete:
             logger.info("Input contains all fields")
+        else:
+            logger.warning('Input incomplete')
         # self._inp.update(inp)
 
     @property
