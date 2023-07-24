@@ -1,25 +1,16 @@
-import logging
-import json
-import pandas as pd
-import numpy as np
-import os
 import datetime
-import seaborn as sns
-import matplotlib.pyplot as plt
 import glob
-import time
-import monet
-import sys
+import json
+import logging
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
 from utilvolc.ashutil import fix_volc_name
-from utilvolc.runhelper import Helper
-from utilvolc.runhelper import list_dirs
-from utilvolc.runhelper import make_dir
-from utilvolc import volcat
-from utilhysplit.runhandler import ProcessList
-from utilhysplit.plotutils import map_util
-import utilhysplit.evaluation.web_ensemble_plots as wep
-from utilvolc import make_data_insertion as mdi
-from utilhysplit.evaluation import ensemble_tools
+from utilvolc.runhelper import Helper, list_dirs, make_dir
 
 logger = logging.getLogger(__name__)
 
@@ -36,17 +27,32 @@ logger = logging.getLogger(__name__)
    check_file
    delete_old
    determine_change
+   get_files
+   get_log
+   get_log_files
+   get_log_list
    get_nc
    get_summary_file_df 
+   make_volcdir
+   new_json
    num_files
    open_json
    open_dataframe
+   open_log
+
+   record_change
+   record_missing
+  
+TODO : not all these functions are currently used.
+
 """
 
 
+def write_summary_file(sumdf, oname):
+    sumdf.to_csv(oname)
 
 
-def get_summary_file_df(fdir, verbose=False, hours=48, edate = datetime.datetime.now()):
+def get_summary_file_df(fdir, verbose=False, hours=48, edate=datetime.datetime.now()):
     """
     fdir : str : location of summary files
     Returns
@@ -54,13 +60,15 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate = datetime.datetime
 
     prints an error if one of the files cannot be read
     """
-
+    sumdf = pd.DataFrame()
     # 2023 09 May (amc) use the time stamp in the filename rather than scandir
-    if not isinstance(edate,datetime.datetime):
-       raise Exception("input edate wrong type {}: should be \
-                        datetime.datetime".format(type(edate)))
-
-
+    if not isinstance(edate, datetime.datetime):
+        raise Exception(
+            "input edate wrong type {}: should be \
+                        datetime.datetime".format(
+                type(edate)
+            )
+        )
     vlist = []
     if not hours:
         logger.warning("get_summary_file_df input hours None, setting hours to 100")
@@ -68,29 +76,34 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate = datetime.datetime
     strf = "s%Y%j_%H"
     sdate = edate - datetime.timedelta(hours=hours)
     s_str = sdate.strftime(strf)
-    done=False
+    done = False
     flist = []
-    iii=0
+    iii = 0
+    if verbose:
+        print("looking for dates {} to {}".format(sdate, edate))
     while not done:
- 
-          flist.extend(glob.glob(fdir + '/*{}*.json'.format(s_str)))
-          sdate += datetime.timedelta(hours=1)
-          s_str = sdate.strftime(strf)
-          if sdate > edate:  done=True
-          iii+=1
-          if iii>10: done=True
+        if verbose:
+            print("Looking for {}".format(sdate))
+        if verbose:
+            print(len(glob.glob(fdir + "/*{}*.json".format(s_str))))
+        flist.extend(glob.glob(fdir + "/*{}*.json".format(s_str)))
+        sdate += datetime.timedelta(hours=1)
+        s_str = sdate.strftime(strf)
+        if sdate > edate:
+            done = True
+        iii += 1
+        if iii > 5000:
+            done = True
     for fln in flist:
-       try:
-           sfn = SummaryFile(fln, fdir)
-       except:
-           if verbose:
-             print("Not summary file", fln)
-             continue
-       try:
-           vlist.append(sfn.open_dataframe())
-       except Exception as eee:
-           print('ERROR READING', fln,  eee)
-    if len(vlist)>0:
+        sfn = SummaryFile(fln, fdir)
+        if sfn.exists:
+            new = sfn.open_dataframe()
+            vlist.append(new)
+        # try:
+        #    vlist.append(sfn.open_dataframe())
+        # except Exception as eee:
+        #    print('AN ERROR READING', fln,  eee)
+    if len(vlist) > 0:
         sumdf = pd.concat(vlist)
     return sumdf
 
@@ -99,15 +112,31 @@ class VFile:
     """
     Base class for the files
     """
+
     def __init__(self, fname, fdir="./"):
-        self.fname = fname
-        self.fdir = fdir
         self.dtfmt = "s%Y%j_%H%M%S"
-        self.vhash = {"FileName": fname}
-        #self.dii = -2
-        #self.djj = -1
-        temp = self.parse(fname)
-        self.exists = os.path.isfile(os.path.join(self.fdir, self.fname))
+        if not isinstance(fname, str) or not isinstance(fdir, str):
+            print(
+                "input should be string but is {} with value {}".format(
+                    fname, type(fname)
+                )
+            )
+            print(
+                "input should be string but is {} with value {}".format(
+                    fdir, type(fdir)
+                )
+            )
+            self.exists = False
+            self.vhash = {}
+            self.fname = "unknown"
+            self.fdir = "unknown"
+            temp = []
+        else:
+            self.fname = fname
+            self.fdir = fdir
+            self.exists = os.path.isfile(os.path.join(self.fdir, self.fname))
+            self.vhash = {"FileName": fname}
+            temp = self.parse(fname)
 
     def parse(self, fname):
         """
@@ -115,22 +144,35 @@ class VFile:
         """
         fname = fname.replace("Full_Disk", "FullDisk")
         fname = fname.replace("FULL_DISK", "FullDisk")
+        fname = fname.replace(self.fdir, "")
         temp = fname.split("_")
         dstr = "{}_{}".format(temp[self.dii], temp[self.djj].replace(".json", ""))
         try:
             self.date = datetime.datetime.strptime(dstr, self.dtfmt)
-        except:
-            print("date not in correct format {} {}".format(dstr, fname))
-            print(temp)
+        except ValueError as eee:
+            logger.warning(eee)
             self.date = datetime.datetime.now()
         self.vhash["date"] = self.date
         return temp
+
+
+class SummaryFileName:
+    def __init__(self, fname):
+        if "FULL_DISK" in fname:
+            fname.replace("FULL_DISK", "FULLDISK")
+            fname.replace(".json", "")
+        plist = fname.split("_")
+        datefmt = "s%Y%j_%H%M%S"
+        self.satelliteid = plist[1]
+        self.coverage = plist[2]
+        self.date = datetime.datetime.strptime(plist[3] + "_" + plist[4], datefmt)
 
 
 class SummaryFile(VFile):
     """
     Volcat summary files
     """
+
     def __init__(self, fname, fdir="./"):
         self.dii = -2
         self.djj = -1
@@ -194,16 +236,17 @@ class SummaryFile(VFile):
         columns = data.columns
         newc = [x.lower() for x in columns]
         data.columns = newc
-
         return data
 
     def add_file_name_atts(self):
         aaa = {"summary date": self.date}
         aaa["summary file"] = self.fname
-        aaa["satellite"] = self.sat
+        aaa["sensor_name"] = self.sat
         return aaa
 
     def add_event_file_info(self, ename):
+        # only need information from the event file name.
+        # the file does not need to exists
         efile = EventFile(ename)
         ehash = {}
         ehash["event date"] = efile.date
@@ -217,6 +260,7 @@ class SummaryFile(VFile):
         Parses information from filename
         """
         temp = super().parse(fname)
+
         self.sat = temp[1]
 
     def open(self):
@@ -227,7 +271,7 @@ class SummaryFile(VFile):
 
 class EventFile(VFile):
     """
-    Volcat event files. These are json files which are pulled from ftp 
+    Volcat event files. These are json files which are pulled from ftp
     and contain information about the data files. data file classes are in volcat.py
 
     methods
@@ -275,9 +319,12 @@ class EventFile(VFile):
         Parses information from filename
         """
         temp = super().parse(fname)
+        if not temp:
+            return False
         self.vid = temp[5]
         self.instrument = temp[1]
         self.gid = temp[-1].replace(".json", "")
+        return True
 
     def open(self):
         fname = os.path.join(self.fdir, self.fname)
@@ -288,12 +335,12 @@ class EventFile(VFile):
 
         # some files have 'files' and some have 'FILES'
         keys = jsonf.keys()
-        fstr = [x for x in keys if 'files' in x.lower()]
+        fstr = [x for x in keys if "files" in x.lower()]
         if fstr:
-           fdict = jsonf[fstr[0]]
+            fdict = jsonf[fstr[0]]
         else:
-           logger.warning('correct key FILES or files  not found.')
-           return False
+            logger.warning("correct key FILES or files  not found.")
+            return False
 
         if isinstance(fdict, dict):
             fdict = [fdict]
@@ -302,16 +349,17 @@ class EventFile(VFile):
         # make all the columns lower case
         newc = [x.lower() for x in df.columns]
         df.columns = newc
-        if 'observation_time' not in df.columns:
-           logger.warning('observation_time not found')
-           return False
+        if "observation_time" not in df.columns:
+            logger.warning("observation_time not found")
+            return False
 
         # format of the data is different in different files.
         dtfmt = "%Y-%m-%dT%H:%M:%SZ"
         dtfmt2 = "%Y-%m-%dT%H:%M:%S.0Z"
-        ttest = df['observation_time'].values[0]
-        if ttest[-3:] == '.0Z': dtfmt = dtfmt2
- 
+        ttest = df["observation_time"].values[0]
+        if ttest[-3:] == ".0Z":
+            dtfmt = dtfmt2
+
         dftemp2 = df.apply(
             lambda row: datetime.datetime.strptime(row["observation_time"], dtfmt),
             axis=1,
@@ -335,12 +383,12 @@ class EventFile(VFile):
         ax.set_ylabel("feature id")
 
 
-def get_log_files(sumdf, verbose=False, inp={"VOLCAT_LOGFILES": "./"},**kwargs):
+def get_log_files(sumdf, verbose=False, inp={"VOLCAT_LOGFILES": "./"}, **kwargs):
     """
     INPUTS
-    sumdf  : pandas DataFrame : 
+    sumdf  : pandas DataFrame :
     verbose : boolean
-    inp    : dictionary. VOLCAT_LOGFILES 
+    inp    : dictionary. VOLCAT_LOGFILES
     kwargs : dictionary where key is a column name and value is list of values to keep for that column.
 
     Return:
@@ -357,32 +405,31 @@ def get_log_files(sumdf, verbose=False, inp={"VOLCAT_LOGFILES": "./"},**kwargs):
             else:
                 df2 = df2[df2[kwargkey] == kwargs[kwargkey]]
     eurl = df2["log_url"].unique()
-    if 'VOLCAT_LOGFILES' not in inp.keys():
-        logger.warning('directory for volcat logfiles not inpt')
-    for iii, logfile in enumerate(eurl):
+    if "VOLCAT_LOGFILES" not in inp.keys():
+        logger.warning("directory for volcat logfiles not inpt")
+    for logfile in eurl:
         rv = get_log(logfile, verbose=verbose, VOLCAT_LOGFILES=inp["VOLCAT_LOGFILES"])
-        #if iii>10: break
         rval.extend(rv)
     failed = []
     succeeded = []
     for rv in rval:
-        temp = df2[df2['log_url']==logfile]
-        vname = temp['volcano_name'].unique()
+        temp = df2[df2["log_url"] == logfile]
+        vname = temp["volcano_name"].unique()
         if not rv[1]:
-           failed.append((logfile, vname))
+            failed.append((logfile, vname))
         else:
-           succeeded.append((logfile, vname))
+            succeeded.append((logfile, vname))
     for fail in failed:
-        print('FAILED\n')
-        print('   {} {}'.format(fail[0], fail[1]))
+        print("FAILED\n")
+        print("   {} {}".format(fail[0], fail[1]))
     else:
         if verbose:
-           print('\nSUCCEEDED\n')
-           for success in succeeded:
-              print('   {} {}'.format(success[0], success[1]))
-    temp = pd.DataFrame.from_records(rval,columns=['log','status'])
-    df2 = pd.merge(df2,temp,on='log')
-    #return temp
+            print("\nSUCCEEDED\n")
+            for success in succeeded:
+                print("   {} {}".format(success[0], success[1]))
+    temp = pd.DataFrame.from_records(rval, columns=["log", "status"])
+    df2 = pd.merge(df2, temp, on="log")
+    # return temp
     return df2
 
 
@@ -439,7 +486,6 @@ def get_files(inp={"JPSS_DIR": "/pub/jpsss_upload"}, vaac=None, verbose=False):
     if np.all(status):
         added = new_json(jdir, logdir)
         added = sorted(added)
-        i = 0
         for afiles in added:
             # while i < len(added):
             data = open_dataframe(os.path.join(jdir, afiles), varname="VOLCANOES")
@@ -473,7 +519,7 @@ def get_files(inp={"JPSS_DIR": "/pub/jpsss_upload"}, vaac=None, verbose=False):
             if verbose:
                 print(logdir + log)
             num_downloaded = get_nc(
-                logdir + log, vaac=vaac, mkdir=True, verbose=verbose, VOLCAT_DIR=ddir
+                logdir + log, vaac=vaac,  verbose=verbose, VOLCAT_DIR=ddir
             )
         # TO DO:
         # Could create a function that moves already downloaded netcdf files to new location
@@ -541,11 +587,9 @@ def delete_old(directory, days=7, verbose=False):
     Outputs:
     string: number of files deleted from directory and total size of files (string)
     """
-    import time
-    import shutil
 
     # import
-    now = time.time()  # current time
+    now = datetime.datetime.now()  # current time
     deletetime = now - (days * 86400)  # delete time
     deletefiles = []  # creating list of files to delete
     for files in os.listdir(directory):
@@ -633,11 +677,11 @@ def get_log(log_url, verbose=False, **kwargs):
         # wget -P: designates location for file download
         os.system("wget -N -P " + log_dir + " " + gurl)
         if os.path.isfile(os.path.join(log_dir, fname)):
-            #logger.info("File {} downloaded to {}".format(gurl, log_dir))
-            rval.append((fname,True))
+            # logger.info("File {} downloaded to {}".format(gurl, log_dir))
+            rval.append((fname, True))
         else:
             logger.warning("FAILED to download File {} ".format(gurl, log_dir))
-            rval.append((fname,False))
+            rval.append((fname, False))
         # if verbose:
         #    logger.info("File {} downloaded to {}".format(gurl, log_dir))
         #    print("File {} downloaded to {}".format(gurl, log_dir))
@@ -652,7 +696,6 @@ def open_log(logdir, logfile=None):
     Outputs:
     original: list of files already downloaded to our server (list)
     """
-    import json
 
     if os.path.isfile(os.path.join(logdir, logfile)):
         with open(os.path.join(logdir, logfile), "r") as f:
@@ -789,7 +832,6 @@ def record_missing(mlist, mdir, mfile="missing_files.txt", verbose=False):
     return None
 
 
-
 def make_volcdir(data_dir, fname, verbose=False):
     """Finds volcano name from json event log file.
     If name has ',' or spaces, the name is modified.
@@ -802,12 +844,12 @@ def make_volcdir(data_dir, fname, verbose=False):
     volcname: string
     New directory is created if it didn't exist
     """
-    volcname = fix_volc_name(volc)
+    volcname = fix_volc_name(fname)
     make_dir(data_dir, newdir=volcname, verbose=verbose)
     return volcname
 
 
-def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
+def get_nc(fname, vaac=None,  verbose=False, **kwargs):
     """
     Finds and downloads netcdf files in json event log files from ftp.
     Netcdf event files are download to specified location
@@ -817,8 +859,6 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
             filename of json event log file
     vaac : string
            vaac region for file downloads Default: None, all files are downloaded
-    mkdir: boolean
-           make directory of volcano name, download files to that directory
     verbose: boolean
     kwargs : dictionary
              'VOLCAT_DIR' : string : netcdf files will be downloaded to subfolder
@@ -833,7 +873,6 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
         data_dir = kwargs["VOLCAT_DIR"]
     else:
         data_dir = "/pub/ECMWF/JPSS/VOLCAT/Files/"
-
 
     volcname = fix_volc_name(open_dataframe(fname)["volcano_name"].values[0])
     make_dir(data_dir, newdir=volcname, verbose=verbose)
@@ -851,7 +890,7 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
     missing = []
     # Checking for type - if only one file in json event log, then event_url will be string
     # Need a list type
-    if type(dfile_list) == str:
+    if isinstance(dfile_list,str):
         dfile_list = [dfile_list]
     i = 0
     while i < len(dfile_list):
@@ -890,6 +929,7 @@ def get_nc(fname, vaac=None, mkdir=True, verbose=False, **kwargs):
         print("File downloads complete. {} files downloaded".format(num_downloaded))
     return num_downloaded
 
+
 def num_files(data_dir, verbose=False):
     """Lists the subdirectories within the given directory
     and the number of files within the subdirectories.
@@ -913,7 +953,6 @@ def num_files(data_dir, verbose=False):
     4   Aira           104
 
     """
-    import pandas as pd
 
     vdirlist = list_dirs(data_dir)
     volcname = []
@@ -929,8 +968,3 @@ def num_files(data_dir, verbose=False):
     numdf = pd.DataFrame(numfiles, columns=["Num Files"])
     dirs_num = pd.concat([vdf, numdf], axis=1)
     return dirs_num
-
-
-
-
-
