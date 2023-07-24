@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 def draw_map(fignum, ax = None, fs=20):
-    proj = ccrs.PlateCarree()
+    proj = ccrs.PlateCarree(central_longitude=180)
     if not ax:
         fig = plt.figure(fignum, figsize=(16,9))
         ax = fig.add_subplot(1,1,1)

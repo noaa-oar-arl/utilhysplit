@@ -165,11 +165,14 @@ def preprocess(indra, enslist=None, sourcelist=None):
 
 
 def ATLra(
-    indra, enslist, sourcelist, threshlist, norm=True, weights=None, include_zero=False
-):
+    indra, enslist, sourcelist, threshlist, norm=True, weights=None, include_zero=False,
+    **kwargs):
 
     # ------------------------------------------------
     # making frequency of exceedances
+    kwargkeys = list(kwargs.keys())
+    kwargkeys = [x.lower() for x in kwargkeys]
+
     atl_list = []
     for thresh in threshlist:
         temp = ATL(indra, enslist, sourcelist, thresh, norm, weights, include_zero)
@@ -201,13 +204,15 @@ def ATLra(
     dhash["Concentration"] = apl
     dset = xr.Dataset(data_vars=dhash)
 
-    nhash = {}
-    nhash["Model"] = "HYSPLIT"
-    nhash["Meteorological model"] = "GFS"
-    nhash["VAAC"] = "TEST"
-    nhash["Volcano"] = "Popocetepetl"
+    #nhash = {}
+    #for key in ['vaac','volcano name','meteorological model', 'model']:
+    #    if key in kwargkeys:
+    #       nhash[key] = kwargs[key]
+    #    else:
+    #       nhash[key] = 'unknown'
 
-    dset.attrs.update(nhash)
+
+    dset.attrs.update(kwargs)
 
     return dset
 
