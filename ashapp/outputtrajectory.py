@@ -28,7 +28,7 @@ utils.setup_logger()
 class OutputTrajectory(ModelOutputInterface):
 
     #ilist = [('starte_date','req')]
-    ilist = []
+    ilist = ['jobid']
 
     def __init__(self, inp, filelist):
         """
@@ -38,7 +38,6 @@ class OutputTrajectory(ModelOutputInterface):
         self.inp = inp
         self._inputlist = filelist
         self._outputlist = self.set_outputlist()
-
 
     @property
     def inputlist(self):
@@ -54,8 +53,7 @@ class OutputTrajectory(ModelOutputInterface):
         return self._outputlist
 
     def set_outputlist(self):
-        outputlist = []
-        #outputlist.append(self.cdumpxraname())
+        outputlist = [self.what_is_outputfilename()]
         return outputlist
 
     def postprocess(self):
@@ -67,10 +65,10 @@ class OutputTrajectory(ModelOutputInterface):
             pass 
         # trajectory  dataframe
         tdf =  hytraj.combine_dataset(flist,taglist)
-        tdf.to_csv(self.tdumpcsvfilename())
+        tdf.to_csv(self.what_is_outputfilename())
         return tdf
 
-    def tdumpcsvfilename(self):
+    def what_is_outputfilename(self):
         return "tdump.{}.csv".format(self.JOBID)
 
     def check(self):

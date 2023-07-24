@@ -133,11 +133,12 @@ def create_run_instance(jid, runinp):
             crun = MainInverse(runinp, jid)
         logger.info("Inversion")
 
-    elif runinp["runflag"] == "trajectory":
+    elif 'trajectory' in runinp["runflag"]:
         from maindispersion import MainTrajectory
 
         crun = MainTrajectory(runinp, jid)
         logger.info("Trajectory Run")
+
     #    if runinp["meteorologicalData"].lower() == "gefs":
     #        from enstrajectory import EnsTrajectoryRun
     #        crun = EnsTrajectoryRun(jid)

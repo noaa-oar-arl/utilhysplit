@@ -209,6 +209,8 @@ class ModelRunInterface(ABC):
 
 class ModelOutputInterface(ABC):
 
+
+
     @abstractmethod
     def postprocess(self):
         """
@@ -225,7 +227,7 @@ class ModelOutputInterface(ABC):
 
     @property
     @abstractmethod
-    def inputlist(self):
+    def inputlist(self,inlist:list):
       """
       list input files
       """
@@ -233,7 +235,7 @@ class ModelOutputInterface(ABC):
 
     @property
     @abstractmethod
-    def outputlist(self):
+    def outputlist(self)->list:
       """
       list of output files
       """

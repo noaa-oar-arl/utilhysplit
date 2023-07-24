@@ -29,7 +29,18 @@ utils.setup_logger()
 
 class OutputDispersion(ModelOutputInterface):
 
+    ilist = [('fraction_of_fine_ash','req'),
+             ('eflag','req'),
+             ('Use_Mastin_eq','req'),  # whether to use mastin eq. to calculate mer.
+             ('start_date','req') 
+            ]
+
+
     def __init__(self, inp, filelist):
+        """
+        filelist: list of tuples (cdumpname, metfile, sourceid)
+        """
+
 
         self.JOBID = inp["jobid"]
         self.inp = inp
@@ -86,12 +97,12 @@ class OutputDispersion(ModelOutputInterface):
             # source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
             # met_tag = self.inp["meteorologicalData"]
             # blist = [(cdumpname, source_tag, met_tag)]
-            print(blist)
             century = 100 * (int(self.inp["start_date"].year / 100))
             species = None
-            ainp = self.inp
+            ainp = self.inp.copy()
             ainp["mult"] = 1
-            print(type(ainp["generatingPostscript"]))
+            # print(type(ainp["generatingPostscript"]))
+            # ainp goes into the attributes for the netcdf file.
             self._ncfile.make_cdump_xra(blist, century, species=species, inp=ainp)
         mult = self.get_conc_multiplier()
         change = self._ncfile.changemult(mult)
@@ -116,21 +127,22 @@ class OutputDispersion(ModelOutputInterface):
 #            )
 #            return []
 
+    # TODO modify this.
     def make_awips_netcdf(self):
         #import cdump2netcdf
         # TODO update this!
-        ghash = {}
-        ghash["source_latitude"] = self.inp["latitude"]
-        ghash["source_longitude"] = self.inp["longitude"]
-        ghash["source_name"] = self.inp["VolcanoName"]
-        ghash["emission_start"] = self.inp["start_date"]
-        ghash["emission_duration_hours"] = self.inp["emissionHours"]
+        #ghash = {}
+        #ghash["source_latitude"] =  self.inp["latitude"]
+        #ghash["source_longitude"] = self.inp["longitude"]
+        #ghash["source_name"] =      self.inp["VolcanoName"]
+        #ghash["emission_start"] =   self.inp["start_date"]
+        #ghash["emission_duration_hours"] = self.inp["emissionHours"]
         # in mg
-        mult = self.get_conc_multiplier()
-        mer = mult / 1e6 / 3600  # kg released in a second.
-        ghash["MER"] = mer
-        ghash["MER_unit"] = "kg/s"
-        logger.debug("MULT value for awips {:3e}".format(mult))
+        #mult = self.get_conc_multiplier(self.inp['top'],self.inp['bottom'])
+        #mer = mult / 1e6 / 3600  # kg released in a second.
+        #ghash["MER"] = mer
+        #ghash["MER_unit"] = "kg/s"
+        #logger.debug("MULT value for awips {:3e}".format(mult))
         #awipsname = self.filelocator.get_awips_filename(stage=0)
         #c2n = cdump2netcdf.Cdump2Awips(
         #    self._cxra, awipsname, munit="mg", jobid=self.JOBID, globalhash=ghash
@@ -145,13 +157,21 @@ class OutputDispersion(ModelOutputInterface):
         factor to convert concentration in unit mass /m3 to mg/m3.
         Model must have been run with 1 unit mass/h released.
         """
-        height = (self.inp["top"] - self.inp["bottom"]) / 1000.0
-        # HT2unit outputs in grams. Then multiply by 1e3 to get mg
-        conc_multiplier = 1e3 * HT2unit(height) * self.get_ash_reduction()
+        if self.inp['Use_Mastin_eq']:
+            height = (self.inp['top'] - self.inp['bottom']) / 1000.0
+            # HT2unit outputs in grams. Then multiply by 1e3 to get mg
+            conc_multiplier = 1e3 * HT2unit(height) * self.get_ash_reduction()
+        else:
+            conc_multiplier = self.get_ash_reduction()
         return conc_multiplier
 
     def get_ash_reduction(self):
+        """
+        """
         eflag = float(self.inp["eflag"])
-        M63 = 0.01  # fraction of  fine ash
-        conc_multiplier = 10 ** (-1 * eflag)
+        M63 = self.inp['fraction_of_fine_ash']  # fraction of  fine ash
+        # 07/01/2023 decided to chang eflag use.
+        # it was done this way to mimic the ash reduction VAAC currently use.
+        #conc_multiplier = 10 ** (-1 * eflag)
+        conc_multiplier = eflag * M63
         return M63 * conc_multiplier

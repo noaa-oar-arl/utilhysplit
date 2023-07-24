@@ -128,11 +128,23 @@ class CollectEmitTimes(ModelCollectionInterface):
         processhandler.pipe_stderr()
         # suffix = gefs_suffix_list()
         for iii, command in enumerate(command_list):
-            logger.info("Runnning {} with job id{}".format("hycs_std", command[1]))
+            logger.info("Running {} with job id {}".format("hycs_std", command[1]))
             processhandler.startnew(command, self.inp["WORK_DIR"], descrip=str(iii))
             # wait 5 seconds to avoid runs trying to access ASCDATA.CFG files at the
             # same time.
             time.sleep(5)
+            num_proces = processhandler.checkprocs()
+            total_time = 0
+            logger.info('Number of processes running {}'.format(num_proces))
+            while num_proces >= 10:
+                  num_proces = processhandler.checkprocs()
+                  max_time = 10 * 60
+                  seconds_to_wait = 10
+                  total_time += seconds_to_wait
+                  time.sleep(seconds_to_wait)
+                  if total_time > max_time: 
+                     logger.info('max time reached')
+                     break
         # wait for runs to finish
         done = False
         seconds_to_wait = 30
