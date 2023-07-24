@@ -83,7 +83,8 @@ class CollectTrajectory(ModelCollectionInterface):
             inp['jobid'] = '{}.{}'.format(self.JOBID, iii)
             run = RunTrajectory(inp,trajgen)
             command = run.run_model(overwrite=False)
-            command_list.append(command) 
+            if isinstance(command,str): command_list.append(command) 
+            self._filelist.extend(run.filelist)
             iii += 1
         return command_list
 

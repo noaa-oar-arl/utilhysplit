@@ -3,7 +3,7 @@ import pandas as pd
 
 """
 Used as input into RunTrajectory class.
-the trajectory generators output a dictionary
+the trajectory generators output a dictionary with height, latitude, longitude.
 """
 
 
@@ -18,7 +18,6 @@ def generate_traj_from_config(inp):
         outp['height'] = hgt
         outp['latitude'] = lat
         outp['longitude'] = lon
-        outp['start_date'] = inp['start_date']
         yield outp
 
 def generate_traj_from_df(df):
@@ -30,12 +29,14 @@ def generate_traj_from_df(df):
         outp["height"] = row.height * 1000
         outp["latitude"] = row.lat
         outp["longitude"] = row.lon
-        outp['start_date'] = row.time
         yield outp 
 
 def generate_traj_from_obsdf(csvname):
     """
     generate back trajectories from a csv file.
+  
+    RETURNS
+    tuple (time, generate_traj_from_df function)
     """
     obsdf = pd.read_csv(csvname, parse_dates=["time"])
     #return obsdf

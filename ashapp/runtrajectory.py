@@ -30,6 +30,11 @@ from ashapp.ashruninterface import ModelRunInterface
 logger = logging.getLogger(__name__)
 
 
+def round_start_time(stime, mround=5):
+    # round to nearest 5 minute
+    minutes = int(stime.minute - stime.minute%mround)
+    newtime = datetime.datetime(stime.year, stime.month, stime.hour, minutes)
+    return newtime
 
 class RunTrajectory(ModelRunInterface):
     ilist = [
@@ -48,7 +53,7 @@ class RunTrajectory(ModelRunInterface):
     ]
 
 
-    def __init__(self, inp):
+    def __init__(self, inp, trajgenerator):
         """
         A trajectory run from inputs.
         inp['height'] may be a list of heights or a single height in meters.
@@ -88,6 +93,7 @@ class RunTrajectory(ModelRunInterface):
         self._filehash = {}
         self._filelist = []
         self.filelocator = inp
+        self.trajgenerator = trajgenerator
 
     @staticmethod
     def help():
@@ -250,8 +256,8 @@ class RunTrajectory(ModelRunInterface):
 
     def run_model(self, overwrite=False):
         # make control and setup files
-        tdump = self.compose_control(rtype="dispersion")
         self.compose_setup()
+        tdump = self.compose_control(rtype="dispersion")
         # start run and wait for it to finish..
         run = False
         command = None
@@ -271,12 +277,13 @@ class RunTrajectory(ModelRunInterface):
             fname=self.default_setup, working_directory=self.inp["DATA_DIR"]
         )
         setup.read(case_sensitive=False)
-
+       
         setup.rename(
             name=self.filehash["setup"], working_directory=self.inp["WORK_DIR"]
         )
         keys = list(setup.nlist.keys())
         return setup
+
 
     def _setup_basic_control(self, rtype="trajectory"):
         """
@@ -284,7 +291,14 @@ class RunTrajectory(ModelRunInterface):
         used for both dispersion and trajectory runs.
         """
         duration = self.inp["durationOfSimulation"]
-        stime = self.inp["start_date"]
+
+        # if time step set then need to make sure start time is compatible
+        if 'delt' in self._setup.keys:
+           rtime = self._setup.nlist['delt']
+           stime = round_start_time(self.inp["start_date"])
+        else:
+           stime = self.inp["start_date"]
+        print('STIME', stime)
         metfiles = self.metfilefinder.find(stime, duration)
         self._control = hcontrol.HycsControl(
             fname=self.default_control,
@@ -306,28 +320,12 @@ class RunTrajectory(ModelRunInterface):
             logger.warning("TERMINATED. missing met files")
             self._status = "FAILED. missing meteorological files"
             self._history.append(self._status)
-            # self.update_run_status(self.JOBID, "TERMINATED. missing met files")
-        # add duration of simulation
         self._control.add_duration(duration)
         return self._control
 
     def _additional_control_setup(self):
-        # for dispersion control file
-        # if setting levels here then need to use the set_levels
-        # function and also adjust the labeling for the levels.
-
-        # round to nearest latitude longitude point.
-        # this is for better matching with gridded volcat data.
-        lat = self.inp["latitude"]
-        lon = self.inp["longitude"]
-        height = self.inp["height"]
-        if not isinstance(height,(list,np.ndarray)):
-           height = [height]
-        # assume that area is the diameter in km if it is smaller
-        # than 1000. 250000 = (0.5*1000)^2
-        # convert to square meters here.
         self._control.remove_locations()
-        [self._control.add_location((lat, lon), x) for x in height]
+        [self._control.add_location((x['latitude'], x['longitude']), x['height']) for x in self.trajgenerator]
         self._control.outdir = self.inp['WORK_DIR']
         self._control.outfile = self.filelocator.get_tdump_filename(0)
 
