@@ -54,9 +54,13 @@ def sphu2relh(sphu, temp, pres ):
     #Pws = Pc * np.exp(M)
     return sphu*(pres) / (0.622*esat)
 
-def sat_vap_density(t, type=1):
+def sat_vap_density(t, stype=1):
     """calculates saturation vapour pressure used to convert sphu to relh"""
-    esat = np.exp(21.4-5351.0/t)
+    if stype==1: #HYSPLIT
+        esat = np.exp(21.4-5351.0/t)
+    elif stype==2:
+        t = t-273.15
+        esat = 610.94 * np.exp(17.625*t/(t+243.04))
     return esat
 
 def relh2sphu(relh, temp, pres):
