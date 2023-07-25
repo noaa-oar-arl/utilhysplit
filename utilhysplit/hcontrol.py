@@ -262,6 +262,8 @@ class ConcGrid:
         )
         if pnotes:
             note = "  #Directory to write concentration output file"
+      
+        if self.outdir[-1]!='/': self.outdir += '/'
         returnstr += self.outdir + note + "\n"
         if pnotes:
             note = "  #Filename for trajectory output"
@@ -645,6 +647,7 @@ class NameList:
         self.nlist = {}  # dictionary of lines in the file.
         self.descrip = {}
         self._load_descrip()
+        self.order = None
         if working_directory[-1] != "/":
             working_directory += "/"
         self.wdir = working_directory
@@ -762,6 +765,24 @@ class NameList:
                 self.nlist[key] = temp[1].strip(",").strip()
         return True 
 
+    def __str__(self):
+        order = self.order
+        rstr = ''
+        if order is None:
+           order = list(self.nlist.keys())
+        for key in order:
+            kstr = True
+            try:
+                rstr += key.lower() + "=" + self.nlist[key] + ",\n"
+            except BaseException:
+                print(
+                    "WARNING: " + str(key) + " " + str(self.nlist[key]) + " not str"
+                )
+                kstr = False
+            if not kstr:
+                rstr += str(key) + "=" + str(self.nlist[key]) + ",\n"
+        return rstr
+
     def write(self, order=None, gem=False, verbose=False, overwrite=True, query=False):
         """
           order : list
@@ -778,7 +799,9 @@ class NameList:
             return rval
 
         if order is None:
-           order = list(self.nlist.keys())
+           self.order = list(self.nlist.keys())
+        else:
+           self.order = order
           #  order = []
         if verbose:
             print("WRITING SETUP FILE", self.wdir + self.fname)
@@ -789,23 +812,27 @@ class NameList:
                 fid.write("&SETUP \n")
             #if order == []:
             #    order = list(self.nlist.keys())
-            for key in order:
-                kstr = True
-                try:
-                    fid.write(key.lower() + "=" + self.nlist[key] + ",\n")
-                except BaseException:
-                    print(
-                        "WARNING: " + str(key) + " " + str(self.nlist[key]) + " not str"
-                    )
-                    kstr = False
-                if not kstr:
-                    fid.write(str(key) + "=" + str(self.nlist[key]) + ",\n")
+            rstr = str(self)
+            fid.write(rstr)
+            #for key in order:
+            #    kstr = True
+            #    try:
+            #        fid.write(key.lower() + "=" + self.nlist[key] + ",\n")
+            #    except BaseException:
+            #        print(
+            #            "WARNING: " + str(key) + " " + str(self.nlist[key]) + " not str"
+            #        )
+            #        kstr = False
+            #    if not kstr:
+            #        fid.write(str(key) + "=" + str(self.nlist[key]) + ",\n")
             fid.write("/ \n")
         return rval
 
 
 class ControlLoc:
-    """Release location in HYSPLIT CONTROL file"""
+    """
+    Release location in HYSPLIT CONTROL file
+    """
 
     total = 0
 
@@ -909,7 +936,6 @@ class HycsControl:
         vertical_motion : int
         ztop : int
     """
-
     def __init__(self, fname="CONTROL", working_directory="./", rtype="dispersion"):
         self.fname = fname
         if working_directory[-1] != "/":
@@ -965,13 +991,12 @@ class HycsControl:
     def copy(self):
         return -1
 
-
     def add_dummy_location(self):
         newloc = self.locs[0].copy()
         self.locs.append(newloc)
         self.nlocs += 1
 
-    def add_location(self, latlon=(0, 0), alt=10.0, rate=False, area=False):
+    def add_location(self, latlon=(0,0), alt=10.0, rate=False, area=False):
         """add new emission location
         latlon : tuple of floats
         atl    : float
@@ -984,6 +1009,10 @@ class HycsControl:
         self.locs.append(
             ControlLoc(line=False, latlon=latlon, alt=alt, rate=rate, area=area)
         )
+
+    def print_locations(self):
+        for loc in self.locs:
+            print(loc)
 
     def add_location_str(self, locstr):
         """add new emission location

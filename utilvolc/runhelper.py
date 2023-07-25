@@ -16,6 +16,7 @@
 
 # 18 APR 2020 (SYZ) - Initial.
 # 15 Jun 2020 (AMC) - Adapted from locusts.py
+# 07 Jun 2023 (AMC) - move ConcplotColors to utilhysplit.plotutils directory
 # -----------------------------------------------------------------------------
 
 # from abc import ABC, abstractmethod
@@ -35,24 +36,107 @@ from utilhysplit.hcontrol import NameList
 logger = logging.getLogger(__name__)
 
 
-class ConcplotColors:
-    def __init__(self):
-        colorhash = {}
-        colorhash["yellow"] = "242236051"
-        colorhash["orange"] = "235137052"
-        colorhash["red"] = "161024014"
-        colorhash["blue"] = "070051242"
-        colorhash["green"] = "147219121"
-        colorhash["magenta"] = "194056143"
-        colorhash["purple"] = "107023156"
-        colorhash["cyan"] = "075201199"
-        colorhash["grey"] = "150150150"
-        colorhash["tan"] = "163145131"
-        self.colorhash = colorhash
 
-    def get(self, color):
-        return self.colorhash[color]
+class VolcList:
+    def __init__(self,vfile):
+        import pandas as pd
+        self.df = pd.read_csv(vfile,
+                  header=0,
+                  index_col=False,
+                  names=['volcano_name',
+                         'volcano_region','volcano_lat',
+                         'volcano_lon','volcano_elevation','type'])
+        self.empty = pd.DataFrame()
+        self.vlist = self.df.volcano_name.unique()
 
+
+    def find_exact(self,vname):
+        match = [x for x in self.vlist if vname.lower() == x.lower()]
+        if match:
+            return self.df[self.df.volcano_name==match[0]]
+        else:
+            return self.empty
+
+    def find_close(self,vname):
+        possible = [x for x in self.vlist if vname.lower() in x.lower()]
+        return self.df[self.df['volcano_name'].isin(possible)]
+
+    def find_start(self,vname):
+        lnn = len(vname)
+        possible = [x for x in self.vlist if vname.lower() in x[0:lnn].lower()]
+        return self.df[self.df['volcano_name'].isin(possible)]
+
+
+    def find(self,vname):
+        guess = self.find_exact(vname)
+        if  guess.empty:
+           guess = self.find_start(vname)
+        if guess.empty:
+           guess = self.find_close(vname)
+        return guess    
+
+    def get_record(self,vname):
+        df = self.find(vname)
+        return df.to_dict(orient='records')
+
+
+def complicated2str(a):
+    """
+    Convert nested list of dictionary and strings to a string
+    """
+    rstr = ''
+    if isinstance(a,list):
+        bbb = [complicated2str(x) for x in a]
+        bbb = str.join(', ',bbb)
+        rstr += bbb
+    elif isinstance(a,dict):
+        for key in a.keys():
+            bbb = str(key) + ':' + complicated2str(a[key]) + '\n'
+            rstr += bbb
+    else:
+        bbb = str(a)
+        rstr += bbb
+    
+    return rstr
+
+
+
+
+def is_input_complete(ilist,inp):
+    """
+    ilist : list of tuples (key, 'req' or 'opt')
+            The key is the dictionary key that should be present.
+            'req' is used if it is required
+            'opt' is used if it is optional.
+
+    inp   : dictionary to check against ilist.
+
+    RETURNS
+        True if all required values are present
+        False if any required values not present
+
+    logger writes warning if required value not present.
+    logger writes info if optional values not present
+    logger writes info if extra values are present. 
+    """
+
+    complete=True
+    for iii in ilist:
+        if iii[0] not in inp.keys():
+            if iii[1] == 'req':
+                logger.warning("Input does not contain {}".format(iii[0]))
+                complete = False
+            else:
+                logger.info("Input does not contain optional {}".format(iii[0]))
+
+    if isinstance(ilist[0],tuple):
+        zlist = list(zip(*ilist))[0]
+    else:
+        zlist = ilist
+    extra = [x for x in inp.keys() if x not in zlist]
+    for val in extra:
+            logger.warning('Extra inputs {}'.format(val))
+    return complete
 
 def make_dir(data_dir, newdir="pc_corrected", verbose=False):
     """Create new directory if it does not exist.
@@ -73,7 +157,10 @@ def make_dir(data_dir, newdir="pc_corrected", verbose=False):
         os.umask(orig_umask)
         if verbose:
             logger.info("Directory created {}".format(new_data_dir))
-
+    if os.path.exists(new_data_dir):
+       return True
+    else:
+       return False
 
 def list_dirs(data_dir):
     """Lists subdirectories within give directory
@@ -446,7 +533,6 @@ class Job:
 
 
 class JobFileNameComposer:
-    # amc : changed control and setup file naming.
 
     def __init__(self, workDir, jobId, jobname):
         self.workDirectory = workDir
@@ -475,18 +561,17 @@ class JobFileNameComposer:
         if stage != 0:
             # return '{}_SETUP.{}.txt'.format(self.job, stage)
             return "SETUP.{}_{}".format(self.job, stage)
-        return "SETUP.{}".format(self.job.JOBID)
+        return "SETUP.{}".format(self.job)
 
     def get_control_suffix(self, stage=0):
         fname = self.get_control_filename(stage=stage)
         return fname.split(".")[-1]
 
     def get_control_filename(self, stage=0):
-        print('GETTING FILENAME HERE')
         if stage != 0:
             # return '{}_CONTROL.{}.txt'.format(self.job, stage)
             return "CONTROL.{}_{}".format(self.job, stage)
-        return "CONTROL.{}".format(self.job.JOBID)
+        return "CONTROL.{}".format(self.job)
 
     def get_message_filename(self, stage=0):
         if stage > 0:

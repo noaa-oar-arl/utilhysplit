@@ -1,7 +1,8 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import datetime
-import numpy as np
 from operator import itemgetter
+import numpy as np
+
 
 """
 Classes to read and write input file for HYSPLIT.
@@ -14,6 +15,13 @@ Emissions file see https://ready.arl.noaa.gov/hysplitusersguide/S417.htm
 
 TO DO: implementation of nanvalue in EmiTimes and EmitCycle class not consistent.
 should it be an attribute of the classes or input into the add_record method?
+
+TO DO: Currently allows users to add emission cycles in any way they wish. For
+instance there can be emission cycles with duplicate or overlapping start times and durations.
+TO DO: Currently allows users to add emission cycles in any way they wish. For
+instance there can be emission cycles with duplicate or overlapping start times and durations.
+Also the emission cycles can be out of order.
+Also the emission cycles can be out of order. 
 
 """
 
@@ -110,7 +118,6 @@ class EmiTimes(object):
 
     def select_species(self,spnum):
         """
-        EmitTimes class
         Returns new EmiTimes class with only one species in it.
         """
         if isinstance(spnum, int): spnum = [spnum]
@@ -146,14 +153,12 @@ class EmiTimes(object):
 
     def get_species(self):
         """
-        EmitTimes class
         This determines number of species from the cycles.
         """
         return list(np.arange(1, self.findmaxsp() + 1))
 
     def findmaxsp(self):
         """
-        EmitTimes class
         find cycle with the most species.
         """
         maxsp = 1
@@ -165,7 +170,6 @@ class EmiTimes(object):
 
     def findmaxrec(self):
         """
-        EmitTimes class
         Find cycle with the most records and return number of records in that
         cycle.
         This is used when writing an EmitTimes file since HYSPLIT
@@ -175,6 +179,7 @@ class EmiTimes(object):
         maxrec : int
            maximum number of records.
         """
+        #EmitTimes class
         maxrec = 0
         for ec in self.cycle_list:
             if ec.nrecs > maxrec:
@@ -183,23 +188,18 @@ class EmiTimes(object):
 
     def write_new(self, filename):
         """
-        EmitTimes class
         write a new EmitTimes file to filename.
         filename : str
         """
-        print('HERE')
+        # EmitTimes class
         # make sure all cycles have same number of species.
-        print('species before ', self.splist)
-        #self.splist = list(range(1, self.findmaxsp() + 1))
-        print('species', self.splist)
+        # self.splist = list(range(1, self.findmaxsp() + 1))
         # make sure that there is a name for each species.
         #self.set_species(self.sphash)
-        print('HERE')
         for ecycle in self.cycle_list:
             ecycle.splist = self.splist
             #if len(self.splist) > 1:
             #    ecycle.fill_species()
-        print('HERE')
         # make sure all cycles have same number of records
         maxrec = self.findmaxrec()
         with open(filename, "w") as fid:
@@ -215,9 +215,9 @@ class EmiTimes(object):
 
     def header2sp(self):
         """
-        EmitTimes class
         check if information on species is stored in the first line.
         """
+        # EmitTimes class
         rval = False
         if "spnum" in self.header:
             rval = True
@@ -235,7 +235,6 @@ class EmiTimes(object):
 
     def read_file(self, verbose=False, num_species=1):
         """
-        EmitTimes class
         Reads an EmitTimes file.
         verbose: boolean
 
@@ -246,6 +245,7 @@ class EmiTimes(object):
         Returns False if EmitTimes file is empty
 
         """
+        # EmitTimes class
         with open(self.filename, "r") as fid:
             lines = fid.readlines()
             self.header = lines[0] + "/n" + lines[1]
@@ -280,21 +280,32 @@ class EmiTimes(object):
 
     def add_cycle(self, sdate, duration):
         """
-        EmitTimes class
         Adds information on a cycle to an EmiTimes object.
+        The cycles must be added in chronological order with
+        the earliest cycle added first. Cycles cannot be overlapping in time.
         sdate: datetime object
                start time of cycle.
         duration : integer
                duration in hours of cycle.
         """
+        # EmitTimes class
         self.ncycles += 1
+        if self.ncycles > 1:
+           ecprev = self.cycle_list[-1]
+           ec_sdate = ecprev.sdate
+           ec_edate = ec_sdate + ecprev.duration
+           if sdate < ec_edate:
+              print('EmitTimes cannot add cycle because it will overlap with previous cycle')
+              return False     
         ec = EmitCycle(sdate, duration)
+
         self.cycle_list.append(ec)
         d1 = sdate
         dt = datetime.timedelta(hours=int(duration))
         d2 = sdate + dt
         self.chash[self.ncycles - 1] = (d1, d2)
         self.sdatelist.append(sdate)
+        return True
 
     def filter_records(self, llcrnr, urcrnr):
         """ 
@@ -333,6 +344,8 @@ class EmiTimes(object):
             if date >= self.chash[ccc][0] and date < self.chash[ccc][1]:
                 cycle_number = ccc
         if cycle_number == -1:
+            print("WARNING: record could not be added. No cycle found") 
+            print(date.strftime("%Y %m/%d %H:%M "))
             rvalue = False
         else:
             self.cycle_list[cycle_number].add_record(

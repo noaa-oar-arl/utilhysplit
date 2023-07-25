@@ -1,7 +1,7 @@
 import glob
 import os
-
-from utilvolc import qva_logic, volcat
+import datetime
+from utilvolc import volcat_files, volcat
 
 
 class TestInputs:
@@ -56,10 +56,16 @@ def test_summaryfile_001():
     # oldest file
     fname2 = min(fnames, key=os.path.getctime)
     for fname in [fname1, fname2]:
-        sumf = qva_logic.SummaryFile(fname, fdir)
+        sumf = volcat_files.SummaryFile(fname, fdir)
         datadf = sumf.open_dataframe()
         assert 1 == 1
 
+def test_summaryfile_003():
+    tinp = TestInputs()
+    fdir = tinp.inp["JPSS_DIR"]
+    d1 = datetime.datetime(2022,11,30)
+    sumdf = volcat_files.get_summary_file_df(fdir,edate=d1,hours=24*4)
+  
 
 def test_summaryfile_002():
     """
@@ -67,7 +73,7 @@ def test_summaryfile_002():
     """
     tinp = TestInputs()
     fdir = tinp.inp["JPSS_DIR"]
-    sumdf = qva_logic.get_summary_file_df(fdir)
+    sumdf = volcat_files.get_summary_file_df(fdir)
     columns = sumdf.columns
     cnames = ["volcano_name", "volcano_gvp_id", "volcano_lat", "volcano_lon"]
     cnames.append("vaac_region")
@@ -100,7 +106,7 @@ def test_eventfile_001():
     # oldest file
     fname2 = min(fnames, key=os.path.getctime)
     for fname in [fname1, fname2]:
-        efile = qva_logic.EventFile(fname, fdir)
+        efile = volcat_files.EventFile(fname, fdir)
         assert efile.open()
         columns = efile.df.columns
         cnames = ["sensor_name", "observation_date", "sensor_mode", "sensor_wmo_id"]
@@ -115,4 +121,4 @@ def test_eventfile_001():
             assert cnn in columns
 
 
-test_volcat_001()
+test_summaryfile_003()
