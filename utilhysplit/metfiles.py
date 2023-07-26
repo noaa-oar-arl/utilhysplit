@@ -279,8 +279,8 @@ def get_forecast_str(metid, FCTDIR="/pub/forecast"):
         if suffix:  
            met = 'gefs.{}'.format(suffix)
     else:
-        logger.warning("Did not recognize MET name {}.".format(metid))
-        logger.warning("Using GFS")
+        logger.warning("Did not recognize MET name for forecast {}.".format(metid))
+        logger.warning("Will look for archived data")
         met = "gfs"
     # metnamefinal = 'No data found'
     #        metime = dtm

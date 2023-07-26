@@ -38,18 +38,18 @@ def round_start_time(stime, mround=5):
 
 class RunTrajectory(ModelRunInterface):
     ilist = [
-        "meteorologicalData",
-        "forecastDirectory",
-        "archivesDirectory",
-        "WORK_DIR",
-        "HYSPLIT_DIR",
-        "durationOfSimulation",
-        "latitude",
-        "longitude",
-        "height",
-        "start_date",
-        "jobid",
-        "jobname"
+        ("meteorologicalData",'req'),
+        ("forecastDirectory",'req'),
+        ("archivesDirectory",'req'),
+        ("WORK_DIR",'req'),
+        ("HYSPLIT_DIR",'req'),
+        ("durationOfSimulation",'req'),
+        ("latitude",'req'),
+        ("longitude",'req'),
+        ("height",'opt'),
+        ("start_date",'req'),
+        ("jobid",'req'),
+        ("jobname",'req')
     ]
 
 
@@ -263,7 +263,8 @@ class RunTrajectory(ModelRunInterface):
         command = None
         if not os.path.isfile(tdump):
             run = True
-        logger.warning("TDUMP file already created {}".format(tdump))
+        else:
+            logger.warning("TDUMP file already created {}".format(tdump))
         if not overwrite:
            self._status = "COMPLETE tdump exists"
            self._history.append(self._status)

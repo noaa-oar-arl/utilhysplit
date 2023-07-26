@@ -135,10 +135,19 @@ def create_run_instance(jid, runinp):
 
     elif 'trajectory' in runinp["runflag"]:
         from maindispersion import MainTrajectory
-
         crun = MainTrajectory(runinp, jid)
         logger.info("Trajectory Run")
-
+    else:
+        logger.warning('run type not defined properly in runflag input {}'.format(runinp['runflag']))
+        print('runflag not recognized {}'.format(runinp['runflag']))
+        print('Acceptable runflag inputs are:')
+        print('datainsertion')
+        print('dispersion')
+        print('inverse')
+        print('trajectory')
+        print('backtrajectoryfromobs')
+        sys.exit(1)
+        return None
     #    if runinp["meteorologicalData"].lower() == "gefs":
     #        from enstrajectory import EnsTrajectoryRun
     #        crun = EnsTrajectoryRun(jid)
@@ -180,6 +189,7 @@ if __name__ == "__main__":
         inp = finputs.inp
 
         arun = create_run_instance(JOBID, inp)
+        
         arun.doit()
         sys.exit(1)
 
