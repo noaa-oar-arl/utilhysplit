@@ -83,19 +83,19 @@ class CollectTrajectory(ModelCollectionInterface):
             inp['jobid'] = '{}.{}'.format(self.JOBID, iii)
             run = RunTrajectory(inp,trajgen)
             command = run.run_model(overwrite=False)
-            if isinstance(command,str): command_list.append(command) 
+            if isinstance(command,(str,list)): command_list.append(command) 
             self._filelist.extend(run.filelist)
             iii += 1
         return command_list
 
     def run(self, overwrite=False):
         import time
-
         command_list = self.setup(overwrite)
         processhandler = ProcessList()
         processhandler.pipe_stdout()
         processhandler.pipe_stderr()
         # suffix = gefs_suffix_list()
+        iii=-1
         for iii, command in enumerate(command_list):
             logger.info("Running {} with job id {}".format("hycs_std", command[1]))
             processhandler.startnew(command, self.inp["WORK_DIR"], descrip=str(iii))
@@ -114,6 +114,7 @@ class CollectTrajectory(ModelCollectionInterface):
                   if total_time > max_time: 
                      logger.info('max time reached')
                      break
+        if iii==-1: logger.warning('NO COMMANDS EXECUTED')
         # wait for runs to finish
         done = False
         seconds_to_wait = 30
