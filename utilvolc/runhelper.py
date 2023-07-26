@@ -96,10 +96,7 @@ def complicated2str(a):
     else:
         bbb = str(a)
         rstr += bbb
-    
     return rstr
-
-
 
 
 def is_input_complete(ilist,inp):
@@ -119,15 +116,24 @@ def is_input_complete(ilist,inp):
     logger writes info if optional values not present
     logger writes info if extra values are present. 
     """
+ 
 
     complete=True
-    for iii in ilist:
-        if iii[0] not in inp.keys():
-            if iii[1] == 'req':
+    
+    if isinstance(ilist[0],tuple):
+        for iii in ilist:
+            if iii[0] not in inp.keys():
+                if iii[1] == 'req':
+                    logger.warning("Input does not contain {}".format(iii[0]))
+                    complete = False
+                else:
+                    logger.info("Input does not contain optional {}".format(iii[0]))
+    else:
+        for iii in ilist:
+            if iii not in inp.keys():
                 logger.warning("Input does not contain {}".format(iii[0]))
                 complete = False
-            else:
-                logger.info("Input does not contain optional {}".format(iii[0]))
+
 
     if isinstance(ilist[0],tuple):
         zlist = list(zip(*ilist))[0]
@@ -316,13 +322,6 @@ class JobSetUp:
             self.inp[astr] = default
 
     def not_used(self, inp):
-        #poll_list = inp["pollutants"]
-        # for  poll in poll_list:
-        # poll['inCloudRemovalRate']
-        # poll['belowCloudRemovalRate']
-        # poll['emissionRate']
-        # poll['depositVelocity']
-        # poll['name']
         self.inp["wetflag"] = inp["usingWetDeposition"]
         self.inp["forwardflag"] = inp["forwardCalculation"]
         # 0 for large down to 3 for small.
