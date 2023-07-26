@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 
 
 def round_start_time(stime, mround=5):
-    # round to nearest 5 minute
+    # round down
     minutes = int(stime.minute - stime.minute%mround)
-    newtime = datetime.datetime(stime.year, stime.month, stime.hour, minutes)
+    newtime = datetime.datetime(stime.year, stime.month, stime.day, stime.hour, minutes)
     return newtime
 
 class RunTrajectory(ModelRunInterface):

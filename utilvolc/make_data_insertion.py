@@ -69,19 +69,6 @@ def make_1D_sub(dset):
     area = area * 1e6 # convert from km^2 to m^2
     time = mass.time
     tlist = volcat.matchvals(lat,lon,mass,height,area)
-
-    #dset.close()
-
-    # Creating compressed 1-d arrays (removing nans) to prepare for file writing
-    #hgt_nan = ma.compressed(height)  # arra with nan values to remove
-    #hgt = hgt_nan[~np.isnan(hgt_nan)]  # removing nan values
-    #mass = ma.compressed(ashmass)[~np.isnan(hgt_nan)]  # removing nan values
-    #lat = ma.compressed(latitude)[~np.isnan(hgt_nan)]  # removing nan values
-    #lon = ma.compressed(longitude)[~np.isnan(hgt_nan)]  # removing nan values
-    #area = ma.compressed(areaf)[~np.isnan(hgt_nan)]  # removing nan values
-    #hgt = hgt * 1000.0  # Moving hgt from (km) to (m)
-
-    # lat, lon, mass, height, area
     return tlist 
 
 
@@ -214,10 +201,10 @@ class InsertVolcat:
     get_area: calculates the domain area, gridded
     make_1D: makes 1D array of lat, lon, ash height, ash mass, area
     write_emit: writes emitimes files
-
-
-    TODO - should get_area method be replaced by function in get_area.py
     """
+
+    # get_area was moved to its own function in get_area.py
+
 
     def __init__(
         self,
@@ -307,72 +294,6 @@ class InsertVolcat:
                 volcframe1["volcano id"] == "v{}".format(self.vid), "filename"
             ].tolist()
         return volclist
-
-    def get_area(
-        self, dset, write=False, correct_parallax=True, decode_times=False, clip=True
-    ):
-        """Calculates the area (km^2) of each volcat grid cell
-        Converts degress to meters using a radius of 6378.137km.
-        Input:
-        write: boolean (default: False) Write area to file
-        correct_parallax: boolean (default: True) Use parallax correct lat/lon values
-        decode_times: boolean (default: False) Must be TRUE if using L1L2 netcdf files
-        clip: boolean (default: True) Use clipped array around data, reduces domain
-        output:
-        area: xarray containing gridded area values
-        """
-        d2r = pi / 180.0  # convert degress to radians
-        d2km = 6378.137 * d2r  # convert degree latitude to kilometers
-
-        # if self.fnamelist:
-        #    dset = volcat.open_dataset(
-        #        self.vdir + fname,
-        #        correct_parallax=correct_parallax,
-        #        decode_times=decode_times,
-        #    )
-        # else:
-        #    print("ERROR: Need volcat filename!")
-        # Extracts ash mass array (two methods - one is smaller domain around feature)
-        # Removes time dimension
-        if clip == True:
-            mass = volcat.get_mass(dset)[0, :, :]
-            # mass = volcat.get_mass(dset)
-        else:
-            mass = dset.ash_mass_loading[0, :, :]
-        lat = mass.latitude
-        lon = mass.longitude
-        latrad = lat * d2r  # Creating latitude array in radians
-        coslat = np.cos(latrad) * d2km * d2km
-        shape = np.shape(mass)
-
-        # Make shifted lat and shifted lon arrays to use for calculations
-        lat_shift = lat[1:, :].values
-        lon_shift = lon[:, 1:].values
-        # Adding row/column of nans to shifted lat/lon arrays
-        to_add_lon = np.empty([shape[0]]) * np.nan
-        to_add_lat = np.empty([shape[1]]) * np.nan
-        # Back to xarray for calculations
-        lat2 = xr.DataArray(np.vstack((lat_shift, to_add_lat)), dims=["y", "x"])
-        lon2 = xr.DataArray(np.column_stack((lon_shift, to_add_lon)), dims=["y", "x"])
-
-        # area calculation
-        area = abs(lat - lat2) * abs(abs(lon) - abs(lon2)) * coslat
-        area.name = "area"
-        area.attrs["long_name"] = "area of each lat/lon grid box"
-        area.attrs["units"] = "km^2"
-        # Reformatting array attributes
-        if write == True:
-            directory = self.wdir + "area/"
-            match = ""
-            # match = self.make_match()
-            if correct_parallax == True:
-                areafname = "area_" + match + "_pc.nc"
-            else:
-                areafname = "area_" + match + ".nc"
-            # print(directory + areafname)
-            area.to_netcdf(directory + areafname)
-        dset.close()
-        return area
 
     def make_1D_fromlist(
         self,
