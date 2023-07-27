@@ -62,6 +62,7 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate=datetime.datetime.n
     """
     sumdf = pd.DataFrame()
     # 2023 09 May (amc) use the time stamp in the filename rather than scandir
+    # 2023 26 Jul (amc) summary files can have duplicate entries. use drop_duplicates to remove.
     if not isinstance(edate, datetime.datetime):
         raise Exception(
             "input edate wrong type {}: should be \
@@ -105,6 +106,9 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate=datetime.datetime.n
         #    print('AN ERROR READING', fln,  eee)
     if len(vlist) > 0:
         sumdf = pd.concat(vlist)
+    # summary files can have duplicate entries in them
+    sumdf = sumdf.drop(['summary file','summary date'],axis=1)
+    sumdf = sumdf.drop_duplicates()
     return sumdf
 
 
@@ -252,7 +256,7 @@ class SummaryFile(VFile):
         ehash["event date"] = efile.date
         ehash["event instrument"] = efile.instrument
         ehash["event vid"] = efile.vid
-        ehash["event gid"] = efile.gid
+        ehash["fid"] = efile.gid
         return ehash
 
     def parse(self, fname):
@@ -306,6 +310,7 @@ class EventFile(VFile):
          FEATURE_ID_INITIAL
          FEATURE_ID_LATEST
     """
+    # 2023 Jul 27 (amc) added attrs to dataframe in open method.
 
     def __init__(self, fname, fdir="./"):
         self.dii = -5
@@ -366,9 +371,12 @@ class EventFile(VFile):
         )
         df.insert(1, "observation_date", dftemp2)
         self.df = df
-
         jsonf.pop(fstr[0])
         self.attrs = jsonf
+        # add attributes to dataframe
+        for key in self.attrs:
+            self.df[key.lower()] = self.attrs[key]
+
         return True
 
     def check_feature_id(self):
@@ -394,6 +402,8 @@ def get_log_files(sumdf, verbose=False, inp={"VOLCAT_LOGFILES": "./"}, **kwargs)
     Return:
        pandas dataframe with additional status column indicating whether log file was downloaded
 
+    TODO - call to get_log will check for every file whether an updated version is available.
+           want to add an option so that it doesn't do this for the older files.
     """
     df2 = sumdf.copy()
     ccc = sumdf.columns
@@ -567,11 +577,11 @@ def open_dataframe(fname, varname=None):
         dataf = jsonf[vstr]
     else:
         dataf = jsonf
-    if type(dataf) == list:
+    if isinstance(dataf,list):
         data = pd.DataFrame.from_dict(dataf)
-    if type(dataf) == dict:
+    elif isinstance(dataf,dict):
         data = pd.DataFrame.from_dict([dataf])
-    if type(dataf) == str:
+    elif isinstance(dataf,str):
         data = dataf
     return data
 
