@@ -31,7 +31,7 @@ from utilvolc.volcat_files import get_log_files
 from utilvolc.volcat_files import check_file
 
 
-from utilvolc.qvainterface import EventdfInterface
+from utilvolc.qvainterface import DFInterface
 from utilvolc.qvainterface import EventInterface
 
 
@@ -52,7 +52,7 @@ class EventDisplay:
     Helper class for Events
     """
   
-    def __init__self(eventid='TEST'):
+    def __init__(self,eventid='TEST'):
         self.eventid = eventid
 
 
@@ -61,20 +61,33 @@ class EventStatus:
     Helper class for Events
     """
   
-    def __init__self(eventid='TEST', status=None):
+    def __init__(self,eventid='TEST', status=None):
         self.eventid = eventid
         self.status = status
 
 
 
-class EventDF(EventdfInterface):
+class EventDF(DFInterface):
 
     def __init__(self,edf):
         self._edf = edf
 
+        # columns which are required. 
+        self._required = ['sensor_name', 
+                    'feature_id', 
+                    'event_file', 
+                    'volcano_lat',
+                    'volcano_lon',
+                    'volcano_name',
+                    'observation_date']
+
     @property
     def edf(self):
         return self._edf.copy()
+
+    @property
+    def required_columns(self):
+        return self._required
 
     def save_csv(self, ndir):
         """
@@ -83,6 +96,7 @@ class EventDF(EventdfInterface):
         fname = os.path.join(ndir, "Events.csv")
         self.edf.to_csv(fname, float_format="%.1f", index=False)
 
+    # extra method
     def read_csv(self, ndir, cname=None):
         """
         reads csv file that was previously saved
@@ -99,66 +113,61 @@ class EventDF(EventdfInterface):
         """
         reads csv file that was previously saved and adds it to dataframe.
         """
-        # Events class
         dftemp = self.read_csv(ndir,cname)
-        if not self.edf.empty:
-            dftemp = pd.concat(self._edf, dftemp)
-        dftemp.drop_duplicates()
-        self._edf = dftemp
+        self.add_df(dftemp)
 
-    def add_eventdf(self, df):
+    def are_required_columns_present(self,df):
+        answer = True
+        for req in self._required:
+            if req not in df.columns:
+               print('WARNING, data frame does not contain required column {}'.format(req))
+               answer=False
+        return answer
+ 
+
+    def add_df(self, df):
         """
         df : pandas DataFrame
         """
         # can utilize output of flist2eventdf
         # change all column names to lower case
+        complete=True
+
+        # check that required columns are in dataframe
         columns = df.columns
         newc = [x.lower() for x in columns]
         df.columns = newc
+        complete = self.are_required_columns_present(df)
 
-        if self._edf.empty:
-            if isinstance(df, pd.core.frame.DataFrame):
-                self._edf = df
-        else:
-            if isinstance(df, pd.core.frame.DataFrame):
-                self._edf = pd.concat([self._edf, df])
-        if 'volcano_lat' not in self.edf.columns:
-           print('add_eventdf warning. no volcano_lat column', self._edf.columns)
+        if complete:
+            if self._edf.empty:
+                if isinstance(df, pd.core.frame.DataFrame):
+                    self._edf = df
+            else:
+                if isinstance(df, pd.core.frame.DataFrame):
+                    self._edf = pd.concat([self._edf, df])
+            self._edf.drop_duplicates()
+        return complete
 
+    # extra method
     def add_events(self, eventlist):
         """
         eventlist: list of EventFile objects.
         """
         # Events class
+        # elist - list of dataframes associated with the EventFile.
         elist = []
-        for eve in eventlist:
-            df = eve.df.copy()
-            
-            for key in eve.attrs:
-                df[key] = eve.attrs[key]
-            elist.append(df)
-
-        if self._edf.empty:
-            if isinstance(elist, list):
-                self._edf = pd.concat(elist)
-            elif isinstance(elist, pd.core.frame.DataFrame):
-                self._edf = elist
-        else:
-            if isinstance(elist, list):
-                df = pd.concat(elist)
-                self._edf = pd.concat([self._edf, df])
-            elif isinstance(elist, pd.core.frame.DataFrame):
-                self._edf = pd.concat([self._edf, elist])
-
-        columns = self._edf.columns
-        newc = [x.lower() for x in columns]
-        self._edf.columns = newc
-
-        if 'volcano_lat' not in self._edf.columns:
-           print('add_events warning. no volcano_lat column',  self.edf.columns)
+        for efile in eventlist:
+            df = efile.df.copy()
+            #for key in efile.attrs:
+            #    df[key.lower()] = efile.attrs[key]
+            if self.are_required_columns_present(df):
+               elist.append(df)
+        dfnew = pd.concat(elist)
+        self.add_df(dfnew)
 
 
-class VolcatEvents:
+class Events:
     """
     combines information from multiple Event Files.
 
@@ -199,7 +208,7 @@ class VolcatEvents:
         # Events class
 
         # need to add using 
-        #         add_eventdf method 
+        #         add_df method 
         #         add_csv
         #         add_events
 
@@ -858,9 +867,12 @@ class VolcatEvents:
         return ax, ax2,temp
         
 
-def create_event(sumdf, fdir, vlist=None, verbose=False):
+def create_event(indf, fdir, vlist=None, verbose=False):
     """
-    sumdf : DataFrame with information from summary files
+    indf : DataFrame with the following columns
+          : volcano_name - str
+          : log - str - name of EventFile logfile (.json file)
+          : 
     fdir  : location of log files
     vlist : list of volcanoes to create  Events objects for
     verbose : boolean
@@ -870,25 +882,35 @@ def create_event(sumdf, fdir, vlist=None, verbose=False):
     eventhash : dictionary
                 key is volcano name. value is Events object.
     """
+    required = ['volcano_name','log']
+    for req in required:
+        if req not in indf.columns:
+           logger.warning('create_event function required column {} not available in input'.
+                           format(req))
+
     if isinstance(fdir, dict):
         fdir = fdir["VOLCAT_LOGFILES"]
-
     eventhash = {}  # key is volcano name. value is Event class instance
+
+    # determining vlist - list of volcano names
     if not isinstance(vlist, (list, np.ndarray)):
-        vlist = sumdf["volcano_name"].unique()
+        vlist = indf["volcano_name"].unique()
     else:
         # so vlist doesn't have to be case dependent.
-        templist = sumdf['volcano_name'].unique()
+        templist = indf['volcano_name'].unique()
         vlist2 = []
         for vvv in vlist:
             temp = [x for x in templist if vvv.lower() in x.lower()]     
             vlist2.extend(temp)
         vlist = vlist2
+
+    # loop through each volcano name.
     for volc in vlist:
         print(volc)
         eventlist = []
-        df2 = sumdf[sumdf["volcano_name"]== volc]
+        df2 = indf[indf["volcano_name"]== volc]
         efile = df2["log"].unique()
+
         for efl in efile:
             if not isinstance(efl,str):
                print('NOT string', efl)
@@ -900,11 +922,16 @@ def create_event(sumdf, fdir, vlist=None, verbose=False):
                 print('\n')
                 continue
             eventlist.append(evo)
+        print("EVENTLIST", len(eventlist))
         if eventlist:
             eve = Events()
             eve.eventdf.add_events(eventlist)
+
             # set the directories for the event.
             if isinstance(fdir,dict): eve.get_dir(inp,verbose=verbose,make=True)
             eventhash[volc] = eve
+        else:
+            print('NO events found')
+
     return eventhash
 

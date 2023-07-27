@@ -276,14 +276,14 @@ def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=Fa
         else:
             temp = temp[temp["observation_date"] < daterange[1]]
     if vid:
-        temp = temp[temp["volcano id"] == vid]
+        temp = temp[temp["event vid"] == vid]
     if fid:
         temp = temp[temp["fid"] == fid]
-    if "volcano id" in temp.columns and "edate" in temp.columns:
+    if "event vid" in temp.columns and "edate" in temp.columns:
         if "fid" in temp.columns:
-            temp = temp.sort_values(["volcano id", "fid", "edate"], axis=0)
+            temp = temp.sort_values(["event vid", "fid", "edate"], axis=0)
         else:
-            temp = temp.sort_values(["volcano id", "edate"], axis=0)
+            temp = temp.sort_values(["event vid", "edate"], axis=0)
     return temp
 
 
@@ -489,7 +489,7 @@ def find_volcat(
                         "date not in range", vn.image_date, daterange[0], daterange[1]
                     )
                 continue
-        if vid and vn.vhash["volcano id"] != vid:
+        if vid and vn.vhash["event vid"] != vid:
             continue
         if return_val == 1:
             if vn.image_date not in vhash.keys():
@@ -570,12 +570,12 @@ class VolcatName:
         self.keylist.append("observation_date")  # should be image date (check)
         self.keylist.append("image time")
         self.keylist.append("fid")
-        self.keylist.append("volcano id")
+        self.keylist.append("event vid")
         self.keylist.append("description")
         self.keylist.append("WMO satellite id")
         self.keylist.append("image scanning strategy")
-        self.keylist.append("event date")  # should be event date (check)
-        self.keylist.append("event time")
+        self.keylist.append("event_date")  # should be event date (check)
+        self.keylist.append("event_time")
         self.keylist.append("feature id")
 
     def __lt__(self, other):
@@ -586,7 +586,7 @@ class VolcatName:
         image date
         feature id if it exists.
         """
-        if self.vhash["volcano id"] < other.vhash["volcano id"]:
+        if self.vhash["event vid"] < other.vhash["event vid"]:
             return True
         if "fid" in self.vhash.keys() and "fid" in other.vhash.keys():
             if self.vhash["fid"] < other.vhash["fid"]:
@@ -670,7 +670,7 @@ class VolcatName:
         # this is the date associated with the data
         self.vhash["observation_date"] = self.image_date
         # this date may be the same as the image date or earlier
-        self.vhash["edate"] = self.event_date
+        self.vhash["event date"] = self.event_date
         self.date = self.image_date
         return self.vhash
 
