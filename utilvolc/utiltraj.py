@@ -1,4 +1,7 @@
 import pandas as pd
+from monetio.models import hytraj
+
+
 
 def combine_traj(fnames, csvfile=None):
     """
@@ -28,7 +31,7 @@ def combine_traj(fnames, csvfile=None):
         else:
             weight = 1
         df1["weight"] = weight
-   
+ 
         trajlist.append(df1.copy())
     # concatenate the trajectories into one dataframe.
     trajdf = pd.concat(trajlist)

@@ -26,6 +26,7 @@ def generate_traj_from_df(df):
         row = rrr[1]
         # this is specifically for file from hunga tonga so2 data.
         # heightI uses the interpolated data as well.
+#        outp["height"] = row.heightI * 1000
         outp["height"] = row.height * 1000
         outp["latitude"] = row.lat
         outp["longitude"] = row.lon
@@ -42,9 +43,25 @@ def generate_traj_from_obsdf(csvname):
     #return obsdf
     outp = {}
     # one trajectory run per time period.
-    timelist = obsdf['time'].unique()
-    for time in timelist:
-        newdf = obsdf[obsdf['time']==time]
+    """
+    This block creates tdump files grouped in 
+    same measured time
+    """ 
+#    timelist = obsdf['time'].unique()
+#    for time in timelist:
+#        newdf = obsdf[obsdf['time']==time]
+#        time = pd.to_datetime(time)
+#        yield time, generate_traj_from_df(newdf)
+
+    """
+    This block creates single tdump file for
+    each sample point
+    """
+    timelist = obsdf['time'].values
+    for tt in range(len(timelist)):
+        newdf = obsdf.iloc[[tt]]
+        time = timelist[tt]
         time = pd.to_datetime(time)
         yield time, generate_traj_from_df(newdf)
+
 

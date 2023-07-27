@@ -40,7 +40,10 @@ class volcatSO2L3:
         else:
             mass = pframe.massI.values
              
-        cb = plt.scatter(lon,lat,c=mass,s=0.1,cmap=cmap)
+        cb = plt.scatter(lon,lat,c=mass,s=0.1,cmap=cmap,
+        vmin=0.0, vmax=2.0)
+        plt.xlim(120, 195), plt.ylim(-35, -5)
+        plt.plot(-175.38+360, -20.57, 'g*')
         plt.colorbar(cb) 
         plt.tight_layout()
 
@@ -93,6 +96,28 @@ class volcatSO2L3:
            pnew = pnew.drop(['index'],axis=1)
            pframe.to_csv(fname)
         return pframe
+
+    def sample_massaloc_and_write(self, nnn=100, fname=None):
+        """ The function allocate mass of those observations located
+        between two rows of samples """
+        pframe = self.pframe.copy()
+        pframe = pframe.sort_values(by=['lon','lat'])
+        nskp = int(np.ceil(len(pframe)/nnn))
+        pframe_massaloc = pframe.iloc[0::nskp,:].copy()
+        pframe_massaloc = pframe_massaloc.reset_index(drop=True)
+        def calculate_sum_columns(row):
+            row_start = row.name * nskp
+            row_end = min(row_start + nskp, len(pframe))
+            row_indices = range(row_start, row_end)
+            sum_column = pframe.iloc[row_indices]['massI'].sum()
+            return sum_column
+        pframe_massaloc['massIalloc'] = pframe_massaloc.apply(calculate_sum_columns, axis=1)
+        if isinstance(fname,str):
+            pframe_massaloc = pframe_massaloc.reset_index()
+            pframe_massaloc = pframe_massaloc.drop(['index'],axis=1)
+            pframe_massaloc.to_csv(fname)
+        return pframe_massaloc
+
 
     def points2frame(self):
         mass = self.mass.values.flatten()
