@@ -1,15 +1,41 @@
 python code for reading and creating HYSPLIT input files as well as processing HYSPLIT output files.
 
 
-* ashapp directory contains code for creating HYSPLIT runs. Dependencies on utilvolc and utilhysplit.
-* utilvolc directory contains code specific to volcanic ash applications. Dependencies on utilhysplit.
 * utilhysplit directory contains general utilities for working with HYSPLIT.
    * hcontrol.py contains classes and functions for reading and writing HYSPLIT CONTROL, SETUP.CFG and ASC.CFG files.
+       * example.py shows example of how to use classes in hcontrol.py
+   * emitimes.py contains classes and functions for reading and writing emit-times files.
+       * emitimes_example.py shows examples of use of classes in emitimes.py 
+   * metfiles.py contains classes and functions to automate adding meteorological data to CONTROL files.
+       * metexamples.py example use of the getmetfiles function.
+       * tests/test_metdata.py has tests for the MetFileFinder class which can also be used as examples.
+   * message_parse.py will read in the MESSAGE file and can create some basic plots of things like time step, emrise, 
+   * hysplit_gridutil.py contains some functions which can be useful for combining different xarray datasets of cdump data.
+   * vmixing.py classes and functions for reading in and plotting vmixing output. 
+   * xtrct_stn.py classes and functions for reading in and plotting output from xrct_stn.py
+   * hysplit_profile.py classes and functions for reading and plotting ouput of profile program
+   * runhandler.py class for handling multiple runs. Can be used for instance if need to do many HYSPLIT runs but only want to have 10 running at a time. runhandler can help start new runs as old ones finish.
+   * geotools.py contains some functions for 
+       * computing concave hull around a set of points
+       * finding distance and bearing between two points
+   * arlmet.py class for reading ARL formatted files. Does not currently work.
+* utilhysplit/particlesize
+   * contains some functions for computing fall velocity by various methods.
+* utilhysplit/plotutils
+   * colormaker.py class to create list of colors. can produce colors suitable for kml files. 
+* utilhysplit/evaluation 
+   * plume_stat.py calculate contingency table and derived statistics.
+   * reliability.py classes for calculating reliability diagrams and rank histograms.
+   * statmain.py can compute most of the statistics in statmain function. contains a MatchedData class.
+   * hysplit_boxplots.py
+   * ensemble_tools.py and ensemble_stats.py for working with xarrays which have dimensions of latitude,longitude,height,time,ensemble_number
+   * datem.py for handling data in datem format. 
 * utilml directory contains code which has dependency on the sklearn module
+* utilvolc directory contains code specific to volcanic ash applications. Dependencies on utilhysplit.
+* ashapp directory contains code for creating automated HYSPLIT runs. Dependencies on utilvolc and utilhysplit.
 * utiltesting contains tests
 
 UPDATES
-
 
 4/6/2023 Update the code
 
