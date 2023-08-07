@@ -27,22 +27,30 @@ Class: InsertVolcat
 
 import os
 import datetime
-from glob import glob
+import math
+import sys
+import glob
 from math import pi
+import datetime
+import monet
+import matplotlib.pyplot as plt
+import seaborn as sns
+from natsort import natsorted
 
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
 import xarray as xr
+from monetio.models import hysplit
+from monetio.models import hytraj
+from utilvolc.utiltraj import combine_traj
 from utilhysplit import emitimes
-
 from utilvolc import volcat
 from utilvolc.volcat import VolcatName
 from utilvolc import get_area
 
 def make_1D_sub(dset):
-    """Makes compressed 1D arrays of latitude, longitude, ash height,
-    mass emission rate, and area
+    """Makes compressed 1D arrays of latitude, longitude, ash height, mass emission rate, and area
     For use in writing emitimes files. See self.write_emit()
     Input:
     areafile: (boolean) True if area netcdf is created
@@ -131,6 +139,193 @@ class EmitName(VolcatName):
         match = match.replace('.nc','')
         match = match.replace('.','')
         return match
+
+def trajectory_input_csv(dataset, data_dir, layer_height):
+    """
+    Functions reads the xarray datasets and generates csv files which can be used by ash_main.py.
+    Input:
+        xarray dataset representing volcat data.
+    Output:
+        csv file used by ash_main.py to create a set of back trajectory runs from the observation 
+        points. 
+    """
+    obs_data_orig = pd.DataFrame(make_1D_sub(dataset), columns=['lat','lon','mass','height','area'])
+    obs_data_orig['time'] = dataset.time.values
+    obs_data_orig["heightI"] = layer_height
+    obs_data_orig.to_csv(data_dir + f'btraj{"%02d" %layer_height}kmASC.csv', index = False)
+    return obs_data_orig
+
+def read_trajectory_output(data_dir, fname, num_layer):
+    """
+    Function reads the trajectory outputs and observations
+    """
+    tnames_path = []
+    obs_path = []
+    for ii in range(1,num_layer):
+        globals()[f'tdumps{ii}'] = natsorted(glob.glob(data_dir + f'{fname}_{"%02d" %ii}km/' + 'tdump.*'))
+        tnames_path.append(globals()[f'tdumps{ii}'])
+        obs_path.append(data_dir + f'{fname}_{"%02d" %ii}km/' + f'btraj{"%02d" %ii}kmASC.csv')
+    return (tnames_path, obs_path)
+
+def traj_volc_dist(volcano, df):
+    """
+    The function calculates the distances between each trajectory (at each time step) and the volcano vent.
+    Inputs:
+        volcano: array; lat and lon of the volcano
+        df: dataframe, trajectory characteristics
+
+    Outputs:
+        dist : array; values of the distances between each point of the trajectory and the volcano.
+    """
+
+    dist = []
+    for i in range(len(df)):
+        span = (df.latitude[i]-volcano[0])**2 + (df.longitude[i]-volcano[1])**2
+        span = math.sqrt(span)
+        dist = np.append(dist, span)
+        dist = np.array(dist)
+    return dist
+
+def traj_layer_dist_cal(tnames_path,obs_path,volcano):
+    """
+    The function calculates the characteristics of trajectories coming close to the volcano over entire observations.
+    It performs calculations for the number of measurements. 
+
+    Inputs:
+        tnames: name and path of resolved back trajectory (list)
+        obs_path: dataframe; contains the characteristics of the data measurement
+    volcano:  array
+              lat and lon of the volcano
+
+    outputs:
+    characteristics of the nearest point of the resolved trajectories to the volcano
+    the names are abbreviated:
+        dist_len: array
+                  the distance length between the closest point of the trajectory and the volcano
+        dist_hgt: array
+                  height at which the trajectories come closest to the volcano
+        dist_lat, dist_lon: array
+                  the coordinates of the nearest points to the volcano eruption
+        dist_time:
+                  the time when the nearest point reaches the volcano
+        obs_"variables":
+                  the locations of the back trajectory starting points (coordinates and altitude)
+    """
+
+    (dist_len, dist_hgt, dist_lat, dist_lon, dist_time, obs_time, obs_lat,
+    obs_lon, init_alt, obs_height, dist_weight) = ([] for i in range(11))
+    for traj_no in range(500):
+
+        df = combine_traj([tnames_path[traj_no]], csvfile = obs_path).copy()
+        df['init_alt'] = df['altitude'].iloc[0]
+        obs_path_csvfile = pd.read_csv(obs_path)
+        df['heightI_obs'] = (obs_path_csvfile['heightI_obs'].iloc[0])*1000
+        df.loc[df['longitude'] < 0, 'longitude'] = df['longitude'] + 360
+        # select the trajectory points within the first 12 hours after the eruption
+        df2 = df.loc[df['time'].between('2022-01-15 04:00:00', '2022-01-15 16:00:00')]
+        df2 = df2.reset_index(level=None, drop=True, inplace=False)
+        dist_out = traj_volc_dist(volcano, df2)
+        closer_dist_value = np.min(dist_out)
+        closer_dist_index = np.argmin(dist_out)
+
+        dist_len = np.append(dist_len, dist_out[closer_dist_index])
+        dist_hgt = np.append(dist_hgt, df2.altitude[closer_dist_index])
+        dist_lat = np.append(dist_lat, df2.latitude[closer_dist_index])
+        dist_lon = np.append(dist_lon, df2.longitude[closer_dist_index])
+        dist_time  = np.append(dist_time, df2.time[closer_dist_index])
+        obs_time = np.append(obs_time, df.time[0])
+        obs_lat = np.append(obs_lat, df.latitude[0])
+        obs_lon = np.append(obs_lon, df.longitude[0])
+        init_alt = np.append(init_alt, df2.init_alt[closer_dist_index])
+        obs_height = np.append(obs_height, df2.heightI_obs[closer_dist_index])
+        dist_weight = np.append(dist_weight, df2.weight[closer_dist_index])
+
+    return (dist_len, dist_hgt, dist_lat, dist_lon, dist_time, obs_time, obs_lat, obs_lon, init_alt,
+            obs_height, dist_weight)
+
+
+# This function outputs the characteristics of the trajectories nearest point to the volcano
+#f trajdisthgt(tnames,obs_path,volcano   , layer_dist_char):
+def traj_layer_dist_char(tnames_path, obs_path, vloc):
+
+    layer_dist_char = {}
+
+    for i in range(0, len(obs_path)):
+        print(obs_path[i])
+    
+        dist_func = traj_layer_dist_cal(tnames_path[i], obs_path[i],vloc)
+
+        dist_len    = dist_func[0]
+        dist_hgt    = dist_func[1]
+        dist_lat    = dist_func[2]
+        dist_lon    = dist_func[3]
+        dist_time   = dist_func[4]
+        obs_time    = dist_func[5]
+        obs_lat     = dist_func[6]
+        obs_lon     = dist_func[7]
+        init_alt    = dist_func[8]
+        obs_height  = dist_func[9]
+        dist_weight = dist_func[10]
+
+        layer_dist_char[i] = {'dist_len': dist_len, 'dist_hgt': dist_hgt, 'dist_lat': dist_lat, 'dist_lon': dist_lon,
+                              'dist_time': dist_time, 'obs_time': obs_time, 'obs_lat':obs_lat, 'obs_lon': obs_lon,
+                              'init_alt': init_alt, 'obs_height': obs_height, 'dist_weight': dist_weight}
+    
+    obs_layer_dist_char = {}
+
+    for ii in range(500):
+        df_variables = pd.DataFrame()
+        for j in range(0,len(obs_path)):
+            df_variables = pd.concat([df_variables, pd.DataFrame(layer_dist_char[j])[ii:ii+1]])
+            obs_layer_dist_char[ii] = df_variables
+
+    return (layer_dist_char, obs_layer_dist_char)
+
+
+def plume_height_char(df):
+
+
+# Select the layers at which the lowest distance length between trajectories and volcano points occur. Set a cut-off 
+# and find the bottom and top layers of the ash cloud
+# the code creates a dataframe containing 500 rows of values for observation points.
+    df_dist_min = pd.DataFrame()
+    df_dist_min_criteria_pass = pd.DataFrame()
+    df_closest_row = pd.DataFrame()
+    cutoff = 3
+    critera_pass_traj_num = 0
+    for i in range(500):
+
+        # find the layers where the trajectories come within a certain distance to the volcano
+        selected_rows = df[i].loc[df[i]['dist_len'] < cutoff]
+
+        # if the selected row is empty, the code will set the features of the nearest trajectory to the vent for the calculation
+        # of plume height. (plume thickness equals 1000, cloud top equals to the initial altitude)
+        if selected_rows.empty:
+            df_closest_row = pd.DataFrame(df[i].iloc[df[i]['dist_len'].argmin()]).transpose()
+            df_closest_row['cloudtop'] = df_closest_row['init_alt']
+            df_closest_row['thickness'] = 1000
+            df_dist_min = pd.concat([df_dist_min, df_closest_row])
+
+        else:
+            # those layers where the nearest points come within the 
+            selected_values = selected_rows['init_alt'].values
+            range_of_values = (np.min(selected_values), np.max(selected_values))
+            # get the two rows with the smallest and largest values in column A
+
+            smallest_row   = selected_rows.nsmallest(1, 'init_alt')
+            largest_row    = selected_rows.nlargest(1, 'init_alt')
+            df_closest_row = selected_rows.nsmallest(1, 'dist_len')
+            df_closest_row['cloudtop'] = np.max(selected_values)
+            df_closest_row['thickness'] = np.max(selected_values) - np.min(selected_values)
+            df_closest_row['thickness'] = df_closest_row['thickness'].clip(lower=1000)
+            df_dist_min = pd.concat([df_dist_min, df_closest_row])
+        
+            df_dist_min_criteria_pass = pd.concat([df_dist_min_criteria_pass, df_closest_row])
+            critera_pass_traj_num = critera_pass_traj_num + 1
+
+
+    return(df_dist_min, df_dist_min_criteria_pass, critera_pass_traj_num)
+
 
 def find_emit(tdir,etype='EMIT'):
     """

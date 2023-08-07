@@ -27,7 +27,8 @@ def combine_traj(fnames, csvfile=None):
         # add weight information from csvfile to the dataframe
         if csvfile:
             temp = weightcsv.loc[trajnum]
-            weight = temp.massI
+        #    weight = temp.massI
+            weight = temp.mass
         else:
             weight = 1
         df1["weight"] = weight
