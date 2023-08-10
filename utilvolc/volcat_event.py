@@ -10,8 +10,9 @@ import glob
 import time
 import monet
 import sys
+import xarray as xr
 
-from utilvolc.ashutil import fix_volc_name
+from utilvolc.volcano_names import fix_volc_name
 from utilvolc.runhelper import Helper
 from utilvolc.runhelper import list_dirs
 from utilvolc.runhelper import make_dir
@@ -42,6 +43,8 @@ logger = logging.getLogger(__name__)
 
  Changelog
  2023 Jul 26 AMC  created from material in qva_logic.
+ 2023 Aug 20 AMC  created OneEventTime to combine volcat files w
+                  ith same time but different feature id.
 """
 
 
@@ -66,11 +69,9 @@ class EventStatus:
         self.status = status
 
 
-
 class EventDF(DFInterface):
 
-    def __init__(self,edf):
-        self._edf = edf
+    def __init__(self,edf,fid='TEST'):
 
         # columns which are required. 
         self._required = ['sensor_name', 
@@ -81,6 +82,13 @@ class EventDF(DFInterface):
                     'volcano_name',
                     'observation_date']
 
+        if self.are_required_columns_present(edf):
+            self._edf = edf
+        else:
+            self._edf = pd.DataFrame()
+
+        self.savename = '{}.csv'.format(fid)
+
     @property
     def edf(self):
         return self._edf.copy()
@@ -89,15 +97,20 @@ class EventDF(DFInterface):
     def required_columns(self):
         return self._required
 
-    def save_csv(self, ndir):
+    def save(self, overwrite=False):
         """
         save dataframe as csv file
         """
-        fname = os.path.join(ndir, "Events.csv")
-        self.edf.to_csv(fname, float_format="%.1f", index=False)
+        rval=True
+        if not os.path.isfile(self.savename) or overwrite:
+            self.edf.to_csv(self.savename, float_format="%.1f", index=False)
+        else:
+            logger.warning('CSV file exists. cannot save')
+            rval = False
+        return rval 
 
     # extra method
-    def read_csv(self, ndir, cname=None):
+    def read(self, ndir, cname=None):
         """
         reads csv file that was previously saved
         """
@@ -166,6 +179,66 @@ class EventDF(DFInterface):
         dfnew = pd.concat(elist)
         self.add_df(dfnew)
 
+
+class OneEventTime:
+
+    def __init__(self,das):
+        """
+        list of volcat files which are valid for the same time but have different feature id.
+        """
+        self.das = das  # list of volcat files which are valid for the same time
+        t1 = das[0].time.values
+        for ddd in das:
+            if ddd.time.values != t1:
+               print('WARNING. list has different times')
+
+    def create(self,gridspace):
+        newlist = self.regrid(gridspace)
+        self.combine(newlist)
+        dset = xr.Dataset(
+               {
+                "ash_mass_loading": self.mass,
+                "ash_cloud_height": self.height,
+                "ash_mass_loading_total_mass": self.totalmass,
+                "feature_area":self.totalarea
+                })
+        return dset
+
+    def regrid(self,gridspace):
+        newlist = []
+        for dset in self.das:
+            newlist.append(volcat.correct_pc(dset,gridspace=gridspace))
+        return newlist    
+
+    def combine(self,newlist):
+        masslist = []
+        hlist = []
+        totalmass = 0
+        totalarea = 0
+        for new in newlist:
+            masslist.append(volcat.get_mass(new))
+            hlist.append(volcat.get_height(new))
+            totalmass += new.ash_mass_loading_total_mass.values
+            totalarea += new.feature_area.values
+        mass = volcat.combine_regridded(masslist)
+        height = volcat.combine_regridded(hlist)
+
+        time = list(set(mass.time.values))
+        if len(time)>1: write('warning, multiple times in OneEventTime')
+        else: time = time[0]
+
+        mass = mass.sum(dim='time')
+        mass['time'] = time
+        mass = mass.expand_dims(dim='time')
+
+        height = height.max(dim='time')
+        height['time'] = time
+        height = height.expand_dims(dim='time')   
+
+        self.mass = mass
+        self.height = height
+        self.totalmass = totalmass
+        self.totalarea = totalarea
 
 class Events:
     """
@@ -557,6 +630,8 @@ class Events:
         alist.append("event_file")
         alist.append("sensor_name")
         df2 = df2[alist].sort_values(by=slist, ascending=True)
+        df2 = df2.reset_index()
+        df2 = df2.drop('index',axis=1)
         # flist = df2['event_file'].values
         return df2
 
@@ -652,10 +727,12 @@ class Events:
         # event class
         from utilvolc import volcat_plots as vp
 
-        vplot = vp.VolcatPlots(self.events)
+        vplot = vp.VolcatPlots(None,volcano_name=self.volcano_name)
+        # read any data that has been saved in a csv file.
+        #vplot.read()
         vplot.main_clr = clr
-        vplot.make_arrays()
-        vplot.volcat_describe_plot()
+        vplot.make_arrays(self.events)
+        #vplot.volcat_describe_plot()
         fig1 = vplot.plot_multiA(fignum=1, smooth=0.08, yscale="linear")
         #plt.show()
         #fig2 = vplot.plot_multiB(fignum=2)

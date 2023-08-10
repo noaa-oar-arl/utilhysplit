@@ -34,7 +34,7 @@ class VolcanoName:
     def name(self):
         return self._name
 
-    @setter
+    @name.setter
     def name(self,name):
         rval = None
         if self.vlist:
@@ -46,10 +46,10 @@ class VolcanoName:
         return rval   
 
     @property
-    def vfile(self):
-        return self.vfile
+    def vlist(self):
+        return self.vlist
 
-    @setter
+    @vlist.setter
     def vlist(self,vfilename):
         if os.path.isfile(vfilename):
            return VolcList(vfile) 
@@ -77,10 +77,10 @@ class VolcList:
         match_hash : dictionary
         example {'volcano_lat':45.0, 'volcano_lon':-175.2}
         """
-        match = self.df.copy()
+        mdf = self.df.copy()
         for key in match_hash:
-            match = match[match[key] = match_hash[key]]
-        return match
+            mdf = mdf[mdf[key] == match_hash[key]]
+        return mdf
 
     def find_exact(self,vname):
         vname = fix_volc_name(vname)

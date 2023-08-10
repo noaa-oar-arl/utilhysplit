@@ -2,7 +2,9 @@ import numpy as np
 from scipy.stats import describe
 import pandas as pd
 import datetime
+import logging
 import matplotlib.pyplot as plt
+import os
 import seaborn as sns
 import xarray as xr
 from utilvolc import volcat
@@ -11,6 +13,7 @@ from utilhysplit.evaluation import statmain
 from utilvolc.qvainterface import DFInterface
 from utilhysplit.plotutils import colormaker
 
+logger = logging.getLogger(__name__)
 #TODO - is find_area still used? also in ash_inverse.py
 
 # 2023 18 July (amc) some of the values such as masstg are no longer being returned as lists.
@@ -21,7 +24,7 @@ class VolcatPlotDF(DFInterface):
 
         self._required = ['time','area','height','mass','radius',
                           'minmass','maxmass','minradius','maxradius',
-                          'mer','time_elapsed','platform_ID','ID']
+                          'platform_ID','ID']
 
         if self.are_required_columns_present(edf,verbose=False):
             self._edf = edf
@@ -35,13 +38,60 @@ class VolcatPlotDF(DFInterface):
     def required_columns(self):
         return self._required
 
+ 
+    def save(self, name=None,overwrite=False):
+        """
+        save dataframe as csv file
+        """
+        if name: self.savename=name
+        rval=True
+        if not os.path.isfile(self.savename) or overwrite:
+            self.edf.to_csv(self.savename, float_format="%.5e",index=False)
+        else:
+            self.add_csv(self.savename)
+            logger.warning('CSV file exists. adding before saving')
+            self.edf.to_csv(self.savename, float_format="%.5e", index=False)
+            self.edf.to_csv(self.savename, index=False)
+        return rval 
 
-    def save(self):
-        return -1 
+    # extra method
+    def read(self, cname=None):
+        """
+        reads csv file that was previously saved
+        """
+        if not cname:
+            cname = os.path.join(ndir, "Volcat.csv")
+        dtp = {"time": "datetime64[ns]"}
+        df = pd.read_csv(cname, sep=",", parse_dates=["time"])
+        return df
 
-    def read(self):
-        return -1      
+    def add_csv(self, cname=None):
+        """
+        reads csv file that was previously saved and adds it to dataframe.
+        """
+        dftemp = self.read(cname)
+        self.add_df(dftemp)
 
+    @staticmethod
+    def calc_mer(df):
+        """
+        INPUT
+        df : dataframe with 'time' and 'mass' in Tg columns
+        OUTPUT
+        df : dataframe with mer column in kg/s 
+        """
+        df.sort_values(by='time',inplace=True)
+        df['temp'] = df.time.diff()
+        def toseconds(x):
+            try: rval = x.seconds 
+            except: rval=0
+            return rval
+        df['dt']=df['temp'].apply(toseconds)
+        # mer in kg/s. multiply by 1e9 to convert from Tg to kg.
+        df['dm']=1e9*df.mass.diff()              
+        df['mer'] = df['dm']/df['dt'] 
+        df['time_elapsed'] = df.dt.cumsum()
+        return df 
 
     def add_df(self, df):
         """
@@ -63,6 +113,8 @@ class VolcatPlotDF(DFInterface):
                 if isinstance(df, pd.core.frame.DataFrame):
                     self._edf = pd.concat([self._edf, df])
             #self._edf.drop_duplicates()
+        self._edf.sort_values(by='time',inplace=True)
+        self._edf.drop_duplicates(inplace=True)
         return complete
 
     # extra method
@@ -78,12 +130,26 @@ class VolcatPlotDF(DFInterface):
 
 class VolcatPlots:
 
-    def __init__(self,dsetlist):
+    def __init__(self,dsetlist,volcano_name='Unknown',tdir='./'):
         """
         dsetlist can be from output of volcat.get_volcat_list function
         """
         self._vdf = VolcatPlotDF(edf=pd.DataFrame())
+        self.volcano_name = volcano_name
+        self.tdir = tdir
+        self.set_plot_settings()      
+ 
+    def make_savename(self):
+        sname = '{}_vplots.csv'.format(self.volcano_name)
+        return sname
 
+    def save(self):
+        self._vdf.savename =  self.make_savename()
+        self._vdf.save(overwrite=False)
+
+    def read(self):
+        sname =  self.make_savename()
+        self._vdf.add_csv(sname)
 
     def add_dsetlist(self,dsetlist):
         return -1
@@ -118,18 +184,22 @@ class VolcatPlots:
         arealist = []
         maxmass = []
         minmass = []
-        mer = []
-        massprev = 0
         radius = []
         minradius = []
         maxradius = []
-        dtlist = []
-        time_elapsed=0
         self.vmass =  []
         sid = []
         satellite = []
 
+        n_added=0
         for iii in np.arange(0,len(das)):
+            checkid = das[iii].attrs['id']
+
+            # if already exists in the dataframe then do not add.
+            if not self.vdf.empty:
+                if checkid in self.vdf.ID.unique(): 
+                   continue
+            n_added+=1
             try:
                 vmass  = volcat.get_mass(das[iii],clip=True)
             except:
@@ -150,7 +220,7 @@ class VolcatPlots:
             # not sure if this is related to how the expansion of dims
             # were changed in volcat open_dataset and get_data functions.
             massval = das[iii].ash_mass_loading_total_mass.values
-            if isinstance(massval, list): massval = massval[0]
+            #if isinstance(massval, list): massval = massval[0]
             masstg = float(massval)
             tmasslist.append(masstg)
 
@@ -170,36 +240,19 @@ class VolcatPlots:
             minradius.append(float(np.min(vrad).values))
             maxradius.append(float(np.max(vrad).values))
 
-            if iii>0: 
-                if (pd.to_datetime(das[iii-1].time.values) > pd.to_datetime(das[iii].time.values)):
-                    print('WARNING: time not increasing ')
-                    print(iii-1, das[iii-1].time.values)
-                    print(iii, das[iii].time.values)
-
-            # mer in kg/s. divide by 1e9 to convert from Tg to kg.
-            # divide by 10*60 to get from per retrieval to per second.
-            if iii>0:
-                dt = pd.to_datetime(das[iii].time.values) - pd.to_datetime(das[iii-1].time.values)
-                mer.append((masstg - massprev)*1e9/(dt.seconds))
-            else:
-                dt = pd.to_datetime(das[iii+1].time.values) - pd.to_datetime(das[iii].time.values)
-                mer.append(0)
-            massprev = masstg
-            dtlist.append(time_elapsed)
-            time_elapsed += dt.seconds 
-
             satellite.append(das[iii].attrs['platform_ID'])
             sid.append(das[iii].attrs['id'])
         #self.dset = dsetlist
-
-        zzz = zip(dlist,arealist,htlist,tmasslist,radius,
-                  minmass,maxmass,minradius,maxradius,mer,dtlist,satellite,sid)
-        df = pd.DataFrame(list(zzz))
-        
-        df.columns = ['time','area','height','mass','radius',
+        logger.info('Number added {} out of {}'.format(n_added,iii))
+        if n_added >0:
+            zzz = zip(dlist,arealist,htlist,tmasslist,radius,
+                      minmass,maxmass,minradius,maxradius,satellite,sid)
+            df = pd.DataFrame(list(zzz))
+            
+            df.columns = ['time','area','height','mass','radius',
                           'minmass','maxmass','minradius','maxradius',
-                          'mer','time_elapsed','platform_ID','ID']
-        self._vdf.add_df(df)
+                          'platform_ID','ID']
+            self._vdf.add_df(df)
 
 
     def boxplotdata(self, datelist, vdata):
@@ -278,19 +331,24 @@ class VolcatPlots:
     def make_spline(self,s=20,vdf=None):
         import scipy.interpolate 
         if not isinstance(vdf,pd.DataFrame): 
-            tmasslist = self.vdf['mass']
-            dtlist = self.vdf['time_elapsed']
+            df = self.vdf
         else:
-            tmasslist = vdf['mass']
-            vdf['time_elapsed']
-        s = s / len(dtlist)
+            df = vdf
+
+        df = self._vdf.calc_mer(df)
+        df2 = df.groupby('time_elapsed').max()
+        tmasslist = df2['mass']
+        dtlist = df2.index
+        dtlist = dtlist
+        s = s / float(len(dtlist))
         #self.spline = scipy.interpolate.CubicSpline(self.dtlist,self.tmasslist)
         self.spline = scipy.interpolate.UnivariateSpline(dtlist,tmasslist,s=s)
+        return df2
 
     def set_plot_settings(self):
-        self.main_clr = '-b.'
-        self.spline_clr = '-r'
-        self.sub_clrs = ['r.','c.']
+        self.main_clr = 'b'
+        self.spline_clr = 'r'
+        self.sub_clrs = ['r','c']
 
     def plot_multiB(self,fignum=1):
         sns.set_style('whitegrid')
@@ -332,7 +390,6 @@ class VolcatPlots:
         return fig
 
     def plot_multiA(self,fignum=1,smooth=20,yscale='linear', bysensor=True):
-        self.make_spline(s=smooth)
 
         sns.set_style('whitegrid')
         fig = plt.figure(fignum,figsize=[10,10])
@@ -352,10 +409,11 @@ class VolcatPlots:
                 self.sub_plot_mass(ax1,vdf=newdf,yscale=yscale)
                 self.sub_plot_area(ax2,vdf=newdf)
                 self.sub_plot_maxht(ax4,vdf=newdf)
+                self.sub_plot_mer(ax3,vdf=newdf,smooth=smooth)
         else:
             self.sub_plot_mass(ax1,yscale=yscale)
             self.sub_plot_area(ax2)
-            self.sub_plot_mer(ax3)
+            self.sub_plot_mer(ax3,smooth=smooth)
             self.sub_plot_maxht(ax4)
   
         fig.autofmt_xdate()
@@ -437,13 +495,14 @@ class VolcatPlots:
             xval = vdf['time']
 
         print(self.main_clr)
-        ax.plot(xval,yval,color=self.main_clr,linestyle='-')
+        ax.plot(xval,yval,color=self.main_clr,linestyle='-',marker='.')
         #ax.plot(xval,np.log(yval),self.main_clr)
         if yscale == 'ln': 
            ax.semilogy(base=np.e) 
            ax.yaxis.set_major_formatter(mtick.FuncFormatter(ticks)) 
         ax.set_ylabel('Total mass (Tg)')
         ax.set_xlabel('Time')
+        plt.xticks(rotation=45)
 
     def sub_plot_max_mass(self,ax):
         yval = self.vdf['maxmass']
@@ -471,26 +530,26 @@ class VolcatPlots:
             yval = vdf['area']
             xval = vdf['time']
         if clr < 0:
-            ax.plot(xval,yval,self.main_clr)
+            ax.plot(xval,yval,color=self.main_clr,linestyle='-',marker='.')
         else:
             ax.plot(xval,yval,self.sub_clrs[clr])
         ax.set_ylabel('Total Area (km$^2$)')
         ax.set_xlabel('Time')
 
-    def sub_plot_mer(self,ax, vdf=None,yscale='linear', spline=False):
+    def sub_plot_mer(self,ax, vdf=None,yscale='linear', smooth=0):
         if not isinstance(vdf,pd.DataFrame): 
-            yval = self.vdf['mer']
-            xval = self.vdf['time']
+           df = self.vdf
         else:
-            yval = vdf['mer']
-            xval = vdf['time']
-
-        if not spline:
-            ax.plot(xval,yval,self.main_clr)
-        else:
+           df = vdf
+        df = self._vdf.calc_mer(df)
+        xval = df['time']
+        yval = df['mer']
+        ax.plot(xval,yval,color=self.main_clr,linestyle='',marker='.')
+        if smooth != 0:
+            splinedf = self.make_spline(s=smooth,vdf=df)
             mer = self.spline.derivative()
-            ys = mer(self.dtlist)
-            ax.plot(xval,ys*1e9,'r.', linewidth=2,alpha=0.8)
+            ys = mer(splinedf.index)
+            ax.plot(splinedf.time,1e9*ys,self.main_clr, linestyle='-',linewidth=1,alpha=0.8)
             #ax.plot(xval,-1*ys*1e9,'k.', LineWidth=2,alpha=0.8)
         ax.set_ylabel('kg s$^{-1}$')
         ax.set_xlabel('Time')
