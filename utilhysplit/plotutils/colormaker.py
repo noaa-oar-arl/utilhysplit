@@ -53,10 +53,12 @@ class ColorMaker:
         cmap = matplotlib.cm.get_cmap(cname)
         cvals = cmap.N
         cspace = int(cvals / nvals)
+        if nvals%2 > 0: cspace+=1
         if self.ctype == "hex":
             self.clist = [self.rgb_to_hex(cmap(x)) for x in range(0, cvals, cspace)]
         else:
             self.clist = [cmap(x) for x in range(0, cvals, cspace)]
+          
 
         # for iii in range(0,cvals,cspace):
         #    if ctype == 'hex':
