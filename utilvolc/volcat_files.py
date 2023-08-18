@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from utilvolc.ashutil import fix_volc_name
+from utilvolc.volcano_names import fix_volc_name
 from utilvolc.runhelper import Helper, list_dirs, make_dir
 
 logger = logging.getLogger(__name__)
@@ -160,16 +160,16 @@ class VFile:
         return temp
 
 
-class SummaryFileName:
-    def __init__(self, fname):
-        if "FULL_DISK" in fname:
-            fname.replace("FULL_DISK", "FULLDISK")
-            fname.replace(".json", "")
-        plist = fname.split("_")
-        datefmt = "s%Y%j_%H%M%S"
-        self.satelliteid = plist[1]
-        self.coverage = plist[2]
-        self.date = datetime.datetime.strptime(plist[3] + "_" + plist[4], datefmt)
+#class SummaryFileName:
+#    def __init__(self, fname):
+#        if "FULL_DISK" in fname:
+#            fname.replace("FULL_DISK", "FULLDISK")
+#            fname.replace(".json", "")
+#        plist = fname.split("_")
+#        datefmt = "s%Y%j_%H%M%S"
+#        self.satelliteid = plist[1]
+#        self.coverage = plist[2]
+#        self.date = datetime.datetime.strptime(plist[3] + "_" + plist[4], datefmt)
 
 
 class SummaryFile(VFile):

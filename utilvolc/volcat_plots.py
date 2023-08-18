@@ -276,7 +276,7 @@ class VolcatPlots:
         dlist = self.vdf['time'] 
         clr = ["-m", "-r", "-b", "-c", "-g"]
         if isinstance(nums,list): vlist = self.vmass[nums[0]:nums[1]]
-        else: vlist = self.vmass
+        else: vlist = self.vdf['mass']
         for jjj, volc in enumerate(vlist):
             volc = volc.values.flatten()
             volc = [x for x in volc if x > threshold]
@@ -336,6 +336,10 @@ class VolcatPlots:
             df = vdf
 
         df = self._vdf.calc_mer(df)
+        # this deals with if there are duplicate times in the file.
+        # TODO - is using max appropriate?
+        # did this partially to preserve the time column which is used for plotting.
+        # sum and mean do not preserve the time column.
         df2 = df.groupby('time_elapsed').max()
         tmasslist = df2['mass']
         dtlist = df2.index
@@ -549,7 +553,7 @@ class VolcatPlots:
             splinedf = self.make_spline(s=smooth,vdf=df)
             mer = self.spline.derivative()
             ys = mer(splinedf.index)
-            ax.plot(splinedf.time,1e9*ys,self.main_clr, linestyle='-',linewidth=1,alpha=0.8)
+            ax.plot(splinedf.time,1e9*ys,self.main_clr, linestyle='-',linewidth=4,alpha=0.8)
             #ax.plot(xval,-1*ys*1e9,'k.', LineWidth=2,alpha=0.8)
         ax.set_ylabel('kg s$^{-1}$')
         ax.set_xlabel('Time')
