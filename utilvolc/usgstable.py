@@ -11,8 +11,8 @@ import datetime
 ################################################################################################
 class USGStable(object):
       """represents usgs preliminary spreadshet of eruption source parameters for volcanoes of the world"""
-      def __init__(self, dir="/pub/Scratch/alicec/Plumeria/" , fname="usgs_table.csv"):
-          self.fname = dir + fname
+      def __init__(self, indir="./" , fname="usgs_table.csv"):
+          self.fname = indir + fname
 
       def volclist(self, firstletter, accents=1):
           """Input - name of volcano - must match name in usgs file. Not case senstive.
@@ -53,7 +53,7 @@ class USGStable(object):
           """Input - name of volcano - must match name in usgs file. Not case senstive.
              returns information from the USGS file for the given volcano"""
           #fid = codecs.open(self.fname, encoding='utf-8', mode='r')
-          fid = open(self.fname, 'r')
+          fid = open(self.fname, 'r', errors='ignore', encoding='utf-8')
           volcname = volcname.lower().strip()
           i = 0
           vhash = {}
@@ -73,7 +73,8 @@ class USGStable(object):
                    wline = wline.split(',')
                    vname = self.remove_accents(wline[4].lower().strip(), accents)
                    vname = vname.replace(' ', '')
-                   if vname == volcname:
+                   print(vname)
+                   if volcname in vname:
                       i = 1
                       vhash= self.parseline(wline, accents=accents)
           fid.close()

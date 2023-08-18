@@ -221,10 +221,10 @@ class iwxxmCollection:
             if time[1]:
                 f1time.append(time[1])
                 f1area.append(aaa[1])
-            if time[2]:
+            if time[2] and len(aaa)>2:
                 f2time.append(time[2])
                 f2area.append(aaa[2])
-            if time[3]:
+            if time[3] and len(aaa)>3:
                 f3time.append(time[3])
                 f3area.append(aaa[3])
             if ptype=='bearing':
@@ -593,17 +593,43 @@ class iwxxmVAA:
             value = fhash['value']
             #if fhash['uom']=='FL': value=value*30.48
             return value
-        astr = 'ashCloudExtent'
-        if astr in self.obs.keys():
-            hlist = [FL2m(self.obs[astr])]
+
+        def htfunc(phash):
+            astr = 'ashCloudExtent'
+            if astr in phash.keys():
+                hlist = [FL2m(phash[astr])]
+            else:
+                hlist = [np.nan]
+            return hlist
+        if self.obs['numpoly']>0:
+            polygons = self.obs['poly']
+            plist = []
+            for poly in polygons:
+                plist.append(htfunc(poly))
+            # use the maximum observed polygon height.
+            hlist = [np.max(plist)]
         else:
             hlist = [np.nan]
+
         alist = ['Forecast0','Forecast1','Forecast2']
         for aaa in alist:
-            if astr in self.forecast[aaa].keys():
-               hlist.append(FL2m(self.forecast[aaa][astr]))
-            else:
+            if not aaa in self.forecast.keys(): continue
+            else: forecast = self.forecast[aaa]
+            if forecast['numpoly']<1: 
                hlist.append(np.nan)
+               continue
+            polygons = forecast['poly']
+            plist = []
+            for poly in polygons:
+               plist.append(htfunc(poly))
+            hlist.append([np.max(plist)][0])
+        # use the maximum observed polygon height.
+
+
+            #if astr in self.forecast[aaa].keys():
+            #   hlist.append(FL2m(self.forecast[aaa][astr]))
+            #else:
+            #   hlist.append(np.nan)
         return hlist
 
 
@@ -847,6 +873,7 @@ class iwxxmVAA:
 
     def get_forecast(self, forecast, verbose=False):
         fhash = {}
+        fhash['numpoly']=0
         fhash['poly'] = []
         ss2 = "VolcanicAshForecastConditions"
         if verbose:
@@ -901,7 +928,6 @@ class iwxxmVAA:
         forecastlist = listfindel(findel(forecast, ss2), ss2b)
         fhash['numpoly'] = len(forecastlist)
         for child in forecastlist:
-            print('getting this forecast ')
             f2 = findel(child,ss3b)
             fhash2 = self.subfunc(f2, verbose=verbose)
             fhash['poly'].append(fhash2)
@@ -910,6 +936,7 @@ class iwxxmVAA:
     def get_obs(self, verbose=False):
         vaa = self.vaaroot
         fhash = {}
+        fhash['numpoly']=0
         # list of polygons
         fhash['poly'] = []
         fhash2 = {}
