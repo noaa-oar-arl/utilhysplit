@@ -6,7 +6,8 @@
 #
 # -----------------------------------------------------------------------------
 # Provides class interfaces
-#
+# DFInterface - interface for managing a dataframe associated with a class
+# StatusInterface - 
 # -----------------------------------------------------------------------------
 from abc import ABC, abstractmethod
 
@@ -21,6 +22,8 @@ class AshParamsInterface(ABC):
         as well as write_parallax_corrected for regridding volcat data.
         """
         pass
+
+
 
 
 class DFInterface(ABC):
@@ -54,14 +57,14 @@ class DFInterface(ABC):
         pass
 
     @abstractmethod
-    def add_csv(self):
+    def read(self):
         """
         reads a previously saved csv file and adds it to dataframe
         """
         pass
 
     @abstractmethod
-    def save_csv(self):
+    def save(self):
         """
         saves the dataframe as a csv file
         """

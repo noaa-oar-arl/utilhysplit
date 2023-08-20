@@ -17,6 +17,7 @@ from monetio.models import hysplit
 from utilhysplit import hysplit_gridutil
 
 from utilvolc.get_area import get_area
+from utilvolc.helperinterface import FileNameInterface
 
 logger = logging.getLogger(__name__)
 
@@ -523,7 +524,7 @@ def test_volcat(tdir, daterange=None, verbose=True):
             print("failed")
 
 
-class VolcatName:
+class VolcatName(FileNameInterface):
     """
     12/18/2020 works with 'new' data format.
     parse the volcat name to get information.
@@ -674,7 +675,7 @@ class VolcatName:
         self.date = self.image_date
         return self.vhash
 
-    def create_name(self):
+    def make_filename(self):
         """
         To do: returns filename given some inputs.
         """
@@ -689,6 +690,7 @@ def bbox(darray, fillvalue):
     if fillvalue is None then assume Nan's.
     """
     try:
+        #arr = darray[0, :, :].values
         arr = darray[0, :, :].values
     except:
         print("bbox arr failed", darray)
@@ -764,12 +766,17 @@ def get_data(dset, vname, clip=True):
     gen = dset.data_vars[vname]
     atvals = gen.attrs
     fillvalue = None
-    gen = gen.expand_dims(dim='time')
+    if not 'time' in gen.dims:
+        gen = gen.expand_dims(dim='time')
     if "_FillValue" in gen.attrs:
         fillvalue = gen._FillValue
         gen = gen.where(gen != fillvalue)
         fillvalue = None
-    if clip:
+     
+    if clip and gen.time.shape[0]==1:
+        # do not clip if more than one time period.
+        # bounding box will only be created for first time period
+        # and may clip out relevant values later.
         status = True
         try:
             box = bbox(gen, fillvalue)
@@ -950,6 +957,7 @@ def correct_pc(dset, gridspace=None):
     # 2023 Jan 14 (amc) replace np.arange with np.linspace
 
     mass = get_mass(dset, clip=False)
+    print(mass.time.values)
     height = get_height(dset, clip=False)
     effrad = get_radius(dset, clip=False)
     # ashdet = get_ashdet(dset, clip=False)
@@ -1046,7 +1054,7 @@ def correct_pc(dset, gridspace=None):
     newrad.attrs = effrad.attrs
     area = get_area(mass)
     newarea = get_area(newmass)
-    time = mass.time
+    time = mass.time.values
     pclat = get_pc_latitude(dset, clip=False)
     pclon = get_pc_longitude(dset, clip=False)
     tlist = np.array(matchvals(pclon, pclat, mass, height, area))
@@ -1108,13 +1116,14 @@ def correct_pc(dset, gridspace=None):
             "ash_mass_loading": newmass,
             "ash_cloud_height": newhgt,
             "effective_radius_of_ash": newrad,
-            "ash_mass_loading_total_mass": dset.ash_mass_loading_total_mass,
-            "feature_area": dset.feature_area,
-            "feature_age": dset.feature_age,
-            "feature_id": dset.feature_id,
+            "ash_mass_loading_total_mass": dset.ash_mass_loading_total_mass.values,
+            "feature_area": dset.feature_area.values,
+            "feature_age": dset.feature_age.values,
+            "feature_id": dset.feature_id.values,
         }
     )
 
+    dnew["time"] = time
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.effective_radius_of_ash.attrs.update(dset.effective_radius_of_ash.attrs)
@@ -1122,7 +1131,6 @@ def correct_pc(dset, gridspace=None):
     # dnew.latitude.attrs.update({"standard_name": "latitude"})
     # dnew.longitude.attrs.update({"standard_name": "longitude"})
     # dnew = dnew.assign_attrs(dset.attrs)
-
     checklon = dnew.isel(y=0).longitude.values
     if np.any(checklon > 180.001):
         print("warning longitude values above 180 found")
