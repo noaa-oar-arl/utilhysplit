@@ -1318,3 +1318,16 @@ def combine_regridded(vlist):
         newra = newra.sortby("time", ascending=True)
     hysplit.reset_latlon_coords(newra)
     return newra
+
+
+
+
+
+
+
+
+
+
+
+
+
