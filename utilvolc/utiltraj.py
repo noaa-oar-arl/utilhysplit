@@ -242,7 +242,6 @@ def plume_thick_cal(df):
             df_dist_min = pd.concat([df_dist_min, df_closest_row])
             df_dist_min_criteria_pass = pd.concat([df_dist_min_criteria_pass, df_closest_row])
             critera_pass_traj_num = critera_pass_traj_num + 1
-
     print(critera_pass_traj_num)
     return(df_dist_min, df_dist_min_criteria_pass, critera_pass_traj_num)
 
