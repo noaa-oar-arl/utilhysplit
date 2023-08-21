@@ -181,7 +181,7 @@ if __name__ == "__main__":
         configname = "config.{}.txt".format(JOBID)
         logger.info("CONFIG FILE {}".format(configname))
         logger.info("TESTING")
-        finputs = make_inputs_from_file("./raikoke_eruption/", configname)
+        finputs = make_inputs_from_file("./", configname)
         inp = finputs.inp
         if inp["runflag"] == "inverse":
             finputs.add_inverse_params()

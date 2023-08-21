@@ -27,30 +27,22 @@ Class: InsertVolcat
 
 import os
 import datetime
-import math
-import sys
-import glob
+from glob import glob
 from math import pi
-import datetime
-import monet
-import matplotlib.pyplot as plt
-import seaborn as sns
-from natsort import natsorted
 
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
 import xarray as xr
-from monetio.models import hysplit
-from monetio.models import hytraj
-from utilvolc.utiltraj import combine_traj
 from utilhysplit import emitimes
+
 from utilvolc import volcat
 from utilvolc.volcat import VolcatName
 from utilvolc import get_area
 
 def make_1D_sub(dset):
-    """Makes compressed 1D arrays of latitude, longitude, ash height, mass emission rate, and area
+    """Makes compressed 1D arrays of latitude, longitude, ash height,
+    mass emission rate, and area
     For use in writing emitimes files. See self.write_emit()
     Input:
     areafile: (boolean) True if area netcdf is created
@@ -139,21 +131,6 @@ class EmitName(VolcatName):
         match = match.replace('.nc','')
         match = match.replace('.','')
         return match
-
-def trajectory_input_csv(dataset, data_dir, layer_height):
-    """
-    Functions reads the xarray datasets and generates csv files which can be used by ash_main.py.
-    Input:
-        xarray dataset representing volcat data.
-    Output:
-        csv file used by ash_main.py to create a set of back trajectory runs from the observation 
-        points. 
-    """
-    obs_data_orig = pd.DataFrame(make_1D_sub(dataset), columns=['lat','lon','mass','height','area'])
-    obs_data_orig['time'] = dataset.time.values
-    obs_data_orig["heightI"] = layer_height
-    obs_data_orig.to_csv(data_dir + f'btraj{"%02d" %layer_height}km.csv', index = False)
-    return obs_data_orig
 
 def find_emit(tdir,etype='EMIT'):
     """
@@ -569,9 +546,3 @@ class InsertVolcat:
         if verbose:
             print("Emitimes file written: " + self.wdir + filename)
         return os.path.join(self.wdir,filename)
-
-
-
-
-
-

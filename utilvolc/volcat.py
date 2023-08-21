@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 # 2023 Mar 05 AMC update __pc__loop to use np.nanmax instead of np.max for heights
 # 2023 Mar 05 AMC fixed bug in calculation of numd in  set_array function inside correct_pc function
 
-
 """
 This script contains routines that open/read VOLCAT data in xarray format,
 manipulate arrays as necessary, and plots desirable variables.
@@ -166,7 +165,6 @@ def check_times(fname):
     ghash = check_global_attrs(dset)
     match_times(ghash,edate,idate) 
     check_vals(idate,ghash,dset)
-
 
 
 def open_dataset(
@@ -1326,16 +1324,5 @@ def combine_regridded(vlist):
         newra = newra.sortby("time", ascending=True)
     hysplit.reset_latlon_coords(newra)
     return newra
-
-
-
-
-
-
-
-
-
-
-
 
 
