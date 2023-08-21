@@ -1,4 +1,5 @@
 import pandas as pd
+from monetio.models import hytraj
 
 def combine_traj(fnames, csvfile=None):
     """
@@ -12,9 +13,10 @@ def combine_traj(fnames, csvfile=None):
     for iii, fnn in enumerate(fnames):
         try:
             df1 = hytraj.open_dataset(fnn)
-        except:
-            print('Failed {}'.format(fnn))
-            continue
+        except Exception as eee:
+            print('Failed to open {}'.format(fnn))
+            print(eee)
+           
         # get trajectory number from the file name
         temp = fnn.split(".")
         trajnum = int(temp[-1])

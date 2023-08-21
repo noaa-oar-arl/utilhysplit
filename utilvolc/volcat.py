@@ -116,11 +116,17 @@ def check_vals(idate, ghash, dset):
     slist.append(dset.full_image_end_time)
     slist.append(dset.first_detection_full_image_start_time)
     slist.append(dset.first_detection_mean_feature_time)
+    slist.append(dset.attrs["event_observation_time"])
     names = ['time_bounds', 'mean_feature_time','full image start time', 'fill image end time',
               'first detection full image start time', 'first detection mean feature time']
+    names.append('event_observation_time')
     for iii, sval in enumerate(slist):
-        print('***', names[iii])
-        if isinstance(sval.values,(list,np.ndarray)):
+        print('***', names[iii], type(sval))
+        if isinstance(sval,str):
+             dstr = "%Y-%m-%dT%H:%M:%SZ"
+             time = datetime.datetime.strptime(sval,dstr)
+             print(time)
+        elif isinstance(sval.values,(list,np.ndarray)):
             for val in sval.values:
                 print(val, type(val))
         else:
@@ -133,7 +139,7 @@ def check_name(fnn):
    vn = VolcatName(fn)
    #for key in vn.vhash.keys():
        #print(key, vn.vhash[key])
-   edate = vn.vhash['edate']
+   edate = vn.vhash['event date']
    idate = vn.vhash['observation_date']
    return edate, idate
 
@@ -154,19 +160,24 @@ def match_times(ghash,edate,idate):
         if ghash[key] == idate.strftime(dfmt):
             print('match',key, 'idate', idate)
     if idate != edate:
-        print('idate, edate difference')
+        print('observation_date {}'.format(idate) )
+        print('event date       {}'.format(edate) )
+        
         print(idate)
         print(edate)
         #print(edate, idate, type(ghash[key]), key)
 
 
 def check_times(fname):
+    """
+    check the times in the filename against times
+    in the file attributes.
+    """
     dset = xr.open_dataset(fname)
-    idate, edate = check_name(fname)
+    edate, idate = check_name(fname)
     ghash = check_global_attrs(dset)
     match_times(ghash,edate,idate) 
     check_vals(idate,ghash,dset)
-
 
 
 def open_dataset(
