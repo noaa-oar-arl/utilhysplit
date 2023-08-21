@@ -34,7 +34,7 @@ def generate_traj_from_df(df):
 
 def generate_traj_from_obsdf(csvname):
     """
-    generate back trajectories from a csv file.
+    generate back trajectories from a csv file. This will create single tdump file for each sample point.
   
     RETURNS
     tuple (time, generate_traj_from_df function)
@@ -43,20 +43,23 @@ def generate_traj_from_obsdf(csvname):
     #return obsdf
     outp = {}
     # one trajectory run per time period.
-    """
-    This block creates tdump files grouped in 
-    same measured time
-    """ 
-#    timelist = obsdf['time'].unique()
-#    for time in timelist:
-#        newdf = obsdf[obsdf['time']==time]
-#        time = pd.to_datetime(time)
-#        yield time, generate_traj_from_df(newdf)
+    timelist = obsdf['time'].unique()
+    for time in timelist:
+        newdf = obsdf[obsdf['time']==time]
+        time = pd.to_datetime(time)
+        yield time, generate_traj_from_df(newdf)
 
+def generate_multrajs_from_obsdf(csvname):
     """
-    This block creates single tdump file for
-    each sample point
+    generate back trajectories from a csv file. this will create tdump files grouped in same measured time.
+
+    RETURNS
+    tuple (time, generate_traj_from_df function)
     """
+    obsdf = pd.read_csv(csvname, parse_dates=["time"])
+    #return obsdf
+    outp = {}
+    # multiple trajectories in single file.
     timelist = obsdf['time'].values
     for tt in range(len(timelist)):
         newdf = obsdf.iloc[[tt]]
