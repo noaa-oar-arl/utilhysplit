@@ -11,7 +11,7 @@ import time
 import monet
 import sys
 
-from utilvolc.ashutil import fix_volc_name
+from utilvolc.volcano_names import fix_volc_name
 from utilvolc.runhelper import Helper
 from utilvolc.runhelper import list_dirs
 from utilvolc.runhelper import make_dir

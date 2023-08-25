@@ -498,6 +498,8 @@ class InverseAshEns:
         """
         InverseAshEns class
         """
+        if len(tdirlist) != len(self.fnamelist):
+           logger.warning('Length of directory list not the same as filenamelist')
         for hruns in zip(tdirlist, self.fnamelist):
             self.invlist.append(
                 InverseAsh(
@@ -580,8 +582,8 @@ class InverseAshEns:
             temp = 1
 
     def write_tcm(self, tcm_name, reset=True, verbose=False):
+        #InverseAshEns 
         """
-        InverseAshEns class
         """
         if reset:
             self.reset_tcm()
@@ -596,8 +598,8 @@ class InverseAshEns:
                 self.n_ctrl_list.append(hrun[0].n_ctrl)
 
     def plot_tcm(self, ensi=None):
+        # InverseAshEns 
         """
-        InverseAshEns class
         """
         if ensi:
             self.invlist[ensi].plot_tcm()
@@ -608,9 +610,7 @@ class InverseAshEns:
         return True
 
     def make_tcm_names(self):
-        """
-        InverseAshEns class
-        """
+        #InverseAshEns 
         out_name1 = "out.dat"
         out_name2 = "out2.dat"
         name1 = []
@@ -621,8 +621,8 @@ class InverseAshEns:
         return name1, name2
 
     def create_emit_output(self, outname, source="M4", overwrite=True, attrs=None):
+        #InverseAshEns 
         """
-        InverseAshEns class
         creates netcdf file with outputs from the runs with the emit-times files.
         This can be fed into the AshEval class.
         attrs : dictionary with any additional information to be added to global attributes.
@@ -663,8 +663,8 @@ class InverseAshEns:
         return dset
 
     def run_hysplit(self):
+        #InverseAshEns 
         """
-        InverseAshEns class
         """
         import time
         from utilhysplit.runhandler import ProcessList
@@ -697,8 +697,8 @@ class InverseAshEns:
                 done = True
 
     def run_tcm(self):
+        #InverseAshEns 
         """
-        InverseAshEns class
         """
         out_name1 = "out.dat"
         out_name2 = "out2.dat"
@@ -732,8 +732,8 @@ class InverseAshEns:
             Helper.move("fort.188", "fort.188.{}".format(self.taglist[iii]))
 
     def plot_outdat(self, eii=None, name=None):
+        # InverseAshEns
         """
-        InverseAshEns class
         eii : int or list of ints.
 
         Plot of modeled vs. observed values.
@@ -762,8 +762,8 @@ class InverseAshEns:
             # plt.show()
 
     def read_outdat(self, eii=None):
+        #InverseAshEns 
         """
-        InverseAshEns class
         eii : int or list of ints.
 
         Returns:
@@ -786,24 +786,20 @@ class InverseAshEns:
         return ilist
 
     def make_emit_name(self, subdir, tag):
+        # InverseAshEns 
         """
-        InverseAshEns class
         """
         return os.path.join(self.subdir, "{}_{}".format(tag, self.emitname))
 
     def add_phash(self, phash=None):
-        """
-        InverseAshEns class
-        """
+        # InverseAshEns 
         if not isinstance(phash, dict):
             self.phash = self.invlist[0].phash
         else:
             self.phash = phash
 
     def make_efile(self, vloc, emis_threshold=1e5, eii=None):
-        """
-        InverseAshEns class
-        """
+        # InverseAshEns 
         """
         creates emit-times, CONTROL and SETUP files.
         vloc : [longitude, latitude]
@@ -872,8 +868,8 @@ class InverseAshEns:
             # return efile
 
     def save_emis(self, savename, eii=None, name=None, ens=True):
+        # InverseAshEns 
         """
-        InverseAshEns class
         Saves emissions in a csv file
         """
         ilist = self.read_outdat(eii)
@@ -890,10 +886,11 @@ class InverseAshEns:
             self.invlist[0].make_outdat_df(df, savename=savename, part="condense")
 
     def plot_outdat_all(
+        # InverseAshEns 
         self, eii=None, unit="kg/s", profile=False, ax=None, name=None, subdirlist=None
     ):
         """
-        InverseAshEns class
+        For plotting files in more than one subdirectory together.
         """
         if isinstance(subdirlist, str):
             subdirlist = [subdirlist]
@@ -913,7 +910,7 @@ class InverseAshEns:
         for iii, sdir in enumerate(subdirlist):
             self.subdir = sdir
             labels.append(sdir.split("/")[-1])
-            ax = self.plot_outdat_ts(
+            ax, axg = self.plot_outdat_ts(
                 eii=eii,
                 unit=unit,
                 clr="#" + cmlist[iii],
@@ -935,10 +932,12 @@ class InverseAshEns:
     def plot_outdat_ts(
         self, eii=None, unit="kg/s", clr=None, profile=False, ax=None, name=None
     ):
+        # InverseAshEns 
         """
-        InverseAshEns class
+        eii :
         """
         # Ensemble.
+        dflist = []
         sns.set_style("whitegrid")
         sns.set_context("notebook")
         if not ax:
@@ -946,10 +945,16 @@ class InverseAshEns:
             ax = fig.add_subplot(1, 1, 1)
         # list of InverseOutDat objects
         ilist = self.read_outdat(eii)
+
         if not clr:
-            clrlist = ["--k", "--r", "--b", "--g", "--c", "--y", "--m"]
+            cmap = "viridis"
+            cm = colormaker.ColorMaker(cmap, len(ilist), ctype="hex", transparency=None)
+            clrlist = cm()
+            clrlist = ["#" + x for x in clrlist]
+            # clrlist = ["--k", "--r", "--b", "--g", "--c", "--y", "--m"]
         else:
             clrlist = [clr]
+
         jjj = 0
         for iii, io in enumerate(ilist):
             df = io.get_emis(name=name)
@@ -964,12 +969,33 @@ class InverseAshEns:
                 ax, df = self.invlist[0].plot_outdat_ts(
                     df, ax=ax, clr=clrlist[jjj], unit=unit
                 )
+            df2 = df.copy()
+            df2.columns = df2.columns.map(lambda x: x[1])
+            dflist.append(df2)
             jjj += 1
             if jjj >= len(clrlist):
                 jjj = 0
         plt.xticks(rotation=45)
+
+        # for plotting the mean
+        temp = pd.concat(dflist)
+        temp = temp.reset_index(names='level').groupby('level').mean()
+        if profile:
+            ax, mass = plot_outdat_profile_function(
+                temp, ax=ax, clr="r", label="mean", lw=5, alpha=0.5
+            )
+        else:
+            plot_outdat_ts_function(temp, ax=ax, label='mean', clr="r", lw=5, alpha=0.5)
+
         handles, labels = ax.get_legend_handles_labels()
-        return ax
+        figlegend = plt.figure(2)
+        sns.set_style("white")
+        axg = figlegend.add_subplot(1, 1, 1)
+        axg.legend(handles, labels, loc="center", fontsize=20)
+        axg.axis("off")
+        plt.tight_layout()
+
+        return ax, axg
 
     def make_tcm_mult(
         self,
@@ -979,9 +1005,8 @@ class InverseAshEns:
         remove_sources=None,
         remove_ncs=0,
     ):
+        # InverseAshEns 
         """
-        InverseAshEns class
-
         calls make_tcm_mult for each instance of  InverseAsh in invlist.
         make_tcm_mult creates a TCM for multiple time periods.
         """
@@ -991,8 +1016,8 @@ class InverseAshEns:
             )
 
     def write_descrip(self, tiilist, remove_cols, remove_rows, remove_sources):
+        # InverseAshEns 
         """
-        InverseAshEns class
         """
         with open(os.path.join(self.subdir, "readme.txt"), "a") as fid:
             fid.write("-----------------")
@@ -1004,8 +1029,8 @@ class InverseAshEns:
                 fid.write("Columns Removed")
 
     def prepare_one_time(self, daterange, st="start", zvals=None, verbose=False):
+        # InverseAshEns 
         """
-        InverseAshEns class
         """
 
         for iii, hrun in enumerate(self.invlist):
@@ -1020,8 +1045,8 @@ class InverseAshEns:
                 logger.warning(str(eee))
 
     def compare_plotsA(self, daterange=None, tii=None, zii=None, vloc=None):
+        # InverseAshEns 
         """
-        InverseAshEns class
         daterange : list of datetime.datetime objects
         tii : int
         """
@@ -1146,6 +1171,9 @@ class InverseAsh:
 
         # particle size information
 
+        # tcm_columns will be filled in later.
+        self.tcm_columns = None
+
     def close_arrays(self):
         """ """
         # InverseAsh class
@@ -1171,10 +1199,21 @@ class InverseAsh:
         print("times in cdump file")
         self.print_times()
 
-    def get_cdump(self, tdir, fname, verbose=False, ensdim="ens"):
+    def add_cdump(self,tdir,fname,verbose=False,ensdim='ens'):
+        """
+        adds another cdump file along the time dimension.
+        """
+        cdump = self.get_cdump_sub(tdir,fname,verbose,ensdim)
+        return xr.concat([self.cdump,cdump],dim='time')
+
+    def get_cdump(self,tdir,fname,verbose=False,ensdim='ens'):
+        self.cdump = self.get_cdump_sub(tdir,fname,verbose,ensdim)
+
+    def get_cdump_sub(self, tdir, fname, verbose=False, ensdim="ens"):
         """ """
         # InverseAsh class
         # hysplit output. xarray.
+        print("working on {}".format(fname))
         if isinstance(fname, str):
             cdump = xr.open_dataset(os.path.join(tdir, fname), engine="netcdf4")
             logger.info("opening {} {}".format(tdir, fname))
@@ -1195,7 +1234,8 @@ class InverseAsh:
         if dim == "source":
             cdump = cdump.rename({"ens": "metid"})
             cdump = cdump.rename({"source": "ens"})
-        self.cdump = cdump.fillna(0)
+        return cdump.fillna(0)
+        #self.cdump = cdump.fillna(0)
         # print('HERE')
         # self.cdump = cdump
 
@@ -1508,6 +1548,34 @@ class InverseAsh:
 
         return tcm, model_lat, model_lon, columns
 
+    def make_tcm_columns(
+        self,
+        tii,
+        remove_cols=True,
+        remove_rows=False,
+        remove_sources=None,
+        remove_ncs=0,
+    ):
+        # just get the columns without creating the whole TCM.
+        cdump = self.cdump_hash[tii]
+
+        # remove some sources from consideration.
+        if remove_sources:
+            ekeep = cdump.ens.values
+            for yyy in remove_sources:
+                ekeep = [x for x in ekeep if yyy not in x]
+            cdump = cdump.sel(ens=ekeep)
+
+        # cdump = cdump * self.concmult
+        model = cdump.stack(pos=["y", "x"])
+        model = model.transpose("pos", "ens")
+        # some have nans? Find out why?
+        model = model.fillna(0)
+
+        columns = model.ens.values
+        # self.tcm_columns = columns
+        return columns
+
     def plot_tcm(self):
         """ """
         # InverseAsh class
@@ -1577,6 +1645,7 @@ class InverseAsh:
         datelist = []
         htlist = []
         valra = []
+
         for val in zip(self.tcm_columns, dfdat[1]):
             shash = self.sourcehash[val[0]]
             datelist.append(shash["sdate"])
@@ -2390,7 +2459,7 @@ class InverseAsh:
         if htoptions == 1:
             cdump_b = self.cdump.sel(time=daterange[model_tii])
 
-        vset = self.get_volcat(daterange)
+        vset = self.get_volcat(daterange, verbose)
         buf = 5
         # clip the volcat array before aligning.
         try:
@@ -2811,6 +2880,7 @@ def plot_outdat_ts_function(
     unit="kg/s",
     ax=None,
     clr="--ko",
+    label=None,
     alpha=1,
     lw=1,
     marker=None,
@@ -2836,7 +2906,7 @@ def plot_outdat_ts_function(
     xval = [pd.to_datetime(x) for x in ts.index.values]
     # ax.plot([x[0] for x in ts.index.values], yval, clr)
     ax.plot(
-        xval, yval, color=clr, linestyle="-", marker=marker, alpha=alpha, linewidth=lw
+        xval, yval, label=label, color=clr, linestyle="-", marker=marker, alpha=alpha, linewidth=lw
     )
     # fig.autofmt_xdate()
     ax.set_ylabel("MER {}".format(unit), fontsize=15)
@@ -2945,6 +3015,8 @@ class InverseAshPart(InverseAsh):
         htlist = []
         valra = []
         psizera = []
+        # if not isinstance(self.tcm_columns, (list, np.ndarray)):
+        #   self.tcm_columns = self.make_tcm_columns()
         for val in zip(self.tcm_columns, dfdat[1]):
             shash = self.sourcehash[val[0][0]]
             datelist.append(shash["sdate"])

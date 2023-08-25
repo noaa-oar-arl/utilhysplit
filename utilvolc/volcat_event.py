@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
  Changelog
  2023 Jul 26 AMC  created from material in qva_logic.
- 2023 Aug 20 AMC  created OneEventTime to combine volcat files w
+ 2023 Aug 10 AMC  created OneEventTime to combine volcat files w
                   ith same time but different feature id.
 """
 
@@ -192,9 +192,15 @@ class OneEventTime:
             if ddd.time.values != t1:
                print('WARNING. list has different times')
 
-    def create(self,gridspace):
-        newlist = self.regrid(gridspace)
-        self.combine(newlist)
+        self.mass = xr.DataArray()
+        self.height = xr.DataArray()
+        self.totalmass = None
+        self.totalarea = None
+        self.gridspace = None
+
+    # no setter
+    @property
+    def dset(self):
         dset = xr.Dataset(
                {
                 "ash_mass_loading": self.mass,
@@ -202,7 +208,14 @@ class OneEventTime:
                 "ash_mass_loading_total_mass": self.totalmass,
                 "feature_area":self.totalarea
                 })
-        return dset
+        return dset 
+
+
+    def create(self,gridspace):
+        self.gridspace = gridspace
+        newlist = self.regrid(gridspace)
+        self.combine(newlist)
+        return self.dset
 
     def regrid(self,gridspace):
         newlist = []
@@ -635,15 +648,28 @@ class Events:
         # flist = df2['event_file'].values
         return df2
 
-    def check_fid(self):
-        # Events class 
+    def generate_combined(self,gridspace):
+        for event in self.generate_fid:
+            newlist = []
+            ilist = event.index.values
+            newlist = self.events[ilist[0],ilist[-1]+1]
+            oet = OneEventTime(newlist)
+            oet.create(gridspace=gridspace)
+            yield oet.dset 
+
+    def generate_fid(self):
         jtemp = self.get_flistdf()
         jdt = jtemp["observation_date"].unique()
         for jjj in jdt:
             atemp = jtemp[jtemp["observation_date"] == jjj]
             if len(atemp) > 1:
-                print(atemp[["observation_date", "feature_id",'event_file']]) 
-                print("------------")
+               yield atemp
+
+    def check_fid(self):
+        # Events class 
+        for fid in self.generate_fid():
+            print(fid[["observation_date", "feature_id",'event_file']]) 
+            print("------------")
         print("done checking fid")
 
     def get_volcat_events(self, bysensor=None, daterange=None, verbose=False):

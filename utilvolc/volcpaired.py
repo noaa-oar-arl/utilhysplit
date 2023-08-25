@@ -24,6 +24,13 @@ from utilvolc.inversioninterface import PairedDataInterface
 
 logger = logging.getLogger(__name__)
 
+"""
+Classes
+    VolcatHysplit
+"""
+
+
+
 class VolcatHysplit(PairedDataInterface):
 
     def __init__(
@@ -877,9 +884,9 @@ class VolcatHysplit(PairedDataInterface):
 
         vhra = vhra.transpose("time", "y", "x")
         vhra = vhra[:, a1:a2, b1:b2]
-
         # clip the cdump array before aligning.
-        if "ens" in cdump_a.coords:
+        #if "ens" in cdump_a.coords:
+        if "ens" in cdump_a.dims:
             cdump_a = cdump_a.transpose("ens", "y", "x")
             if htoptions == 1:
                 cdump_b = cdump_b.transpose("ens", "z,", "y", "x")
@@ -894,7 +901,7 @@ class VolcatHysplit(PairedDataInterface):
             a1, a2, b1, b2 = self.clip(dummy, buf=5)
         except:
             print("dummy cannot be clipped", dummy)
-        if "ens" in cdump_a.coords:
+        if "ens" in cdump_a.dims:
             cdump_a = cdump_a[:, a1:a2, b1:b2]
             if htoptions == 1:
                 cdump_b = cdump_b[:, :, a1:a2, b1:b2]
