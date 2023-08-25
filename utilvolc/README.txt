@@ -1,4 +1,5 @@
 
+
 VOLCAT
 
     volcat.py for reading VOLCAT netcdf event files.
@@ -11,7 +12,8 @@ VOLCAT
        TODO - may be some unused functions in here.
 
     volcat_plots.py
-       TODO - 
+       TODO - the box plot and cdf plotting functionality needs updating.
+              
 
     volcat_2dplots.py
 

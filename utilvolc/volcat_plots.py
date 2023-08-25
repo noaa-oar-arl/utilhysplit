@@ -171,10 +171,6 @@ class VolcatPlots:
         return False
 
     def make_arrays(self,das):
-        #das = self.dset
-        #dsetlist = [] 
-        #sns.set()
-        #sns.set_style('whitegrid')
         masslist = []
         dlist = []
         # from maximum value of retrieval
@@ -187,9 +183,12 @@ class VolcatPlots:
         radius = []
         minradius = []
         maxradius = []
-        self.vmass =  []
         sid = []
         satellite = []
+ 
+        # TO DO  - need to save this in some kind of structure?
+        self.vmass =  []
+
 
         n_added=0
         for iii in np.arange(0,len(das)):
