@@ -21,7 +21,22 @@ from utilhysplit import emitimes
 from utilvolc import volcat
 from utilvolc.volcat import VolcatName
 from utilvolc import get_area
+from utilvolc.make_data_insertion import make_1D_sub
 
+def trajectory_input_csv(dataset, data_dir, layer_height):
+    """
+    Functions reads the xarray datasets and generates csv files which can be used by ash_main.py.
+    Input:
+        xarray dataset representing volcat data.
+    Output:
+        csv file used by ash_main.py to create a set of back trajectory runs from the observation 
+        points. 
+    """
+    obs_data_orig = pd.DataFrame(make_1D_sub(dataset), columns=['lat','lon','mass','height','area'])
+    obs_data_orig['time'] = dataset.time.values
+    obs_data_orig["heightI"] = layer_height
+    obs_data_orig.to_csv(data_dir + f'btraj{"%02d" %layer_height}km.csv', index = False)
+    return obs_data_orig
 
 def combine_traj(fnames, csvfile=None):
     """
@@ -59,7 +74,6 @@ def combine_traj(fnames, csvfile=None):
     return trajdf
 
 
-
 def read_traj_output(data_dir, fname, num_layer):
     """
     Function reads the trajectories and measured observations. These paths of the trajectories will
@@ -85,14 +99,25 @@ def traj_volc_dist(vloc, df):
     Outputs:
         dist : array; values of the distances between each point of the trajectory and the volcano.
     """
+    #dist = []
+    #for i in range(len(df)):
+    #    span = (df.latitude[i]-vloc[0])**2 + (df.longitude[i]-vloc[1])**2
+    #    span = math.sqrt(span)
+    #    dist = np.append(dist, span)
+    #    dist = np.array(dist)
+    #return dist
+
+
+
     dist = []
+    deg2km = 111.111
     for i in range(len(df)):
-        span = (df.latitude[i]-vloc[0])**2 + (df.longitude[i]-vloc[1])**2
+    # distance calculation to meters
+        span = ((df.latitude[i] - vloc[0])*deg2km)**2 + ((df.longitude[i] - vloc[1])*deg2km)**2
         span = math.sqrt(span)
         dist = np.append(dist, span)
         dist = np.array(dist)
     return dist
-
 
 
 def traj_layer_cal(tnames_path,obs_path,vloc):
