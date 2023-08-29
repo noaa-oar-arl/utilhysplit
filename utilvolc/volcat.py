@@ -877,7 +877,7 @@ def check_total_mass(dset):
 def get_total_mass(dset):
     # unit is in Tg.
     """Units are in Tg"""
-    return dset.ash_mass_loading_total_mass.values[0]
+    return dset.ash_mass_loading_total_mass.values
 
 
 def get_mass(dset, vname=None, clip=True):

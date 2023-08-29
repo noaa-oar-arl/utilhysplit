@@ -53,19 +53,34 @@ class EventDisplay:
     """
     Helper class for Events
     """
-
-    def __init__(self, eventid="TEST", volcano_name="Unknown", tdir="./"):
+    def __init__(self, eventid="TEST", 
+                       volcano_name="Unknown", 
+                       tdir="./"):
 
         self.eventid = eventid
         self.volcano_name = fix_volc_name(volcano_name)
-        self.tdir = tdir
         self._vplot = vp.VolcatPlots(
             pd.DataFrame(), volcano_name=self.volcano_name, tdir=tdir
         )
+        self.tdir = tdir
+
+    @property
+    def tdir(self,tdir):
+        return self._tdir
+
+    @tdir.setter
+    def tdir(self,tdir):
+        # update the directory for VolcatPlots
+        # read any csv file that is there.
+        self._vplot.tdir=tdir
+        print('HERE', tdir)
         self._vplot.read()
+        self._tdir = tdir
 
     def add(self, events):
+        print('HERE add')
         self._vplot.make_arrays(events)
+        print('HERE add')
         self._vplot.save()
 
 
@@ -309,7 +324,14 @@ class Events:
 
     """
 
-    def __init__(self, eventid="TEST", volcano_name=None, eventlist=None):
+    def __init__(self, eventid="TEST", 
+                       volcano_name=None, 
+                       eventlist=None,
+                       inp=None):
+        """
+          
+        inp : dictionary with information for setting the directories.
+        """  
         # Events class
 
         # need to add using
@@ -321,17 +343,23 @@ class Events:
         self.eventdf = EventDF(edf=pd.DataFrame())
         if isinstance(eventlist, (list, np.ndarray)):
             self.eventdf.add_events(eventlist)
-  
+ 
         self.set_volcano_name(vname=volcano_name)  # str volcano name
 
-        self.status = EventStatus(eventid, "Initialized")
-        self.display = EventDisplay(eventid, self.volcano_name)
-
         # need to set using get_dir or set_dir methods.
-        self.ndir = None  # directory where VOLCAT files are
-        self.pdir = None  # directory where parallax corrected volcat files are
-        self.edir = None  # directory where emit-times files are
-        self.idir = None  # directory where inversion runs are
+        self.ndir = './'  # directory where VOLCAT files are
+        self.pdir = './'  # directory where parallax corrected volcat files are
+        self.edir = './'  # directory where emit-times files are
+        self.idir = './'  # directory where inversion runs are
+        # try the get_dir method.
+        self.get_dir(inp) 
+
+
+        self.status = EventStatus(eventid, "Initialized")
+
+        # send display output to the parallax corrected directory?
+        self.display = EventDisplay(eventid, self.volcano_name, tdir=self.pdir)
+
 
         self.events = []  # list of xarray DataSets with volcat data
         self.pcevents = []  # list of xarray DataSets with volcat data
@@ -439,6 +467,7 @@ class Events:
         set the directory from the dictionary inp.
         """
         # Events class
+        if not isinstance(inp,dict): return None
         if "VOLCAT_DIR" not in inp.keys():
             logger.warning("get_dir method input does not contain VOLCAT_DIR")
             return None
@@ -1116,8 +1145,7 @@ def create_event(indf, fdir, vlist=None, verbose=False):
             eventlist.append(evo)
         print("EVENTLIST", len(eventlist))
         if eventlist:
-            eve = Events(volcano_name=volc, eventlist=eventlist)
-            eve.get_dir(inp)
+            eve = Events(volcano_name=volc, eventlist=eventlist,inp=inp)
 
             # set the directories for the event.
             if isinstance(fdir, dict):

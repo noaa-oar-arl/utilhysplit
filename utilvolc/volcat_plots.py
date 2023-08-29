@@ -7,18 +7,29 @@ import matplotlib.pyplot as plt
 import os
 import seaborn as sns
 import xarray as xr
-from utilvolc import volcat
 from utilhysplit.evaluation import hysplit_boxplots
 from utilhysplit.evaluation import statmain
-from utilvolc.qvainterface import DFInterface
 from utilhysplit.plotutils import colormaker
+from utilvolc.qvainterface import DFInterface
+from utilvolc import volcat
 
 logger = logging.getLogger(__name__)
-#TODO - is find_area still used? also in ash_inverse.py
 
+# Classes
+# VolcatPlots
+# VolcatPlotDF (DFInterface)
+
+# some work being done in KarymskyVolcat.ipynb
+
+#TODO - is find_area still used? also in ash_inverse.py
 # 2023 18 July (amc) some of the values such as masstg are no longer being returned as lists.
 
 class VolcatPlotDF(DFInterface):
+    """
+    DataFrame associated with plots in VolcatPlots class.
+    contains information about volcat retrievals.
+    """
+
 
     def __init__(self,edf):
 
@@ -59,10 +70,15 @@ class VolcatPlotDF(DFInterface):
         """
         reads csv file that was previously saved
         """
-        if not cname:
-            cname = os.path.join(ndir, "Volcat.csv")
+        if not os.path.isfile(cname): 
+           return pd.DataFrame()
         dtp = {"time": "datetime64[ns]"}
-        df = pd.read_csv(cname, sep=",", parse_dates=["time"])
+        try:
+            df = pd.read_csv(cname, sep=",", parse_dates=["time"])
+        except Exception as eee:
+            print('cannot read {}'.format(cname))
+            print(eee)
+            return pd.DataFrame()
         return df
 
     def add_csv(self, cname=None):
@@ -70,7 +86,7 @@ class VolcatPlotDF(DFInterface):
         reads csv file that was previously saved and adds it to dataframe.
         """
         dftemp = self.read(cname)
-        self.add_df(dftemp)
+        if not dftemp.empty: self.add_df(dftemp)
 
     @staticmethod
     def calc_mer(df):
@@ -123,7 +139,7 @@ class VolcatPlotDF(DFInterface):
         answer = True
         for req in self._required:
             if req not in df.columns:
-               if verbose: print('WARNING, data frame does not contain required column {}'.format(req))
+               if verbose: logger.warning('WARNING, data frame does not contain required column {}'.format(req))
                answer=False
         return answer
  
@@ -136,11 +152,13 @@ class VolcatPlots:
         """
         self._vdf = VolcatPlotDF(edf=pd.DataFrame())
         self.volcano_name = volcano_name
-        self.tdir = tdir
+        self._tdir = tdir
         self.set_plot_settings()      
  
+
     def make_savename(self):
-        sname = '{}_vplots.csv'.format(self.volcano_name)
+        sname = os.path.join(self._tdir,
+                             '{}_vplots.csv'.format(self.volcano_name))
         return sname
 
     def save(self):
@@ -151,24 +169,22 @@ class VolcatPlots:
         sname =  self.make_savename()
         self._vdf.add_csv(sname)
 
-    def add_dsetlist(self,dsetlist):
-        return -1
-        # sort dset list by time
-        #def ftime(x):
-        #    tval = x.time.values
-        #    if isinstance(tval,(list,np.ndarray)): return tval[0]
-        #    return tval
-        #dsetlist.sort(key=ftime)
-        #self.dset = dsetlist
-        #self.set_plot_settings()
+    @property
+    def tdir(self):
+        return self._tdir
+
+    @tdir.setter
+    def tdir(self,tdir):
+        self._tdir=tdir
 
     # returns the dataframe
     @property
     def vdf(self):
         return self._vdf.edf
+ 
 
     def empty(self):
-        return False
+        return self._vdf.edf.empty
 
     def make_arrays(self,das):
         masslist = []
@@ -189,7 +205,7 @@ class VolcatPlots:
         # TO DO  - need to save this in some kind of structure?
         self.vmass =  []
 
-
+        iii=0
         n_added=0
         for iii in np.arange(0,len(das)):
             checkid = das[iii].attrs['id']
@@ -240,7 +256,13 @@ class VolcatPlots:
             maxradius.append(float(np.max(vrad).values))
 
             satellite.append(das[iii].attrs['platform_ID'])
+            
+            # TODO - use feature ID to greoup together features?            
+            #vvv = volcat.VolcatName(das[iii].attrs['id'])
+            #fid = vvv.vhash['feature id']
+
             sid.append(das[iii].attrs['id'])
+
         #self.dset = dsetlist
         logger.info('Number added {} out of {}'.format(n_added,iii))
         if n_added >0:
@@ -328,6 +350,7 @@ class VolcatPlots:
         return ax
 
     def make_spline(self,s=20,vdf=None):
+
         import scipy.interpolate 
         if not isinstance(vdf,pd.DataFrame): 
             df = self.vdf
@@ -335,15 +358,18 @@ class VolcatPlots:
             df = vdf
 
         df = self._vdf.calc_mer(df)
+
         # this deals with if there are duplicate times in the file.
         # TODO - is using max appropriate?
         # did this partially to preserve the time column which is used for plotting.
         # sum and mean do not preserve the time column.
+
         df2 = df.groupby('time_elapsed').max()
         tmasslist = df2['mass']
         dtlist = df2.index
         dtlist = dtlist
         s = s / float(len(dtlist))
+
         #self.spline = scipy.interpolate.CubicSpline(self.dtlist,self.tmasslist)
         self.spline = scipy.interpolate.UnivariateSpline(dtlist,tmasslist,s=s)
         return df2
@@ -408,17 +434,20 @@ class VolcatPlots:
             clist = cmaker()
             for iii, sensor in enumerate(self.vdf.platform_ID.unique()):
                 newdf = self.vdf[self.vdf['platform_ID']==sensor]
+                label = '{} {}'.format(sensor,newdf.shape[0])
                 self.main_clr='#' + clist[iii]
-                self.sub_plot_mass(ax1,vdf=newdf,yscale=yscale)
+                self.sub_plot_mass(ax1,vdf=newdf,yscale=yscale,label=label)
                 self.sub_plot_area(ax2,vdf=newdf)
                 self.sub_plot_maxht(ax4,vdf=newdf)
                 self.sub_plot_mer(ax3,vdf=newdf,smooth=smooth)
+                handles, labels = ax1.get_legend_handles_labels()
+                ax1.legend(handles,labels)
         else:
             self.sub_plot_mass(ax1,yscale=yscale)
             self.sub_plot_area(ax2)
             self.sub_plot_mer(ax3,smooth=smooth)
             self.sub_plot_maxht(ax4)
-  
+            
         fig.autofmt_xdate()
         plt.tight_layout()
         return fig
@@ -474,7 +503,6 @@ class VolcatPlots:
         ax.set_ylabel('Skewness')
         ax.set_xlabel('Time')
        
-       
     def sub_plot_num(self,ax):
         xval = self.dfstats['date']
         yval = self.dfstats['N']
@@ -482,8 +510,6 @@ class VolcatPlots:
         ax.set_ylabel('Number of Observations')
         ax.set_xlabel('Time')
        
-
- 
     def sub_plot_mass(self,ax,vdf=None,yscale='ln',label=None):
         import matplotlib.ticker as mtick
         def ticks(y,pos):
@@ -497,8 +523,7 @@ class VolcatPlots:
             yval = vdf['mass']
             xval = vdf['time']
 
-        print(self.main_clr)
-        ax.plot(xval,yval,color=self.main_clr,linestyle='-',marker='.')
+        ax.plot(xval,yval,color=self.main_clr,linestyle='-',marker='.',label=label)
         #ax.plot(xval,np.log(yval),self.main_clr)
         if yscale == 'ln': 
            ax.semilogy(base=np.e) 
@@ -540,20 +565,25 @@ class VolcatPlots:
         ax.set_xlabel('Time')
 
     def sub_plot_mer(self,ax, vdf=None,yscale='linear', smooth=0):
+
         if not isinstance(vdf,pd.DataFrame): 
            df = self.vdf
         else:
            df = vdf
+
         df = self._vdf.calc_mer(df)
         xval = df['time']
         yval = df['mer']
         ax.plot(xval,yval,color=self.main_clr,linestyle='',marker='.')
-        if smooth != 0:
+
+        # don't smooth if number of points is too small.
+        if smooth != 0 and df.shape[0]>10:
             splinedf = self.make_spline(s=smooth,vdf=df)
             mer = self.spline.derivative()
             ys = mer(splinedf.index)
             ax.plot(splinedf.time,1e9*ys,self.main_clr, linestyle='-',linewidth=4,alpha=0.8)
             #ax.plot(xval,-1*ys*1e9,'k.', LineWidth=2,alpha=0.8)
+
         ax.set_ylabel('kg s$^{-1}$')
         ax.set_xlabel('Time')
         #ax.semilogy(basey=np.e) 
@@ -571,15 +601,3 @@ class VolcatPlots:
         ax.set_ylabel('Maximum height km')
         ax.set_xlabel('Time')
 
-def find_area(vmass):
-    r2 = vmass.where(vmass>0)
-    r2 = r2.fillna(0)
-    #place ones where above threshold
-    r2 = r2.where(r2<=0)
-    r2 = r2.fillna(1)
-    return int(r2.sum())
-
-
-        
-        #sns.set()
-        #sns.set_style('whitegrid')
