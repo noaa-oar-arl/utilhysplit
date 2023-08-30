@@ -8,6 +8,11 @@ VOLCAT ash
     process_volcat.py executable for writing the parallax corrected files
     volcalert.py      reads volcat alert files
 
+    Data Insertion
+        make_data_insertion.py creates emitimes files from VOLCAT netcdf files.
+
+
+
 Workflow
     qva_logic.py      workflow for creating HYSPLIT forecasts with data fusion
     dtwin.py          digitial twin. in progress

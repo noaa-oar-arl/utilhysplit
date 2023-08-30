@@ -1,3 +1,10 @@
+""" rasterize polygon into xarray grid
+
+Poly2xra class
+VaacPoly class
+
+"""
+
 import xarray as xr
 import shapely.geometry as sgeo
 from affine import Affine

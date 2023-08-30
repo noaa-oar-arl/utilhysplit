@@ -11,9 +11,9 @@ import seaborn as sns
 from utilhysplit.fixlondf import fixlondf
 # Opens the dataset
 
-   
-
- 
+"""
+functions and classes to read and manipulate VOLCAT  data.
+"""   
 
 class volcatSO2L3:
 
@@ -67,7 +67,6 @@ class volcatSO2L3:
         lon = self.dset.lon.values
         lat = self.dset.lat.values
         self.lon, self.lat = np.meshgrid(lon,lat)
-
 
     def sample_and_write(self, nnn=100, fname=None,method=0):
         """

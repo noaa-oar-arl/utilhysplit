@@ -2,6 +2,84 @@
 import datetime
 import numpy as np
 
+def create_runtag(tag, tii, remove_cols, remove_rows, remove_sources, remove_ncs=0):
+    base = tag
+    times = str.join("_", map(str, tii))
+    tag2 = ""
+    if remove_cols:
+        tag2 += "T"
+    else:
+        tag2 += "F"
+    if remove_rows:
+        tag2 += "T"
+    else:
+        tag2 += "F"
+    rval = "Run{}_{}_{}".format(base, times, tag2)
+    if remove_ncs > 0:
+        tag3 = "w{}".format(remove_ncs)
+        rval = "{}_{}".format(rval,tag3)
+    else:
+        tag3 = ""
+    if remove_sources:
+        tag4 = "_{}".format(str.join("_", list(map(str, remove_sources))))
+        rval = "{}_{}".format(rval,tag4)
+    else:
+        tag4 = ""
+    return rval
+
+def create_dlist(shash):
+    """
+    Uses the start date and duration of simulation from the
+    inversion configuration file.
+    """
+    dlist = []
+    sdate = shash["start_date"]
+    dhr = shash["durationOfSimulation"]
+    dt = datetime.timedelta(hours=1)
+    for iii in np.arange(0, dhr):
+        drange = [sdate, sdate + dt]
+        dlist.append(drange)
+        sdate += dt
+    return dlist
+
+
+def get_inp_hash(wdir, configfile):
+    from utilvolc.runhelper import make_inputs_from_file
+    setup = make_inputs_from_file(wdir, configfile)
+    setup.add_inverse_params()
+    return setup.inp
+
+
+def get_sourcehash(wdir, configfile):
+    from utilvolc.invhelper import inverse_get_suffix_list
+    from utilvolc.runhelper import make_inputs_from_file
+
+    setup = make_inputs_from_file(wdir, configfile)
+    setup.add_inverse_params()
+    sourcehash = inverse_get_suffix_list(setup.inp)
+    return sourcehash
+
+def add_config_info(configdir, configfile):
+    """ """
+    # InverseAsh class
+    # the ens dimension holds is key to what emission source was used.
+    # the sourcehash is a dictionary
+    # key is the ensemble number
+    # values is another dictionary with
+    # sdate: begin emission
+    # edate: end emission
+    # bottom : lower height of emission
+    # top : upper height of emission.
+    if configfile:
+        if not os.path.isfile(os.path.join(configdir, configfile)):
+            configfile = None
+    if configfile:
+        sourcehash = get_sourcehash(configdir, configfile)
+        inp = get_inp_hash(configdir, configfile)
+    else:
+        sourcehash = {}
+        inp = {}
+    return inp, sourcehash
 
 def get_suffix(suffix_type, dtfmt, nnn, ndate, bottom, center=None):
     if suffix_type == "int":
