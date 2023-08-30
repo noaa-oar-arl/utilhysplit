@@ -12,6 +12,7 @@ import monet
 import sys
 import xarray as xr
 
+from utilvolc import volcano_names
 from utilvolc.volcano_names import fix_volc_name
 from utilvolc.runhelper import Helper
 from utilvolc.runhelper import list_dirs
@@ -53,9 +54,8 @@ class EventDisplay:
     """
     Helper class for Events
     """
-    def __init__(self, eventid="TEST", 
-                       volcano_name="Unknown", 
-                       tdir="./"):
+
+    def __init__(self, eventid="TEST", volcano_name="Unknown", tdir="./"):
 
         self.eventid = eventid
         self.volcano_name = fix_volc_name(volcano_name)
@@ -65,22 +65,22 @@ class EventDisplay:
         self.tdir = tdir
 
     @property
-    def tdir(self,tdir):
+    def tdir(self, tdir):
         return self._tdir
 
     @tdir.setter
-    def tdir(self,tdir):
+    def tdir(self, tdir):
         # update the directory for VolcatPlots
         # read any csv file that is there.
-        self._vplot.tdir=tdir
-        print('HERE', tdir)
+        self._vplot.tdir = tdir
+        print("HERE", tdir)
         self._vplot.read()
         self._tdir = tdir
 
     def add(self, events):
-        print('HERE add')
+        print("HERE add")
         self._vplot.make_arrays(events)
-        print('HERE add')
+        print("HERE add")
         self._vplot.save()
 
 
@@ -324,14 +324,11 @@ class Events:
 
     """
 
-    def __init__(self, eventid="TEST", 
-                       volcano_name=None, 
-                       eventlist=None,
-                       inp=None):
+    def __init__(self, eventid="TEST", volcano_name=None, eventlist=None, inp=None):
         """
-          
+
         inp : dictionary with information for setting the directories.
-        """  
+        """
         # Events class
 
         # need to add using
@@ -339,27 +336,26 @@ class Events:
         #         add_csv
         #         add_events
 
-
         self.eventdf = EventDF(edf=pd.DataFrame())
         if isinstance(eventlist, (list, np.ndarray)):
             self.eventdf.add_events(eventlist)
- 
+        elif isinstance(eventlist, (pd.core.frame.DataFrame)):
+            self.eventdf.add_df(eventlist)
+
         self.set_volcano_name(vname=volcano_name)  # str volcano name
 
         # need to set using get_dir or set_dir methods.
-        self.ndir = './'  # directory where VOLCAT files are
-        self.pdir = './'  # directory where parallax corrected volcat files are
-        self.edir = './'  # directory where emit-times files are
-        self.idir = './'  # directory where inversion runs are
+        self.ndir = "./"  # directory where VOLCAT files are
+        self.pdir = "./"  # directory where parallax corrected volcat files are
+        self.edir = "./"  # directory where emit-times files are
+        self.idir = "./"  # directory where inversion runs are
         # try the get_dir method.
-        self.get_dir(inp) 
-
+        self.get_dir(inp)
 
         self.status = EventStatus(eventid, "Initialized")
 
         # send display output to the parallax corrected directory?
         self.display = EventDisplay(eventid, self.volcano_name, tdir=self.pdir)
-
 
         self.events = []  # list of xarray DataSets with volcat data
         self.pcevents = []  # list of xarray DataSets with volcat data
@@ -467,7 +463,8 @@ class Events:
         set the directory from the dictionary inp.
         """
         # Events class
-        if not isinstance(inp,dict): return None
+        if not isinstance(inp, dict):
+            return None
         if "VOLCAT_DIR" not in inp.keys():
             logger.warning("get_dir method input does not contain VOLCAT_DIR")
             return None
@@ -1080,8 +1077,27 @@ class Events:
         return ax, ax2, temp
 
 
+def create_event_from_fnames(inp, vname, volclistfile=None):
+    """
+    Create Event object  from the filenames of the event netcdf files.
+    """
+
+    if not isinstance(volclist, str):
+        volclist = "/hysplit-users/alicec/ashapp/data/volclist.txt"
+    vprops = volcano_names.VolcList(volclistfile)
+    vname = fix_volc_name(vname)
+    files = glob.glob("{}/{}/{}".format(inp["VOLCAT_DIR"], vname, "*VOLCAT*nc"))
+    record = vprops.get_record(vname)
+    record = record.to_dict(orient="records")[0]
+    logdf = volcat.flist2eventdf(files, record)
+    eve = Events(volcano_name=vname, eventlist=logdf, inp=inp)
+    return eve
+
+
 def create_event(indf, fdir, vlist=None, verbose=False):
     """
+    Create Event object from dataframe with logfiles.
+
     indf : DataFrame with the following columns
           : volcano_name - str
           : log - str - name of EventFile logfile (.json file)
@@ -1145,7 +1161,7 @@ def create_event(indf, fdir, vlist=None, verbose=False):
             eventlist.append(evo)
         print("EVENTLIST", len(eventlist))
         if eventlist:
-            eve = Events(volcano_name=volc, eventlist=eventlist,inp=inp)
+            eve = Events(volcano_name=volc, eventlist=eventlist, inp=inp)
 
             # set the directories for the event.
             if isinstance(fdir, dict):
