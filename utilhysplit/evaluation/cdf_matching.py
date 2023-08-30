@@ -176,6 +176,7 @@ def cdf_match_volcat(forecast, volcat,
     if thresh2!=0: rfc2 = [x for x in rfc if x >=thresh2]
     else: rfc2 = rfc
     robs2 = [x for x in robs if x >=thresh]
+
     # make sure arrays are the same shape. Two methods.
  
     # pixel matching should take care of making sure
@@ -204,6 +205,7 @@ def cdf_match_volcat(forecast, volcat,
     outputs = cdf_match(rfc2, robs2,scale=scale,pfit=pfit,
                         makeplots=makeplots,figname=figname,
                         figsize=figsize)
+
     return thresh2, outputs[0], outputs[1], outputs[2]
 
 def cdf_match(rfc, robs, scale=None,pfit=1,
@@ -219,7 +221,7 @@ def cdf_match(rfc, robs, scale=None,pfit=1,
    # RETURNS
    poly :  polynomial to use for scaling.
    fc :    the scaled values.
-   rhash : dictionary
+   rhash : dictionary with residuals
    """
    #obs = robs
    #fc  = rfc
