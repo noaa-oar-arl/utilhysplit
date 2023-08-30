@@ -15,14 +15,39 @@ Change log
 """
 
 
+def align(ds1, ds2, tol=0.01,verbose=False):
+    if not compare_grids(ds1, ds2, verbose=False, tolerance=tol):
+        if not compare_grids_compat(ds1, ds2):
+            print("grids are not compatible. cannot align")
+            return False
+        elif verbose:
+            print("grids are compatible. changing grids")
+        vatt = find_grid_specs(ds1)
+        print('V1', vatt)
+        dlat = vatt["Latitude Spacing"]
+        dlon = vatt["Longitude Spacing"]
+        crnr = vatt["llcrnr longitude"]
+        newatt = create_global_grid(dlat, dlon, -180.0)
+        print('NEW', newatt)
+        dnew1 = change_grid(ds1, newatt)
+        dnew2 = change_grid(ds2, newatt)
+
+        dnew1, dnew2 = align_grids(dnew1, dnew2, tolerance=tol)
+    return dnew1, dnew2
+
+
+
+
 def findclose(lat, latval):
     try:
-        rval = np.where(np.isclose(lat, latval,atol=1e-3))[0][0]
+        rval = np.where(np.isclose(lat, latval,atol=5e-2))[0][0]
     except Exception as eee:
+        print('-----------------------------------')
         print(eee)
         print(lat)
         print(latval)
-        print(np.isclose(lat,latval))
+        print(np.isclose(lat,latval,atol=1e-3))
+        print('-----------------------------------')
         rval = None
     return rval
 
@@ -34,6 +59,7 @@ def change_grid(dset,newattr):
     """
     latra = dset.isel(x=0).latitude.values
     lonra = dset.isel(y=0).longitude.values
+    lonra = [x if x<=180.001 else x-360.0 for x in lonra]
     ynew, xnew = get_new_indices(latra,lonra,newattr)
     dset = dset.assign_coords(y=ynew)
     dset = dset.assign_coords(x=xnew)
@@ -57,7 +83,15 @@ def get_new_indices(latra, lonra, attr):
     # latra is the array for the subset of the grid in the array.
     # Add one because convention is that index starts at 1 not 0.
     ilat2 = [findclose(lat, latra[x])+1 for x in np.arange(0, len(latra))]
+
+    #try:
     ilon2 = [findclose(lon, lonra[x])+1 for x in np.arange(0, len(lonra))]
+    #except:
+    #ilon2 = []
+    #for iii in np.arange(0,len(lonra)):
+    #    print('here', lon, lonra[iii])
+    #    print('CLOSE', findclose(lon,lonra[iii]))
+    #    ilon2.append(findclose(lon,lonra[iii])+1)
     return ilat2, ilon2
 
 def attr_check(dset):
@@ -66,7 +100,7 @@ def attr_check(dset):
            return False
     return True
 
-def align_grids(grid1,grid2):
+def align_grids(grid1,grid2,tolerance):
     # takes care of making sure grids are aligned.
     # can use when grid definition not in the attributes.
     grida, gridb = xr.align(grid1, grid2, join='outer')
@@ -74,7 +108,7 @@ def align_grids(grid1,grid2):
     # always update the attributes?
     #if not attr_check(grid1) or not attr_check(grid2):     
     # if grids are not compatible then calc_grids returns empty dictionary.
-    attrs = calc_grids(grid1, grid2, verbose=False)
+    attrs = calc_grids(grid1, grid2, tolerance=tolerance, verbose=False)
     grida.attrs.update(attrs)
     gridb.attrs.update(attrs)
     grida = hysplit.reset_latlon_coords(grida)
@@ -82,7 +116,7 @@ def align_grids(grid1,grid2):
 
     return grida, gridb
 
-def compare_grids(c1,c2,verbose=False, tolerance=1e-3):
+def compare_grids(c1,c2,verbose=False, tolerance=5e-3):
     """
     Returns:
     True if grids are the same
@@ -143,6 +177,7 @@ def check_grids(check, tolerance=1e-5, verbose=False):
 #    else:
 #       return grid
 
+
 def find_grid_specs(grid,verbose=False):
     """
     grid : xarray DataSet or DataArray with regular lat-lon grid.
@@ -189,8 +224,8 @@ def find_grid_specs(grid,verbose=False):
     if corner_lon >= 179.999:
        corner_lon += -360 
     # round dlon and dlat
-    dlon = np.round(dlon*1000)/1000.0
-    dlat = np.round(dlon*1000)/1000.0
+    dlon = np.round(dlon*100)/100.0
+    dlat = np.round(dlon*100)/100.0
 
     attrs = {'llcrnr latitude':  corner_lat,
              'llcrnr longitude': corner_lon,
@@ -219,8 +254,10 @@ def calc_grids(c1,c2,tolerance=1e-3,verbose=False):
        print('grid2' , grid2)
        return {}
     attrs = grid1
-    nlat = np.max([grid1['Number Lat Points'],grid2['Number Lat Points']])
-    nlon = np.max([grid1['Number Lon Points'],grid2['Number Lon Points']])
+    # this needs to be updated.
+    # causing errors so added 10 to each.
+    nlat = np.max([grid1['Number Lat Points'],grid2['Number Lat Points']]) + 10
+    nlon = np.max([grid1['Number Lon Points'],grid2['Number Lon Points']]) + 10
 
     attrs.update({'Number Lat Points' : nlat,
                   'Number Lon Points' : nlon})

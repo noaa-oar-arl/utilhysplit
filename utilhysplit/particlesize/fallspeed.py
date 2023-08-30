@@ -1,8 +1,9 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
 from math import *
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 """
 # PROGRAM:  fallspd.py   
@@ -179,14 +180,3 @@ def create_curves(dpra, rhop=2500, rhoa=1.2, kshape=1 ):
 
     plt.show()
     return stokes_ra, ganser_ra, wilson_ra
-
-
-
-
-
-
-
-
-
-
-

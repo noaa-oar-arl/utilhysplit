@@ -1,15 +1,10 @@
 import datetime
 import os
-
 import numpy as np
-
-# from utilhysplit import hysplit_gridutil
 import pytest
 from monetio.models import hysplit
 
 
-def makera(grid):
-    return -1
 
 
 def test_003():

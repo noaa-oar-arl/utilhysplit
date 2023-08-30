@@ -1,15 +1,17 @@
 # import matplotlib.pyplot as plt
 # import textwrap
 import datetime
+import logging
 import os
 import sys
-import numpy as np
 import warnings
 
-warnings.simplefilter(action="ignore", category=FutureWarning)
+import numpy as np
 import pandas as pd
+
 from utilhysplit import par2conc
-import logging
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 """
 par2df 

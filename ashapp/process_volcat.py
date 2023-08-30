@@ -146,9 +146,9 @@ def second_menu():
 
 
 if __name__ == "__main__":
-    setup_logger(level=logging.WARNING)
+
     #setup_logger()
-    # create a test to run without inputs from web page.
+    setup_logger(level=logging.WARNING)
     logging.getLogger().setLevel(20)
     logging.basicConfig(stream=sys.stdout)
 
@@ -168,13 +168,11 @@ if __name__ == "__main__":
 
         #------------------------------------------------------------------------
         #------------------------------------------------------------------------
-
         if choice in [1,2]:
             choice2 = 0
 
             # get the summary df file
             if choice==1 or original_sumdf.empty:
-                print('here because ', choice, original_sumdf.empty)
                 work = qva_logic.WorkFlow(esetup.inp)
                 print('How many hours back to check? (default = {}, max = {})'.format(24,24*7))
                 hours = input()
@@ -186,6 +184,7 @@ if __name__ == "__main__":
                 if hours > 24*7 : hours = 24*7
                 sumdf = volcat_files.get_summary_file_df(esetup.inp['JPSS_DIR'],hours=hours)
                 original_sumdf = sumdf.copy()
+
             # use the original sumdf file
             elif choice==2:
                 sumdf = original_sumdf.copy()
@@ -215,6 +214,10 @@ if __name__ == "__main__":
                     work.get_volcat(hours=hours,verbose=False)
                     print('created events for ', work.ehash.keys())
                     download=True
+
+               
+                if choice2 == 3:
+                   work.write_parallax_corrected(gridspace = 0.1)
 
                 # write_parallax_corrected
                 if choice2 == 5:

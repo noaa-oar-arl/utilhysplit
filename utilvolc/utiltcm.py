@@ -8,6 +8,17 @@ import seaborn as sns
 
 logger = logging.getLogger(__name__)
 
+"""
+Classes
+    ParametersIn
+    InverseDat
+    InverseOutDat
+
+Functions
+    readoutdat
+"""
+
+
 class ParametersIn:
     """
     simple way of changing the n_ctrl, nx_ctrl and

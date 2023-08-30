@@ -247,8 +247,13 @@ if __name__ == "__main__":
                 r = requests.get(inputUrl, headers={headerstr: API_KEY})
                 a = r.json()
                 JOBID = a["id"]
-            else:
+            elif RUNTYEP == 'dispersion':
                 inputUrl = "{}/runinput/{}".format(RUN_URL, JOBID)
+                r = requests.get(inputUrl, headers={headerstr: API_KEY})
+                a = r.json()
+                a = r.json()
+            elif RUNTYEP == 'datainsertion':
+                inputUrl = "{}/datainsertion/{}".format(RUN_URL, JOBID)
                 r = requests.get(inputUrl, headers={headerstr: API_KEY})
                 a = r.json()
             # print(json.dumps(a, indent=4))
