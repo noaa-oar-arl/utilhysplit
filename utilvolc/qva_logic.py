@@ -55,28 +55,27 @@ logger = logging.getLogger(__name__)
 
 
  Issue = vl.get_files pauses and asks if you want to overwrite the logfiles.
- TODO  -  figure out what permissions need to be set for files.
  TODO  -  generation of parallax corrected files is slow.
- TODO  - generate forecasts from TCM rather than a new run of HYSPLIT.
+ TODO  -  generate forecasts from TCM rather than a new run of HYSPLIT?
 """
 
-# Prata 2018 uses dosage 
+# Prata 2018 uses dosage
 
 
 def workflow():
-    """
-     Set the directories.
-        # inp = {}
-        # inp['JPSS_DIR'] = '/pub/jpsss_upload'
-        # inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
-        # inp['VOLCAT_DIR']= '/pub/ECMWF/JPSS/VOLCAT/Files/'
+
+    # Set the directories.
+    # inp = {}
+    # inp['JPSS_DIR'] = '/pub/jpsss_upload'
+    # inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+    # inp['VOLCAT_DIR']= '/pub/ECMWF/JPSS/VOLCAT/Files/'
 
     # WorkFlow object has following attributes
-        # dirhash
-        # greenlist
-        # sumdf
-        # logdf
-        # ehash
+    # dirhash
+    # greenlist
+    # sumdf
+    # logdf
+    # ehash
 
     # hours = 7*24
     ## Create instance of WorkFlow class
@@ -87,20 +86,27 @@ def workflow():
 
     # Check if more than one file for an observation date.
     # This can occur if two files have different feature ID's
-      # work.check_fid()
+    # work.check_fid()
 
-    #------------------------------------    
+    # ------------------------------------
     # TYPES OF FILES
-    #------------------------------------    
-    # Event summary files. 
-            SummaryFile class. json file. pushed to ARL.
-    # Event Files. 
-            EventFile class. json file. pulled.
-    # Data Files. 
-            see classes and methods in volcat.py. netcdf files. pulled.  
-    # 
-    """
-    #------------------------------------    
+    # ------------------------------------
+    # Event summary files.
+    # SummaryFile class. json file. pushed to ARL.
+    # Event Files.
+    # EventFile class. json file. pulled.
+    # Data Files.
+    # see classes and methods in volcat.py. netcdf files. pulled.
+    #
+
+    # GET INFORMATION FROM summary files
+    d1 = datetime.datetime.now()
+    hours = 24
+    sumdf = volcat_files.get_summary_file_df(inp["JPSS_DIR"], edate=d1, hours=hours)
+
+    #
+
+    # ------------------------------------
     # COMPLETED:
     # done - check for event summary files and read
     # use a text log file to keep track.
@@ -206,32 +212,32 @@ def workflow():
     return 0
 
 
-
 class Region:
     """
     matches different events with the same time
     """
 
-    def __init__(self,target_time,tres,region_name='Region'):
+    def __init__(self, target_time, tres, region_name="Region"):
         self.region_name = region_name
         self.eventlist = []
 
     def add_event(self, event):
         dset = self.match_time(event)
         self.eventlist.extend(dset)
-    
-def match_time(events,target_time,tres):
+
+
+def match_time(events, target_time, tres):
     matches = []
-    tres = datetime.timedelta(hours=tres/60.0)
+    tres = datetime.timedelta(hours=tres / 60.0)
     for eee in events:
         stime = pd.to_datetime(eee.time.values[0])
         if stime > target_time:
-           if stime-target_time < tres: matches.append(eee)
+            if stime - target_time < tres:
+                matches.append(eee)
         else:
-           if target_time -stime < tres: matches.append(eee)
+            if target_time - stime < tres:
+                matches.append(eee)
     return matches
-
-
 
 
 class WorkFlow:
@@ -255,7 +261,7 @@ class WorkFlow:
         self.dirhash = self.set_directories(inp)
         # get list of volcanoes to process data for
         self.greenlist = self.get_greenlist()
-        
+
         # initialize attributes
         # DataFrame with info from summary files
         self.sumdf = pd.DataFrame()
@@ -303,7 +309,7 @@ class WorkFlow:
     def get_sumdf(self, hours=24):
         return get_summary_file_df(self.dirhash["JPSS_DIR"], hours=hours)
 
-    def get_volcat(self, hours=24,  verbose=False):
+    def get_volcat(self, hours=24, verbose=False):
         """
         Retrieves log files from ftp.
         inp : dictionary with file locations
@@ -319,29 +325,32 @@ class WorkFlow:
         # we pull the log files which we want.
         khash["volcano_name"] = self.greenlist
         self.logdf = get_log_files(
-            self.sumdf, inp=self.dirhash,verbose=verbose,**khash
+            self.sumdf, inp=self.dirhash, verbose=verbose, **khash
         )
-        logger.info('retrieved log files') 
+        logger.info("retrieved log files")
 
         # download the event netcdf files
         self.ehash = self.create_ehash()
-        #indf = self.logdf[self.logdf['status']==True]
-        #self.ehash = create_event(indf, self.dirhash, vlist=self.greenlist)
+        # indf = self.logdf[self.logdf['status']==True]
+        # self.ehash = create_event(indf, self.dirhash, vlist=self.greenlist)
         for volc in self.ehash.keys():
             print("download {} netcdf files".format(volc))
-            logfile = '/hysplit-users/alicec/{}_FAILED.txt'.format(fix_volc_name(volc))
-            self.ehash[volc].download(self.dirhash,log=logfile,verbose=verbose)
-
+            logfile = "/hysplit-users/alicec/{}_FAILED.txt".format(fix_volc_name(volc))
+            self.ehash[volc].download(self.dirhash, log=logfile, verbose=verbose)
 
     def create_ehash(self):
         # download netcdf files
-        indf = self.logdf[self.logdf['status']==True]
+        indf = self.logdf[self.logdf["status"] == True]
         ehash = create_event(indf, self.dirhash, vlist=self.greenlist)
         return ehash
 
     def check_log_files(self):
-        dfbad = self.logdf[self.logdf['status']==False]
-        logger.info('Number of files that could not be retrieved {}'.format(len(dfbad.log_url.values)))
+        dfbad = self.logdf[self.logdf["status"] == False]
+        logger.info(
+            "Number of files that could not be retrieved {}".format(
+                len(dfbad.log_url.values)
+            )
+        )
         return dfbad
 
     def check_fid(self):
@@ -368,8 +377,8 @@ class WorkFlow:
     def write_parallax_corrected(self, gridspace=None, elist=None):
 
         failed_list = []
-        if not isinstance(elist,list):
-           elist = self.ehash.keys()
+        if not isinstance(elist, list):
+            elist = self.ehash.keys()
 
         print("WRITING FOR THESE", elist)
         for volc in elist:
@@ -383,8 +392,6 @@ class WorkFlow:
                 failed_list.append(volc)
         print("parallax correction failed for {}".format(", ".join(failed_list)))
         return failed_list
-
-
 
 
 def file_progression():
@@ -481,14 +488,14 @@ def generate_report(vmin=None, vmax=None, greenlist=None, **kwargs):
 
     vnames = os.listdir(data_dir)
     redlist = []
-    #print(vnames)
-    #vnames = vnames[vmin:vmax]
+    # print(vnames)
+    # vnames = vnames[vmin:vmax]
     print(len(vnames))
     for iii, volc in enumerate(vnames):
-        if isinstance(greenlist,list):
-           if not volc in greenlist: 
-              redlist.append(volc)
-              continue
+        if isinstance(greenlist, list):
+            if not volc in greenlist:
+                redlist.append(volc)
+                continue
         fig = plt.figure(figsize=[10, 2])
         try:
             events = list_times(os.path.join(data_dir, volc), pc=False)
@@ -496,42 +503,50 @@ def generate_report(vmin=None, vmax=None, greenlist=None, **kwargs):
             print(eee)
             print("warning in generate report for directory ", volc)
             continue
-        if 'Event_Dates' in events.keys():
+        if "Event_Dates" in events.keys():
             sns.set()
             plt.plot(events["Event_Dates"], events["Num_Files"], "k.")
             plt.title(volc)
             ax = plt.gca()
-            ax.set_ylabel('Number of files for event')
+            ax.set_ylabel("Number of files for event")
             fig.autofmt_xdate()
             plt.tight_layout()
             plt.show()
         else:
-           print(volc, events.keys())
-    return redlist 
+            print(volc, events.keys())
+    return redlist
 
 
-def correct_pc(data_dir, newdir="pc_corrected", daterange=None, verbose=False,gridspace=0.1,dfile_list=None):
+def correct_pc(
+    data_dir,
+    newdir="pc_corrected",
+    daterange=None,
+    verbose=False,
+    gridspace=0.1,
+    dfile_list=None,
+):
     """Create pc_corrected folder if not already there.
     Create pc_corrected netcdf file in pc_corrected folder if not already there
     """
     import sys
+
     # May want to streamline this more so all files are not checked each time!
     # Create pc_corrected netcdf files if not already created, put in pc_corrected folder
     # Make sure data_dir ends with '/'
     # data_dir = os.path.join(data_dir, "")
     # Create pc_corrected folder if not already there
 
-    #edir = '/hysplit-users/alicec/utilhysplit/utilvolc/'
+    # edir = '/hysplit-users/alicec/utilhysplit/utilvolc/'
     processhandler = ProcessList()
     helper = Helper
-    #processhandler.pipe_stdout()
-    #processhandler.pipe_stderr()
+    # processhandler.pipe_stdout()
+    # processhandler.pipe_stderr()
     print(os.getcwd())
-    #sys.exit()
+    # sys.exit()
     make_dir(data_dir, verbose=verbose)
     pc_dir = os.path.join(data_dir, newdir, "")
     # Create list of files original directory
-    if not isinstance(dfile_list,list):
+    if not isinstance(dfile_list, list):
         dfile_list = volcat.find_volcat(
             data_dir, vid=None, daterange=daterange, include_last=True, return_val=3
         )
@@ -540,14 +555,14 @@ def correct_pc(data_dir, newdir="pc_corrected", daterange=None, verbose=False,gr
 
     file_list = []
     pcfile_list = []
-    jjj=0
-    #print("volcat files", dfile_list)
-    logger.info('Number of files to write {}'.format(len(dfile_list)))
+    jjj = 0
+    # print("volcat files", dfile_list)
+    logger.info("Number of files to write {}".format(len(dfile_list)))
     for iii, element in enumerate(dfile_list):
-        if iii%50 == 0:
-           logger.info('Working on file {}'.format(iii))
-        #print("element ", element)
-        #print("--------------")
+        if iii % 50 == 0:
+            logger.info("Working on file {}".format(iii))
+        # print("element ", element)
+        # print("--------------")
         s = element.rfind("/")
         fname = element[s + 1 :]
         pcfname = os.path.splitext(fname)[0] + "_pc.nc"
@@ -555,33 +570,37 @@ def correct_pc(data_dir, newdir="pc_corrected", daterange=None, verbose=False,gr
         if make_pcfile:
             # Create pc_corrected file if not in pc directory
             flist = [fname]
-            volcat.write_parallax_corrected_files(data_dir,pc_dir,flist=flist,gridspace=gridspace,verbose=False)
+            volcat.write_parallax_corrected_files(
+                data_dir, pc_dir, flist=flist, gridspace=gridspace, verbose=False
+            )
             if verbose:
                 print(os.path.join(data_dir, fname))
             try:
-                volcat.write_parallax_corrected_files(data_dir,pc_dir,flist=flist,gridspace=gridspace,verbose=False)
+                volcat.write_parallax_corrected_files(
+                    data_dir, pc_dir, flist=flist, gridspace=gridspace, verbose=False
+                )
             except Exception as eee:
-                print('warning could not write pc corrected file {}'.format(flist[0]))
+                print("warning could not write pc corrected file {}".format(flist[0]))
                 print(eee)
-                print('----') 
-            #cproc = ['python', 'process_volcat.py', data_dir, fname, pc_dir, str(gridspace)]
-            #print(cproc)
-            #processhandler.startnew(cproc,edir)
-            #Helper.execute_with_shell(cproc)
-            #make_pcfile = check_file(pcfname, pc_dir, verbose=verbose)
-            #print('file written', not(make_pcfile), pcfname, pc_dir)
-            #done=False
-            #seconds_to_wait=2
-            #total_time = 0
-            #max_time = 60*6000
-            #while not done:
+                print("----")
+            # cproc = ['python', 'process_volcat.py', data_dir, fname, pc_dir, str(gridspace)]
+            # print(cproc)
+            # processhandler.startnew(cproc,edir)
+            # Helper.execute_with_shell(cproc)
+            # make_pcfile = check_file(pcfname, pc_dir, verbose=verbose)
+            # print('file written', not(make_pcfile), pcfname, pc_dir)
+            # done=False
+            # seconds_to_wait=2
+            # total_time = 0
+            # max_time = 60*6000
+            # while not done:
             #      num_procs = processhandler.checkprocs()
             #      logger.info('{}'.format(processhandler.err))
             #      if num_procs==0: done=True
             #      time.sleep(seconds_to_wait)
             #      total_time += seconds_to_wait
-            #jjj+=1
-            #if jjj>2: sys.exit()
+            # jjj+=1
+            # if jjj>2: sys.exit()
     return None
 
 
@@ -652,7 +671,6 @@ def make_red_list(data_dir):
             fid.write(volc + "\n")
     os.chmod(data_dir + "red_list.txt", 0o666)
     return None
-
 
 
 def make_pc_files(
@@ -1007,18 +1025,19 @@ def write_di_emitimes(
         if event_date:
             dframe = dframe[dframe["edate"] == event_date]
         else:
-            print('available event dates', dframe["edate"].unique())
-            #return
+            print("available event dates", dframe["edate"].unique())
+            # return
 
         imgdates = dframe["idate"].unique()
-        if verbose: print('available image dates', imgdates)
+        if verbose:
+            print("available image dates", imgdates)
         # loop through image dates
         # write one emit-times file per image date.
         # sometimes this will utilize more than one volcat file.
         for iii, idate in enumerate(imgdates):
             # get all files with that image date
             filenames = dframe.loc[dframe["idate"] == idate, "filename"].tolist()
-            #print('working on ', filenames)
+            # print('working on ', filenames)
             date_time = pd.to_datetime(idate)
             # Initialize write_emitimes function
             volcemit = mdi.InsertVolcat(
@@ -1030,18 +1049,20 @@ def write_di_emitimes(
                 pollnum=pollnum,
                 pollpercents=pollpercents,
             )
-            #print('FILENAME', filenames)
-            #overwrite=True
+            # print('FILENAME', filenames)
+            # overwrite=True
             if not volcemit.check_for_file() or overwrite:
                 try:
-                    oname = volcemit.write_emit(area_file=False, clip=clip, verbose=verbose)
+                    oname = volcemit.write_emit(
+                        area_file=False, clip=clip, verbose=verbose
+                    )
                 except:
-                    logger.warning('emit file could not be written')
+                    logger.warning("emit file could not be written")
                     continue
                 logger.info(
                     "Emit-times file written {}".format(volcemit.make_emit_filename())
                 )
-                print('CREATED', oname)
+                print("CREATED", oname)
             else:
                 logger.info(
                     "Emit-times file exists {}".format(volcemit.make_emit_filename())
@@ -1049,19 +1070,24 @@ def write_di_emitimes(
         return None
 
 
-
-def forecast2QVA(dset,qva_filename,kwargs):
+def forecast2QVA(dset, qva_filename, kwargs):
     """
     dset should have units of mg/m3.
     """
     enslist = dset.ens.values
-    qva = ensemble_tools.ATLra(dset,enslist,sourcelist=None, threshlist=[0.2,2,5,10],weights=None,**kwargs)
+    qva = ensemble_tools.ATLra(
+        dset,
+        enslist,
+        sourcelist=None,
+        threshlist=[0.2, 2, 5, 10],
+        weights=None,
+        **kwargs
+    )
     encoding = {}
-    encoding['zlib']=True
-    encoding['complevel']=9
-    ehash={}
-    ehash['Concentration'] = encoding
-    ehash['FrequencyOfExceedance'] = encoding
-    qva.to_netcdf(qva_filename,encoding=ehash) 
+    encoding["zlib"] = True
+    encoding["complevel"] = 9
+    ehash = {}
+    ehash["Concentration"] = encoding
+    ehash["FrequencyOfExceedance"] = encoding
+    qva.to_netcdf(qva_filename, encoding=ehash)
     return qva
-

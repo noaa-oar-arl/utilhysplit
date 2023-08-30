@@ -828,6 +828,7 @@ NUMBER,RN,SN,VN,NAME,LOCATION,STATUS,LATITUDE,NS,VF,LONGITUDE,EW,ELEV,TYPE,TIMEF
 1000-272,10,00,-272,Khangar,Kamchatka,Radiocarbon,54.75,N,,157.38,E,2000,Stratovolcano,D5,S0
 1000-273,10,00,-273,Cherpuk Group,Kamchatka,Radiocarbon,55.55,N,,157.47,E,1868,Pyroclastic cones,D7,S0
 1000-27=,10,00,-27-,Shiveluch,Kamchatka,Historical,56.653,N,,161.360,E,3283,Stratovolcano,D1,S1
+1000-27=,10,00,-27-,Sheveluch,Kamchatka,Historical,56.653,N,,161.360,E,3283,Stratovolcano,D1,S1
 1000-28=,10,00,-28-,Ichinsky,Kamchatka,Historical,55.68,N,,157.73,E,3621,Stratovolcano,D4,M0
 1000-29-,10,00,-29-,Maly Payalpan,Kamchatka,Holocene?,55.82,N,,157.98,E,1802,Shield volcanoes,?,M0
 1000-30-,10,00,-30-,Bolshoi Payalpan,Kamchatka,Holocene?,55.88,N,,157.78,E,1906,Shield volcanoes,?,M0

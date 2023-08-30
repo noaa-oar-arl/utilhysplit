@@ -6,8 +6,8 @@ import numpy as np
 import logging
 import pandas as pd
 from netCDF4 import Dataset
-#from monetio.models import hysplit
-import hysplit
+from monetio.models import hysplit
+#import hysplit
 
 # 01/28/2020 AMC cdump2awips created to make a netcdf file appropriate for input into AWIPS
 #

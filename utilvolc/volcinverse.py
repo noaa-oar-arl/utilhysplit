@@ -327,7 +327,7 @@ class RunInversion(RunInversionInterface):
         self._tcm.write(tcm_name)
         return -1
 
-
+    # TODO also a funciton in volctcm.
     def make_outdat(self):
         """
         makeoutdat for InverseAshPart class.
@@ -371,6 +371,7 @@ class RunInversion(RunInversionInterface):
         ax.legend(handles, labels)
         return ax, ts
 
+    # to do -also a function in volctcm.py
     def make_outdat_df(self, savename=None, part="basic"):
         # InverseAsh class
         """

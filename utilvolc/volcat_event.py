@@ -1025,13 +1025,17 @@ class Events:
                 print("EXCEPTION in plots", eee)
                 print(das[iii].attrs)
                 pass
-            vht.isel(time=0).plot.pcolormesh(
-                ax=ax,
-                x="longitude",
-                y="latitude",
-                cmap="Reds",
-                transform=volcat_transform,
-            )
+            try: 
+                vht.isel(time=0).plot.pcolormesh(
+                    ax=ax,
+                    x="longitude",
+                    y="latitude",
+                    cmap="Reds",
+                    transform=volcat_transform,
+                )
+            except:
+                print('Failed at ', iii)
+                return das[iii] 
 
             # ax.set_xlim(xmin,xmax)
             # ax.set_ylim(ymin,ymax)
