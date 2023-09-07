@@ -184,8 +184,8 @@ class HYSPLITAshNetcdf:
 
     def make_cdump_xra(self, blist, century=None, species=None, inp={}):
         self._cxra = hysplit.combine_dataset(
-            blist, century=century, sample_time_stamp="start", species=species
-        )
+            blist, century=century, sample_time_stamp="start", species=species,
+            verbose=False)
         self.assign_attrs(inp)
 
     def close(self):

@@ -27,25 +27,25 @@ if __name__ == "__main__":
     vprops = volcano_names.VolcList('/hysplit-users/alicec/utilhysplit/ashapp/data/volclist.txt')
 
     edate = datetime.datetime.now()
-    hours = 24
+    hours = 72
     sumdf = volcat_files.get_summary_file_df(inp['JPSS'],hours=hours,edate=edate)
     logdf = volcat_files.get_log_files(sumdf,inp)
     logger.info('Setting up new data {}'.format(sumdf.shape)) 
     logdflist.append(logdf)
 
     # Raikoke case
-    edate = datetime.datetime(2019,06,21)
+    edate = datetime.datetime(2019,6,21)
     hours = 48
     files = glob.glob(inp['VOLCAT_DIR']+'/Raikoke/*VOLCAT*nc')
     vname = volcat.VolcatName(files[0])
     khash = {'volcano_name':['Raikoke']}
-    record = vprops.get_record('Raikoke') 
+    #record = vprops.get_record('Raikoke') 
     # transform into dictionary
-    record = record.to_dict(orient='records')[0]
-    logdf_raikoke = volcat_files.get_log_files(sumdf2,inp,**khash)
-    logdf_raikoke = volcat.flist2eventdf(files, record)
-    logger.info('Setting up Raikoke case {}'.format(sumdf2.shape))
-    logdflist.append(logdf_raikoke)
+    #record = record.to_dict(orient='records')[0]
+    #logdf_raikoke = volcat_files.get_log_files(sumdf2,inp,**khash)
+    #logdf_raikoke = volcat.flist2eventdf(files, record)
+    #logger.info('Setting up Raikoke case {}'.format(sumdf2.shape))
+    #logdflist.append(logdf_raikoke)
 
 
     # Mauna_Loa case
@@ -55,6 +55,7 @@ if __name__ == "__main__":
     khash = {'volcano_name':['Mauna Loa']}
     logdf2 = volcat_files.get_log_files(sumdf2,inp,**khash)
     logger.info('Setting up Mauna Loa case {}'.format(sumdf2.shape))
+    logdflist.append(logdf2)
 
     # Popocatepetl case
     edate = datetime.datetime(2023,5,11)
@@ -64,6 +65,7 @@ if __name__ == "__main__":
     khash = {'volcano_name':['Popocatepetl']}
     logdf3 = volcat_files.get_log_files(sumdf3,inp,**khash)
     logger.info('Setting up Popocatepetl case {}'.format(logdf3.shape))
+    logdflist.append(logdf3)
 
     # Sheveluch case
     #files = glob.glob(inp['VOLCAT_DIR']+'/Sheveluch/*VOLCAT*nc')
@@ -86,10 +88,19 @@ if __name__ == "__main__":
     logdf5 = volcat_files.get_log_files(sumdf5,inp,**khash)
     logger.info('Setting up {} case {}'.format(vname, sumdf5.shape))
 
+    edate = datetime.datetime(2023,8,27)
+    hours = 48
+    sumdf5 = volcat_files.get_summary_file_df(inp['JPSS'],hours=hours,edate=edate)
+    #sumdf5 = sumdf3[sumdf3['volcano_name'] == vname]
+    khash = {'volcano_name':['Shishaldin']}
+    logdf5 = volcat_files.get_log_files(sumdf5,inp,**khash)
+    logger.info('Setting up {} case {}'.format(vname, sumdf5.shape))
+    logdflist.append(logdf5)
+
     #some shishaldin files may have been misnamed as Pavlof
 
     # put them all together
-    totaldf = pd.concat([logdf,logdf2,logdf3,logdf5],axis=0)
+    totaldf = pd.concat(logdflist,axis=0)
     basename = '/hysplit-users/alicec/utilhysplit/ashapp/VolcatDataBase'    
     totaldf.to_csv(basename + '.csv')     
     #connection = sqlite3.connect(basename + ".db")

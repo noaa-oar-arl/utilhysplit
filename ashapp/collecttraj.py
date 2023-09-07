@@ -7,7 +7,7 @@ from ashapp.ashruninterface import ModelCollectionInterface
 from ashapp.runtrajectory import RunTrajectory
 from utilhysplit.runhandler import ProcessList
 from utilvolc.runhelper import is_input_complete
-from trajectory_generators import generate_traj_from_obsdf
+from ashapp.trajectory_generators import generate_traj_from_obsdf
 
 logger = logging.getLogger(__name__)
 
