@@ -89,6 +89,7 @@ def APLra(indra, enslist=None, sourcelist=None):
     coords2 = dict(coords)
     # remove 'ens' from the coordinate dictionary.
     coords2.pop("ens")
+    coords2.pop("source")
     dims = list(dra2.dims)
     # find which dimension is the 'ens' dimension
     dii = dims.index(dim)
@@ -132,7 +133,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
     # if lists are an np.ndarray then testing them with not
     # returns an error.
     if isinstance(sourcelist, np.ndarray):
-        pass
+       sourcelist = list(sourcelist)
     # if no sourcelist is passed and source dimension is only length 1,
     # then 'squeeze' it rather than stack it.
     elif "source" in dra.dims and len(dra.source.values) == 1:
@@ -184,7 +185,7 @@ def ATLra(
     atthash = {}
     atthash["Description"] = "Ensemble relative frequency of exceedance"
     atthash["thresh unit"] = "mg/m3"
-    atthash["unit"] = "percent of ensemble members above threshold"
+    atthash["unit"] = "Fraction of ensemble members above threshold"
     new.attrs.update(atthash)
 
     # ------------------------------------------------

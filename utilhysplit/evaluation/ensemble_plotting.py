@@ -12,7 +12,7 @@ import seaborn as sns
 import xarray as xr
 from matplotlib.colors import BoundaryNorm
 from utilhysplit.evaluation.statmain import cdf
-
+from utilhysplit.evaluation.ensemble_tools import preprocess
 
 """
 FUNCTIONS
@@ -309,30 +309,37 @@ def plotmaxconc(revash, time, enslist, level=1, clevs=None, dim='y', tp='contour
     return ax, rtot
 
 
-def topheight(revash, time, ens, level, thresh=0.01, tp=0):
-    source = 0
+def topheight(revash, time, level, enslist=None,sourcelist=None, thresh=0.01, tp=0):
+
+    revash,dim = preprocess(revash,enslist,sourcelist)
+
     if isinstance(level, int):
         level = [level]
-    iii = 0
-    for lev in level:
+    for iii, lev in enumerate(level):
         lev_value = revash.z.values[lev]
+        print('working on', lev, lev_value)
         r2 = revash.sel(time=time)
-        r2 = r2.isel(ens=ens)
-        r2 = r2.isel(source=source, z=lev)
+        #r2 = r2.isel(ens=ens)
+        #r2 = r2.isel(source=source, z=lev)
+        r2 = r2.isel(z=lev)
         # place zeros where it is below threshold
-        r2 = r2.where(r2 >= thresh)
-        r2 = r2.fillna(0)
+        r2 = xr.where(r2>thresh,lev_value,0)
+        #r2 = r2.where(r2 >= thresh)
+        #r2 = r2.fillna(0)
         # place ones where it is above threshold
-        r2 = r2.where(r2 < thresh)
-        r2 = r2.fillna(lev_value)
+        #r2 = r2.where(r2 < thresh)
+        #r2 = r2.fillna(lev_value)
         if iii == 0:
             rtot = r2
-            rtot.expand_dims('z')
+            rtot = rtot.expand_dims('z')
         else:
-            r2.expand_dims('z')
+            r2 = r2.expand_dims('z')
             rtot = xr.concat([rtot, r2], 'z')
-        rht = rtot.max(dim='z')
-    return rht
+    rht = rtot.max(dim='z')
+    rht2 = xr.where(rtot==0,1e6,rtot)
+    rbt = rht2.min(dim='z')
+    rbt = xr.where(rbt<1e5,rbt,0)
+    return rht, rbt
 
 
 def ATLmass(dra, time, enslist=None, thresh=0.1):

@@ -38,7 +38,7 @@ from matplotlib.colors import BoundaryNorm
 import cartopy
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 from monetio.models import hysplit
-from utilhysplit.evaluation.ensemble_tools import ATL
+from utilhysplit.evaluation.ensemble_tools import ATL, preprocess
 from utilhysplit.plotutils.colormaker import ColorMaker
 
 logger = logging.getLogger(__name__)
@@ -176,12 +176,13 @@ def decide_central_longitude(xorg):
     min_x = np.min(xorg)
     max_x = np.max(xorg)
     # see if values span 180.
-    if min_x < 180 and max_x > 180:
+    #if min_x < 180 and max_x > 180:
+    if min_x < -90 or max_x > 90:
         central_longitude = 180
     else:
         central_longitude = 0
-    return central_longitude
-
+    #return central_longitude
+    return 0
 
 def shift_sub(x):
     if x > 0:
@@ -228,19 +229,24 @@ def set_levels(mass):
     return levels
 
 
-def massload_plot(revash, enslist, name="None", vlist=None):
+def massload_plot(revash, enslist=None,sourcelist=None, name="None", vlist=None):
+    """
+    revash: xarray data-array with dimensions source, ens, time, z, y, x.
+            values are concentrations in mg/m3.
+    vlist: tuple of [latitude, longitude] with volcano location
+    enslist:
+    """
     setup_plot()
-    mass = massload_ensemble_mean(revash, enslist)
-    transform = get_transform()
+    mass = massload_ensemble_mean(revash, enslist,sourcelist)
     iii = 0
     fignamelist = []
     for time in mass.time.values:
-        source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[0], vlist[1])
+        source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[1], vlist[0])
         label = LabelData(
             time, "Column mass loading (ensemble mean)", "g/m$^2$", source
         )
 
-        mass2 = mass.sel(time=time).isel(source=0)
+        mass2 = mass.sel(time=time)
         x = mass2.longitude
         y = mass2.latitude
         # z = mass2.where(mass2!=0)
@@ -278,17 +284,19 @@ def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=
     cm = ColorMaker("plasma", len(levels), ctype="rgb")
     clrs = cm()
     # norm = BoundaryNorm(levels,ncolors=cmap.N,clip=False)
-    cb2 = ax.contourf(x, y, z, levels=levels, colors=clrs, transform=transform)
+    data_transform = get_transform(central_longitude=0)
+    cb2 = ax.contourf(x, y, z, levels=levels, colors=clrs, transform=data_transform)
     # cb2 = ax.pcolormesh(x,y,z,cmap=cmap,transform=transform,norm=norm)
     if isinstance(vlist,(np.ndarray,list,tuple)): 
-        ax.plot(vlist[0], vlist[1], "r^")
-    format_plot(ax, transform)
-    label_ax(dax, labeldata, transform)
+        ax.plot(vlist[1], vlist[0], "r^", transform=data_transform)
+    format_plot(ax, data_transform)
+    label_ax(dax, labeldata, data_transform)
     cb = plt.colorbar(cb2)
     cb.set_label("g/m$^2$")
     if name != "None":
         plt.savefig(name)
-        plt.close()
+    plt.show()
+        #plt.close()
 
 
 def ATLtimeloop(
@@ -437,7 +445,7 @@ def plotATL(
         print("NAME", name)
         if name != "None":
             plt.savefig(name)
-            plt.close()
+            #plt.close()
     else:
         logger.warning("plotATL. no plots created")
         print("no plots")
@@ -547,8 +555,8 @@ def ATLsubplot(
     return cb2
 
 
-def massload_ensemble_mean(revash, enslist):
-    rev2 = revash.sel(ens=enslist)
+def massload_ensemble_mean(revash, enslist=None,sourcelist=None):
+    rev2,dim = preprocess(revash,enslist,sourcelist)
     mass = hysplit.hysp_massload(rev2)
-    massmean = mass.mean(dim="ens")
+    massmean = mass.mean(dim=dim)
     return massmean
