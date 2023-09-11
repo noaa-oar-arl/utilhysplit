@@ -38,21 +38,22 @@ from matplotlib.colors import BoundaryNorm
 import cartopy
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 from monetio.models import hysplit
-from utilhysplit.evaluation.ensemble_tools import ATL, preprocess
+from utilhysplit.evaluation.ensemble_tools import ATL, preprocess, topheight
 from utilhysplit.plotutils.colormaker import ColorMaker
 
 logger = logging.getLogger(__name__)
 
+
 def setup_logger_warning(level=logging.WARNING):
     MESSAGE_FORMAT_INFO = "%(asctime)s.%(msecs)03d %(levelname)s - %(message)s"
-    MESSAGE_FORMAT_DEBUG = \
-    "%(asctime)s.%(msecs)03d %(levelname)s %(name)s - %(message)s"
+    MESSAGE_FORMAT_DEBUG = (
+        "%(asctime)s.%(msecs)03d %(levelname)s %(name)s - %(message)s"
+    )
     import sys
+
     logging.basicConfig(
-            stream=sys.stdout,
-            level=level,
-            format=MESSAGE_FORMAT_INFO,
-            datefmt="%H:%M:%S")
+        stream=sys.stdout, level=level, format=MESSAGE_FORMAT_INFO, datefmt="%H:%M:%S"
+    )
 
 
 class LabelData:
@@ -176,13 +177,14 @@ def decide_central_longitude(xorg):
     min_x = np.min(xorg)
     max_x = np.max(xorg)
     # see if values span 180.
-    #if min_x < 180 and max_x > 180:
+    # if min_x < 180 and max_x > 180:
     if min_x < -90 or max_x > 90:
         central_longitude = 180
     else:
         central_longitude = 0
-    #return central_longitude
+    # return central_longitude
     return 0
+
 
 def shift_sub(x):
     if x > 0:
@@ -229,7 +231,67 @@ def set_levels(mass):
     return levels
 
 
-def massload_plot(revash, enslist=None,sourcelist=None, name="None", vlist=None):
+def get_source_str(vlist):
+    if vlist:
+        source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[1], vlist[0])
+    else:
+        source = "Unknown"
+    return source
+
+
+def height_plot(revash, thresh=0.2, name="None", vlist=None,unit='FL'):
+    setup_plot()
+    source = get_source_str(vlist)
+    figname = "None"
+    if "source" in revash.dims:
+        for source in revash.source.values:
+            height_plot_time(
+                revash.sel(source=source),
+                thresh=thresh,
+                name=name,
+                vlist=vlist,
+                label=str(source),
+                figname=figname,
+                unit=unit
+            )
+        else:
+            height_plot_time(
+                revash, thresh=thresh, name=name, vlist=vlist, label="", figname=figname,unit=unit
+            )
+
+
+def height_plot_time(
+    revash, thresh=0.2, name="None", vlist=None, label="", figname="None",unit='FL'
+):
+    level = np.arange(0, len(revash.z.values))
+    for time in revash.time.values:
+        top, bottom = topheight(revash, time, level, thresh)
+        slabel = LabelData(
+            time,
+            "Top and bottom height of cloud using {} mg/m3 threshold".format(thresh),
+            unit,
+            label,
+        )
+        x = top.longitude
+        y = top.latitude
+        z = top.values
+        central_longitude = decide_central_longitude(x)
+        transform = get_transform(central_longitude)
+        levels = set_height_levels(z)
+        sub_height_plot(x, y, z, transform, levels, slabel, figname, vlist,unit=unit)
+    return -1
+
+
+def set_height_levels(zvals):
+    levs = list(set(list(zvals.flatten() - 1)))
+    levs.sort()
+    levs[0] = 0
+    if len(levs) <= 1:
+        levs.append(100)
+    return levs
+
+
+def massload_plot(revash, enslist=None, sourcelist=None, name="None", vlist=None):
     """
     revash: xarray data-array with dimensions source, ens, time, z, y, x.
             values are concentrations in mg/m3.
@@ -237,23 +299,20 @@ def massload_plot(revash, enslist=None,sourcelist=None, name="None", vlist=None)
     enslist:
     """
     setup_plot()
-    mass = massload_ensemble_mean(revash, enslist,sourcelist)
-    iii = 0
+    mass = massload_ensemble_mean(revash, enslist, sourcelist)
     fignamelist = []
-    for time in mass.time.values:
-        source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[1], vlist[0])
+
+    source = get_source_str(vlist)
+
+    for iii, time in enumerate(mass.time.values):
         label = LabelData(
             time, "Column mass loading (ensemble mean)", "g/m$^2$", source
         )
-
         mass2 = mass.sel(time=time)
         x = mass2.longitude
         y = mass2.latitude
         # z = mass2.where(mass2!=0)
         central_longitude = decide_central_longitude(x)
-        # if central_longitude !=0:
-        #    x = shift_xvals(x.values,central_longitude)
-        #     if iii==0: vlist[0] = shift_xvals(vlist[0],central_longitude)
         transform = get_transform(central_longitude)
 
         figname = name.replace("zzz", "{}".format(iii))
@@ -263,7 +322,6 @@ def massload_plot(revash, enslist=None,sourcelist=None, name="None", vlist=None)
             sub_massload_plot(x, y, z, transform, levels, label, figname, vlist)
         except ValueError as ex:
             print("ERROR: cannot create massload plot at {}: {}".format(time, str(ex)))
-        iii += 1
         fignamelist.append(figname)
     return fignamelist
 
@@ -287,7 +345,7 @@ def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=
     data_transform = get_transform(central_longitude=0)
     cb2 = ax.contourf(x, y, z, levels=levels, colors=clrs, transform=data_transform)
     # cb2 = ax.pcolormesh(x,y,z,cmap=cmap,transform=transform,norm=norm)
-    if isinstance(vlist,(np.ndarray,list,tuple)): 
+    if isinstance(vlist, (np.ndarray, list, tuple)):
         ax.plot(vlist[1], vlist[0], "r^", transform=data_transform)
     format_plot(ax, data_transform)
     label_ax(dax, labeldata, data_transform)
@@ -296,7 +354,51 @@ def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=
     if name != "None":
         plt.savefig(name)
     plt.show()
-        #plt.close()
+    # plt.close()
+
+
+def sub_height_plot(
+    x, y, z, transform, levels, labeldata, name="None", vlist=None, unit="FL"
+):
+    nrow = 2
+    ncol = 1  # second row is for text information.
+    fig, axra = plt.subplots(
+        nrows=nrow,
+        ncols=ncol,
+        figsize=(10, 10),
+        constrained_layout=False,
+        subplot_kw={"projection": transform},
+    )
+    ax = axra[0]
+    dax = axra[1]
+    cmap = plt.get_cmap("binary")
+    norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
+    data_transform = get_transform(central_longitude=0)
+    # cb2 = ax.pcolormesh(x, y, z, levels=levels, cmap=cmap, transform=data_transform)
+    cb2 = ax.pcolormesh(x, y, z, cmap=cmap, transform=transform, norm=norm)
+    if isinstance(vlist, (np.ndarray, list, tuple)):
+        ax.plot(vlist[1], vlist[0], "r^", transform=data_transform)
+
+    format_plot(ax, data_transform)
+    label_ax(dax, labeldata, data_transform)
+    cb = plt.colorbar(cb2, ticks=levels)
+    if unit.upper() == "FL":
+        tick_labels = [meterev2FL(x) for x in levels]
+        cb.ax.set_yticklabels(tick_labels)
+        cb.set_label("Height")
+    elif unit.lower() == "m":
+        tick_labels = levels
+        cb.ax.set_yticklabels(tick_labels)
+        cb.set_label("Height (m)")
+    elif unit.lower() == "km":
+        tick_labels = [x / 1000.0 for x in levels]
+        cb.ax.set_yticklabels(tick_labels)
+        cb.set_label("Height (km)")
+
+    if name != "None":
+        plt.savefig(name)
+    plt.show()
+    # plt.close()
 
 
 def ATLtimeloop(
@@ -325,7 +427,7 @@ def ATLtimeloop(
     norm : boolean
            if True plot percentage of members.
            if False plot number of members.
-           
+
     """
     fignamelist = []
     iii = 0
@@ -334,11 +436,11 @@ def ATLtimeloop(
 
     for time in revash.time.values:
         revash2 = revash.sel(time=time)
-        source=''
-        if isinstance(vlist,(np.ndarray,list,tuple)): 
+        source = ""
+        if isinstance(vlist, (np.ndarray, list, tuple)):
             source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[0], vlist[1])
         label = LabelData(time, "Probability of exceedance", "%", source)
-        rtot = ATL(revash2, enslist=enslist, thresh=thresh,norm=norm)
+        rtot = ATL(revash2, enslist=enslist, thresh=thresh, norm=norm)
         # figname = name.replace('zzz',"{:02d}".format(iii))
         figname = name.replace("zzz", "{}".format(iii))
         if norm:
@@ -387,7 +489,7 @@ def plotATL(
     x = rtot.longitude
     y = rtot.latitude
 
-    if isinstance(vlist,(np.ndarray,list,tuple)): 
+    if isinstance(vlist, (np.ndarray, list, tuple)):
         vlist_copy = vlist.copy()
     else:
         vlist_copy = None
@@ -445,7 +547,7 @@ def plotATL(
         print("NAME", name)
         if name != "None":
             plt.savefig(name)
-            #plt.close()
+            # plt.close()
     else:
         logger.warning("plotATL. no plots created")
         print("no plots")
@@ -470,7 +572,7 @@ def reset_plots():
 def format_plot(ax, transform):
     setup_logger_warning(level=logging.WARNING)
     # ax.add_feature(cartopy.feature.LAND)
-    #ax.add_feature(cartopy.feature.BORDERS)
+    # ax.add_feature(cartopy.feature.BORDERS)
     ax.coastlines("50m")
     # This allows latitude and longitude axis
     # to have different scales.
@@ -483,7 +585,7 @@ def format_plot(ax, transform):
 
     # don't use a different central_longitude when
     # making the tick labels.
-    #return 1
+    # return 1
     gl = ax.gridlines(
         crs=transform,
         draw_labels=True,
@@ -530,7 +632,7 @@ def ATLsubplot(
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
     cb2 = ax.pcolormesh(x, y, z, cmap=cmap, transform=transform, norm=norm)
     # ax.pcolormesh(x, y, z, cmap=cmap, transform=transform, norm=norm)
-    if isinstance(vlist,(np.ndarray,list,tuple)): 
+    if isinstance(vlist, (np.ndarray, list, tuple)):
         ax.plot(vlist[0], vlist[1], "r^")
     # except Exception as ex:
     #    print('exception {} {}'.format(type(ex).__name__, ex.args)
@@ -555,8 +657,8 @@ def ATLsubplot(
     return cb2
 
 
-def massload_ensemble_mean(revash, enslist=None,sourcelist=None):
-    rev2,dim = preprocess(revash,enslist,sourcelist)
+def massload_ensemble_mean(revash, enslist=None, sourcelist=None):
+    rev2, dim = preprocess(revash, enslist, sourcelist)
     mass = hysplit.hysp_massload(rev2)
     massmean = mass.mean(dim=dim)
     return massmean

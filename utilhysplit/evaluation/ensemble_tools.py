@@ -564,68 +564,41 @@ def plot_cdf(ax1, cdfhash, xscale="log", clrs=None, label="time"):
     return ax1
 
 
-# def make_ATL_hysp(xra, variable="p006", threshold=0.0, MER=None):
-# amr version. maybe not needed now that ATL has been modified.
-#    """
-#    Uses threshold value to make binary field of ensemble members.
-#    For use in statistics calculations. Based on mass loading, no vertical component
-#    Inputs:
-#    xra: xarray dataset - netcdf files from hysplit.combine_dataset
-#    variable: variable name (string) from xra
-#    threshold: ash threshold - default=0. (float/integer)
-#    MER: mass eruption rate - default is Mastin equation MER from xra attributes, units are  (float/integer)
-#    Output:
-#    xrabin: binary xarray dataarray (source, x, y)
-#    """
-#
-#    xra2 = (
-#        xra[variable] * 1000.0
-#    )  # Each vertical layer is 1000m - MAY WANT TO ALLOW INPUT
-#    xra2 = xra2.sum(dim="z")  # Summing along z makes the units g/m^2
-#    # May want to add loops for time and ensemble dimension in the future
-#    # MER must used for two ensemble members
-#    if not MER:
-#        MER = xra.attrs[
-#            "Fine Ash MER"
-#        ]  # Allowing for MER input - default is Mastin equation MER
-#
-#    xra3 = xra2
-#    a = 0
-#    while a < len(xra2.source):
-#        if xra2[a, :, :].source in ("CylinderSource", "LineSource"):
-#            xra3[a, :, :] = xra2[a, :, :] * MER
-#        else:
-#            xra3[a, :, :] = xra2[a, :, :]
-#        a += 1
-#
-#    xrabin = xr.where(xra3 >= threshold, 1.0, 0.0)
-#    return xrabin
+def topheight(inash, time, level, enslist=None,sourcelist=None, thresh=0.01):
+    """
+    inash - xarray
 
-
-def topheight(draash, time, ens, level, thresh=0.01):
-    # more work needs to be done on this or there may be
-    # a similar function elsewhere.
-
-    source = 0
+    Returns
+    rht - xarray with highest level that contains concentration above threshold
+    rbt - xarray with lowest level that contains concentration above threshold
+    """
+    if 'time' in inash.dims:
+        inash = inash.sel(time=time)
+    revash,dim = preprocess(inash,enslist,sourcelist)
     if isinstance(level, int):
         level = [level]
-    iii = 0
-    for lev in level:
-        lev_value = draash.z.values[lev]
-        rr2 = draash.sel(time=time)
-        rr2 = rr2.isel(ens=ens)
-        rr2 = rr2.isel(source=source, z=lev)
+    for iii, lev in enumerate(level):
+        lev_value = revash.z.values[lev]
+        rr2 = revash.isel(z=lev)
+        print(rr2.dims, dim)
+        #if dim in rr2.dims:
+        #   rr2 = rr2.max(dim=dim)
         # place zeros where it is below threshold
-        rr2 = rr2.where(rr2 >= thresh)
-        rr2 = rr2.fillna(0)
-        # place ones where it is above threshold
-        rr2 = rr2.where(rr2 < thresh)
-        rr2 = rr2.fillna(lev_value)
+        # place level value in meters where above threshold.
+        rr2 = xr.where(rr2>thresh,lev_value,0)
+
         if iii == 0:
             rtot = rr2
-            rtot.expand_dims("z")
+            rtot = rtot.expand_dims('z')
         else:
-            rr2.expand_dims("z")
-            rtot = xr.concat([rtot, rr2], "z")
-        rht = rtot.max(dim="z")
-    return rht
+            rr2 = rr2.expand_dims('z')
+            rtot = xr.concat([rtot, rr2], 'z')
+    rht = rtot.max(dim='z')
+    rht2 = xr.where(rtot==0,1e6,rtot)
+    rbt = rht2.min(dim='z')
+    rbt = xr.where(rbt<1e5,rbt,0)
+    return rht, rbt
+
+
+
+
