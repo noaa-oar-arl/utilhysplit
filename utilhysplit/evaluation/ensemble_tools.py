@@ -25,7 +25,7 @@ get_pixel_match : finds threshold which would result in same number of pixels in
     ens_boxplot
 
 # Needs checking
-    topheight : returns height of level
+    ATLra output for the problev 50 and 99 levels.
 
 Commented out
     volcATL
@@ -134,6 +134,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
     # returns an error.
     if isinstance(sourcelist, np.ndarray):
        sourcelist = list(sourcelist)
+
     # if no sourcelist is passed and source dimension is only length 1,
     # then 'squeeze' it rather than stack it.
     elif "source" in dra.dims and len(dra.source.values) == 1:
@@ -149,6 +150,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
         dra = dra.isel(ens=0)
     elif "ens" in dra.dims and not enslist:
         enslist = dra.ens.values
+
     if "source" in dra.dims and "ens" in dra.dims:
         dra = dra.rename({"ens": "metens"})
         dra = dra.sel(metens=enslist)
@@ -191,18 +193,29 @@ def ATLra(
     # ------------------------------------------------
     # making gridded concentration
     problev = 50
-    apl = APL(indra, problev=problev)
+    apl = APL(indra, problev=problev,sourcelist=sourcelist,enslist=enslist)
     descrip = "Concentrations at {} percentile level".format(problev)
     atthash = {}
     atthash["Description"] = descrip
     atthash["units"] = "mg/m3"
     apl.attrs.update(atthash)
 
+    problev = 99
+    apl90 = APL(indra, problev=problev,sourcelist=sourcelist,enslist=enslist)
+    descrip = "Concentrations at {} percentile level".format(problev)
+    atthash = {}
+    atthash["Description"] = descrip
+    atthash["units"] = "mg/m3"
+    apl90.attrs.update(atthash)
+
+    # ------------------------------------------------
+
     # ------------------------------------------------
     # making dataset
     dhash = {}
     dhash["FrequencyOfExceedance"] = new
-    dhash["Concentration"] = apl
+    dhash["Concentration"] = apl.drop('percent_level',dim=None)
+    dhash["Concentration99"] = apl90.drop('percent_level',dim=None)
     dset = xr.Dataset(data_vars=dhash)
 
     #nhash = {}
@@ -580,7 +593,6 @@ def topheight(inash, time, level, enslist=None,sourcelist=None, thresh=0.01):
     for iii, lev in enumerate(level):
         lev_value = revash.z.values[lev]
         rr2 = revash.isel(z=lev)
-        print(rr2.dims, dim)
         #if dim in rr2.dims:
         #   rr2 = rr2.max(dim=dim)
         # place zeros where it is below threshold
@@ -599,6 +611,24 @@ def topheight(inash, time, level, enslist=None,sourcelist=None, thresh=0.01):
     rbt = xr.where(rbt<1e5,rbt,0)
     return rht, rbt
 
+
+
+def get_hull(z,thresh1=0.1,thresh2=1000):
+    lat = z.longitude.values.flatten()
+    lon = z.latitude.values.flatten()
+    zzz = z.values.flatten()
+    tlist = list(zip(lat,lon,zzz))
+    print('MAX tlist', np.max(tlist))
+    #thresh=0.1
+    tlist = [x for x in tlist if ~np.isnan(x[2])]
+    tlist = [x for x in tlist if x[2]>=thresh1]
+    tlist = [x for x in tlist if x[2]<=thresh2]
+    print(tlist[0:5])
+    lon = [x[1] for x in tlist]
+    lat = [x[0] for x in tlist]
+    mpts = geotools.make_multi(lon,lat)
+    ch, ep = geotools.concave_hull(mpts,alpha=1)
+    return ch, ep
 
 
 

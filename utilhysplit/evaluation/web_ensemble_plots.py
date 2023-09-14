@@ -40,6 +40,7 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 from monetio.models import hysplit
 from utilhysplit.evaluation.ensemble_tools import ATL, preprocess, topheight
 from utilhysplit.plotutils.colormaker import ColorMaker
+from utilhysplit.evaluation.ensemble_polygons import HeightPolygons
 
 logger = logging.getLogger(__name__)
 
@@ -239,32 +240,53 @@ def get_source_str(vlist):
     return source
 
 
-def height_plot(revash, thresh=0.2, name="None", vlist=None,unit='FL'):
+
+
+def height_plot(revash, thresh=0.2, figname="None", vlist=None, unit="FL"):
+    # TO DO add plotting of bottom height.
     setup_plot()
     source = get_source_str(vlist)
     figname = "None"
     if "source" in revash.dims:
+        # plot for ensemble mean
+        height_plot_time(
+            revash.mean(dim="source"),
+            thresh=thresh,
+            figname=figname,
+            vlist=vlist,
+            label=str(source),
+            unit=unit,
+        )
+        # plot for individual sources
         for source in revash.source.values:
             height_plot_time(
                 revash.sel(source=source),
                 thresh=thresh,
-                name=name,
+                figname=figname,
                 vlist=vlist,
                 label=str(source),
-                figname=figname,
-                unit=unit
+                unit=unit,
             )
         else:
             height_plot_time(
-                revash, thresh=thresh, name=name, vlist=vlist, label="", figname=figname,unit=unit
+                revash,
+                thresh=thresh,
+                figname=figname,
+                vlist=vlist,
+                label="",
+                unit=unit,
             )
 
 
 def height_plot_time(
-    revash, thresh=0.2, name="None", vlist=None, label="", figname="None",unit='FL'
+    revash, thresh=0.2, vlist=None, label="", figname="None", unit="FL"
 ):
     level = np.arange(0, len(revash.z.values))
-    for time in revash.time.values:
+    if 'time' in revash.dims:
+        loopvals = revash.time.values
+    else:
+        loopvals = [999]
+    for time in loopvals:
         top, bottom = topheight(revash, time, level, thresh)
         slabel = LabelData(
             time,
@@ -272,14 +294,19 @@ def height_plot_time(
             unit,
             label,
         )
+        hplot(top,thresh=thresh,label=slabel,figname=figname,vlist=vlist,unit=unit)
+    return -1
+
+def hplot(
+    top, thresh=0.2, vlist=None, label="", figname="None", unit="FL"
+):
         x = top.longitude
         y = top.latitude
         z = top.values
         central_longitude = decide_central_longitude(x)
         transform = get_transform(central_longitude)
         levels = set_height_levels(z)
-        sub_height_plot(x, y, z, transform, levels, slabel, figname, vlist,unit=unit)
-    return -1
+        sub_height_plot(x, y, z, transform, levels, label, figname, vlist, unit=unit)
 
 
 def set_height_levels(zvals):
@@ -355,6 +382,122 @@ def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=
         plt.savefig(name)
     plt.show()
     # plt.close()
+
+
+
+class PlotVAA:
+
+    def __init__(self):
+
+        self._transform = get_transform()
+        self.setup()
+        self._timestep = 3
+
+    def setup(self):
+        nrow = 3
+        ncol = 2 
+        fig, axra = plt.subplots(
+            nrows=nrow,
+            ncols=ncol,
+            figsize=(20, 20),
+            constrained_layout=False,
+            subplot_kw={"projection": self.transform},
+        )
+        self.fig = fig
+        self.axra = axra.flatten() 
+
+    @property
+    def transform(self):
+        return self._transform
+
+    @property
+    def timestep(self):
+        return datetime.timedelta(hours=self._timestep)
+
+    @property
+    def model(self): 
+        return self._model 
+
+    @model.setter
+    def model(self,dset):
+        self._model = dset
+
+
+    def plot(self,vloc,thresh,plotmass=True,ppp='top'):
+        timelist = self._model.time.values
+        zlevs = np.arange(0,len(self._model.z.values))
+        hhh = []
+        lab = []
+        for iii, time in enumerate(timelist):
+            ax = self.axra[iii]
+            xplace, yplace, size = set_ATL_text(iii)
+            size=15
+            dset = self._model.sel(time=time) 
+            top,bottom = topheight(dset,time=time,level=zlevs,thresh=thresh)
+            tpoly = HeightPolygons()
+            if ppp=='top':
+                tpoly.process(top,alpha=0.1)
+            elif ppp=='bottom':
+                tpoly.process(bottom,alpha=0.1)
+            handles,labels = tpoly.plot(ax=self.axra[iii],vloc=vloc,pbuffer=0.15,legend=False)
+            format_plot(self.axra[iii], self.transform)
+            hhh.extend(handles)
+            lab.extend(labels) 
+            time = pd.to_datetime(time) 
+            time_label=time.strftime("%d %b %H:%M UTC")
+            if not plotmass:
+              self.axra[iii].text(
+                xplace,
+                yplace,
+                time_label,
+                va="bottom",
+                ha="center",
+                rotation="horizontal",
+                rotation_mode="anchor",
+                transform=ax.transAxes,
+                size=size,
+                backgroundcolor="white",
+              )
+            if plotmass:
+
+                cset = xr.where(dset==0,np.nan,dset)
+                cset = cset.max(dim='z')
+                #levels = set_levels(cset.values)
+                #norm = BoundaryNorm(levels,ncolors=cmap.N,clip=False)
+
+                cset.plot.pcolormesh(ax=ax,x='longitude',y='latitude',transform=self.transform,cmap='Reds')     
+                latr, lonr = self.find_limit(cset)
+                
+                ax.set_xlim(lonr[0],lonr[1])
+                ax.set_ylim(latr[0],latr[1])
+        handles,labels = self.sort_labels(hhh,lab)
+        self.axra[0].legend(handles,labels)
+
+   
+    def find_limit(self,cset,buf=1):
+        lat = cset.latitude.values
+        lon = cset.longitude.values
+        vals = cset.values
+        a = zip(lat.flatten(),lon.flatten(),vals.flatten())
+        b = [x for x in a if x[2]>1e-6]
+        lat,lon,val = zip(*b)
+        minlat = np.nanmin(lat)
+        maxlat = np.nanmax(lat)
+        minlon = np.nanmin(lon)
+        maxlon = np.nanmax(lon)
+        return (minlat-buf,maxlat+buf), (minlon-buf,maxlon+buf) 
+
+    def sort_labels(self,handles,labels):
+        lset = list(set(labels))
+        lset.sort()
+        hset = []
+        zzz = list(zip(labels,handles))
+        for val in lset:
+            for zval in zzz:
+                if zval[0]==val:
+                   hset.append(zval[1])
+                   break
+        return hset, lset
 
 
 def sub_height_plot(
@@ -503,10 +646,8 @@ def plotATL(
     else:
         nrow = 1
         ncol = 1
-    print("NROW, NCOL", nrow, ncol)
     z = temp.where(temp != 0)
     central_longitude = decide_central_longitude(x)
-    print("central longitude", central_longitude)
     # if central_longitude !=0:
     #   x = shift_xvals(x.values,central_longitude)
     #   vlist_copy[0] = shift_xvals(vlist[0],central_longitude)
@@ -600,8 +741,8 @@ def format_plot(ax, transform):
     gl.left_labels = True
     gl.xformatter = LONGITUDE_FORMATTER
     gl.yformatter = LATITUDE_FORMATTER
-    gl.xlabel_style = {"size": 10, "color": "gray"}
-    gl.ylabel_style = {"size": 10, "color": "gray"}
+    gl.xlabel_style = {"size": 20, "color": "gray"}
+    gl.ylabel_style = {"size": 20, "color": "gray"}
 
 
 def ATLsubplot(
