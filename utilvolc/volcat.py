@@ -937,7 +937,7 @@ def get_atherr(dset):
     return height_err
 
 
-def matchvals(pclat, pclon, massra, height, area):
+def matchvals(pclon, pclat, massra, height, area):
     # pclat : xarray DataArray
     # pclon : xarray DataArray
     # mass  : xarray DataArray
@@ -949,7 +949,7 @@ def matchvals(pclat, pclon, massra, height, area):
     mass = massra.values.flatten()
     height = height.values.flatten()
     area = area.values.flatten()
-    tlist = list(zip(pclat, pclon, mass, height, area))
+    tlist = list(zip(pclon, pclat, mass, height, area))
     # only return tuples in which mass has a valid value
     if "_FillValue" in massra.attrs:
         fill = massra.attrs["_FillValue"]
@@ -1357,3 +1357,37 @@ def combine_regridded(vlist):
         newra = newra.sortby("time", ascending=True)
     hysplit.reset_latlon_coords(newra)
     return newra
+
+
+def volcat2hull(dsetlist,alpha=1):
+    from utilhysplit import geotools
+
+    levlist = range(50,650,50)
+    levlist = [x*100/3.28084/1000 for x in levlist]
+    print(levlist)
+    htlist = levlist
+
+    polyhash = {}
+
+    tlist = []
+    for dset in dsetlist:
+        lat = get_pc_latitude(dset,clip=False)
+        lon = get_pc_longitude(dset,clip=False)
+        ht = get_height(dset,clip=False)
+        mass = get_mass(dset,clip=False)
+        area = get_area(mass)
+        ttt = matchvals(lat,lon,mass,ht,area)
+        tlist.extend(ttt)
+  
+    for iii, ht in enumerate(htlist[1:]):
+        new = [x for x in tlist if x[3]>htlist[iii]]
+        new = [x for x in new if x[3]<ht]
+        longitude = [x[0] for x in new]
+        latitude = [x[1] for x in new]
+        print(ht, len(latitude))
+        if len(latitude)<4: continue
+        mpts = geotools.make_multi(longitude,latitude)
+        ch,ep = geotools.concave_hull(mpts,alpha=alpha)
+        polyhash[ht] = ch
+
+    return polyhash

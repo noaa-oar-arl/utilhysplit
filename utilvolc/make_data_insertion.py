@@ -22,6 +22,9 @@ Class: InsertVolcat
      get_area: calculates area of lat/lon grid
      make_1D: makes 1D arrays of lat, lon, ash height, ash mass, and area
      write_emit: writes emitimes files
+
+     rate is written in units of g/h
+
 --------------
 """
 

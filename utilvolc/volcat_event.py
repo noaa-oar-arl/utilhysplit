@@ -47,7 +47,14 @@ logger = logging.getLogger(__name__)
  2023 Jul 26 AMC  created from material in qva_logic.
  2023 Aug 10 AMC  created OneEventTime to combine volcat files w
                   ith same time but different feature id.
+ 2023 Sep 14 AMC  started adding average method to Events class
+                  started fleshing out EventStatus class.
 """
+
+#TODO 
+# integrate the OneEventTime class into the workflow
+# complete the average method or other way of creating averaged volcat data.
+# 
 
 
 class EventDisplay:
@@ -90,23 +97,53 @@ class EventStatus:
     """
 
     def __init__(self, eventid="TEST", status=None):
+
         self.eventid = eventid
         self.status = status
+      
+        self.start_time=None   # start of events
+        self.current_time=None # last time updated
+        self.end_time=None     # time event was ended.
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self,status):
+        if not isinstance(status,str):
+           try: status = str(status)
+           except Exception as eee:
+                logger.warning(eee)
+        slist = ['Ended','Failed','Ongoing','Paused']
+        if status in slist:
+           self._status = status
+        else:
+           self._status = status          
+
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @start_time.setter
+    def start_time(self,time):
+        if isinstance(time,datetime.datetime):
+            self._start_time=time
 
 
 class EventDF(DFInterface):
-    def __init__(self, edf, fid="TEST"):
+    # columns which are required.
+    required = [
+        "sensor_name",
+        "feature_id",
+        "event_file",
+        "volcano_lat",
+        "volcano_lon",
+        "volcano_name",
+        "observation_date",
+    ]
 
-        # columns which are required.
-        self._required = [
-            "sensor_name",
-            "feature_id",
-            "event_file",
-            "volcano_lat",
-            "volcano_lon",
-            "volcano_name",
-            "observation_date",
-        ]
+    def __init__(self, edf, fid="TEST"):
 
         if self.are_required_columns_present(edf):
             self._edf = edf
@@ -121,7 +158,7 @@ class EventDF(DFInterface):
 
     @property
     def required_columns(self):
-        return self._required
+        return self.required
 
     def save(self, overwrite=False):
         """
@@ -157,7 +194,7 @@ class EventDF(DFInterface):
 
     def are_required_columns_present(self, df):
         answer = True
-        for req in self._required:
+        for req in self.required:
             if req not in df.columns:
                 logger.info(
                     "EventDF WARNING, data frame does not contain required column {}".format(
@@ -392,24 +429,8 @@ class Events:
     def check_sensor(self):
         self.check_val("sensor_name")
 
-    # def filter_sensor(self, sensorname):
-    #    # Events class
-    #    dtemp = self.edf.copy()
-    #    dtemp = dtemp[dtemp['sensor_name']==sensorname]
-    #    self.edf = dtemp
-
     def check_feature_id(self):
-        # Events class
         self.check_val("feature_id")
-        # dtemp = self.edf
-        # sns.set()
-        # for fid in dtemp["feature_id"].unique():
-        #    dtemp2 = dtemp[dtemp["feature_id"] == fid]
-        #    plt.plot(dtemp2["observation_date"], dtemp2["feature_id"], ".")
-        # fig = plt.gcf()
-        # fig.autofmt_xdate()
-        # ax = plt.gca()
-        # ax.set_ylabel("feature id")
 
     def set_dir(self, data_dir, parallax_dir, emit_dir, inv_dir=None, make=False):
         """
@@ -557,7 +578,9 @@ class Events:
             print("NEW FAILURES in {} {}".format(log, newfailed))
 
     def get_closest_time(self, target_time, nmatches=1):
-        # Events class
+        """
+        returns row of edf with cloest time.
+        """
         df2 = self.edf
         df2 = df2[["observation_date", "event_file"]]
         # create column with time delta object showing time differences
@@ -580,7 +603,6 @@ class Events:
         yeslist : list : event files which exist in ndir
         """
         flist = df["event_file"].unique()
-
         yeslist = [x for x in flist if os.path.isfile(os.path.join(ndir, x))]
         return yeslist
 
@@ -720,6 +742,9 @@ class Events:
             yield oet.dset
 
     def generate_fid(self):
+        """
+        find files which have same observation date in order to combine them.
+        """
         jtemp = self.get_flistdf()
         jdt = jtemp["observation_date"].unique()
         for jjj in jdt:
@@ -728,7 +753,9 @@ class Events:
                 yield atemp
 
     def check_fid(self):
-        # Events class
+        """
+        Indicates whether different features are contained in different files.
+        """
         for fid in self.generate_fid():
             print(fid[["observation_date", "feature_id", "event_file"]])
             print("------------")
@@ -775,6 +802,13 @@ class Events:
         self.maxi = len(das)
         return flist
 
+
+    def average(self,d1,d2):
+        timelist = [pd.to_datetime(x.time.values) for x in self.pcevents] 
+        zzz = zip(timelist,self.pcevents)
+        return timelist
+
+
     def get_volcat_events_pc(self, bysensor=None, verbose=False, daterange=None):
         for event in self.pcevents:
             event.close()
@@ -799,7 +833,6 @@ class Events:
 
         def ftime(x):
             return x.time.values[0]
-
         das.sort(key=ftime)
         self.pcevents = das
         self.maxi = len(das)
@@ -824,10 +857,6 @@ class Events:
     # def boxplot(self, vplot, bstep=10):
     #    vplot.make_boxplot(np.arange(0, self.maxi - 1, bstep))
 
-    @property
-    def sumplot(self):
-        return self._vplot
-
     # def vplots(self, clr="-k"):
     # event class
     #    from utilvolc import volcat_plots as vp
@@ -843,9 +872,9 @@ class Events:
     # fig2 = vplot.plot_multiB(fignum=2)
     #     return vplot
 
-    def volcat2poly(self, iii):
-        pcdas = self.pcevents[iii]
-        vmass = volcat.get_mass(das[iii], clip=True)
+    #def volcat2pol(self, iii):
+    #    pcdas = self.pcevents[iii]
+    #    vmass = volcat.get_mass(das[iii], clip=True)
 
     def compare_pc(
         self, pstep, daterange=None, fid=None, central_longitude=0, vlist=None

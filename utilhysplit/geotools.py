@@ -1,6 +1,25 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import numpy as np
 from scipy.spatial import Delaunay
+import shapely.geometry as sgeo
+from shapely.ops import unary_union,  polygonize, transform
+
+
+def plotpoly(sgeo_poly):
+    """xy plot of a shapely polygon"""
+    x, y = sgeo_poly.exterior.xy
+    # plt.plot(x,y)
+    return x, y
+
+
+
+
+
+def plotpoly(sgeo_poly):
+    """xy plot of a shapely polygon"""
+    x, y = sgeo_poly.exterior.xy
+    # plt.plot(x,y)
+    return x, y
 
 
 def distance(p1,p2):
@@ -57,7 +76,7 @@ def concave_hull(mpoints, alpha=1):
     Note.  ep and mpoints can be fed into plot_delauney to plot the Delauney triangles.
            rpoly can be fed in as hull=rpoly. 
     """
-    coords = np.array([x.coords[0] for x in mpoints]) 
+    coords = np.array([x.coords[0] for x in mpoints.geoms]) 
     tri = Delaunay(coords)
     edges = set()
     edge_points = []
@@ -77,9 +96,11 @@ def concave_hull(mpoints, alpha=1):
            edges, edge_points = add_edge(edges, edge_points, coords, ib, ic)
            edges, edge_points = add_edge(edges, edge_points, coords, ic, ia)
 
-    mmm = geometry.MultiLineString(edge_points)
+    mmm = sgeo.MultiLineString(edge_points)
     triangles = list(polygonize(mmm))
-    rpoly= cascaded_union(triangles)
+    
+    #rpoly= cascaded_union(triangles)
+    rpoly= unary_union(triangles)
     return rpoly, edge_points
 
 def make_multi(x,y):
@@ -92,3 +113,16 @@ def make_multi(x,y):
     #poly = mpts.convex_hull
     #coords = list(poly.exterior.coords)
     return mpts
+
+def add_edge(edges, edge_points, coords, iii, jjj):
+    """
+    helper function for concave_hull
+    """
+    if (iii, jjj) in edges or (jjj, iii) in edges:
+        return edges, edge_points
+    else:
+        edges.add((iii, jjj))
+        edge_points.append(coords[[iii, jjj]])
+    return edges, edge_points
+
+

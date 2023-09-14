@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 # TODO - is find_area still used? also in ash_inverse.py
 # 2023 18 July (amc) some of the values such as masstg are no longer being returned as lists.
 
+# TODO plot_dist_stats does not work anymore
+# TODO volcat_describe_plot does not work anymore
 
 class VolcatPlotDF(DFInterface):
     """

@@ -1,3 +1,4 @@
+old clean branch is in /hysplit-users/alicec/clean/utilhysplit. it still has some untracked files in it.
 
 
 VOLCAT
@@ -20,11 +21,33 @@ VOLCAT
 
     TODO - need more functions/methods for identifying/combining volcat files that are at same time
            but have different id numbers. 
+           this has been started in volcat_events with the OneEventTime class.
 
+   volcat_event.py
 
+        FUNCTIONS 
+            create_event_from_fnames
+            create_event 
+
+        Events class
+
+          Attributes:
+              self.eventdf - EventDF class
+
+          Properties
+              edf - dataframe of self.eventdf 
+
+          Probably has too many methods!
+
+        EventDisplay class (helper class)
+        EventStatus  class (helper class)
+        EventDF      class (helper class)
+        OneEventTime class (helper class)
 
 
 QVA creation
+   model_event.py contains classes for helping with QVA creation.
+
  
 qvainterface.py
    TODO - just started writing this.
