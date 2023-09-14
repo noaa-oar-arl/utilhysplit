@@ -7,19 +7,23 @@ from shapely.ops import unary_union,  polygonize, transform
 
 def plotpoly(sgeo_poly):
     """xy plot of a shapely polygon"""
-    x, y = sgeo_poly.exterior.xy
-    # plt.plot(x,y)
-    return x, y
+    if isinstance(sgeo_poly, sgeo.multipolygon.MultiPolygon):
+        for poly in sgeo_poly.geoms:
+            x,y = poly.exterior.xy
+            yield x,y
+    else:
+        x, y = sgeo_poly.exterior.xy
+        # plt.plot(x,y)
+        yield x, y
 
 
 
 
-
-def plotpoly(sgeo_poly):
-    """xy plot of a shapely polygon"""
-    x, y = sgeo_poly.exterior.xy
-    # plt.plot(x,y)
-    return x, y
+#def plotpoly(sgeo_poly):
+#    """xy plot of a shapely polygon"""
+#    x, y = sgeo_poly.exterior.xy
+#    # plt.plot(x,y)
+#    return x, y
 
 
 def distance(p1,p2):
@@ -80,7 +84,11 @@ def concave_hull(mpoints, alpha=1):
     tri = Delaunay(coords)
     edges = set()
     edge_points = []
-    for ia, ib, ic in tri.vertices:
+    #for ia, ib, ic in tri.vertices:
+    done=False
+    while not done:
+      iii=0
+      for ia, ib, ic in tri.simplices:
         pa = coords[ia]
         pb = coords[ib]
         pc = coords[ic]
@@ -95,7 +103,12 @@ def concave_hull(mpoints, alpha=1):
            edges, edge_points = add_edge(edges, edge_points, coords, ia, ib)
            edges, edge_points = add_edge(edges, edge_points, coords, ib, ic)
            edges, edge_points = add_edge(edges, edge_points, coords, ic, ia)
-
+           done=True
+           #print('alpha', alpha,iii)
+        if not done:
+           alpha = alpha/2.0
+        iii+=1
+       
     mmm = sgeo.MultiLineString(edge_points)
     triangles = list(polygonize(mmm))
     

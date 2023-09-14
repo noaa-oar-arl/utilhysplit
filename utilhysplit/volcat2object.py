@@ -22,11 +22,13 @@ from mpl_toolkits.mplot3d import Axes3D
 from pylab import *
 from scipy.io import netcdf
 
-from utilhysplit import ashgeo
+from utilhysplit import geotools
 
 ##notes - fundamental sampling resolution of caliop lidar is 30 meters vertical and 333 meters horizontal.
 ##06/08/15 modified to read pardump binary file (rather than ascii file created by par2asc. 
 ##Also  modified to use pandas dataframes rather than the particle class.
+
+## see related volcat2hull in utilvolc/volcat.py
 
 class InvGroup:
     def __init__(self,key,sorti,htbnds,latbnds,lonbnds):
@@ -39,7 +41,7 @@ class InvGroup:
 
 def plot_geom(chull,clr='-r'):
     for geom in chull:
-        x,y = ashgeo.plotpoly(geom)
+        x,y = geotools.plotpoly(geom)
         plt.plot(x,y,clr)
 
 def plot_pars(pdump,mass2,vloc=None):
@@ -66,11 +68,12 @@ def plot_pars(pdump,mass2,vloc=None):
     try:
         plot_geom(ch)
     except:
-        x,y = ashgeo.plotpoly(ch)
+        x,y = geotools.plotpoly(ch)
         plt.plot(x,y,'-r')
     if vloc: plt.plot(vloc[0],vloc[1],'r^')
     plt.show()
     return sorti
+
 
 def obs2concavehull(obs,thresh=0.1,alpha=1):
     """
@@ -88,9 +91,9 @@ def obs2concavehull(obs,thresh=0.1,alpha=1):
     latitude = obs.latitude.values.flatten()
     mval = obs.values.flatten()
     vpi = np.where(mval > thresh)
-    mpts = ashgeo.make_multi(longitude[vpi],latitude[vpi])
+    mpts = geotools.make_multi(longitude[vpi],latitude[vpi])
     if len(mpts)>=3:
-        chull, edge_points = ashgeo.concave_hull(mpts,alpha=alpha)
+        chull, edge_points = geotools.concave_hull(mpts,alpha=alpha)
     elif(len(mpts)>=2):
         ccc = [x.coords[0] for x in mpts]
         chull = sgeo.LineString(ccc)
