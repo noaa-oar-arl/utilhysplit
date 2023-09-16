@@ -1,4 +1,101 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
+def findzx(zagl,a,b,c,nlvl):
+    dist = b*b-4*a*(c-zagl)
+    zx = (-b+dist**0.5)/(2*a)
+    zx = np.min([np.max([1,zx]),nlvl])
+    return zx
+
+
+class zindex_example():
+
+    def __init__(self):
+        self.zmdl=25000
+        self.zz = 0.5
+        self.zter = 2000  #Colorado elevation is about 2000 m
+        self.nlvl = 71
+        self.a = 5
+        self.b = 5
+        self.c = 0
+
+        self.zagl = (self.zmdl-self.zter)*(1-self.zz)
+        self.zaglp = (self.zmdl)*(1-self.zz)
+
+        self.zsg = get_zsg(self.a,self.b,self.c,self.zmdl,self.nlvl)
+
+        zindex = findzx(self.zaglp,self.a,self.b,self.c,self.nlvl)
+        print(zindex)
+
+        # need to subtract 1 because index for python arrays starts from 0.
+        # while index for fortran arrays starts at 1.
+        #hgts = [self.zmdl*(1-x) for x in self.zsg]
+        x1 = self.zsg[int(np.floor(zindex))-1]
+        x2 = self.zsg[int(np.ceil(zindex))-1]
+        target_index = x1 + (x2-x1)*self.zz
+        print('target', self.zz, 'value', target_index)
+        
+
+
+    def h_agl(self):
+        target = (self.zmdl-self.zter)*(1-self.zz)
+        return target
+
+     
+
+
+def get_zsg(a,b,c,zmdl,nlvl):
+    zsg = []
+    zter=0
+    for nnn in np.arange(1,nlvl+1):
+        # zsg values defined for zter=0
+        ztemp = 1-(a*nnn*nnn + b*nnn + c)/(zmdl+zter)
+        zsg.append(ztemp)
+    zsg = np.array(zsg)
+    return zsg
+
+
+def zsg_plots(zmdl, nlvl):
+    alist = [30,20,15,10,5,2.5]
+    blist = [-25,-15,-5,-10,5,2.5]
+    clist = [5,5,0,10,0,0]
+
+    fig = plt.figure(1,figsize=[10,15])
+    ax = fig.add_subplot(3,1,1)
+    ax2 = fig.add_subplot(3,1,2)
+    ax3 = fig.add_subplot(3,1,3)
+    
+    #sns.set_style('whitegrid')
+    sigmalist = []
+    xval = range(1,nlvl+1,1)
+    for abc in zip(alist,blist,clist):
+        sigma = get_zsg(abc[0],abc[1],abc[2],zmdl,nlvl)
+        sigmalist.append(sigma)
+        lbl = 'a={}, b={}, c={}'.format(abc[0],abc[1],abc[2])
+        ax.plot(xval,sigma, marker='.')
+        ax2.plot(xval,sigma,marker='.',label=lbl)
+        ax3.plot(xval,sigma,marker='.',label=lbl)
+
+    ax.set_ylim(0,1)
+    ax2.set_ylim(0.9,1)
+    ax2.set_xlim(0,10)
+    ax3.set_ylim(0.4,0.6)
+    ax3.set_xlim(45,55)
+    ax3.set_ylabel('sigma value')
+    ax3.set_xlabel('level index')
+    #ax3.grid()
+
+
+    ax.set_xlabel('Level index')
+    ax.set_ylabel('sigma value')
+    ax2.set_xlabel('Level index')
+    handles, labels = ax2.get_legend_handles_labels()
+    ax2.legend(handles,labels)
+    plt.title('ZMDL=25000 m')
+    plt.show()
+
+
+
 
 def metlvl(plev):
 
