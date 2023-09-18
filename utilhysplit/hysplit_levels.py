@@ -49,7 +49,7 @@ def get_zsg(a,b,c,zmdl,nlvl):
     zter=0
     for nnn in np.arange(1,nlvl+1):
         # zsg values defined for zter=0
-        ztemp = 1-(a*nnn*nnn + b*nnn + c)/(zmdl+zter)
+        ztemp = 1-(a*nnn*nnn + b*nnn + c)/(zmdl-zter)
         zsg.append(ztemp)
     zsg = np.array(zsg)
     return zsg
