@@ -23,6 +23,7 @@ from utilvolc.runhelper import is_input_complete, Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
 import ashapp.utildatainsertion as utildi
 
+from ashapp.level_setter import get_levelsetter
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,15 @@ class RunEmitTimes(ModelRunInterface):
         ("DATA_DIR",'req',),
         ("HYSPLIT_DIR",'req'),
         ("jobname",'req'),
+        ("qvaflag",'req'),
         ("durationOfSimulation",'req'),
         ("emitfile",'req'),
         ("jobid",'req'),
         ("samplingIntervalHours",'opt'), 
         ("control",'opt'), 
+        ("bottom",'opt'), 
+        ("top",'opt'), 
+        ("dzconcgrid",'opt'), #vertical resolution of concentration grid in meters.
     ]
 
 
@@ -92,9 +97,15 @@ class RunEmitTimes(ModelRunInterface):
         self.filelocator = inp
         self.so2 = False
 
+        self._levelsetter = get_levelsetter(self.inp)
+
         inp2 = utildi.read_emittimes(self.inp['emitfile'])
         self._inp.update(inp2)
         logger.info('DATE UPDATED from EMITFILE'.format(self._inp['start_date']))
+
+    @property
+    def levelsetter(self):
+        return self._levelsetter
 
     @staticmethod
     def help():
@@ -437,7 +448,8 @@ class RunEmitTimes(ModelRunInterface):
         self._control.concgrids[0].latspan = 180.0
         self._control.concgrids[0].lonspan = 360.0
         # set the levels
-        self.set_levels(self._control.concgrids[0])
+        # self.set_levels(self._control.concgrids[0])
+        self._control.concgrids[0].set_levels(self._levelsetter.levlist)
 
         # emission durations and rates in control should be 0
         # all emissions come from the emitimes file.
@@ -457,25 +469,6 @@ class RunEmitTimes(ModelRunInterface):
 
         self._control.concgrids[0].interval = (self.inp["samplingIntervalHours"], 0)
         self._control.concgrids[0].sampletype = -1
-
-    @staticmethod
-    def set_qva_levels():
-        # every 5000 ft (FL50 chunks)
-        # Approx 1.5 km.
-        levlist_fl = range(50, 650, 50)
-        levlist = [FL2meters(x) for x in levlist_fl]
-        rlist = []
-        plev = "SFC"
-        for lev in levlist_fl:
-            nlev = "FL{}".format(lev)
-            rlist.append("{} to {}".format(plev, nlev))
-            plev = nlev
-        logger.debug(rlist)
-        return levlist, rlist
-
-    def set_levels(self, cgrid):
-        levlist, rlist = self.set_qva_levels()
-        cgrid.set_levels(levlist)
 
 
 
