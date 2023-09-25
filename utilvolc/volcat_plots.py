@@ -4,6 +4,7 @@ import pandas as pd
 import datetime
 import logging
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 import os
 import seaborn as sns
 import xarray as xr
@@ -434,19 +435,37 @@ class VolcatPlots:
         self.spline_clr = "r"
         self.sub_clrs = ["r", "c"]
 
-    def plot_multiB(self, fignum=1):
+    def plot_multiB(self, fignum=1,bysensor=True):
         sns.set_style("whitegrid")
         fig = plt.figure(fignum, figsize=[10, 5])
-
         ax1 = fig.add_subplot(2, 1, 1)
-        self.sub_plot_radius(ax1)
+        ax2 = fig.add_subplot(2, 1, 2)
+        figlegend = plt.figure(fignum+1)
+        axlegend = figlegend.add_subplot(1,1,1) 
+        if bysensor:
+            sensors = self.vdf.platform_ID.unique()
+            cmaker = colormaker.ColorMaker(
+                "viridis", len(sensors), ctype="hex", transparency=None
+            )
+            clist = cmaker()
+            for iii, sensor in enumerate(self.vdf.platform_ID.unique()):
+                newdf = self.vdf[self.vdf["platform_ID"] == sensor]
+                label = "{} {}".format(sensor, newdf.shape[0])
+                self.main_clr = "#" + clist[iii]
+                self.sub_plot_radius(ax1, label=label,vdf=newdf)
+                self.sub_plot_min_mass(ax2,vdf=newdf,both=True)
+                handles, labels = ax1.get_legend_handles_labels()
+                #ax1.legend(handles, labels)
+        else:
 
-        ax3 = fig.add_subplot(2, 1, 2)
-        self.sub_plot_min_mass(ax3, both=True)
-
+            self.sub_plot_radius(ax1)
+            self.sub_plot_min_mass(ax2, both=True)
         fig.autofmt_xdate()
-
-        return fig
+        plt.tight_layout() 
+        axlegend.legend(handles,labels,loc='center',fontsize=20)
+        axlegend.axis("off")
+        plt.tight_layout()
+        return fig, figlegend
 
     def plot_dist_stats(self, fignum=2):
         sns.set_style("whitegrid")
@@ -472,6 +491,8 @@ class VolcatPlots:
         plt.tight_layout()
         return fig
 
+
+
     def plot_multiA(self, fignum=1, smooth=20, yscale="linear", bysensor=True):
 
         sns.set_style("whitegrid")
@@ -488,34 +509,43 @@ class VolcatPlots:
                 "viridis", len(sensors), ctype="hex", transparency=None
             )
             clist = cmaker()
+            cmaker = colormaker.ColorMaker(
+                "autumn", len(sensors), ctype="hex", transparency=None
+            )
+            clist2 = cmaker()
             for iii, sensor in enumerate(self.vdf.platform_ID.unique()):
                 newdf = self.vdf[self.vdf["platform_ID"] == sensor]
                 label = "{} {}".format(sensor, newdf.shape[0])
                 self.main_clr = "#" + clist[iii]
+                self.sub_clrs = ["#" + clist2[iii], '#' + clist2[iii]]
                 self.sub_plot_mass(ax1, vdf=newdf, yscale=yscale, label=label)
                 self.sub_plot_area(ax2, vdf=newdf)
                 self.sub_plot_maxht(ax4, vdf=newdf)
-                self.sub_plot_mer(ax3, vdf=newdf, smooth=smooth)
+                self.sub_plot_mer(ax3, vdf=newdf, smooth=smooth,yscale=yscale)
                 handles, labels = ax1.get_legend_handles_labels()
                 ax1.legend(handles, labels)
         else:
             self.sub_plot_mass(ax1, yscale=yscale)
             self.sub_plot_area(ax2)
-            self.sub_plot_mer(ax3, smooth=smooth)
+            self.sub_plot_mer(ax3, smooth=smooth,yscale=yscale)
             self.sub_plot_maxht(ax4)
 
         fig.autofmt_xdate()
         plt.tight_layout()
         return fig
 
-    def sub_plot_radius(self, ax):
-        yval = self.vdf["radius"]
-        yval2 = self.vdf["minradius"]
-        yval3 = self.vdf["maxradius"]
-        xval = self.vdf["time"]
-        ax.plot(xval, yval, self.main_clr, label="Average")
-        ax.plot(xval, yval2, self.sub_clrs[0], label="Minimum")
-        ax.plot(xval, yval3, self.sub_clrs[1], label="Maximum")
+    def sub_plot_radius(self, ax,label='',vdf=None):
+
+        if not isinstance(vdf, pd.DataFrame):
+            vdf = self.vdf
+
+        yval = vdf["radius"]
+        yval2 = vdf["minradius"]
+        yval3 = vdf["maxradius"]
+        xval = vdf["time"]
+        ax.plot(xval, yval, self.main_clr, label="Average {}".format(label))
+        ax.plot(xval, yval2, self.main_clr, label="Minimum",linestyle='--')
+        ax.plot(xval, yval3, self.main_clr, label="Maximum",linestyle=':')
         ax.set_ylabel("Effective radius")
         ax.set_xlabel("Time")
 
@@ -567,11 +597,11 @@ class VolcatPlots:
         ax.set_xlabel("Time")
 
     def sub_plot_mass(self, ax, vdf=None, yscale="ln", label=None):
-        import matplotlib.ticker as mtick
 
         def ticks(y, pos):
             pstr = "{:.0f}".format(np.log(y))
-            return r"$e^{}$".format(pstr)
+            return r"$e^{%s}$" % pstr
+            #return r"$e^{}$".format(pstr)
 
         if not isinstance(vdf, pd.DataFrame):
             yval = self.vdf["mass"]
@@ -585,6 +615,8 @@ class VolcatPlots:
         if yscale == "ln":
             ax.semilogy(base=np.e)
             ax.yaxis.set_major_formatter(mtick.FuncFormatter(ticks))
+        if yscale == "log":
+            ax.set_yscale('log')
         ax.set_ylabel("Total mass (Tg)")
         ax.set_xlabel("Time")
         plt.xticks(rotation=45)
@@ -596,17 +628,23 @@ class VolcatPlots:
         ax.set_ylabel("Maximum Mass Loading (g m$^{-2}$)")
         ax.set_xlabel("Time")
 
-    def sub_plot_min_mass(self, ax, both=False):
-        yval = self.vdf["minmass"]
-        yval2 = self.vdf["maxmass"]
-        xval = self.vdf["time"]
-        ax.plot(xval, yval, self.main_clr, label="Minimum")
+    def sub_plot_min_mass(self, ax, both=False,vdf=None):
+        if not isinstance(vdf, pd.DataFrame):
+           vdf = self.vdf
+       
+        yval = vdf["minmass"]
+        yval2 = vdf["maxmass"]
+        xval = vdf["time"]
+        ax.plot(xval, yval, self.main_clr, label="Minimum",linestyle='--')
+        maxy=np.max(yval)+10
+        miny = np.min(yval) 
         if both:
-            ax.plot(xval, yval2, self.sub_clrs[0], label="Maximum")
+            ax.plot(xval, yval2, self.main_clr, label="Maximum",linestyle=':')
+            maxy=np.max(yval2)+10
         ax.set_ylabel("Mass Loading (g m$^{-2}$)")
         ax.set_xlabel("Time")
         ax.set_yscale("log")
-        ax.set_ylim([0.001, 50])
+        ax.set_ylim([miny, maxy])
 
     def sub_plot_area(self, ax, vdf=None, clr=-1):
         if not isinstance(vdf, pd.DataFrame):
@@ -644,8 +682,8 @@ class VolcatPlots:
                 1e9 * ys,
                 self.main_clr,
                 linestyle="-",
-                linewidth=4,
-                alpha=0.8,
+                linewidth=2,
+                alpha=0.5,
             )
             # ax.plot(xval,-1*ys*1e9,'k.', LineWidth=2,alpha=0.8)
 
@@ -653,7 +691,15 @@ class VolcatPlots:
         ax.set_xlabel("Time")
         # ax.semilogy(basey=np.e)
         if yscale == "log":
+            ax.plot(xval, -1*yval, color=self.main_clr, linestyle="", marker="+")
             ax.set_yscale("log")
+        if yscale == "ln":
+            def ticks(y, pos):
+                pstr = "{:.0f}".format(np.log(y))
+                return r"$e^{%s}$" % pstr
+            ax.plot(xval, -1*yval, color=self.main_clr, linestyle="", marker="+")
+            ax.semilogy(base=np.e)
+            ax.yaxis.set_major_formatter(mtick.FuncFormatter(ticks))
 
     def sub_plot_maxht(self, ax, vdf=None):
         if not isinstance(vdf, pd.DataFrame):

@@ -282,12 +282,14 @@ def height_plot_time(
     revash, thresh=0.2, vlist=None, label="", figname="None", unit="FL"
 ):
     level = np.arange(0, len(revash.z.values))
+    dlev = revash.z.values[-1] - revhash.z.values[-2]  
+ 
     if 'time' in revash.dims:
         loopvals = revash.time.values
     else:
         loopvals = [999]
     for time in loopvals:
-        top, bottom = topheight(revash, time, level, thresh)
+        top, bottom = topheight(revash, time, level=level, dlev=dlev, thresh=thresh)
         slabel = LabelData(
             time,
             "Top and bottom height of cloud using {} mg/m3 threshold".format(thresh),
@@ -422,6 +424,57 @@ class PlotVAA:
     def model(self,dset):
         self._model = dset
 
+    def plot_one(self,vloc,thresh,plotmass=True):
+        timelist = self._model.time.values
+        zlevs = np.arange(0,len(self._model.z.values))
+        hhh = []
+        lab = []
+        for iii, time in enumerate(timelist):
+            ax = self.axra[iii]
+            xplace, yplace, size = set_ATL_text(iii)
+            size=15
+            dset = self._model.sel(time=time) 
+            top,bottom = topheight(dset,time=time,level=zlevs,thresh=thresh)
+            cmap='Blues'
+            top_poly = HeightPolygons(cmap=cmap)
+            top_poly.process(top,alpha=0.1)
+            lw = 5
+            top_poly = top_poly.merge(key='high')
+
+            bottom_poly = HeightPolygons(cmap=cmap) 
+            bottom_poly.process(bottom,alpha=0.1)
+            bottom_poly = bottom_poly.merge(key='low')
+            tpoly = top_poly.merge_with(bottom_poly)
+            handles,labels = tpoly.plot(ax=self.axra[iii],vloc=vloc,pbuffer=0.15,legend=False,linewidth=lw)
+            format_plot(self.axra[iii], self.transform)
+            print('Labels', labels)
+            handles,labels = self.sort_labels(handles,labels)
+            print('Labels', labels)
+            self.axra[iii].legend(handles,labels,fontsize=20)
+            if plotmass:
+                self.plotmass_method(self.axra[iii],dset)
+        plt.tight_layout()
+
+
+    def plotmass_method(self,ax,dset):
+        levels = [0.02,0.1,0.2,2,5,10,50]
+        cm = 'Reds'
+        mass_cmap = plt.get_cmap(cm)
+        norm = BoundaryNorm(levels,ncolors=mass_cmap.N,clip=False,extend='both')
+        cset = xr.where(dset==0,np.nan,dset)
+        cset = cset.max(dim='z')
+        x = cset.longitude.values
+        y = cset.latitude.values
+        z = cset.values
+        cb2 = ax.pcolormesh(x,y,z,transform=self.transform,norm=norm,cmap=cm)
+        #cset.plot.pcolormesh(ax=ax,x='longitude',y='latitude',transform=self.transform,cmap='Reds')     
+        cb = self.fig.colorbar(cb2)
+        cb.set_label('mg m$^{-3}$',fontsize=20)               
+        cb.ax.tick_params(labelsize=20)
+        latr, lonr = self.find_limit(cset)
+        ax.set_xlim(lonr[0],lonr[1])
+        ax.set_ylim(latr[0],latr[1])
+
 
     def plot(self,vloc,thresh,plotmass=True,ppp='top'):
         timelist = self._model.time.values
@@ -434,12 +487,22 @@ class PlotVAA:
             size=15
             dset = self._model.sel(time=time) 
             top,bottom = topheight(dset,time=time,level=zlevs,thresh=thresh)
-            tpoly = HeightPolygons()
-            if ppp=='top':
-                tpoly.process(top,alpha=0.1)
-            elif ppp=='bottom':
-                tpoly.process(bottom,alpha=0.1)
-            handles,labels = tpoly.plot(ax=self.axra[iii],vloc=vloc,pbuffer=0.15,legend=False)
+            if ppp=='top': cmap='cividis'
+            else: cmap='Blues'
+            top_poly = HeightPolygons(cmap=cmap)
+            top_poly.process(top,alpha=0.1)
+            lw = 5
+            #top_poly = top_poly.merge(key='high')
+
+            bottom_poly = HeightPolygons(cmap=cmap) 
+            bottom_poly.process(bottom,alpha=0.1)
+            #bottom_poly = bottom_poly.merge(key='low')
+          
+            if ppp=='top': tpoly = top_poly
+            if ppp=='bottom': tpoly = bottom_poly
+
+
+            handles,labels = tpoly.plot(ax=self.axra[iii],vloc=vloc,pbuffer=0.15,legend=False,linewidth=lw)
             format_plot(self.axra[iii], self.transform)
             hhh.extend(handles)
             lab.extend(labels) 
@@ -459,27 +522,27 @@ class PlotVAA:
                 backgroundcolor="white",
               )
             if plotmass:
-
-                cset = xr.where(dset==0,np.nan,dset)
-                cset = cset.max(dim='z')
+                self.plotmass_method(ax,dset)
+                #cset = xr.where(dset==0,np.nan,dset)
+                #cset = cset.max(dim='z')
                 #levels = set_levels(cset.values)
                 #norm = BoundaryNorm(levels,ncolors=cmap.N,clip=False)
 
-                cset.plot.pcolormesh(ax=ax,x='longitude',y='latitude',transform=self.transform,cmap='Reds')     
-                latr, lonr = self.find_limit(cset)
+                #cset.plot.pcolormesh(ax=ax,x='longitude',y='latitude',transform=self.transform,cmap='Reds')     
+                #latr, lonr = self.find_limit(cset)
                 
-                ax.set_xlim(lonr[0],lonr[1])
-                ax.set_ylim(latr[0],latr[1])
+                #ax.set_xlim(lonr[0],lonr[1])
+                #ax.set_ylim(latr[0],latr[1])
         handles,labels = self.sort_labels(hhh,lab)
-        self.axra[0].legend(handles,labels)
+        self.axra[0].legend(handles,labels,fontsize=20)
 
    
-    def find_limit(self,cset,buf=1):
+    def find_limit(self,cset,buf=1,cmin=0.0001):
         lat = cset.latitude.values
         lon = cset.longitude.values
         vals = cset.values
         a = zip(lat.flatten(),lon.flatten(),vals.flatten())
-        b = [x for x in a if x[2]>1e-6]
+        b = [x for x in a if x[2]>cmin]
         lat,lon,val = zip(*b)
         minlat = np.nanmin(lat)
         maxlat = np.nanmax(lat)

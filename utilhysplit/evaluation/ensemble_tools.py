@@ -577,9 +577,10 @@ def plot_cdf(ax1, cdfhash, xscale="log", clrs=None, label="time"):
     return ax1
 
 
-def topheight(inash, time, level, enslist=None,sourcelist=None, thresh=0.01):
+def topheight(inash, time, level=None, dlev=0,enslist=None,sourcelist=None, thresh=0.01):
     """
     inash - xarray
+    dlev - level thickness. To be added on to get the top height values.
 
     Returns
     rht - xarray with highest level that contains concentration above threshold
@@ -590,14 +591,18 @@ def topheight(inash, time, level, enslist=None,sourcelist=None, thresh=0.01):
     revash,dim = preprocess(inash,enslist,sourcelist)
     if isinstance(level, int):
         level = [level]
+    if not isinstance(level,list):
+        level = np.arange(0,len(revash.z.values))
+
     for iii, lev in enumerate(level):
         lev_value = revash.z.values[lev]
         rr2 = revash.isel(z=lev)
         #if dim in rr2.dims:
         #   rr2 = rr2.max(dim=dim)
         # place zeros where it is below threshold
-        # place level value in meters where above threshold.
-        rr2 = xr.where(rr2>thresh,lev_value,0)
+        # place level value + level thickness in meters where above threshold.
+        # assume that level height indicates the bottom of the level. 
+        rr2 = xr.where(rr2>thresh,lev_value+dlev,0)
 
         if iii == 0:
             rtot = rr2
@@ -606,6 +611,7 @@ def topheight(inash, time, level, enslist=None,sourcelist=None, thresh=0.01):
             rr2 = rr2.expand_dims('z')
             rtot = xr.concat([rtot, rr2], 'z')
     rht = rtot.max(dim='z')
+
     rht2 = xr.where(rtot==0,1e6,rtot)
     rbt = rht2.min(dim='z')
     rbt = xr.where(rbt<1e5,rbt,0)

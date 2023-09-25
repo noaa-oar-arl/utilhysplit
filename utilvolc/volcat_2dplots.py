@@ -123,7 +123,7 @@ def plot_gen(
     time=None,
     plotmap=True,
     title=None,
-    central_longitude=180,
+    central_longitude=0,
     unit=None,
 ):
     """Plot ash mass loading from VOLCAT
@@ -143,7 +143,7 @@ def plot_gen(
     lat = mass.latitude
     lon = mass.longitude
     if plotmap:
-        transform = ccrs.PlateCarree(central_longitude=central_longitude)
+        transform = ccrs.PlateCarree(central_longitude=0)
         vtransform = ccrs.PlateCarree(central_longitude=0)
         fig, axx = plt.subplots(1, 1, subplot_kw={"projection": transform})
         # m.add_feature(cfeat.LAND)

@@ -160,8 +160,18 @@ class ModelForecast:
         conc = conc.sel(time=timelist)
         vaa = wep.PlotVAA()
         vaa.model = conc
-        vaa.plot(vloc=vloc,thresh=thresh,ppp='bottom')
-        return vaa
+        vaa.plot(vloc=vloc,thresh=thresh,ppp='top')
+
+        vaab = wep.PlotVAA()
+        vaab.model = conc
+        vaab.plot(vloc=vloc,thresh=thresh,ppp='bottom')
+
+        vaac = wep.PlotVAA()
+        vaac.model = conc
+        vaac.plot_one(vloc=vloc,thresh=thresh)
+
+
+        return vaa, vaab, vaac
 
 
 
