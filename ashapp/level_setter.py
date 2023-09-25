@@ -15,6 +15,7 @@ def get_levelsetter(inp):
         if 'bottom' in inp.keys():
             bottom = inp['bottom']
         levelsetter = LevelSetter(bottom,top,dz,unit)
+        print('HERE', bottom, top,dz,unit)
     return levelsetter
 
 
@@ -29,7 +30,7 @@ class LevelSetter:
                  bottom=None, 
                  top=None, 
                  dz=None,
-                 unit='FL'):
+               unit='FL'):
         self._levlist = []
         self._descriptions = []
         self._unit = unit
@@ -39,7 +40,10 @@ class LevelSetter:
               bottom=50
            if not isinstance(top,(float,int)):
               top = 650 
-           self_levlist, self._descriptions = set_qva_levels(bottom,top,dz)
+           if not isinstance(dz,(float,int)):
+              dz = 50 
+           print('HERE HERE', bottom,top,dz)
+           self._levlist, self._descriptions = set_qva_levels(bottom,top,dz)
 
         if unit=='m':
            if not isinstance(bottom,(float,int)):
@@ -66,7 +70,7 @@ class LevelSetter:
 def set_qva_levels(bottom=50,top=650,dz=50):
     # every 5000 ft (FL50 chunks)
     # Approx 1.5 km.
-    levlist_fl = range(50, 650, 50)
+    levlist_fl = list(range(bottom, top,dz))
     levlist = [FL2meters(x) for x in levlist_fl]
     rlist = []
     plev = "SFC"

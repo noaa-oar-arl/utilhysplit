@@ -111,6 +111,7 @@ class RunDispersion(ModelRunInterface):
         self._metfilefinder.set_archives_directory(inp["archivesDirectory"])
   
         self._levelsetter = get_levelsetter(self.inp)
+        print('LEVELS', self._levelsetter.levlist)
 
         # self._filehash and self_filelist are
         # set in the filelocator setter method.
