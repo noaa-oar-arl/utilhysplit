@@ -27,8 +27,9 @@ import numpy as np
 
 from utilhysplit import hcontrol
 from utilhysplit.metfiles import MetFileFinder
-from utilvolc.runhelper import Helper, JobFileNameComposer
+from utilvolc.runhelper import is_input_complete, Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
+from ashapp.level_setter import get_levelsetter
 
 # from runhandler import ProcessList
 # from utilvolc.volcMER import HT2unit
@@ -52,24 +53,26 @@ def make_chemrate(wdir):
 
 class RunDispersion(ModelRunInterface):
     ilist = [
-        "meteorologicalData",
-        "forecastDirectory",
-        "archivesDirectory",
-        "WORK_DIR",
-        "HYSPLIT_DIR",
-        "jobname",
-        "durationOfSimulation",
-        "latitude",
-        "longitude",
-        "bottom",
-        "top",
-        "emissionHours",
-        "rate",
-        "area",
-        "start_date",
-        "samplingIntervalHours",
-        "jobid",
-        "source description",
+        ("meteorologicalData",'req'),
+        ("forecastDirectory",'req'),
+        ("archivesDirectory",'req'),
+        ("WORK_DIR",'req'),
+        ("HYSPLIT_DIR",'req'),
+        ("jobname",'req'),
+        ("durationOfSimulation",'req'),
+        ("latitude",'req'),
+        ("longitude",'req'),
+        ("bottom",'req'),
+        ("top",'req'),
+        ("emissionHours",'req'),
+        ("rate",'req'),
+        ("area",'req'),
+        ("start_date",'req'),
+        ("samplingIntervalHours",'req'),
+        ("qvaflag",'req'),
+        ("jobid",'req'),
+        ("source description",'req'),
+        ("dzconcgrid",'opt'), #vertical resolution of concentration grid in meters.
     ]
 
 
@@ -106,6 +109,9 @@ class RunDispersion(ModelRunInterface):
         self._metfilefinder = MetFileFinder(inp["meteorologicalData"])
         self._metfilefinder.set_forecast_directory(inp["forecastDirectory"])
         self._metfilefinder.set_archives_directory(inp["archivesDirectory"])
+  
+        self._levelsetter = get_levelsetter(self.inp)
+        print('LEVELS', self._levelsetter.levlist)
 
         # self._filehash and self_filelist are
         # set in the filelocator setter method.
@@ -113,6 +119,10 @@ class RunDispersion(ModelRunInterface):
         self._filelist = []
         self.filelocator = inp
         self.so2 = False
+
+    @property
+    def levelsetter(self):
+        return self._levelsetter
 
     @staticmethod
     def help():
@@ -148,7 +158,7 @@ class RunDispersion(ModelRunInterface):
             source = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
             self._inp["source description"] = source
 
-        complete = is_input_complete(self._inp)
+        complete = is_input_complete(self.ilist,self._inp)
             
 
 
@@ -415,7 +425,7 @@ class RunDispersion(ModelRunInterface):
         self._control.concgrids[0].latspan = 180.0
         self._control.concgrids[0].lonspan = 360.0
         # set the levels
-        self.set_levels(self._control.concgrids[0])
+        self._control.concgrids[0].set_levels(self._levelsetter.levlist)
 
         # add emission duration
         rate_test = 0
@@ -447,21 +457,3 @@ class RunDispersion(ModelRunInterface):
         self._control.concgrids[0].interval = (self.inp["samplingIntervalHours"], 0)
         self._control.concgrids[0].sampletype = -1
 
-    @staticmethod
-    def set_qva_levels():
-        # every 5000 ft (FL50 chunks)
-        # Approx 1.5 km.
-        levlist_fl = range(50, 650, 50)
-        levlist = [FL2meters(x) for x in levlist_fl]
-        rlist = []
-        plev = "SFC"
-        for lev in levlist_fl:
-            nlev = "FL{}".format(lev)
-            rlist.append("{} to {}".format(plev, nlev))
-            plev = nlev
-        logger.debug(rlist)
-        return levlist, rlist
-
-    def set_levels(self, cgrid):
-        levlist, rlist = self.set_qva_levels()
-        cgrid.set_levels(levlist)

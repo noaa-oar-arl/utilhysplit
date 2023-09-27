@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 utils.setup_logger()
 
 
+
+
 class OutputDispersion(ModelOutputInterface):
 
     ilist = [('fraction_of_fine_ash','req'),
@@ -168,7 +170,9 @@ class OutputDispersion(ModelOutputInterface):
     def get_ash_reduction(self):
         """
         """
+        # 09/07/2023 (amc) don't allow multiplication by 0.
         eflag = float(self.inp["eflag"])
+        if eflag==0: eflag = 1
         M63 = self.inp['fraction_of_fine_ash']  # fraction of  fine ash
         # 07/01/2023 decided to chang eflag use.
         # it was done this way to mimic the ash reduction VAAC currently use.

@@ -132,6 +132,26 @@ def cdf_match(aeval, tiilist, enslist, pfit=1, thresh=0.1):
     dfcdf = pd.DataFrame.from_dict(polyhash)
     return dfcdf
 
+def get_norm(model, r2, logscale=False):
+    # InverseAsh class
+    """ """
+    if isinstance(r2, np.ndarray):
+        rval = r2
+    else:
+        rval = r2.values
+
+    m_max = np.nanmax(model)
+    v_max = np.nanmax(rval)
+    m_min = np.nanmin(model)
+    v_min = np.nanmin(rval)
+    p_min = np.nanmin([m_min, v_min])
+    p_max = np.nanmax([m_max, v_max])
+    lower_color = 0.8
+    if logscale:
+        norm = mpl.colors.LogNorm(vmin=lower_color * p_min, vmax=p_max)
+    else:
+        norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max)
+    return norm
 
 class AshEval(InverseAsh):
     def __init__(
@@ -262,7 +282,7 @@ class AshEval(InverseAsh):
         hysplit_boxplots.make_boxplot(dj)
 
     def volcat_cdf_plot(self, threshold=0):
-        step = 5
+        step = 1
         clr = ["-m", "-r", "-b", "-c", "-g"]
         for jjj, iii in enumerate(self.volcat_avg_hash.keys()):
             # print(self.cdump.time.values[iii])
@@ -281,6 +301,7 @@ class AshEval(InverseAsh):
             else:
                 lw = 1
             ax.step(sdata, y, clr[jjj % len(clr)], linewidth=lw)
+            ax.set_xscale("log")
 
     def pixel_matching(time, enslist=None, threshold=0):
         mass = self.massload.sel(time=time)
@@ -531,6 +552,7 @@ class AshEval(InverseAsh):
         prob=False,
         cmap_prob="cool",
         overlay=False,
+        central_longitude=0,
         **kwargs
     ):
         """
@@ -542,6 +564,25 @@ class AshEval(InverseAsh):
         log
         cmap3
         """
+        from matplotlib.colors import BoundaryNorm
+        import cartopy
+        from utilhysplit.plotutils import vtools
+        import utilhysplit.evaluation.web_ensemble_plots as wep
+        transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
+        vtransform = cartopy.crs.PlateCarree(central_longitude=0)
+
+        if include == 'all': 
+           pp1=True
+           pp2 = True
+           pp3 = True
+        elif include == 'two':
+           pp1=True
+           pp3=True
+           pp2=False
+        else:
+           pp1=True
+           pp2=True
+           pp3=False
         # forecast should be an xarray in mass loading format with no time dimension.
         if "log" in kwargs.keys():
             logscale = kwargs["log"]
@@ -551,14 +592,34 @@ class AshEval(InverseAsh):
         sns.set_style("whitegrid")
 
         if include == "all":
-            fig = plt.figure(figsize=[15, 4])
-            ax1 = fig.add_subplot(1, 3, 1)
-            ax2 = fig.add_subplot(1, 3, 2)
-            ax3 = fig.add_subplot(1, 3, 3)
-        else:
-            fig = plt.figure(figsize=[10, 3])
-            ax2 = fig.add_subplot(1, 2, 1)
-            ax3 = fig.add_subplot(1, 2, 2)
+            figsize = [15,4]
+            ncols=3
+        else: 
+            figsize = [10,3]
+            ncols=2
+
+        fig,axrr = plt.subplots(nrows=1,ncols=ncols,figsize=figsize,
+                                constrained_layout=True,
+                                subplot_kw={'projection':transform})
+        axlist = axrr.flatten()
+        if include == "all":
+           ax1 = axlist[0]
+           ax2 = axlist[1]
+           ax3 = axlist[2]
+        elif include == 'two':
+           ax1 = axlist[0]
+           ax3 = axlist[1]
+        else: 
+           ax2 = axlist[0]
+           ax3 = axlist[1]
+        #    fig = plt.figure(figsize=[15, 4])
+        #    ax1 = fig.add_subplot(1, 3, 1)
+        #    ax2 = fig.add_subplot(1, 3, 2)
+        #    ax3 = fig.add_subplot(1, 3, 3)
+        #else:
+        #    fig = plt.figure(figsize=[10, 3])
+        #    ax2 = fig.add_subplot(1, 2, 1)
+        #    ax3 = fig.add_subplot(1, 2, 2)
 
         time = pd.to_datetime(forecast.time.values)
         tii = self.time_index(time)
@@ -580,7 +641,7 @@ class AshEval(InverseAsh):
                norm = mpl.colors.Normalize(vmin=kwargs["vmin"], vmax=kwargs["vmax"])
             vmax = kwargs["vmax"]
         else:
-            norm = self.get_norm(vvals, evals)
+            norm = get_norm(vvals, evals)
             if not logscale:
                vmax = np.max(evals) + 10
             else:
@@ -605,6 +666,7 @@ class AshEval(InverseAsh):
             cm = colormaker.ColorMaker(cmap, len(clevels), ctype="rgb")
             cm3 = cm
             cmap3a = cmap
+            cmap3b = cmap
 
         if prob:
             cm2 = colormaker.ColorMaker(cmap_prob, len(clevels), ctype="rgb")
@@ -612,7 +674,7 @@ class AshEval(InverseAsh):
             cm2 = colormaker.ColorMaker(cmap, len(clevels), ctype="rgb")
 
         if ptype == "pcolormesh":
-            if include == "all":
+            if pp1:
                 if logscale:
                     cb = ax1.pcolormesh(
                         volcat.longitude,
@@ -620,6 +682,7 @@ class AshEval(InverseAsh):
                         vvals,
                         cmap=cmap,
                         shading="nearest",
+                        transform = vtransform
                      )
                 else:
                     cb = ax1.pcolormesh(
@@ -629,6 +692,7 @@ class AshEval(InverseAsh):
                         norm=norm,
                         cmap=cmap,
                         shading="nearest",
+                        transform = vtransform
                      )
             # cb2 = ax2.pcolormesh(
             #    forecast.longitude,
@@ -642,26 +706,28 @@ class AshEval(InverseAsh):
                 plevels = kwargs["plevels"]
             else:
                 plevels = clevels
-            if ptype == "contour":
+            if ptype == "contour" and pp2:
                 cb2 = ax2.contourf(
                     forecast.longitude,
                     forecast.latitude,
                     evals,
                     norm=norm,
                     levels=plevels,
-                    colors=cm2()
+                    colors=cm2(),
+                    transform=vtransform
                 )
             else:
                 print('here')
-                if logscale:
+                if logscale and pp2:
                     cb2 = ax2.pcolormesh(
                         forecast.longitude,
                         forecast.latitude,
                         evals,
                         cmap=cmap,
                         shading="nearest",
+                        transform=vtransform
                         )
-                else:
+                elif pp2:
                     cb2 = ax2.pcolormesh(
                         forecast.longitude,
                         forecast.latitude,
@@ -670,10 +736,11 @@ class AshEval(InverseAsh):
                         cmap=cmap,
                         linewidths=5,
                         shading="nearest",
+                        transform=vtransform
                         ) 
-                if include=='all':
+                if pp1:
                     ax1.grid(visible=True,axis='both',which='major')
-                ax2.grid(visible=True,axis='both',which='major')
+                if pp2: ax2.grid(visible=True,axis='both',which='major')
                 if not logscale:
                    vals = np.log10(evals)
                 else:
@@ -687,7 +754,8 @@ class AshEval(InverseAsh):
                     # colors=cm(),
                     linewidths=5,
                     cmap=cmap3a,
-                    alpha=1
+                    alpha=1,
+                    transform=vtransform
                 )
             if overlay:
                 if "plevels" in kwargs.keys():
@@ -700,11 +768,13 @@ class AshEval(InverseAsh):
                     volcat.longitude,
                     volcat.latitude,
                     vals,
-                    levels=np.log10(plevels),
+                    #levels=np.log10(plevels),
+                    levels=clevels,
                    # colors = cm3(),
                     # linewidths=3,
-                    cmap=cmap3b,
+                    cmap='RdPu',
                     alpha=1,
+                    transform=vtransform
                 )
                 #cb4 = ax3.contour(
                 #    volcat.longitude,
@@ -717,12 +787,13 @@ class AshEval(InverseAsh):
                 #    alpha=1,
                 #)
         plt.title(time.strftime("%Y %m/%d %H:%M UTC"))
-        if include == "all":
+        if pp1:
             plt.colorbar(cb, ax=ax1)
-        if np.max(evals) > vmax:
-            plt.colorbar(cb2, ax=ax2, extend="max")
-        else:
-            plt.colorbar(cb2, ax=ax2)
+        if pp2: 
+            if np.max(evals) > vmax:
+                plt.colorbar(cb2, ax=axcb, extend="max")
+            else:
+                plt.colorbar(cb2, ax=axcb)
         cb33 = plt.colorbar(cb3, ax=ax3, shrink=1.00)
         #cb33.ax.tick_params(size=10, width=10)
         ticklabels = [str(x) for x in clevels]
@@ -730,7 +801,7 @@ class AshEval(InverseAsh):
         cb33.ax.set_yticklabels(ticklabels)
         if overlay:
             cb44 = plt.colorbar(cb4, ax=ax3, shrink=1.00)
-            cb44.ax.set_yticklabels(['','','',''])
+        #    cb44.ax.set_yticklabels(['','','',''])
         # sets the linewidths of contour lines in the plot.
         # plt.setp(cb4.collections,linewidth=1)
         # cb44=plt.colorbar(cb4, ax=ax3)
@@ -739,24 +810,28 @@ class AshEval(InverseAsh):
         # cb44.ax.get_children()[0].set_linewidths(10)
         # if not 'plevels' in kwargs.keys(): cb44.set_ticks([])
         if "xlim" in kwargs.keys():
-            if include == "all":
+            if pp1:
                 ax1.set_xlim(kwargs["xlim"])
-            ax2.set_xlim(kwargs["xlim"])
+            if pp2: ax2.set_xlim(kwargs["xlim"])
             ax3.set_xlim(kwargs["xlim"])
         else:
-            if include == "all":
+            if pp1: 
                 xlim = ax1.get_xlim()
-            ax2.set_xlim(xlim)
+            else:
+                xlim = ax3.get_xlim()
+            if pp2: ax2.set_xlim(xlim)
             ax3.set_xlim(xlim)
         if "ylim" in kwargs.keys():
-            if include == "all":
+            if plot1:
                 ax1.set_ylim(kwargs["ylim"])
-            ax2.set_ylim(kwargs["ylim"])
+            if include!= 'two': ax2.set_ylim(kwargs["ylim"])
             ax3.set_ylim(kwargs["ylim"])
         else:
             if include == "all":
                 ylim = ax1.get_ylim()
-            ax2.set_ylim(ylim)
+            else:
+                ylim = ax1.get_ylim()
+            if include!= 'two': ax2.set_ylim(ylim)
             ax3.set_ylim(ylim)
         if vloc:
             ms=10
@@ -764,6 +839,9 @@ class AshEval(InverseAsh):
                 ax1.plot(vloc[0], vloc[1], "k^", markersize=ms)
             ax2.plot(vloc[0], vloc[1], "k^",markersize=ms)
             ax3.plot(vloc[0], vloc[1], "k^",markersize=ms)
+        if include in ['all','two']: wep.format_plot(ax1,transform)
+        if include!='two': wep.format_plot(ax2,transform)
+        wep.format_plot(ax3,transform)
         return fig
 
     def compare_plots(self, daterange, levels=None):

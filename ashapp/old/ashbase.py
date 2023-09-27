@@ -34,7 +34,8 @@ import xarray as xr
 from monetio.models import hysplit
 from utilhysplit import hcontrol
 import utilhysplit.metfiles as metfile
-from utilvolc.runhelper import ConcplotColors, Helper, JobFileNameComposer
+from utilvolc.runhelper import  Helper, JobFileNameComposer
+from utilhysplit.plotutils.concplotutil import ConcplotColors
 
 # from runhandler import ProcessList
 from utilvolc.volcMER import HT2unit
@@ -513,6 +514,8 @@ class AshRun:
         logger.info("Model submitted on {}".format(datetime.datetime.now()))
         # if files are already there then do not run the model.
         if not self.after_run_check(update=False):
+            import sys
+            #sys.exit()
             # self.preprocessing()
             self.run_model()
             # self.postprocessing()

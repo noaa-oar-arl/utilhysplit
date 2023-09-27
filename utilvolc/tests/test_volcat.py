@@ -86,7 +86,7 @@ def test_summaryfile_002():
     cnames.append("event gid")
     cnames.append("summary date")
     cnames.append("summary file")
-    cnames.append("satellite")
+    cnames.append("sensor_name")
     cnames.append("volcano_elevation")
     cnames.append("volcano_country")
     for cnn in cnames:

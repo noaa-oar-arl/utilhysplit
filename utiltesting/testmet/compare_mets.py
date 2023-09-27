@@ -328,7 +328,7 @@ class CompareMetProfile:
         if plotall: varlist = self.twodlist
         varlist.sort()
         for iii, var in enumerate(varlist):
-            print(var)
+            print('HERE', var)
             if together:
                 ax = self.plot_ts(var,fignum=fignum+iii)
             else:
@@ -374,11 +374,12 @@ class CompareMetProfile:
         plt.legend(handles,labels,loc='best',prop={'size':10})
         ax1.set_ylabel('difference for {}'.format(var))
 
-    def windspd(self,date,legend=False):
-        fig = plt.figure(10)
-        ax = fig.add_subplot(1,1,1)
-        fig1 = plt.figure(11)
-        ax1 = fig1.add_subplot(1,1,1)
+    def windspd(self,date,ax1=None, ax2=None,legend=False):
+        if not ax1 and not ax2:
+            fig = plt.figure(10)
+            ax1 = fig.add_subplot(1,1,1)
+            fig1 = plt.figure(11)
+            ax2 = fig1.add_subplot(1,1,1)
         #iii=0
         for prof, label, color in self.generate_prof():
             if 'VWND_rot' not in prof.var3d: continue
@@ -401,14 +402,14 @@ class CompareMetProfile:
             dfdir = df['wdir']
             dfspd = df['wspd']
             try:
-               ax.plot(dfdir,df.index,color=color,marker='.',
+               ax1.plot(dfdir,df.index,color=color,marker='.',
                        label=label,linewidth=lw,alpha=alpha,
                        markersize=ms)
             except Exception as eee:
                 print('failed {}'.format(label))
                 print(eee)
             try:
-               ax1.plot(dfspd,df.index,color=color,marker='.',
+               ax2.plot(dfspd,df.index,color=color,marker='.',
                        label=label,linewidth=lw,alpha=alpha,
                        markersize=ms)
             except Exception as eee:
@@ -416,12 +417,12 @@ class CompareMetProfile:
                 print(eee)
             #if iii> 1: break
             #iii+=1
-        handles, labels = ax.get_legend_handles_labels()
+        handles, labels = ax1.get_legend_handles_labels()
         if legend: plt.legend(handles,labels,loc='best',prop={'size':10})
-        ax.set_ylabel('Level (mb)')
-        ax.invert_yaxis()
+        ax1.set_ylabel('Level (mb)')
         ax1.invert_yaxis()
-        return ax, ax1
+        ax2.invert_yaxis()
+        return ax1, ax2
 
     def check_3d(self,var,date,legend=False,ax=None):
         if not ax:

@@ -9,6 +9,9 @@ import pandas as pd
 
 #import monet
 
+def FL2meters(flight_level):
+    meters = flight_level * 100 / 3.28084
+    return int(meters)
 
 def coarsen(small, large):
     """

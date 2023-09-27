@@ -13,7 +13,7 @@ from utilvolc.runhelper import make_dir
 from utilvolc import volcat
 import utilvolc.iwxxmVAA as ixa
 from utilvolc import volcat_plots as vp
-from utilvolc import volcat_logic
+from utilvolc import qva_logic
 from utilhysplit import geotools
 from utilhysplit import volcat2object
 
@@ -86,7 +86,7 @@ class Eruption:
         self.name = vname
         self.daterange = daterange
         self.ixc = ixa.iwxxmCollection()
-        self.vcat = volcat_logic.Events()
+        self.vcat = qva_logic.Events()
 
     def add_vaas(self,icc):
         self.ixc = icc

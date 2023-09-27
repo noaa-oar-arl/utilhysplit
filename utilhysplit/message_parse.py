@@ -34,15 +34,26 @@ class HysplitMessageFile(object):
         """
         with open(self.fname, 'r', errors="ignore") as fid:
              lines = fid.readlines(10000)
-        lev = [x for x in lines if 'nlvl' in x]
+        lev = [x for x in lines if 'nlvl,aa,bb,cc' in x]
+
         iii = lines.index(lev[0])
-        kbls = [x for x in lines if 'kbls' in x]
-        jjj = lines.index(kbls[0])
-        temp = lines[iii:jjj]
-        aaa = float(temp[1].split()[3])
-        bbb = float(temp[1].split()[4])
-        ccc = float(temp[1].split()[5])
-        nlevs = int(temp[0].split()[1])
+        print(lines[iii])
+        #kbls = [x for x in lines if 'kbls' in x.lower()]
+        #jjj = lines.index(kbls[0])
+        #print('HERE', kbls,iii,jjj)
+        #temp = lines[iii:jjj]
+        temp = lines[iii]
+        temp = temp.split()
+        #print(temp)
+        aaa = float(temp[5])
+        bbb = float(temp[6])
+        ccc = float(temp[7])
+        nlevs = int(temp[4])
+      
+        #aaa = float(temp[1].split()[3])
+        #bbb = float(temp[1].split()[4])
+        #ccc = float(temp[1].split()[5])
+        # nlevs = int(temp[0].split()[1])
         levs = [float(x) for x in temp[2].split()[1:]]
         levs_km = [get_height_km(aaa,bbb,ccc,x) for x in range(1,nlevs+1)]
         return levs_km

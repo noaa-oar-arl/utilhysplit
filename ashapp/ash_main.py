@@ -101,7 +101,12 @@ def create_run_instance(jid, runinp):
     """
     logger.info("Creating run Instance")
 
-    if runinp["runflag"] == "dispersion":
+    if 'qva' in runinp['runflag'].lower():
+        runinp['qvaflag']=True
+    else:
+        runinp['qvaflag']=False
+
+    if 'dispersion' in runinp["runflag"].lower():
         if runinp["meteorologicalData"].lower() == "gefs":
             from maindispersion import MainEnsemble
 
@@ -113,14 +118,14 @@ def create_run_instance(jid, runinp):
             crun = MainDispersion(runinp, jid)
             logger.info("Dispersion")
 
-    elif runinp["runflag"].lower() == "datainsertion":
+    elif 'datainsertion' in runinp["runflag"].lower():
         # This handles GEFS as well as deterministic runs.
         from maindispersion import MainEmitTimes
 
         crun = MainEmitTimes(runinp, jid)
         logger.info("Use EmitTimes files")
 
-    elif runinp["runflag"] == "inverse":
+    elif 'inverse' in runinp["runflag"]:
         if runinp["meteorologicalData"].lower() == "gefs":
             # this one generates a separate netcdf file
             # for each gefs member

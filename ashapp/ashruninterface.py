@@ -207,9 +207,33 @@ class ModelRunInterface(ABC):
       """
       pass
 
+    @property
+    @abstractmethod
+    def levelsetter(self):
+        """
+        """ 
+        pass
+
+
+class LevelSetterInterface(ABC):
+     
+    @property
+    @abstractmethod
+    def unit(self): #string
+        pass
+  
+    @property
+    @abstractmethod
+    def levlist(self): #list of floats
+        pass
+
+    @property
+    @abstractmethod
+    def descriptions(self): #list of strings
+        pass
+
+
 class ModelOutputInterface(ABC):
-
-
 
     @abstractmethod
     def postprocess(self):

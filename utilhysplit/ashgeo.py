@@ -605,8 +605,9 @@ def example1():
     fname = "/pub/Scratch/alicec/KASATOCHI/cylindrical/e3/"
     fn = "PARDUMP.cyl.gdas1.e3"
     pd = pardump.Pardump(fname=fname + fn)
-    pdict = pd.read()
-    p1 = pdict["200808081400"]
+    p1 = pd.read()
+    #return pdict
+    #p1 = pdict["200808081400"]
     df = get_thickness(p1, 10000, 12000)
     mpts = make_multi(df["lon"], df["lat"])
     ch, ep = concave_hull(mpts, alpha=1)

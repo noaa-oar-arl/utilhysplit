@@ -25,10 +25,10 @@ def fix_volc_name(volcname):
 #    return volcdf
 
 class VolcanoName:
-
+   
     def __init__(self,name,vfilename='None'):
         self._name = name
-        self.vlist = vfilename
+        self._vlist = vfilename
 
     @property
     def name(self):
@@ -43,18 +43,18 @@ class VolcanoName:
               rval = rval[0]
         if not rval:
            rval = name
-        return rval   
+        self._name = rval  
 
     @property
     def vlist(self):
-        return self.vlist
+        return self._vlist
 
     @vlist.setter
     def vlist(self,vfilename):
         if os.path.isfile(vfilename):
-           return VolcList(vfile) 
+           self._vlist =  VolcList(vfile) 
         else:
-           return None
+           self._vlist =  None
 
 class VolcList:
     def __init__(self,vfile):
@@ -114,3 +114,4 @@ class VolcList:
     def get_record(self,vname):
         vname = fix_volc_name(vname)
         df = self.find(vname)
+        return df

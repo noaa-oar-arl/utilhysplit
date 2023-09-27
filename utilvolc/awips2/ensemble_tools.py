@@ -1,21 +1,35 @@
+"""
+Functions
+
+example_relative_frequency 
+
+
+Classes
+LabelData : also in web_ensemble_plots
+"""
+
+
 import datetime
 import logging
-import xarray as xr
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from matplotlib.colors import BoundaryNorm
+
 import cartopy
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import xarray as xr
+from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+from matplotlib.colors import BoundaryNorm
+from utilhysplit.plotutils.colormaker import ColorMaker
+
 import hysplit
-from colormaker import ColorMaker
 
 logger = logging.getLogger(__name__)
 
+
 def example_relative_frequency():
-    cname  = 'cxra.nc'
-    outfilename  = 'filename.zzz.png'
+    cname = "cxra.nc"
+    outfilename = "filename.zzz.png"
 
     # latitude and longitude of volcano.
     longitude = -175
@@ -27,12 +41,12 @@ def example_relative_frequency():
     enslist = cxra.ens.values
 
     # probability levels for plotting.
-    clevels = [5,20,40,60,80,95]
+    clevels = [5, 20, 40, 60, 80, 95]
 
     # threshold of exceedance in mg/m3.
     thresh = 0.2
 
-    title = "HYSPLIT ensemble relative frequency exceeding (:0.2f)mg/m3".format(thresh) 
+    title = "HYSPLIT ensemble relative frequency exceeding (:0.2f)mg/m3".format(thresh)
     title += "\n GEFS {} members".format(len(enslist))
 
     # adjust make sure that ATL plots are not all empty.
@@ -40,30 +54,35 @@ def example_relative_frequency():
     # it is 1/10th the max value. some time periods may still be empty.
     adjust = 10
 
-
-    fignamelist = ATLtimeloop(cxra, enslist, thresh, zlevels,vlist,
-                              name = outfilename,
-                              norm = True,
-                              clevels = clevels,
-                              title = title,
-                              adjust = adjust)
+    fignamelist = ATLtimeloop(
+        cxra,
+        enslist,
+        thresh,
+        zlevels,
+        vlist,
+        name=outfilename,
+        norm=True,
+        clevels=clevels,
+        title=title,
+        adjust=adjust,
+    )
 
 
 class LabelData:
     def __init__(self, time, descrip, units, source="", tag=""):
         """
-        time : str, numpy datetime64, or datetime.datetime 
+        time : str, numpy datetime64, or datetime.datetime
         descript : str
         """
         if type(time) == str:
-           self.time = time
+            self.time = time
         else:
             timefmt = "%m/%d/%Y %H:%M UTC"
             self.model = "NOAA HYSPLIT"
             # somtetimes time is a numpy datetime64  object.
             # convert to datetime.
-            if type(time) == np.datetime64: 
-               time = pd.to_datetime(str(time))
+            if type(time) == np.datetime64:
+                time = pd.to_datetime(str(time))
             self.time = time.strftime(timefmt)
             temp2 = time + datetime.timedelta(hours=1)
             self.time = "{} to {}".format(self.time, temp2.strftime(timefmt))
@@ -74,10 +93,11 @@ class LabelData:
         self.source = "source: {}".format(source)
         self.tag = tag
 
+
 def label_ax(ax, label, transform):
     """
-     formats the subplot on the mass loading plots which contains text
-     describing the plot.
+    formats the subplot on the mass loading plots which contains text
+    describing the plot.
     """
     # add labels to plot meant for labels.
     gl = ax.gridlines(
@@ -160,36 +180,45 @@ def label_ax(ax, label, transform):
         size=size,
     )
 
+
 def get_transform(central_longitude=0):
-    transform = cartopy.crs.PlateCarree(central_longitude=central_longitude,globe=None)
-    #transform = cartopy.crs.AzimuthalEquidistant(central_longitude=180)
+    transform = cartopy.crs.PlateCarree(central_longitude=central_longitude, globe=None)
+    # transform = cartopy.crs.AzimuthalEquidistant(central_longitude=180)
     return transform
+
 
 def decide_central_longitude(xorg):
     # currently works when lon values are 0-360.
     min_x = np.min(xorg)
     max_x = np.max(xorg)
     # see if values span 180.
-    if min_x < 180 and max_x >180:
-       central_longitude = 180
+    if min_x < 180 and max_x > 180:
+        central_longitude = 180
     else:
-       central_longitude = 0
-    return central_longitude 
+        central_longitude = 0
+    return central_longitude
+
 
 def shift_sub(x):
-    if x>0: newx = x-180
-    else: newx = x + 180
-    if newx>360: return 360-newx
-    else: return newx
+    if x > 0:
+        newx = x - 180
+    else:
+        newx = x + 180
+    if newx > 360:
+        return 360 - newx
+    else:
+        return newx
+
 
 def shift_xvals(xorg, central_longitude):
-    if central_longitude==0:
-       return xorg
+    if central_longitude == 0:
+        return xorg
     xnew = np.vectorize(shift_sub)(xorg)
-    #xnew = np.vectorize(shift_sub)(xorg - central_longitude)
-    #xnew = [x + central_longitude  for x in xorg]
-    #xnew = [x-360 if x > 360 else x for x in xnew]
-    return xnew 
+    # xnew = np.vectorize(shift_sub)(xorg - central_longitude)
+    # xnew = [x + central_longitude  for x in xorg]
+    # xnew = [x-360 if x > 360 else x for x in xnew]
+    return xnew
+
 
 def set_levels(mass):
     levels = [0.2, 2, 5, 10]
@@ -210,9 +239,10 @@ def set_levels(mass):
     elif np.max(mass) < 751:
         levels.extend([50, 100, 250, 500, 750])
     else:
-        mlev = np.max([1000,int(np.max(mass))])
+        mlev = np.max([1000, int(np.max(mass))])
         levels.extend([50, 100, 500, 750, mlev])
     return levels
+
 
 def massload_plot(revash, enslist, name="None", vlist=None):
     setup_plot()
@@ -230,9 +260,10 @@ def massload_plot(revash, enslist, name="None", vlist=None):
         y = mass2.latitude
         # z = mass2.where(mass2!=0)
         central_longitude = decide_central_longitude(x)
-        if central_longitude !=0:
-            x = shift_xvals(x.values,central_longitude)
-            if iii==0: vlist[0] = shift_xvals(vlist[0],central_longitude)
+        if central_longitude != 0:
+            x = shift_xvals(x.values, central_longitude)
+            if iii == 0:
+                vlist[0] = shift_xvals(vlist[0], central_longitude)
         transform = get_transform(central_longitude)
 
         figname = name.replace("zzz", "{}".format(iii))
@@ -241,10 +272,11 @@ def massload_plot(revash, enslist, name="None", vlist=None):
         try:
             sub_massload_plot(x, y, z, transform, levels, label, figname, vlist)
         except ValueError as ex:
-            print('ERROR: cannot create massload plot at {}: {}'.format(time, str(ex)))
+            print("ERROR: cannot create massload plot at {}: {}".format(time, str(ex)))
         iii += 1
         fignamelist.append(figname)
     return fignamelist
+
 
 def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=None):
     nrow = 2
@@ -273,6 +305,7 @@ def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=
     if name != "None":
         plt.savefig(name)
         plt.close()
+
 
 def ATLtimeloop(
     revash,
@@ -304,9 +337,9 @@ def ATLtimeloop(
     if adjust > 0:
         thresh = check_thresh(np.max(revash), thresh, adjust)
     if thresh > 0.01:
-        title = title.replace('thresh','{:0.2f}'.format(thresh))
+        title = title.replace("thresh", "{:0.2f}".format(thresh))
     else:
-        title = title.replace('thresh','{:0.2e}'.format(thresh))
+        title = title.replace("thresh", "{:0.2e}".format(thresh))
     for time in revash.time.values:
         revash2 = revash.sel(time=time)
         source = "Longitude: {:0.2f} Latitude {:0.2f}".format(vlist[0], vlist[1])
@@ -323,6 +356,7 @@ def ATLtimeloop(
     reset_plots()
     return fignamelist
 
+
 def check_thresh(cmax, thresh, adjust):
     """
     set threshold at half the maximum value.
@@ -330,14 +364,14 @@ def check_thresh(cmax, thresh, adjust):
     thresh2 = thresh
     if cmax < thresh:
         thresh2 = float(cmax / float(adjust))
-    #print('ADJUST', thresh, cmax, thresh2)
+    # print('ADJUST', thresh, cmax, thresh2)
     return thresh2
 
 
 def set_ATL_text(nrow):
     if nrow >= 6:
         yplace = 0.8
-        #xplace = 0.15
+        # xplace = 0.15
         xplace = 0.85
         size = 10
     else:
@@ -370,9 +404,9 @@ def plotATL(
         ncol = 1
     z = temp.where(temp != 0)
     central_longitude = decide_central_longitude(x)
-    if central_longitude !=0:
-       x = shift_xvals(x.values,central_longitude)
-       vlist_copy[0] = shift_xvals(vlist[0],central_longitude)
+    if central_longitude != 0:
+        x = shift_xvals(x.values, central_longitude)
+        vlist_copy[0] = shift_xvals(vlist[0], central_longitude)
     transform = get_transform(central_longitude)
     fig, axarr = plt.subplots(
         nrows=nrow,
@@ -385,27 +419,29 @@ def plotATL(
         axlist = axarr.flatten()
     else:
         axlist = axarr
-    if not isinstance(axarr,np.ndarray):
+    if not isinstance(axarr, np.ndarray):
         axlist = [axarr]
     iii = 0
     for ax in axlist:
         if not isinstance(ax, cartopy.mpl.geoaxes.GeoAxesSubplot):
-           print('Error expecting Geoaxes subplot got {}'.format(type(ax)))
+            print("Error expecting Geoaxes subplot got {}".format(type(ax)))
         # if level doesn't exist then break.
         try:
             z = rtot.isel(z=iii)
-        except IndexError: 
-            logger.warning('plotATL. no level with index {}'.format(iii))
+        except IndexError:
+            logger.warning("plotATL. no level with index {}".format(iii))
             break
         z = z.where(z != 0)
         label = meterev2FL(rtot.z.values[iii])
-        cb = ATLsubplot(ax, x, y, z, transform, label, vlist_copy, levels=levels, nrow=nrow)
+        cb = ATLsubplot(
+            ax, x, y, z, transform, label, vlist_copy, levels=levels, nrow=nrow
+        )
         iii += 1
     # if at least one subplot was created.
     if iii > 0:
         cb2 = plt.colorbar(cb)
         # cb2.set_label('mg/m$^3$')
-        cb2.set_label("Percent",size=10)
+        cb2.set_label("Percent", size=10)
         cbar_ax = fig.axes[-1]
         cbar_ax.tick_params(labelsize=10)
         fig.suptitle(title, size=10)
@@ -413,7 +449,7 @@ def plotATL(
             plt.savefig(name)
             plt.close()
     else:
-        logger.warning('plotATL. no plots created')
+        logger.warning("plotATL. no plots created")
 
 
 def meterev2FL(meters):
@@ -498,7 +534,7 @@ def ATLsubplot(
     try:
         ax.plot(vlist[0], vlist[1], "r^")
     except:
-        pass 
+        pass
     format_plot(ax, transform)
     ax.text(
         xplace,
@@ -526,12 +562,12 @@ def massload_ensemble_mean(revash, enslist):
 
 def ATL(revash, enslist, thresh=0.2, level=1, norm=False):
     """
-     Returns array with number of ensemble members above
-     given threshold at each location.
-     norm : boolean
-            if True return percentage of members.
-            if False return number of members.
-     """
+    Returns array with number of ensemble members above
+    given threshold at each location.
+    norm : boolean
+           if True return percentage of members.
+           if False return number of members.
+    """
     # import matplotlib.pyplot as plt
     # sns.set_style('whitegrid')
     source = 0

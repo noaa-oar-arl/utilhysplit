@@ -36,11 +36,11 @@ def create_pc_plot(dset):
     """
 
     def subfunc(ax, vals):
-        ax.plot(vals[0], vals[1], "k.", MarkerSize=1)
+        ax.plot(vals[0], vals[1], "k.", markersize=1)
         # plot 1:1 line
         minval = np.min(vals[0])
         maxval = np.max(vals[0])
-        ax.plot([minval, maxval], [minval, maxval], "--r.", MarkerSize=1)
+        ax.plot([minval, maxval], [minval, maxval], "--r.", markersize=1)
 
     latitude, longitude = compare_pc(dset)
     fig = plt.figure(1)
@@ -87,26 +87,45 @@ def plot_height(dset):
     Does not save figure - quick image creation"""
     fig = plt.figure("Ash_Top_Height")
     title = "Ash Top Height (km)"
-    #ax = fig.add_subplot(1, 1, 1)
+    # ax = fig.add_subplot(1, 1, 1)
     ax = plot_gen(dset, val="height", time=None, plotmap=True, title=title)
     return ax
+
 
 def plot_radius(dset):
     """Plots ash effective radius from VOLCAT
     Does not save figure - quick image creation"""
-    #fig = plt.figure("Ash_Effective_Radius")
+    # fig = plt.figure("Ash_Effective_Radius")
     title = "Ash effective radius ($\mu$m)"
-    #ax = fig.add_subplot(1, 1, 1)
+    # ax = fig.add_subplot(1, 1, 1)
     ax = plot_gen(dset, val="radius", time=None, plotmap=True, title=title)
     return ax
 
-def plot_mass(dset,central_logintude=0):
-    #fig = plt.figure("Ash_Mass_Loading")
-    #ax = fig.add_subplot(1, 1, 1)
-    ax = plot_gen(dset,  val="mass", time=None, plotmap=True, title="Ash_Mass_Loading",unit='g m$^{-2}$')
+
+def plot_mass(dset, central_longitude=0):
+    # fig = plt.figure("Ash_Mass_Loading")
+    # ax = fig.add_subplot(1, 1, 1)
+    ax = plot_gen(
+        dset,
+        val="mass",
+        time=None,
+        plotmap=True,
+        title="Ash_Mass_Loading",
+        unit="g m$^{-2}$",
+        central_longitude=central_longitude,
+    )
     return ax
 
-def plot_gen(dset, val="mass", time=None, plotmap=True, title=None, central_longitude=180,unit=None):
+
+def plot_gen(
+    dset,
+    val="mass",
+    time=None,
+    plotmap=True,
+    title=None,
+    central_longitude=0,
+    unit=None,
+):
     """Plot ash mass loading from VOLCAT
     Does not save figure - quick image creation"""
     # lat=dset.latitude
@@ -124,20 +143,20 @@ def plot_gen(dset, val="mass", time=None, plotmap=True, title=None, central_long
     lat = mass.latitude
     lon = mass.longitude
     if plotmap:
-        transform = ccrs.PlateCarree(central_longitude=central_longitude)
+        transform = ccrs.PlateCarree(central_longitude=0)
         vtransform = ccrs.PlateCarree(central_longitude=0)
-        fig, axx = plt.subplots(1,1,subplot_kw={'projection':transform})
-        #m.add_feature(cfeat.LAND)
-        #m.add_feature(cfeat.COASTLINE)
-        #m.add_feature(cfeat.BORDERS)
-        cb = axx.pcolormesh(lon, lat, mass, transform=transform)
-        vtools.format_plot(axx,transform)
+        fig, axx = plt.subplots(1, 1, subplot_kw={"projection": transform})
+        # m.add_feature(cfeat.LAND)
+        # m.add_feature(cfeat.COASTLINE)
+        # m.add_feature(cfeat.BORDERS)
+        cb = axx.pcolormesh(lon, lat, mass, transform=vtransform)
+        vtools.format_plot(axx, transform)
     else:
         plt.pcolormesh(lon, lat, mass)
     cb2 = plt.colorbar(cb)
-    if isinstance(unit,str): 
-       cb2.set_label(unit)
+    if isinstance(unit, str):
+        cb2.set_label(unit)
     dstr = str(mass.time.values)
-    plt.title(title + ' ' + dstr[0:-8])
+    plt.title(title + " " + dstr[0:-8])
     return axx
-    #plt.show()
+    # plt.show()

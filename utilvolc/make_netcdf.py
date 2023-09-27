@@ -1,3 +1,8 @@
+"""
+author : Allison Ring
+
+"""
+
 # make_netcdf.py
 # Makes ensemble hysplit netcdf, volcat regrid netcdf, and stats netcdf
 from datetime import datetime, timedelta

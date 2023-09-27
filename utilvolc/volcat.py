@@ -107,6 +107,7 @@ Improvements to be done:
 
 """
 
+
 def check_vals(idate, ghash, dset):
     slist = []
     slist.append(dset.time_bounds)
@@ -115,56 +116,76 @@ def check_vals(idate, ghash, dset):
     slist.append(dset.full_image_end_time)
     slist.append(dset.first_detection_full_image_start_time)
     slist.append(dset.first_detection_mean_feature_time)
-    names = ['time_bounds', 'mean_feature_time','full image start time', 'fill image end time',
-              'first detection full image start time', 'first detection mean feature time']
+    slist.append(dset.attrs["event_observation_time"])
+    names = [
+        "time_bounds",
+        "mean_feature_time",
+        "full image start time",
+        "fill image end time",
+        "first detection full image start time",
+        "first detection mean feature time",
+    ]
+    names.append("event_observation_time")
     for iii, sval in enumerate(slist):
-        print('***', names[iii])
-        if isinstance(sval.values,(list,np.ndarray)):
+        print("***", names[iii], type(sval))
+        if isinstance(sval, str):
+            dstr = "%Y-%m-%dT%H:%M:%SZ"
+            time = datetime.datetime.strptime(sval, dstr)
+            print(time)
+        elif isinstance(sval.values, (list, np.ndarray)):
             for val in sval.values:
                 print(val, type(val))
         else:
             print(sval.values, type(sval.values))
-            if (idate == pd.to_datetime(sval.values)): print('TRUE TRUE TRUE')
+            if idate == pd.to_datetime(sval.values):
+                print("TRUE TRUE TRUE")
 
 
 def check_name(fnn):
-   fn = fnn.split('/')[-1]
-   vn = VolcatName(fn)
-   #for key in vn.vhash.keys():
-       #print(key, vn.vhash[key])
-   edate = vn.vhash['edate']
-   idate = vn.vhash['observation_date']
-   return edate, idate
+    fn = fnn.split("/")[-1]
+    vn = VolcatName(fn)
+    # for key in vn.vhash.keys():
+    # print(key, vn.vhash[key])
+    edate = vn.vhash["event date"]
+    idate = vn.vhash["observation_date"]
+    return edate, idate
+
 
 def check_global_attrs(dset):
     ghash = {}
     for attr in dset.attrs:
-        if 'time' in attr:
-            #print(attr, dset.attrs[attr])
+        if "time" in attr:
+            # print(attr, dset.attrs[attr])
             ghash[attr] = dset.attrs[attr]
     return ghash
 
 
-def match_times(ghash,edate,idate):
+def match_times(ghash, edate, idate):
     dfmt = "%Y-%m-%dT%H:%M%S.0z"
     for key in ghash:
         if ghash[key] == edate.strftime(dfmt):
-            print('match', key, 'edate', edate)
+            print("match", key, "edate", edate)
         if ghash[key] == idate.strftime(dfmt):
-            print('match',key, 'idate', idate)
+            print("match", key, "idate", idate)
     if idate != edate:
-        print('idate, edate difference')
+        print("observation_date {}".format(idate))
+        print("event date       {}".format(edate))
+
         print(idate)
         print(edate)
-        #print(edate, idate, type(ghash[key]), key)
+        # print(edate, idate, type(ghash[key]), key)
 
 
 def check_times(fname):
+    """
+    check the times in the filename against times
+    in the file attributes.
+    """
     dset = xr.open_dataset(fname)
-    idate, edate = check_name(fname)
+    edate, idate = check_name(fname)
     ghash = check_global_attrs(dset)
-    match_times(ghash,edate,idate) 
-    check_vals(idate,ghash,dset)
+    match_times(ghash, edate, idate)
+    check_vals(idate, ghash, dset)
 
 
 def open_dataset(
@@ -172,8 +193,8 @@ def open_dataset(
     gridspace=None,
     correct_parallax=False,
     mask_and_scale=True,
-    decode_times=True
-    ):
+    decode_times=True,
+):
     """
     Opens single VOLCAT file
     gridspace: only necessary if doing parallax correction
@@ -204,9 +225,9 @@ def open_dataset(
     # use parallax corrected if available and flag is set.
     dset = _get_latlon(dset, "latitude", "longitude")
     dset = _get_time(dset)
-    #try:
+    # try:
     #    dset = _get_time(dset)
-    #except Exception as eee:
+    # except Exception as eee:
     #    print('_get_time error', eee)
     if "pc_latitude" in dset.data_vars and correct_parallax:
         if not gridspace:
@@ -221,7 +242,8 @@ def open_dataset(
         dset.attrs.update({"parallax corrected coordinates": "False"})
     return dset
 
-def flist2eventdf(flist,inphash):
+
+def flist2eventdf(flist, inphash):
     """
     create a dataframe from list of volcat filenames
     inphash contains additional information should be in following format
@@ -230,7 +252,7 @@ def flist2eventdf(flist,inphash):
     # example usage in Raikoke2023Volcat
     vlist = []
     # change all keys to upper case
-    inphash = {k.upper():val for k,val in inphash.items()}
+    inphash = {k.upper(): val for k, val in inphash.items()}
     for fle in flist:
         try:
             temp = VolcatName(fle)
@@ -240,20 +262,26 @@ def flist2eventdf(flist,inphash):
     vframe = pd.DataFrame.from_dict(vlist)
     cols = vframe.columns
     # rename columns which need to be renamed.
-    cols = [x if x != 'satellite platform' else 'sensor_name' for x in cols]
-    cols = [x if x != 'idate' else 'observation_date' for x in cols]
-    cols = [x if x != 'filename' else 'event_file' for x in cols]
-    cols = [x if x != 'WMO satellite id' else 'SENSOR_WMO_ID_INITIAL' for x in cols]
-    cols = [x if x != 'feature id' else 'FEATURE_ID' for x in cols]
+    cols = [x if x != "satellite platform" else "sensor_name" for x in cols]
+    cols = [x if x != "idate" else "observation_date" for x in cols]
+    cols = [x if x != "filename" else "event_file" for x in cols]
+    cols = [x if x != "WMO satellite id" else "SENSOR_WMO_ID_INITIAL" for x in cols]
+    cols = [x if x != "feature id" else "FEATURE_ID" for x in cols]
     vframe.columns = cols
-    checklist = ['VOLCANO_NAME', 'VOLCANO_LAT', 'VOLCANO_LON',
-                 'VOLCANO_REGION','VOLCANO_ELEVATION']
-    
+    checklist = [
+        "VOLCANO_NAME",
+        "VOLCANO_LAT",
+        "VOLCANO_LON",
+        "VOLCANO_REGION",
+        "VOLCANO_ELEVATION",
+    ]
     for key in checklist:
         if key in inphash.keys():
-           vframe[key.lower()] = inphash[key] 
+            print('adding {} {}'.format(key,inphash[key]))
+            vframe[key.lower()] = inphash[key]
         if key.lower() in inphash.keys():
-           vframe[key.lower()] = inphash[key] 
+            print('adding {}'.format(key))
+            vframe[key.lower()] = inphash[key]
     return vframe
 
 
@@ -420,8 +448,10 @@ def write_parallax_corrected_files(
             if verbose:
                 print("writing {} to {}".format(new_fname, wdir))
             dset = open_dataset(
-                os.path.join(tdir, fname), gridspace=gridspace, 
-                decode_times=True,correct_parallax=True
+                os.path.join(tdir, fname),
+                gridspace=gridspace,
+                decode_times=True,
+                correct_parallax=True,
             )
             newname = os.path.join(wdir, new_fname)
             # print('wdir {}'.format(newname))
@@ -432,7 +462,7 @@ def write_parallax_corrected_files(
                 )
             else:
                 logger.info("file did write {} {}".format(wdir, new_fname))
-    #print('Number of files which were already written {}'.format(anum))
+    # print('Number of files which were already written {}'.format(anum))
 
 
 def find_volcat(
@@ -538,7 +568,7 @@ class VolcatName(FileNameInterface):
 
     def __init__(self, fname):
         # if full directory path is input then just get the filename
-        self.fname = fname 
+        self.fname = fname
         if isinstance(fname, str):
             if "/" in fname:
                 temp = fname.split("/")
@@ -650,14 +680,14 @@ class VolcatName(FileNameInterface):
 
         # Image date marks date of the data collection
         dk = self.datekeys
-        if  isinstance(dk[0],int) and isinstance(dk[1],int):
+        if isinstance(dk[0], int) and isinstance(dk[1], int):
             dstr = "{}_{}".format(
                 self.vhash[self.keylist[dk[0]]], self.vhash[self.keylist[dk[1]]]
             )
             self.image_date = datetime.datetime.strptime(dstr, self.image_dtfmt)
 
         # Event date is start of event
-        if  isinstance(dk[2],int) and isinstance(dk[3],int):
+        if isinstance(dk[2], int) and isinstance(dk[3], int):
             dstr = "{}_{}".format(
                 self.vhash[self.keylist[dk[2]]], self.vhash[self.keylist[dk[3]]]
             )
@@ -688,7 +718,7 @@ def bbox(darray, fillvalue):
     if fillvalue is None then assume Nan's.
     """
     try:
-        #arr = darray[0, :, :].values
+        # arr = darray[0, :, :].values
         arr = darray[0, :, :].values
     except:
         print("bbox arr failed", darray)
@@ -715,34 +745,34 @@ def _get_time(dset):
     # June 2023 There was some issue with this for the reprocessed Popo data.
 
     import pandas as pd
-    
-    #temp2 = dset.full_image_start_time.values
+
+    # temp2 = dset.full_image_start_time.values
     # scan start and end times
-    #temp2 = dset.time_bounds.values[0]
+    # temp2 = dset.time_bounds.values[0]
 
     # full image stat. this corresponds to the idate.
-    #temp2 = dset.full_image_start_time.values
+    # temp2 = dset.full_image_start_time.values
 
     temp2 = dset.attrs["event_observation_time"]
-    #temp3 = dset.attrs["time_coverage_end"]
-    #if temp1 != temp2:
-    #   logger.warning('Different times in volcat {} {}'.format(temp1,temp2,temp3)) 
+    # temp3 = dset.attrs["time_coverage_end"]
+    # if temp1 != temp2:
+    #   logger.warning('Different times in volcat {} {}'.format(temp1,temp2,temp3))
     dstr = "%Y-%m-%dT%H:%M:%SZ"
-    # time string sometimes has seconds as a decimal which is not recognized by strptime. 
+    # time string sometimes has seconds as a decimal which is not recognized by strptime.
     # Remove the decimal part.
-    iii = str.find(temp2,'.')
-    temp2 = temp2[0:iii] + 'Z'
-    time = datetime.datetime.strptime(temp2,dstr)
+    iii = str.find(temp2, ".")
+    temp2 = temp2[0:iii] + "Z"
+    time = datetime.datetime.strptime(temp2, dstr)
     dset["time"] = time
     dset = dset.set_coords(["time"])
     # expand_dims has been moved to the get_data function.
     # it was failing here possibly because of the structure of the data.
-    #dset = dset.expand_dims(dim="time")
+    # dset = dset.expand_dims(dim="time")
     return dset
 
 
 # no longer valid
-#def _get_time2(dset)
+# def _get_time2(dset)
 #    import pandas as pd
 #
 #    date = "20" + str(dset.attrs["Image_Date"])[1:]
@@ -764,14 +794,14 @@ def get_data(dset, vname, clip=True):
     gen = dset.data_vars[vname]
     atvals = gen.attrs
     fillvalue = None
-    if not 'time' in gen.dims:
-        gen = gen.expand_dims(dim='time')
+    if not "time" in gen.dims:
+        gen = gen.expand_dims(dim="time")
     if "_FillValue" in gen.attrs:
         fillvalue = gen._FillValue
         gen = gen.where(gen != fillvalue)
         fillvalue = None
-     
-    if clip and gen.time.shape[0]==1:
+
+    if clip and gen.time.shape[0] == 1:
         # do not clip if more than one time period.
         # bounding box will only be created for first time period
         # and may clip out relevant values later.
@@ -813,13 +843,16 @@ def check_names(dset, vname, checklist, clip=True):
 
 
 def check_pc(dset):
-    checklist = ["pc_latitude","pc_longitude"]
+    checklist = ["pc_latitude", "pc_longitude"]
     count = 0
     for val in checklist:
         if val in dset.data_vars:
-           count +=1
-    if count == 2: return True
-    else: return False
+            count += 1
+    if count == 2:
+        return True
+    else:
+        return False
+
 
 def get_pc_latitude(dset, vname=None, clip=True):
     """Returns array with retrieved height of the highest layer of ash."""
@@ -865,7 +898,7 @@ def check_total_mass(dset):
 def get_total_mass(dset):
     # unit is in Tg.
     """Units are in Tg"""
-    return dset.ash_mass_loading_total_mass.values[0]
+    return dset.ash_mass_loading_total_mass.values
 
 
 def get_mass(dset, vname=None, clip=True):
@@ -904,7 +937,7 @@ def get_atherr(dset):
     return height_err
 
 
-def matchvals(pclat, pclon, massra, height, area):
+def matchvals(pclon, pclat, massra, height, area):
     # pclat : xarray DataArray
     # pclon : xarray DataArray
     # mass  : xarray DataArray
@@ -916,7 +949,7 @@ def matchvals(pclat, pclon, massra, height, area):
     mass = massra.values.flatten()
     height = height.values.flatten()
     area = area.values.flatten()
-    tlist = list(zip(pclat, pclon, mass, height, area))
+    tlist = list(zip(pclon, pclat, mass, height, area))
     # only return tuples in which mass has a valid value
     if "_FillValue" in massra.attrs:
         fill = massra.attrs["_FillValue"]
@@ -1326,3 +1359,35 @@ def combine_regridded(vlist):
     return newra
 
 
+def volcat2hull(dsetlist,alpha=1):
+    from utilhysplit import geotools
+
+    levlist = range(50,650,50)
+    levlist = [x*100/3.28084/1000 for x in levlist]
+    print(levlist)
+    htlist = levlist
+
+    polyhash = {}
+
+    tlist = []
+    for dset in dsetlist:
+        lat = get_pc_latitude(dset,clip=False)
+        lon = get_pc_longitude(dset,clip=False)
+        ht = get_height(dset,clip=False)
+        mass = get_mass(dset,clip=False)
+        area = get_area(mass)
+        ttt = matchvals(lat,lon,mass,ht,area)
+        tlist.extend(ttt)
+  
+    for iii, ht in enumerate(htlist[1:]):
+        new = [x for x in tlist if x[3]>htlist[iii]]
+        new = [x for x in new if x[3]<ht]
+        longitude = [x[0] for x in new]
+        latitude = [x[1] for x in new]
+        print(ht, len(latitude))
+        if len(latitude)<4: continue
+        mpts = geotools.make_multi(longitude,latitude)
+        ch,ep = geotools.concave_hull(mpts,alpha=alpha)
+        polyhash[ht] = ch
+
+    return polyhash

@@ -289,31 +289,34 @@ class iwxxmCollection:
         polylist = []
 
         vaa0 = sublist[obsiii]
-        vaa0.plot_vaa()
-        plt.show()
+        #vaa0.plot_vaa()
+        #plt.show()
         time0 = vaa0.get_times()[0]
         print("Reference time {}".format(time0))
         polylist.append(vaa0.get_poly_list()[0])
+        print('Remark ------')
         print(vaa0.remarks)
 
         for fii in flist:
             vaaf = sublist[fii]
-            vaaf.plot_vaa()
-            plt.show()
+            #vaaf.plot_vaa()
+            #plt.show()
             timef = vaaf.get_times()[fnum]
             obsf = vaaf.get_times()[0]
             print(
                 "obstime {} Forecast time {} DIFF {}".format(obsf, timef, timef - obsf)
             )
             polylist.append(vaaf.get_poly_list()[fnum])
+            print('Remark ------')
             print(vaaf.remarks)
 
         clr = ["-k", "-r", "-b", "-c"]
         for iii, poly in enumerate(polylist):
-            if not poly.is_empty:
-                plt.plot(*poly.exterior.xy, clr[iii])
-            else:
-                print("Empty polygon")
+            for ppp in poly:
+                if not ppp.is_empty:
+                    plt.plot(*ppp.exterior.xy, clr[iii])
+                else:
+                    print("Empty polygon")
         # plt.plot(vlon,vlat,'^y',MarkerSize=10)
 
     def find_time_match(self, vname, intime, forecast, dt):
@@ -641,8 +644,14 @@ class iwxxmVAA:
         mindiff=10
         for poly in plist:
             # if multiple polygons just use first one.
-            if isisntance(poly,list):
-               poly = poly[0]
+            if isinstance(poly,list):
+               if poly:
+                  poly = poly[0]
+               else:
+                  mlist.append(np.nan)
+                  alist.append(np.nan)
+                  continue
+                   
             bearing = 0
             aaa = 400
             iii=0

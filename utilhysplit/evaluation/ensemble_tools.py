@@ -25,7 +25,7 @@ get_pixel_match : finds threshold which would result in same number of pixels in
     ens_boxplot
 
 # Needs checking
-    topheight : returns height of level
+    ATLra output for the problev 50 and 99 levels.
 
 Commented out
     volcATL
@@ -89,6 +89,7 @@ def APLra(indra, enslist=None, sourcelist=None):
     coords2 = dict(coords)
     # remove 'ens' from the coordinate dictionary.
     coords2.pop("ens")
+    coords2.pop("source")
     dims = list(dra2.dims)
     # find which dimension is the 'ens' dimension
     dii = dims.index(dim)
@@ -132,7 +133,8 @@ def preprocess(indra, enslist=None, sourcelist=None):
     # if lists are an np.ndarray then testing them with not
     # returns an error.
     if isinstance(sourcelist, np.ndarray):
-        pass
+       sourcelist = list(sourcelist)
+
     # if no sourcelist is passed and source dimension is only length 1,
     # then 'squeeze' it rather than stack it.
     elif "source" in dra.dims and len(dra.source.values) == 1:
@@ -148,6 +150,7 @@ def preprocess(indra, enslist=None, sourcelist=None):
         dra = dra.isel(ens=0)
     elif "ens" in dra.dims and not enslist:
         enslist = dra.ens.values
+
     if "source" in dra.dims and "ens" in dra.dims:
         dra = dra.rename({"ens": "metens"})
         dra = dra.sel(metens=enslist)
@@ -184,24 +187,35 @@ def ATLra(
     atthash = {}
     atthash["Description"] = "Ensemble relative frequency of exceedance"
     atthash["thresh unit"] = "mg/m3"
-    atthash["unit"] = "percent of ensemble members above threshold"
+    atthash["unit"] = "Fraction of ensemble members above threshold"
     new.attrs.update(atthash)
 
     # ------------------------------------------------
     # making gridded concentration
     problev = 50
-    apl = APL(indra, problev=problev)
+    apl = APL(indra, problev=problev,sourcelist=sourcelist,enslist=enslist)
     descrip = "Concentrations at {} percentile level".format(problev)
     atthash = {}
     atthash["Description"] = descrip
     atthash["units"] = "mg/m3"
     apl.attrs.update(atthash)
 
+    problev = 99
+    apl90 = APL(indra, problev=problev,sourcelist=sourcelist,enslist=enslist)
+    descrip = "Concentrations at {} percentile level".format(problev)
+    atthash = {}
+    atthash["Description"] = descrip
+    atthash["units"] = "mg/m3"
+    apl90.attrs.update(atthash)
+
+    # ------------------------------------------------
+
     # ------------------------------------------------
     # making dataset
     dhash = {}
     dhash["FrequencyOfExceedance"] = new
-    dhash["Concentration"] = apl
+    dhash["Concentration"] = apl.drop('percent_level',dim=None)
+    dhash["Concentration99"] = apl90.drop('percent_level',dim=None)
     dset = xr.Dataset(data_vars=dhash)
 
     #nhash = {}
@@ -563,68 +577,64 @@ def plot_cdf(ax1, cdfhash, xscale="log", clrs=None, label="time"):
     return ax1
 
 
-# def make_ATL_hysp(xra, variable="p006", threshold=0.0, MER=None):
-# amr version. maybe not needed now that ATL has been modified.
-#    """
-#    Uses threshold value to make binary field of ensemble members.
-#    For use in statistics calculations. Based on mass loading, no vertical component
-#    Inputs:
-#    xra: xarray dataset - netcdf files from hysplit.combine_dataset
-#    variable: variable name (string) from xra
-#    threshold: ash threshold - default=0. (float/integer)
-#    MER: mass eruption rate - default is Mastin equation MER from xra attributes, units are  (float/integer)
-#    Output:
-#    xrabin: binary xarray dataarray (source, x, y)
-#    """
-#
-#    xra2 = (
-#        xra[variable] * 1000.0
-#    )  # Each vertical layer is 1000m - MAY WANT TO ALLOW INPUT
-#    xra2 = xra2.sum(dim="z")  # Summing along z makes the units g/m^2
-#    # May want to add loops for time and ensemble dimension in the future
-#    # MER must used for two ensemble members
-#    if not MER:
-#        MER = xra.attrs[
-#            "Fine Ash MER"
-#        ]  # Allowing for MER input - default is Mastin equation MER
-#
-#    xra3 = xra2
-#    a = 0
-#    while a < len(xra2.source):
-#        if xra2[a, :, :].source in ("CylinderSource", "LineSource"):
-#            xra3[a, :, :] = xra2[a, :, :] * MER
-#        else:
-#            xra3[a, :, :] = xra2[a, :, :]
-#        a += 1
-#
-#    xrabin = xr.where(xra3 >= threshold, 1.0, 0.0)
-#    return xrabin
+def topheight(inash, time, level=None, dlev=0,enslist=None,sourcelist=None, thresh=0.01):
+    """
+    inash - xarray
+    dlev - level thickness. To be added on to get the top height values.
 
-
-def topheight(draash, time, ens, level, thresh=0.01):
-    # more work needs to be done on this or there may be
-    # a similar function elsewhere.
-
-    source = 0
+    Returns
+    rht - xarray with highest level that contains concentration above threshold
+    rbt - xarray with lowest level that contains concentration above threshold
+    """
+    if 'time' in inash.dims:
+        inash = inash.sel(time=time)
+    revash,dim = preprocess(inash,enslist,sourcelist)
     if isinstance(level, int):
         level = [level]
-    iii = 0
-    for lev in level:
-        lev_value = draash.z.values[lev]
-        rr2 = draash.sel(time=time)
-        rr2 = rr2.isel(ens=ens)
-        rr2 = rr2.isel(source=source, z=lev)
+    if not isinstance(level,list):
+        level = np.arange(0,len(revash.z.values))
+
+    for iii, lev in enumerate(level):
+        lev_value = revash.z.values[lev]
+        rr2 = revash.isel(z=lev)
+        #if dim in rr2.dims:
+        #   rr2 = rr2.max(dim=dim)
         # place zeros where it is below threshold
-        rr2 = rr2.where(rr2 >= thresh)
-        rr2 = rr2.fillna(0)
-        # place ones where it is above threshold
-        rr2 = rr2.where(rr2 < thresh)
-        rr2 = rr2.fillna(lev_value)
+        # place level value + level thickness in meters where above threshold.
+        # assume that level height indicates the bottom of the level. 
+        rr2 = xr.where(rr2>thresh,lev_value+dlev,0)
+
         if iii == 0:
             rtot = rr2
-            rtot.expand_dims("z")
+            rtot = rtot.expand_dims('z')
         else:
-            rr2.expand_dims("z")
-            rtot = xr.concat([rtot, rr2], "z")
-        rht = rtot.max(dim="z")
-    return rht
+            rr2 = rr2.expand_dims('z')
+            rtot = xr.concat([rtot, rr2], 'z')
+    rht = rtot.max(dim='z')
+
+    rht2 = xr.where(rtot==0,1e6,rtot)
+    rbt = rht2.min(dim='z')
+    rbt = xr.where(rbt<1e5,rbt,0)
+    return rht, rbt
+
+
+
+def get_hull(z,thresh1=0.1,thresh2=1000):
+    lat = z.longitude.values.flatten()
+    lon = z.latitude.values.flatten()
+    zzz = z.values.flatten()
+    tlist = list(zip(lat,lon,zzz))
+    print('MAX tlist', np.max(tlist))
+    #thresh=0.1
+    tlist = [x for x in tlist if ~np.isnan(x[2])]
+    tlist = [x for x in tlist if x[2]>=thresh1]
+    tlist = [x for x in tlist if x[2]<=thresh2]
+    print(tlist[0:5])
+    lon = [x[1] for x in tlist]
+    lat = [x[0] for x in tlist]
+    mpts = geotools.make_multi(lon,lat)
+    ch, ep = geotools.concave_hull(mpts,alpha=1)
+    return ch, ep
+
+
+

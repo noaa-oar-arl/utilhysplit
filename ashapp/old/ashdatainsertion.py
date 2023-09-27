@@ -88,7 +88,8 @@ def find_cdump_df(wdir, jobid, daterange):
     if isinstance(dset,list):
        dset = find_cdump_df_alt(wdir,jobid)
     # return only cdump files with the jobid in the name.
-    return dset[dset.apply(lambda row: jobid in row['filename'],axis=1)]
+    d2 = dset[dset.apply(lambda row: jobid in row['filename'],axis=1)]
+    return d2
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
     edf = mdi.get_emit_name_df(wdir,ftype)
@@ -149,20 +150,31 @@ class DataInsertionRun(AshRun):
 
     def get_cdump_xra(self):
         import sys
+        logger.warning('get_cdump_xra')
         edate = self.inp["DI_start_date"] + datetime.timedelta(
             hours=self.inp["DIrunHours"]
         )
         logger.warning('DATES {} {} {}'.format(self.inp['DI_start_date'], edate, self.inp['DIrunHours']))
+        logger.warning(self.inp['WORK_DIR'])
+        logger.warning(self.JOBID)
         cdf = find_cdump_df(self.inp["WORK_DIR"], self.JOBID, [self.inp["start_date"], edate])
         blist = list(cdf["filename"].values)
         alist = []
         # if not blist:
         #    logger.warning("No cdump files found")
         #    return xr.Dataset()
-        for fname in blist:
-            logger.info("Adding to netcdf file {}".format(fname))
-            alist.append((fname, fname, self.inp["meteorologicalData"]))
         century = 100 * (int(self.inp["DI_start_date"].year / 100))
+        for fname in blist:
+            failed = False
+            dname = self.inp['WORK_DIR'] +  fname
+            try:
+                hysplit.open_dataset(dname,century=century)
+            except:
+                logger.warning('COuld not open {}'.format(dname))
+                failed = True
+            if not failed: 
+               logger.warning("Adding to netcdf file {}".format(fname))
+               alist.append((fname, fname, self.inp["meteorologicalData"]))
         cdumpxra = hysplit.combine_dataset(
             alist, century=century, sample_time_stamp="start"
         )
