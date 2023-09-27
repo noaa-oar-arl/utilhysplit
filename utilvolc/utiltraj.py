@@ -264,7 +264,7 @@ def plume_thick_cal(df, cutoff):
 
 def conc_emitimes_data(df, cutoff):
     """"
-    This function prepares the EMITIMES input file for Hysplit Concentration Calculations.
+    This function prepares the characteristics of plume emission for EMITIMES needed for forward dispersion run.
     """
     df_dist_fwd_data = pd.DataFrame()
     df_dist_fwd = {}
