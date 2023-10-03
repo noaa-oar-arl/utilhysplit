@@ -796,6 +796,7 @@ class NameList:
 
 
     def __str__(self):
+        # 9/28/2023 remove key.lower() so write with same case as input.
         order = self.order
         rstr = ""
         if order is None:
@@ -803,7 +804,7 @@ class NameList:
         for key in order:
             kstr = True
             try:
-                rstr += key.lower() + "=" + self.nlist[key] + "{}\n".format(self.line_ending)
+                rstr += key + "=" + self.nlist[key] + "{}\n".format(self.line_ending)
             except BaseException:
                 print("WARNING: " + str(key) + " " + str(self.nlist[key]) + " not str")
                 kstr = False
