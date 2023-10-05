@@ -87,6 +87,7 @@ if __name__ == "__main__":
     khash = {'volcano_name':['Shishaldin']}
     logdf5 = volcat_files.get_log_files(sumdf5,inp,**khash)
     logger.info('Setting up {} case {}'.format(vname, sumdf5.shape))
+    logdflist.append(logdf5)
 
     edate = datetime.datetime(2023,8,27)
     hours = 48
@@ -96,6 +97,16 @@ if __name__ == "__main__":
     logdf5 = volcat_files.get_log_files(sumdf5,inp,**khash)
     logger.info('Setting up {} case {}'.format(vname, sumdf5.shape))
     logdflist.append(logdf5)
+ 
+    edate = datetime.datetime(2023,10,4)
+    hours = 48
+    sumdf5 = volcat_files.get_summary_file_df(inp['JPSS'],hours=hours,edate=edate)
+    #sumdf5 = sumdf3[sumdf3['volcano_name'] == vname]
+    khash = {'volcano_name':['Shishaldin']}
+    logdf5 = volcat_files.get_log_files(sumdf5,inp,**khash)
+    logger.info('Setting up {} case {}'.format(vname, sumdf5.shape))
+    logdflist.append(logdf5)
+
 
     #some shishaldin files may have been misnamed as Pavlof
 

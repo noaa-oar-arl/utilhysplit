@@ -61,7 +61,6 @@ class ModelForecast:
         self.end_time = end_time       # end time of last forecast
         self.time_delta = time_delta   # time between forecasts h
         self.attrs = attrs    
-
         self.forecast = None
 
  
@@ -73,6 +72,8 @@ class ModelForecast:
  
     def get_sourcelist(self,time_previous=3):
         """
+        This is specifically for data insertion files.
+        where the sources have name format that can be handled by EmitName class.
         """
         dt = datetime.timedelta(hours=time_previous)
         snames = self.model_dset.source.values
@@ -133,7 +134,7 @@ class ModelForecast:
         dset = self.model_dset.sel(source=sourcelist).sel(time=timelist)
         wep.height_plot(dset,vlist=vloc,thresh=thresh,unit=unit)
 
-    def get_forecast(self,thresh,problev):
+    def get_iwxxm_forecast(self,thresh,problev):
         tp = 1
         if problev==50:
             #conc = self.forecast.Concentration
@@ -156,9 +157,8 @@ class ModelForecast:
             conc = conc.isel(ens=0) 
         return conc
 
-
     def plot_vaa_forecast(self,vloc,thresh=0.2,problev=50,plev=3):
-        conc = self.get_forecast(thresh,problev)
+        conc = self.get_iwxxm_forecast(thresh,problev)
         dt = datetime.timedelta(hours=3)
         timelist = [self.start_time+n*dt for n in [0,1,2,3,4,5]]
         conc = conc.sel(time=timelist)
