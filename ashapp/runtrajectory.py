@@ -190,6 +190,11 @@ class RunTrajectory(ModelRunInterface):
     def filehash(self):
         return self._filehash
 
+    # no level setter needed for trajectory runs.
+    @property
+    def levelsetter(self):
+        return None
+
     def _get_filenames(self):
         fhash = {}
         fhash["control"] = self.filelocator.get_control_filename()

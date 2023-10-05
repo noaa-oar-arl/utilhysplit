@@ -26,8 +26,10 @@ def generate_traj_from_df(df):
         row = rrr[1]
         # this is specifically for file from hunga tonga so2 data.
         # heightI uses the interpolated data as well.
-        outp["height"] = row.heightI * 1000
-#        outp["height"] = row.height * 1000
+        if 'heightI' in df.columns:
+            outp["height"] = row.heightI * 1000
+        else:
+            outp["height"] = row.height * 1000
         outp["latitude"] = row.lat
         outp["longitude"] = row.lon
         yield outp 

@@ -1,4 +1,9 @@
 
+def get_qva_levels():
+    ls = LevelSetter(bottom=50, top=650, dz=50, unit='FL')
+    return ls.levlist
+
+
 def get_levelsetter(inp):
 
     if inp['qvaflag']:
@@ -15,7 +20,6 @@ def get_levelsetter(inp):
         if 'bottom' in inp.keys():
             bottom = inp['bottom']
         levelsetter = LevelSetter(bottom,top,dz,unit)
-        print('HERE', bottom, top,dz,unit)
     return levelsetter
 
 
