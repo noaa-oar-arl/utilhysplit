@@ -64,7 +64,7 @@ class OutputTrajectory(ModelOutputInterface):
             taglist.append(tdump[1])
             pass 
         # trajectory  dataframe
-        tdf =  hytraj.combine_dataset(flist,taglist)
+        tdf =  hytraj.combine_dataset(flist,taglist,renumber=True)
         tdf.to_csv(self.what_is_outputfilename())
         return tdf
 
