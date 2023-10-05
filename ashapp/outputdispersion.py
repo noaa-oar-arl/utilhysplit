@@ -74,7 +74,7 @@ class OutputDispersion(ModelOutputInterface):
 
     def postprocess(self):
         self.get_cdump_xra()
-        self._ncfile.write_with_compression(overwrite=True)
+        self._ncfile.write_with_compression(overwrite=False)
         # combine all cdump files into an xarray and write a netcdf file.
         return -1
 

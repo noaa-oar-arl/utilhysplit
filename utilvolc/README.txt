@@ -1,5 +1,19 @@
 old clean branch is in /hysplit-users/alicec/clean/utilhysplit. it still has some untracked files in it.
 
+TCM
+
+   volcinverse.py
+       classes -
+       InvDirectory
+       RunInversion
+          uses VolcatHysplit paired data class.
+
+
+MODEL+VOLCAT EVALUATION
+
+   volcpaired.py
+       VolcatHysplit class
+
 
 VOLCAT
 
@@ -45,8 +59,20 @@ VOLCAT
         OneEventTime class (helper class)
 
 
-QVA creation
+Model data
    model_event.py contains classes for helping with QVA creation.
+
+        ModelEvent class 
+             DataInsertion outputs
+             Model runs for input into inversion algorithm.
+             Model runs which are result of emissions with inversion algorithm.
+             Model runs which are the result of 'traditional' run.
+
+        ModelForecast class
+             Instances of the forecast class are created by the ModelEvent class.
+             the forecast class should also be able to ingest the VOLCAT data.
+
+   ensemble_polygons contains classes for taking model data and creating polygons
 
  
 qvainterface.py
@@ -66,8 +92,7 @@ INTERFACES
 
 
 DATA INSERTION
-    ashapp/di_main.py started to write main program for the data insertion.
-
+    ashapp/DImain.py 
     ashapp/make_volcat_database.py  run this to create a csv file from the sumdf file created by get_summary_file_df.
 
 

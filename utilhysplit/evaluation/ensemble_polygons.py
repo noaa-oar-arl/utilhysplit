@@ -17,22 +17,26 @@ def FL_colors(levlist=None,cmap='viridis'):
 
 def other_colors(levlist,cmap='viridis'):
     nclr = len(levlist)
-    print('NCLRL', nclr)
     cm = colormaker.ColorMaker(cmap,nclr,ctype='rgb')
     zzz = zip(levlist,cm())
     return dict(zzz) 
 
 
 def get_hull(z,thresh1=0.1,thresh2=1000,alpha=10):
+
     lat = z.longitude.values.flatten()
     lon = z.latitude.values.flatten()
     zzz = z.values.flatten()
     tlist = list(zip(lat,lon,zzz))
+
+    # get lat lon values for values above thresh1 and below thresh2 and non nan.
     tlist = [x for x in tlist if ~np.isnan(x[2])]
     tlist = [x for x in tlist if x[2]>=thresh1]
     tlist = [x for x in tlist if x[2]<=thresh2]
     lon = [x[1] for x in tlist]
     lat = [x[0] for x in tlist]
+
+    # create the polygons
     numpts = len(lon)
     mpts = geotools.make_multi(lon,lat)
     if numpts >= 4: 
@@ -90,6 +94,9 @@ class HeightPolygons:
         else: return False            
  
     def process(self,dset,alpha=10):
+        """
+        dset : xarray DataArray
+        """
         hlevs = wep.set_height_levels(dset.values)
         hlevs.sort()
         if hlevs[0]==0: hlevs=hlevs[1:]
@@ -117,10 +124,8 @@ class HeightPolygons:
         checklist = list(zip(keylist,polylist))
         for poly in checklist:
             cont=True
-            print(poly)
             for ccc in clist: 
                 for c in ccc:
-                    print('check', c[0], poly[0])
                     if c[0]==poly[0]: cont=False
             if cont:
                 cluster = [x for x in checklist if poly[1].distance(x[1])<dist]
@@ -155,10 +160,11 @@ class HeightPolygons:
         new.ch_hash = newhash
         return new 
 
+    #def merge(self):
+
     def merge_with(self,other):
         self_polygons = list(self.ch_hash.values())
         other_polygons = list(other.ch_hash.values())
-        print(type(other_polygons[0]), type(self_polygons[0]))
     
         keylist = list(self.ch_hash.keys())
         keylist.extend(list(other.ch_hash.keys()))

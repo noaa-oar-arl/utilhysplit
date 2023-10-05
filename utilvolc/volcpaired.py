@@ -19,8 +19,9 @@ from utilhysplit.metfiles import MetFileFinder
 from utilhysplit.plotutils import colormaker
 from utilvolc import volcat
 from utilvolc.runhelper import Helper
+from ashapp import level_setter
 
-from utilvolc.inversioninterface import PairedDataInterface
+#from utilvolc.inversioninterface import PairedDataInterface
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +30,20 @@ Classes
     VolcatHysplit
 """
 
+def add_qva_levels_to_dset(self,dset):
+    lsetter = level_setter.LevelSetter()
+    
 
 
-class VolcatHysplit(PairedDataInterface):
+#class VolcatHysplit(PairedDataInterface):
+class VolcatHysplit():
 
     def __init__(
         self,
-        inp,
-        tdir,
-        fname,
-        vdir,
+        #inp,
+        #tdir,
+        #fname,
+        #vdir,
         #vid,
         #configdir="./",
         #configfile=None,
@@ -54,13 +59,13 @@ class VolcatHysplit(PairedDataInterface):
         """
         # InverseAsh class
 
-        self.tdir = tdir  # directory for hysplit output
-        self.fname = fname  # name of hysplit output
+        #self.tdir = tdir    # directory for hysplit output
+        #self.fname = fname  # name of hysplit output
 
-        self.vdir = vdir  # directory for volcat data
+        self.vdir = None  # directory for volcat data
         #self.vid = vid  # volcano id.
 
-        self.n_ctrl = 0  # determined in the write_tcm method.
+        #self.n_ctrl = 0  # determined in the write_tcm method.
         # needed for Parameters_in.dat input into inversion algorithm
 
         # keep volcat arrays for different averaging times.
@@ -71,26 +76,26 @@ class VolcatHysplit(PairedDataInterface):
         # and are on the same grid.
         self.volcat_avg_hash = {}
         self.volcat_ht_hash = {}
-        self.cdump_hash = {}
+        self.cdump_mass_hash = {}
 
         # multiplication factor if more than 1 unit mass released.
         self.concmult = 1
 
         # get_cdump method loads the cdump file.
         self.cdump = None
-        self.get_cdump(tdir, fname, verbose, ensdim)
+        #self.get_cdump(tdir, fname, verbose, ensdim)
 
         # add_config_info creates these two dictionaries from the configuration.
         #self.sourcehash = {}
         #self.inp = {}
         #self.add_config_info(configdir, configfile)
-        self._inp = inp
+        self._inp = {}
 
         # These values are for if spatial coarsening is used.
         self.coarsen = None
         self.original_volcat_avg_hash = {}
         self.original_volcat_ht_hash = {}
-        self.original_cdump_hash = {}
+        self.original_cdump_mass_hash = {}
 
         self.set_bias_correction(slope=None, intercept=None)
 
@@ -124,7 +129,7 @@ class VolcatHysplit(PairedDataInterface):
         # InverseAsh class
         iacopy = InverseAsh(self.tdir, self.fname, self.vdir, self.vid, self.n_ctrl)
         iacopy.volcat_avg_hash = self.volcat_avg_hash
-        iacopy.volcat_cdump_hash = self.cdump_hash
+        iacopy.volcat_cdump_hash = self.cdump_mass_hash
         icacopy.concmult = self.concmult
         return icacopy
 
@@ -135,6 +140,27 @@ class VolcatHysplit(PairedDataInterface):
         print(self.volcat_avg_hash.keys())
         print("times in cdump file")
         self.print_times()
+
+    def add_cdump_dset(self,dset,ensdim='ens'):
+        self.cdump = self.process_cdump(dset,ensdim)
+
+    def add_qva_levels(self):
+        qvalevs = level_setter.get_qva_levels()
+        self.add_levels(qvalevs)
+
+    def add_levels(self, levels):
+        lkey = 'Level top heights (m)'
+        z = self.cdump.z.values
+        for zval in z:
+            if zval not in levels:
+               levels.append(zval)
+        levels.sort()
+
+        if lkey in self.cdump.attrs.keys():
+           logger.info('current levels', self.cdump.attrs[lkey])
+           logger.info('changing to ', levels)
+        self.cdump = self.cdump.assign_attrs({lkey:list(levels)})        
+
 
     def add_model(self,tdir,fname,verbose=False,ensdim='ens'):
         """
@@ -158,6 +184,9 @@ class VolcatHysplit(PairedDataInterface):
             cdump = fname
         if not hysplit.check_grid_continuity(cdump):
             logger.info("Grid not continuous")
+        self.process_cdump(cdump,ensdim)
+
+    def process_cdump(self,cdump,ensdim):
         if not isinstance(cdump, xr.core.dataarray.DataArray):
             # turn dataset into dataarray
             temp = list(cdump.keys())
@@ -312,7 +341,7 @@ class VolcatHysplit(PairedDataInterface):
         if tii is None:
             tii = self.time_index(daterange[0])
         print("tii", tii)
-        cdump = self.concmult * self.cdump_hash[tii]
+        cdump = self.concmult * self.cdump_mass_hash[tii]
         volcat = self.volcat_avg_hash[tii]
         if not zii:
             csum = cdump.sum(dim="ens")
@@ -352,27 +381,6 @@ class VolcatHysplit(PairedDataInterface):
         # return csum.copy()
         return csum.copy()
 
-    @staticmethod
-    def get_norm(model, r2, logscale=False):
-        # InverseAsh class
-        """ """
-        if isinstance(r2, np.ndarray):
-            rval = r2
-        else:
-            rval = r2.values
-
-        m_max = np.nanmax(model)
-        v_max = np.nanmax(rval)
-        m_min = np.nanmin(model)
-        v_min = np.nanmin(rval)
-        p_min = np.nanmin([m_min, v_min])
-        p_max = np.nanmax([m_max, v_max])
-        lower_color = 0.8
-        if logscale:
-            norm = mpl.colors.LogNorm(vmin=lower_color * p_min, vmax=p_max)
-        else:
-            norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max)
-        return norm
 
     def set_bias_correction(self, slope, intercept, dfcdf=pd.DataFrame()):
         # InverseAsh class
@@ -417,7 +425,7 @@ class VolcatHysplit(PairedDataInterface):
         elif isinstance(tii, datetime.datetime):
             iii = self.time_index(tii)
 
-        cdump = self.cdump_hash[iii] * self.concmult
+        cdump = self.cdump_mass_hash[iii] * self.concmult
 
         if not cii:
             cii = tii
@@ -550,10 +558,14 @@ class VolcatHysplit(PairedDataInterface):
             # data2 = data2[~np.isnan(data2)]
         return data2
 
-    def compare(self, forecast, thresh=None):
+    def compare(self, time,thresh=None):
         # InverseAsh class
         """ """
-        volcat = self.match_volcat(forecast)
+        tii = self.time_index(time)
+        print("tii", tii)
+        volcat = self.volcat_avg_hash[tii]
+        forecast = self.cdump_mass_hash[tii]
+        #volcat = self.match_volcat(forecast)
         evals = self.remove_nans(forecast.values.flatten(), thresh)
         vvals = self.remove_nans(volcat.values.flatten(), thresh)
         # number of pixles above threshold in each.
@@ -581,7 +593,7 @@ class VolcatHysplit(PairedDataInterface):
         evals = forecast.values
         vpi = evals < 0.001
         evals[vpi] = np.nan
-        norm = self.get_norm(volcat, forecast)
+        norm = get_norm(volcat, forecast)
 
         # evals = np.log10(evals)
         # vvals = np.log10(volcat.values)
@@ -637,79 +649,21 @@ class VolcatHysplit(PairedDataInterface):
             ax3.plot(vloc[0], vloc[1], "y^")
         return fig
 
-    def compare_forecast(self, forecast, cmap="Blues", ptype="pcolormesh", vloc=None):
+    def compare_forecast(self, time,cmap="Blues", ptype="pcolormesh", vloc=None):
         # InverseAsh class
         """
         forecast should be an xarray in mass loading format with no time dimension.
         """
-        sns.set()
-        sns.set_style("whitegrid")
-        fig = plt.figure(figsize=[15, 5])
-        ax1 = fig.add_subplot(1, 3, 1)
-        ax2 = fig.add_subplot(1, 3, 2)
-        ax3 = fig.add_subplot(1, 3, 3)
-
-        time = pd.to_datetime(forecast.time.values)
+        #time = pd.to_datetime(forecast.time.values)
         tii = self.time_index(time)
         print("tii", tii)
         volcat = self.volcat_avg_hash[tii]
-        evals = forecast.values
-        vpi = evals < 0.001
-        evals[vpi] = np.nan
-        norm = self.get_norm(volcat, forecast)
-
-        # evals = np.log10(evals)
-        # vvals = np.log10(volcat.values)
-        vvals = volcat.values
-        vpi = vvals < 0.001
-        vvals[vpi] = np.nan
-        # clevels = [0.2,2,5,10]
-        clevels = [0.2, 10]
-        if ptype == "pcolormesh":
-            cb = ax1.pcolormesh(
-                volcat.longitude,
-                volcat.latitude,
-                vvals,
-                norm=norm,
-                cmap=cmap,
-                shading="nearest",
-            )
-            cb2 = ax2.pcolormesh(
-                forecast.longitude,
-                forecast.latitude,
-                evals,
-                norm=norm,
-                cmap=cmap,
-                shading="nearest",
-            )
-            # cb2 = ax3.pcolormesh(forecast.longitude, forecast.latitude,evals,norm=norm, cmap=cmap,shading='nearest')
-            ax3.contourf(
-                volcat.longitude,
-                volcat.latitude,
-                volcat.values,
-                levels=clevels,
-                cmap="Reds",
-            )
-            ax3.contour(
-                forecast.longitude,
-                forecast.latitude,
-                evals,
-                levels=clevels,
-                cmap="viridis",
-            )
-        plt.title(time.strftime("%Y %m/%d %H:%M UTC"))
-        plt.colorbar(cb, ax=ax1)
-        plt.colorbar(cb2, ax=ax2)
-        ylim = ax1.get_ylim()
-        ax2.set_ylim(ylim)
-        ax3.set_ylim(ylim)
-        xlim = ax1.get_xlim()
-        ax2.set_xlim(xlim)
-        ax3.set_xlim(xlim)
-        if vloc:
-            ax1.plot(vloc[0], vloc[1], "y^")
-            ax2.plot(vloc[0], vloc[1], "y^")
-            ax3.plot(vloc[0], vloc[1], "y^")
+        forecast = self.cdump_mass_hash[tii]
+        for ens in forecast.ens.values:
+            fff = forecast.sel(ens=ens)  
+            print(ens)
+            fig = compare_forecast(volcat,fff,cmap,ptype,vloc) 
+            plt.show()
         return fig
 
     def compare_plots(self, daterange, levels=None):
@@ -719,14 +673,16 @@ class VolcatHysplit(PairedDataInterface):
         ax1 = fig.add_subplot(1, 2, 1)
         ax2 = fig.add_subplot(1, 2, 2)
         tii = self.time_index(daterange[0])
-        cdump = self.concmult * self.cdump_hash[tii]
+        cdump = self.concmult * self.cdump_mass_hash[tii]
         volcat = self.volcat_avg_hash[tii]
-        csum = cdump.sum(dim="ens")
+        volcat = xr.where(volcat>0,volcat,np.nan)
+        csum = cdump.max(dim="ens")
+        csum = xr.where(csum>0,csum,np.nan)
         volcat.plot.pcolormesh(x="longitude", y="latitude", levels=levels, ax=ax1)
         # cdump.sum(dim='ens').plot.contour(x='longitude',y='latitude',ax=ax2)
         # plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds')
         # plt.pcolormesh(csum.longitude, csum.latitude, csum,cmap='Reds',shading='nearest')
-        cb = csum.plot.pcolormesh(x="longitude", y="latitude", cmap="viridis", ax=ax2)
+        cb = csum.plot.pcolormesh(x="longitude", y="latitude", cmap="viridis", ax=ax2,levels=levels)
         # cb = plt.pcolormesh(volcat.longitude, volcat.latitude, np.log10(volcat),cmap='Blues',levels=levels)
         # cb = plt.scatter(volcat.longitude, volcat.latitude, c=np.log10(volcat),s=2,cmap='Blues')
         # cb = plt.scatter(volcat.longitude, volcat.latitude, c=volcat.values,s=2,cmap='viridis',levels=levels)
@@ -735,30 +691,20 @@ class VolcatHysplit(PairedDataInterface):
         plt.tight_layout()
         return ax1, ax2
 
-    def prepare_times(self, daterangelist, das=None):
-        # InverseAsh class
-        """ """
-        for dates in daterangelist:
-            subdas = []
-            for sd in das:
-                if (
-                    pd.to_datetime(sd.time.values) < dates[1]
-                    and pd.to_datetime(sd.time.values) >= dates[0]
-                ):
-                    subdas.append(sd)
-            print("preparing", dates)
-            self.prepare_one_time(dates, das=subdas)
+    def prepare_times(self):
+        dlist = self.get_times()
+        for time in dlist:
+            self.prepare_one_time(time)
 
     def add_volcat_hash(self, volcat_hash):
-        # InverseAsh class
         """ """
         # allow to update from another instance of the class.
         self.volcat_avg_hash.update(volcat_hash)
 
     def add_cdump_hash(self, cdump_hash):
-        # InverseAsh class
+        # allow to update from another instance of the class.
         """ """
-        self.cdump_hash.update(cdump_hash)
+        self.cdump_mass_hash.update(cdump_hash)
 
     def change_sampling_time(self, value):
         if value not in ["start", "end"]:
@@ -788,7 +734,7 @@ class VolcatHysplit(PairedDataInterface):
             self.original_cdump_hash = self.cdump_hash.copy()
             self.original_volcat_avg_hash = self.volcat_avg_hash.copy()
         self.coarsen = num
-        for key in self.cdump_hash.keys():
+        for key in self.cdump_mass_hash.keys():
             c2 = self.original_cdump_hash[key].coarsen(x=num).mean()
             c2 = c2.coarsen(y=num).mean()
             v2 = self.original_volcat_avg_hash[key].coarsen(x=num).mean()
@@ -809,7 +755,7 @@ class VolcatHysplit(PairedDataInterface):
                 # use second date in daterange list
                 model_tii = 1
             tii = self.time_index(daterange[model_tii])
-        if tii in self.cdump_hash.keys():
+        if tii in self.cdump_mass_hash.keys():
             del self.cdump_hash[tii]
         if tii in self.volcat_hash.keys():
             del self.volcat_hash[tii]
@@ -848,9 +794,9 @@ class VolcatHysplit(PairedDataInterface):
         #    model_tii = 0
         tii = self.time_index(daterange[model_tii])
 
-        if tii in self.cdump_hash.keys():
+        if tii in self.cdump_mass_hash.keys():
            print('Time {} already prepared'.format(tii))
-           return self.cdump_hash[tii], self.volcat_hash[tii]
+           return self.cdump_mass_hash[tii], self.volcat_hash[tii]
 
         if not isinstance(tii, int):
             print("No time found for {}".format(daterange[0]))
@@ -945,7 +891,7 @@ class VolcatHysplit(PairedDataInterface):
         avra = vra.fillna(0).mean(dim="time")
         maxvhra = vhra.fillna(0).max(dim="time")
 
-        self.cdump_hash[tii] = cdump_a
+        self.cdump_mass_hash[tii] = cdump_a
         self.volcat_avg_hash[tii] = avra
         self.volcat_ht_hash[tii] = maxvhra
         return cdump_a, avra
@@ -960,22 +906,121 @@ class VolcatHysplit(PairedDataInterface):
         vset = vset.ash_mass_loading
         for time in vset.time.values:
             temp = vset.sel(time=time)
-            a1, a2, b1, b2 = self.clip(temp.fillna(0))
-            temp = temp[a1:a2, b1:b2]
+            #a1, a2, b1, b2 = self.clip(temp.fillna(0))
+            #temp = temp[a1:a2, b1:b2]
             temp.plot.pcolormesh(x="longitude", y="latitude")
             plt.show()
         avra = vset.fillna(0).mean(dim="time")
         avra2 = vset.mean(dim="time")
-        a1, a2, b1, b2 = self.clip(avra)
-        avra = avra[a1:a2, b1:b2]
-        avra2 = avra2[a1:a2, b1:b2]
+        #a1, a2, b1, b2 = self.clip(avra)
+        #avra = avra[a1:a2, b1:b2]
+        #avra2 = avra2[a1:a2, b1:b2]
         print("Average with nans set to 0")
+        avra = xr.where(avra<=0,np.nan,avra)
         avra.plot.pcolormesh(x="longitude", y="latitude")
+        plt.title('average of values with 0')      
         plt.show()
         print("Average of values above 0")
         avra2.plot.pcolormesh(x="longitude", y="latitude")
+        plt.title('average of values above 0')      
         plt.show()
         diff = avra2.fillna(0) - avra
         diff.plot.pcolormesh(x="longitude", y="latitude")
+        plt.title('difference')
 
 
+def compare_forecast(volcat,forecast, cmap="Blues", ptype="pcolormesh", vloc=None):
+    # InverseAsh class
+    """
+    forecast should be an xarray in mass loading format with no time dimension.
+    """
+    sns.set()
+    sns.set_style("whitegrid")
+    fig = plt.figure(figsize=[15, 5])
+    ax1 = fig.add_subplot(1, 3, 1)
+    ax2 = fig.add_subplot(1, 3, 2)
+    ax3 = fig.add_subplot(1, 3, 3)
+
+    time = pd.to_datetime(forecast.time.values)
+    #tii = self.time_index(time)
+    #print("tii", tii)
+    #volcat = self.volcat_avg_hash[tii]
+    evals = forecast.values
+    vpi = evals < 0.001
+    evals[vpi] = np.nan
+    norm = get_norm(volcat, forecast)
+
+    # evals = np.log10(evals)
+    # vvals = np.log10(volcat.values)
+    vvals = volcat.values
+    vpi = vvals < 0.001
+    vvals[vpi] = np.nan
+    # clevels = [0.2,2,5,10]
+    clevels = [0.02,0.2,2,5,10,20]
+    if ptype == "pcolormesh":
+        cb = ax1.pcolormesh(
+            volcat.longitude,
+            volcat.latitude,
+            vvals,
+            norm=norm,
+            cmap=cmap,
+            shading="nearest",
+        )
+        cb2 = ax2.pcolormesh(
+            forecast.longitude,
+            forecast.latitude,
+            evals,
+            norm=norm,
+            cmap=cmap,
+            shading="nearest",
+        )
+        # cb2 = ax3.pcolormesh(forecast.longitude, forecast.latitude,evals,norm=norm, cmap=cmap,shading='nearest')
+        ax3.contourf(
+            volcat.longitude,
+            volcat.latitude,
+            volcat.values,
+            levels=clevels,
+            cmap="Reds",
+        )
+        ax3.contour(
+            forecast.longitude,
+            forecast.latitude,
+            evals,
+            levels=clevels,
+            cmap="viridis",
+        )
+    plt.title(time.strftime("%Y %m/%d %H:%M UTC"))
+    plt.colorbar(cb, ax=ax1)
+    plt.colorbar(cb2, ax=ax2)
+    ylim = ax1.get_ylim()
+    ax2.set_ylim(ylim)
+    ax3.set_ylim(ylim)
+    xlim = ax1.get_xlim()
+    ax2.set_xlim(xlim)
+    ax3.set_xlim(xlim)
+    if vloc:
+        ax1.plot(vloc[0], vloc[1], "y^")
+        ax2.plot(vloc[0], vloc[1], "y^")
+        ax3.plot(vloc[0], vloc[1], "y^")
+    return fig
+
+def get_norm(model, r2, logscale=False):
+    # InverseAsh class
+    """ """
+    if isinstance(r2, np.ndarray):
+        rval = r2
+    else:
+        rval = r2.values
+
+    m_max = np.nanmax(model)
+    v_max = np.nanmax(rval)
+    m_min = np.nanmin(model)
+    v_min = np.nanmin(rval)
+    p_min = np.nanmin([m_min, v_min])
+    p_max = np.nanmax([m_max, v_max])
+    lower_color = 0.8
+    if logscale:
+        norm = mpl.colors.LogNorm(vmin=lower_color * p_min, vmax=p_max)
+    else:
+        norm = mpl.colors.Normalize(vmin=p_min, vmax=p_max)
+    return norm

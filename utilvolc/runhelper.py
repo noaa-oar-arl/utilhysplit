@@ -304,6 +304,14 @@ class JobSetUp:
     def __init__(self):
         self.inp = {}
 
+    def write(self,fname,wdir='./'):
+        inp = self.inp.copy()
+        inp['start_date'] = inp['start_date'].strftime('%Y:%m:%d:%H')
+        output = NameList(fname=fname,working_directory=wdir)
+        output.add_n(inp)
+        output.line_ending = ''
+        output.write(overwrite=True,noheader=True) 
+
     def parse_inputs(self, a):
         self.add_run_params(a)
         self.add_directories(a)

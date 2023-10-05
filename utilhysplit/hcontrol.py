@@ -24,7 +24,10 @@ FUNCTIONS
    writelanduse - writes ASCDATA.CFG file.
 """
 
-# 2023 July 14 (AMC) added type hinting to ConcGrid class
+# 2023 Jul 14 (AMC) added type hinting to ConcGrid class
+# 2023 Sep 26 (AMC) added kwargs to NameList write method so can write without header.
+#                   changed gem to a kwarg.
+# 2023 Sep 26 (AMC) added a line_ending property to NameList class so can write withouth ',' at line ends.
 
 logger = logging.getLogger(__name__)
 
@@ -662,11 +665,21 @@ class NameList:
         if working_directory[-1] != "/":
             working_directory += "/"
         self.wdir = working_directory
+        self.line_ending = ','
 
     @property
     def keys(self):
         keys = self.nlist.keys()
         return keys
+
+    @property
+    def line_ending(self):
+        return self._line_ending
+
+    @line_ending.setter
+    def line_ending(self,line_ending):
+        self._line_ending = line_ending
+
 
     def print_help(self, order=None, sep=":"):
         rstr = ""
@@ -781,7 +794,9 @@ class NameList:
                 self.nlist[key] = temp[1].strip(",").strip()
         return True
 
+
     def __str__(self):
+        # 9/28/2023 remove key.lower() so write with same case as input.
         order = self.order
         rstr = ""
         if order is None:
@@ -789,15 +804,15 @@ class NameList:
         for key in order:
             kstr = True
             try:
-                rstr += key.lower() + "=" + self.nlist[key] + ",\n"
+                rstr += key + "=" + self.nlist[key] + "{}\n".format(self.line_ending)
             except BaseException:
                 print("WARNING: " + str(key) + " " + str(self.nlist[key]) + " not str")
                 kstr = False
             if not kstr:
-                rstr += str(key) + "=" + str(self.nlist[key]) + ",\n"
+                rstr += str(key) + "=" + str(self.nlist[key]) + "{}\n".format(self.line_ending)
         return rstr
 
-    def write(self, order=None, gem=False, verbose=False, overwrite=True, query=False):
+    def write(self, order=None, verbose=False, overwrite=True, query=False, **kwargs):
         """
         order : list
         gem   : boolean
@@ -805,8 +820,20 @@ class NameList:
         overwrite : boolean
         query : boolean
 
+        keyword arguments
         if gem=True then will write &GENPARM at beginning of file rather than &SETUP
         """
+
+        if 'gem' in kwargs.keys():
+            gem = kwargs['gem']
+        else:
+            gem= False
+
+        if 'noheader' in kwargs.keys():
+            noheader = kwargs['noheader']
+        else:
+            noheader= False
+
 
         rval = writeover(self.wdir + self.fname, overwrite, query, verbose=verbose)
         if rval == -1:
@@ -822,6 +849,8 @@ class NameList:
         with open(path.join(self.wdir, self.fname), "w") as fid:
             if gem:
                 fid.write("&GEMPARM \n")
+            elif noheader:
+                pass
             else:
                 fid.write("&SETUP \n")
             # if order == []:

@@ -25,6 +25,11 @@ Functions
 
 """
 
+# 2023 Oct 3  added _bool_ method to LabelData class.
+#             added get_empty_label function
+#             added ax argument to hplot and sub_height_plot
+#             added height plotting to the PlotVAA class       
+
 import datetime
 import logging
 
@@ -56,6 +61,8 @@ def setup_logger_warning(level=logging.WARNING):
         stream=sys.stdout, level=level, format=MESSAGE_FORMAT_INFO, datefmt="%H:%M:%S"
     )
 
+def get_empty_label():
+    return LabelData('none',None,None,None,None)
 
 class LabelData:
     def __init__(self, time, descrip, units, source="", tag=""):
@@ -81,6 +88,13 @@ class LabelData:
         self.units = "units: {}".format(units)
         self.source = "source: {}".format(source)
         self.tag = tag
+
+    def __bool__(self):
+        if not isinstance(self.units,str): return False
+        if not isinstance(self.source,str): return False
+        if not isinstance(self.time,str): return False
+        if not isinstance(self.descrip,str): return False
+        return True 
 
 
 def label_ax(ax, label, transform):
@@ -282,13 +296,14 @@ def height_plot_time(
     revash, thresh=0.2, vlist=None, label="", figname="None", unit="FL"
 ):
     level = np.arange(0, len(revash.z.values))
-    dlev = revash.z.values[-1] - revhash.z.values[-2]  
+    dlev = revash.z.values[-1] - revash.z.values[-2]  
  
     if 'time' in revash.dims:
         loopvals = revash.time.values
     else:
         loopvals = [999]
     for time in loopvals:
+        print(time)
         top, bottom = topheight(revash, time, level=level, dlev=dlev, thresh=thresh)
         slabel = LabelData(
             time,
@@ -300,15 +315,15 @@ def height_plot_time(
     return -1
 
 def hplot(
-    top, thresh=0.2, vlist=None, label="", figname="None", unit="FL"
+    top, thresh=0.2, vlist=None, label="", figname="None", unit="FL",ax=None
 ):
         x = top.longitude
         y = top.latitude
         z = top.values
-        central_longitude = decide_central_longitude(x)
-        transform = get_transform(central_longitude)
+        #central_longitude = decide_central_longitude(x)
+        transform = get_transform(0)
         levels = set_height_levels(z)
-        sub_height_plot(x, y, z, transform, levels, label, figname, vlist, unit=unit)
+        sub_height_plot(x, y, z, transform, levels, label, figname, vlist, unit=unit,ax=ax)
 
 
 def set_height_levels(zvals):
@@ -431,10 +446,10 @@ class PlotVAA:
         lab = []
         for iii, time in enumerate(timelist):
             ax = self.axra[iii]
-            xplace, yplace, size = set_ATL_text(iii)
             size=15
             dset = self._model.sel(time=time) 
             top,bottom = topheight(dset,time=time,level=zlevs,thresh=thresh)
+          
             cmap='Blues'
             top_poly = HeightPolygons(cmap=cmap)
             top_poly.process(top,alpha=0.1)
@@ -447,14 +462,28 @@ class PlotVAA:
             tpoly = top_poly.merge_with(bottom_poly)
             handles,labels = tpoly.plot(ax=self.axra[iii],vloc=vloc,pbuffer=0.15,legend=False,linewidth=lw)
             format_plot(self.axra[iii], self.transform)
-            print('Labels', labels)
             handles,labels = self.sort_labels(handles,labels)
-            print('Labels', labels)
             self.axra[iii].legend(handles,labels,fontsize=20)
             if plotmass:
                 self.plotmass_method(self.axra[iii],dset)
+            time = pd.to_datetime(time) 
+            time_label=time.strftime("%d %b %H:%M UTC")
+            yplace = 1.
+            xplace = 0.2
+            size = 20
+            self.axra[iii].text(
+                xplace,
+                yplace,
+                time_label,
+                va="bottom",
+                ha="center",
+                rotation="horizontal",
+                rotation_mode="anchor",
+                transform=ax.transAxes,
+                size=size,
+                backgroundcolor="white")
         plt.tight_layout()
-
+        self.polygons=top_poly
 
     def plotmass_method(self,ax,dset):
         levels = [0.02,0.1,0.2,2,5,10,50]
@@ -475,8 +504,24 @@ class PlotVAA:
         ax.set_xlim(lonr[0],lonr[1])
         ax.set_ylim(latr[0],latr[1])
 
+    def plotheight_method(self,ax,top):
+        x = top.longitude
+        y = top.latitude
+        z = top.values
+        levels = set_height_levels(z)
+        cmap = plt.get_cmap("binary")
+        norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
+        cb2 = ax.pcolormesh(x, y, z, cmap=cmap, transform=self.transform, norm=norm)
+        cb = plt.colorbar(cb2, ticks=levels)
+        tick_labels = [meterev2FL(x) for x in levels]
+        cb.ax.set_yticklabels(tick_labels)
+        cb.set_label("Height")
+        latr, lonr = self.find_limit(top)
+        ax.set_xlim(lonr[0],lonr[1])
+        ax.set_ylim(latr[0],latr[1])
 
-    def plot(self,vloc,thresh,plotmass=True,ppp='top'):
+
+    def plot(self,vloc,thresh,plotmass=True,plotheight=False,ppp='top'):
         timelist = self._model.time.values
         zlevs = np.arange(0,len(self._model.z.values))
         hhh = []
@@ -490,6 +535,7 @@ class PlotVAA:
             if ppp=='top': cmap='cividis'
             else: cmap='Blues'
             top_poly = HeightPolygons(cmap=cmap)
+            self.polygons=top_poly
             top_poly.process(top,alpha=0.1)
             lw = 5
             #top_poly = top_poly.merge(key='high')
@@ -523,19 +569,11 @@ class PlotVAA:
               )
             if plotmass:
                 self.plotmass_method(ax,dset)
-                #cset = xr.where(dset==0,np.nan,dset)
-                #cset = cset.max(dim='z')
-                #levels = set_levels(cset.values)
-                #norm = BoundaryNorm(levels,ncolors=cmap.N,clip=False)
-
-                #cset.plot.pcolormesh(ax=ax,x='longitude',y='latitude',transform=self.transform,cmap='Reds')     
-                #latr, lonr = self.find_limit(cset)
-                
-                #ax.set_xlim(lonr[0],lonr[1])
-                #ax.set_ylim(latr[0],latr[1])
+            elif plotheight:
+                self.plotheight_method(ax,top)
         handles,labels = self.sort_labels(hhh,lab)
         self.axra[0].legend(handles,labels,fontsize=20)
-
+        plt.tight_layout()
    
     def find_limit(self,cset,buf=1,cmin=0.0001):
         lat = cset.latitude.values
@@ -564,30 +602,33 @@ class PlotVAA:
 
 
 def sub_height_plot(
-    x, y, z, transform, levels, labeldata, name="None", vlist=None, unit="FL"
+    x, y, z, transform, levels, labeldata, name="None", vlist=None, unit="FL",ax=None
 ):
-    nrow = 2
-    ncol = 1  # second row is for text information.
-    fig, axra = plt.subplots(
-        nrows=nrow,
-        ncols=ncol,
-        figsize=(10, 10),
-        constrained_layout=False,
-        subplot_kw={"projection": transform},
-    )
-    ax = axra[0]
-    dax = axra[1]
+    if not ax:
+        nrow = 2
+        ncol = 1  # second row is for text information.
+        fig, axra = plt.subplots(
+            nrows=nrow,
+            ncols=ncol,
+            figsize=(10, 10),
+            constrained_layout=False,
+            subplot_kw={"projection": transform},
+        )
+        ax = axra[0]
+        dax = axra[1]
     cmap = plt.get_cmap("binary")
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
     data_transform = get_transform(central_longitude=0)
+    #data_transform = transform
     # cb2 = ax.pcolormesh(x, y, z, levels=levels, cmap=cmap, transform=data_transform)
     cb2 = ax.pcolormesh(x, y, z, cmap=cmap, transform=transform, norm=norm)
     if isinstance(vlist, (np.ndarray, list, tuple)):
         ax.plot(vlist[1], vlist[0], "r^", transform=data_transform)
 
     format_plot(ax, data_transform)
-    label_ax(dax, labeldata, data_transform)
     cb = plt.colorbar(cb2, ticks=levels)
+    if labeldata:
+        label_ax(dax, labeldata, data_transform)
     if unit.upper() == "FL":
         tick_labels = [meterev2FL(x) for x in levels]
         cb.ax.set_yticklabels(tick_labels)
@@ -601,10 +642,10 @@ def sub_height_plot(
         cb.ax.set_yticklabels(tick_labels)
         cb.set_label("Height (km)")
 
-    if name != "None":
+    if name != "None" and isinstance(name,str):
         plt.savefig(name)
     plt.show()
-    # plt.close()
+    plt.close()
 
 
 def ATLtimeloop(

@@ -50,18 +50,17 @@ class ModelForecast:
     def __init__(self,
                  model_dset,
                  eventid,
-                 start_time,
+                 start_time,               
                  end_time,
                  time_delta=3,
                  attrs={'model':'HYSPLIT'}):
 
         self.eventid = eventid
-        self.model_dset = model_dset
-        self.start_time= start_time
-        self.end_time = end_time
-        self.time_delta = time_delta
+        self.model_dset = model_dset  
+        self.start_time= start_time    # start time of first forecast
+        self.end_time = end_time       # end time of last forecast
+        self.time_delta = time_delta   # time between forecasts h
         self.attrs = attrs    
-
         self.forecast = None
 
  
@@ -73,12 +72,13 @@ class ModelForecast:
  
     def get_sourcelist(self,time_previous=3):
         """
+        This is specifically for data insertion files.
+        where the sources have name format that can be handled by EmitName class.
         """
         dt = datetime.timedelta(hours=time_previous)
         snames = self.model_dset.source.values
         # use data insertions up to dt h earlier.
         drange = [self.start_time-dt, self.start_time]
-        print('zzzz', drange)
         sourcelist = pick_source(snames, drange)
         # if doesn't return any, then use all.
         if not sourcelist:
@@ -134,7 +134,7 @@ class ModelForecast:
         dset = self.model_dset.sel(source=sourcelist).sel(time=timelist)
         wep.height_plot(dset,vlist=vloc,thresh=thresh,unit=unit)
 
-    def plot_vaa_forecast(self,vloc,thresh=0.2,problev=50):
+    def get_iwxxm_forecast(self,thresh,problev):
         tp = 1
         if problev==50:
             #conc = self.forecast.Concentration
@@ -155,27 +155,38 @@ class ModelForecast:
             conc = self.model_dset.sel(source=sourcelist[-1],ens=enslist)
             print(conc.source.values)
             conc = conc.isel(ens=0) 
+        return conc
+
+    def plot_vaa_forecast(self,vloc,thresh=0.2,problev=50,plev=3):
+        conc = self.get_iwxxm_forecast(thresh,problev)
         dt = datetime.timedelta(hours=3)
         timelist = [self.start_time+n*dt for n in [0,1,2,3,4,5]]
         conc = conc.sel(time=timelist)
         vaa = wep.PlotVAA()
         vaa.model = conc
-        vaa.plot(vloc=vloc,thresh=thresh,ppp='top')
+ 
+        if plev==0:
+            vaa.plot(vloc=vloc,thresh=thresh,ppp='top',plotheight=True,plotmass=False)
 
-        vaab = wep.PlotVAA()
-        vaab.model = conc
-        vaab.plot(vloc=vloc,thresh=thresh,ppp='bottom')
+        elif plev==1:
+            vaa.plot(vloc=vloc,thresh=thresh,ppp='bottom')
+     
+        elif plev==2:
+            vaa.plot(vloc=vloc,thresh=thresh,ppp='top',plotheight=False,plotmass=True)
 
-        vaac = wep.PlotVAA()
-        vaac.model = conc
-        vaac.plot_one(vloc=vloc,thresh=thresh)
+        # final plot
+        elif plev==3:
+            vaa.plot_one(vloc=vloc,thresh=thresh)
+
+        return vaa
 
 
-        return vaa, vaab, vaac
 
+def pick_source(sss: str, 
+                drange: list) -> list:
+    """
 
-
-def pick_source(sss, drange):
+    """
     new = []
     for sname in sss:
         #sn = sname.replace('cdump.','cdump_')
@@ -184,7 +195,6 @@ def pick_source(sss, drange):
         if ddd > drange[0] and ddd < drange[1]:
            new.append(sname)
     return new
-
 
 
 class ModelEvent:
@@ -199,7 +209,7 @@ class ModelEvent:
         self.edir = "./"  # directory where data insertion model output resides.
         self.idir = "./"  # directory where inversion algorithm model output resides.
 
-        self.events = []  # list of datasets with model output.
+        self.events ={} # dictionary where list of datasets with model output.
 
         self.volcano_name = volcano_name
  
@@ -219,11 +229,28 @@ class ModelEvent:
         difiles = glob.glob(emit_dir + '/xrfile.*.nc')
         return difiles
 
-    def get_model_runs(self):
-        dilist = self.check_for_DI()
+    def get_model_runs(self,dilist=None):
+        if not isinstance(dilist,list):
+            dilist = self.check_for_DI()
         for di in dilist:
-            self.events.append(xr.open_dataset(di))
+            if di not in self.events.keys():
+               self.events[di] = xr.open_dataset(di)
 
+    def find_event(self,start,end):
+        elist = []
+        for key in self.events.keys():
+            dset = self.events[key]
+            snames = dset.source.values
+            # use data insertions up to dt h earlier.
+            drange = [start, end]
+            sourcelist = pick_source(snames, drange)
+            if sourcelist:
+               elist.append(key)
+            #if sourcelist:
+            #    print('creating forecast for {}'.format(key))
+            #    forecast = ModelForcast(dset,self.eventid,start,end)
+            #    return forecast
+        return elist
 
     def get_dir(self, inp, verbose=False, make=True):
         """

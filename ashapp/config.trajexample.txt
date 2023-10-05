@@ -24,4 +24,4 @@ samplingIntervalHours=1
 eflag=0
 source_type = uniform
 jobname= ashtest
-runflag= BackTrajectory
+runflag= backtrajectoryfromobs

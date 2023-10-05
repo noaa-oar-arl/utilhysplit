@@ -803,10 +803,23 @@ class Events:
         return flist
 
 
-    def average(self,d1,d2):
-        timelist = [pd.to_datetime(x.time.values) for x in self.pcevents] 
+    def subset_time(self,d1,d2):
+        timelist = [pd.to_datetime(x.time.values[0]) for x in self.pcevents] 
         zzz = zip(timelist,self.pcevents)
-        return timelist
+        elist = [x for x in zzz if x[0]>=d1 and x[0]<d2]
+        elist = list(zip(*elist))[1]
+        aset = volcat.combine_regridded(elist) 
+        return aset
+
+    def average_mass(self,d1,d2):
+        aset = self.subset_time(d1,d2)
+        aset = aset.ash_mass_loading
+        return aset.mean(dim='time')
+
+    def max_height(self,d1,d2):
+        aset = self.subset_time(d1,d2)
+        aset = aset.ash_cloud_height
+        return aset.max(dim='time')
 
 
     def get_volcat_events_pc(self, bysensor=None, verbose=False, daterange=None):

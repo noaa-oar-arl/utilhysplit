@@ -167,7 +167,6 @@ class InvDirectory:
 
     def __str__(self):
         """
-        InverseAshEns class
         """
         rstr = "Working directory, wdir :{}".format(self.wdir)
         rstr += "\n"
@@ -189,7 +188,6 @@ class InvDirectory:
 
     def set_directory(self, wdir, execdir, modeldir, obsdir, hysplitdir, subdir=None):
         """
-        InverseAshEns class
         """
         self.modeldir = modeldir
         self.obsdir = obsdir
@@ -210,7 +208,7 @@ class RunInversion(RunInversionInterface):
         # so this is where the model_dir is as well
         self._ilist = ["WORK_DIR", "INV_DIR", "HYSPLIT_DIR", "OBS_DIR"]
 
-        self._inp = {}
+        self._inp = {}  #dictionary with information from the config file.
         self.inp = inp
 
         self._directories = InvDirectory()
@@ -222,7 +220,6 @@ class RunInversion(RunInversionInterface):
 
         # can be constructed in the inp setter from inp['configdir'] and inp['configfile'].
         self._sourcehash = {}
-
 
     def set_directory(self, inp):
         self._directories.set_directory(
@@ -294,6 +291,7 @@ class RunInversion(RunInversionInterface):
 
     def setup_tcm(self,tiilist, 
                   concmult=1,
+
                   remove_cols=True,
                   remove_rows=False,
                   remove_sources=False,
