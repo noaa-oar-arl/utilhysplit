@@ -95,13 +95,7 @@ class EmitName(VolcatName):
 
     def make_keylist(self):
         self.keylist = ["file descriptor"]
-        #self.keylist.append("algorithm name")
-        self.keylist.append("image date")  # should be image date (check)
-        self.keylist.append("image time")
-        self.keylist.append("volcano id")
-        # may not need the event date in filename
-        #self.keylist.append("event date")  # should be event date (check)
-        #self.keylist.append("event time")
+        self.keylist.append("event vid")
         self.keylist.append("satellite platform")
         self.keylist.append("feature id")
         self.keylist.append("layer")
@@ -118,17 +112,13 @@ class EmitName(VolcatName):
         # Parse filename for image datetime, event datetime, and volcano id
         vname = VolcatName(volcat_fname)
         pidlist = [prefix]
-        for key in self.keylist:
+        pidlist.append(vname.image_date_str)
+        for key in ['event vid','satellite platform','feature id']:
             if key in vname.vhash.keys():
-               if key == 'edate':
-                  mstr = vname.vhash["edate"].strftime(vname.event_dtfmt)
-                  pidlist.append(mstr)
-               elif key == 'idate':
-                  mstr = vname.vhash["idate"].strftime(vname.image_dtfmt)
-                  pidlist.append(mstr)
-               else: 
-                  mstr = vname.vhash[key]  
-                  pidlist.append(mstr)
+               mstr = vname.vhash[key]  
+               pidlist.append(mstr)
+            else:
+               print('WARNING key not found {}'.format(key))
         pidlist.append(suffix)
         match = str.join('_',pidlist)  
         match = match.replace('.nc','')

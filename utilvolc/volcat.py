@@ -703,6 +703,11 @@ class VolcatName(FileNameInterface):
         self.date = self.image_date
         return self.vhash
 
+
+    @property
+    def image_date_str(self):
+        return self.image_date.strftime(self.image_dtfmt)
+
     def make_filename(self):
         """
         To do: returns filename given some inputs.
