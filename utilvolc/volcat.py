@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 # 2023 Feb 27 AMC moved some functions to volcat_legacy.py
 # 2023 Mar 05 AMC update __pc__loop to use np.nanmax instead of np.max for heights
 # 2023 Mar 05 AMC fixed bug in calculation of numd in  set_array function inside correct_pc function
+# 2023 Oct 13 AMC in VolcatName switched fid and feature_id. 
 
 """
 This script contains routines that open/read VOLCAT data in xarray format,
@@ -266,7 +267,7 @@ def flist2eventdf(flist, inphash):
     cols = [x if x != "idate" else "observation_date" for x in cols]
     cols = [x if x != "filename" else "event_file" for x in cols]
     cols = [x if x != "WMO satellite id" else "SENSOR_WMO_ID_INITIAL" for x in cols]
-    cols = [x if x != "feature id" else "FEATURE_ID" for x in cols]
+    cols = [x if x != "FEATURE_ID" else "feature_id" for x in cols]
     vframe.columns = cols
     checklist = [
         "VOLCANO_NAME",
@@ -277,11 +278,11 @@ def flist2eventdf(flist, inphash):
     ]
     for key in checklist:
         if key in inphash.keys():
-            print('adding {} {}'.format(key,inphash[key]))
+            print('A adding {} :  {}'.format(key,inphash[key]))
             vframe[key.lower()] = inphash[key]
         if key.lower() in inphash.keys():
-            print('adding {}'.format(key))
-            vframe[key.lower()] = inphash[key]
+            print('B adding {}'.format(key))
+            vframe[key.lower()] = inphash[key.lower()]
     return vframe
 
 
@@ -598,14 +599,14 @@ class VolcatName(FileNameInterface):
         self.keylist.append("event scanning strategy")
         self.keylist.append("observation_date")  # should be image date (check)
         self.keylist.append("image time")
-        self.keylist.append("fid")
+        self.keylist.append("feature_id")
         self.keylist.append("event vid")
         self.keylist.append("description")
         self.keylist.append("WMO satellite id")
         self.keylist.append("image scanning strategy")
         self.keylist.append("event_date")  # should be event date (check)
         self.keylist.append("event_time")
-        self.keylist.append("feature id")
+        self.keylist.append("fid")
 
     def __lt__(self, other):
         """

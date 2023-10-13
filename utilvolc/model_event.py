@@ -27,6 +27,9 @@ import utilhysplit.evaluation.web_ensemble_plots as wep
 from utilvolc import make_data_insertion as mdi
 from utilhysplit.evaluation import ensemble_tools
 from utilhysplit.evaluation import web_ensemble_plots as wep
+from utilhysplit.evaluation.ensemble_tools import ATL, preprocess, topheight 
+from utilhysplit.evaluation import ensemble_polygons
+
 
 #from utilvolc.qvainterface import DFInterface
 #from utilvolc.qvainterface import EventInterface
@@ -52,18 +55,45 @@ class ModelForecast:
                  eventid,
                  start_time,               
                  end_time,
-                 time_delta=3,
+                 timedelta=3,
                  attrs={'model':'HYSPLIT'}):
 
         self.eventid = eventid
-        self.model_dset = model_dset  
-        self.start_time= start_time    # start time of first forecast
-        self.end_time = end_time       # end time of last forecast
-        self.time_delta = time_delta   # time between forecasts h
+        self._model_dset = model_dset  
+        self._start_time= start_time   # start time of first forecast
+        self._end_time = end_time      # end time of last forecast
+        self.timedelta = timedelta    # time between forecasts h
         self.attrs = attrs    
         self.forecast = None
 
- 
+#   properties --------------------------------------------------------------------
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @property
+    def end_time(self):
+        return self._end_time
+
+    @property
+    def model_dset(self):
+        return self._model_dset
+
+    @property
+    def timedelta(self):
+        return datetime.timedelta(hours=self._timedelta)
+
+    @timedelta.setter
+    def timedelta(self,hours):
+        if isinstance(hours,(int,float)):
+           self._timedelta=hours 
+
+    @property
+    def timelist(self):
+        dt = self.timedelta
+        return [self.start_time+n*dt for n in [0,1,2,3,4,5]]
+
+#   --------------------------------------------------------------------
     def make_savename(self):
         fstr = "%Y%m%d%H"
         dstr = self.start_time.strftime(self.start_time,fstr)
@@ -90,7 +120,7 @@ class ModelForecast:
         enslist = self.model_dset.ens.values
         return enslist
 
-    def make_forecast(self,time_previous=3):
+    def make_gridded_qva(self,time_previous=3):
         sourcelist = self.get_sourcelist(time_previous=time_previous)
         enslist = self.get_enslist()
         enslist = None #need to fix this.
@@ -107,7 +137,7 @@ class ModelForecast:
         self.forecast = qva
         return qva    
 
-    def save_forecast(self):
+    def save_gridded_qva(self):
         """
         dset should have units of mg/m3.
         """
@@ -157,11 +187,22 @@ class ModelForecast:
             conc = conc.isel(ens=0) 
         return conc
 
+    def polygon(self,thresh,problev):
+        phash = {}
+        for time in self.timelist:
+            dset = self.get_iwxxm_forecast(thresh,problev)
+            zlevs = np.arange(0,len(dset.z.values))
+            dset = dset.sel(time=time) 
+            top,bottom = topheight(dset,time=time,level=zlevs,thresh=thresh)
+            top_poly = ensemble_polygons.HeightPolygons(cmap='viridis')
+            top_poly.process(top,alpha=0.1)
+            phash[time] = top_poly 
+        return phash
+
     def plot_vaa_forecast(self,vloc,thresh=0.2,problev=50,plev=3):
         conc = self.get_iwxxm_forecast(thresh,problev)
-        dt = datetime.timedelta(hours=3)
-        timelist = [self.start_time+n*dt for n in [0,1,2,3,4,5]]
-        conc = conc.sel(time=timelist)
+        #dt = datetime.timedelta(hours=3)
+        conc = conc.sel(time=self.timelist)
         vaa = wep.PlotVAA()
         vaa.model = conc
  

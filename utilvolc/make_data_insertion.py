@@ -97,7 +97,7 @@ class EmitName(VolcatName):
         self.keylist = ["file descriptor"]
         self.keylist.append("event vid")
         self.keylist.append("satellite platform")
-        self.keylist.append("feature id")
+        self.keylist.append("feature_id")
         self.keylist.append("layer")
         self.keylist.append("particles")
 
@@ -113,13 +113,14 @@ class EmitName(VolcatName):
         vname = VolcatName(volcat_fname)
         pidlist = [prefix]
         pidlist.append(vname.image_date_str)
-        for key in ['event vid','satellite platform','feature id']:
+        for key in ['event vid','satellite platform','feature_id']:
             if key in vname.vhash.keys():
                mstr = vname.vhash[key]  
                pidlist.append(mstr)
             else:
                print('WARNING key not found {}'.format(key))
-        pidlist.append(suffix)
+        if suffix: 
+           pidlist.append(suffix)
         match = str.join('_',pidlist)  
         match = match.replace('.nc','')
         match = match.replace('.','')

@@ -48,6 +48,7 @@ class VolcatPlotDF(DFInterface):
             "maxradius",
             "platform_ID",
             "ID",
+            "feature_id"
         ]
 
         if self.are_required_columns_present(edf, verbose=False):
@@ -86,8 +87,9 @@ class VolcatPlotDF(DFInterface):
         if not os.path.isfile(cname):
             return pd.DataFrame()
         dtp = {"time": "datetime64[ns]"}
+        dtp = {"area": float, 'height':float,'radius':float,'feature_id':float,'platform_ID':str,'ID':str}
         try:
-            df = pd.read_csv(cname, sep=",", parse_dates=["time"])
+            df = pd.read_csv(cname, sep=",", parse_dates=["time"],dtype=dtp)
         except Exception as eee:
             print("cannot read {}".format(cname))
             print(eee)
@@ -148,7 +150,7 @@ class VolcatPlotDF(DFInterface):
                     self._edf = pd.concat([self._edf, df])
             # self._edf.drop_duplicates()
         self._edf.sort_values(by="time", inplace=True)
-        self._edf.drop_duplicates(inplace=True)
+        self._edf.drop_duplicates(inplace=True,subset=['time','platform_ID','feature_id','ID'])
         return complete
 
     # extra method
@@ -206,6 +208,7 @@ class VolcatPlots:
         return self._vdf.edf.empty
 
     def make_arrays(self, das):
+        print('make arrays')
         masslist = []
         dlist = []
         # from maximum value of retrieval
@@ -219,6 +222,7 @@ class VolcatPlots:
         minradius = []
         maxradius = []
         sid = []
+        fid = []
         satellite = []
 
         # TO DO  - need to save this in some kind of structure?
@@ -276,15 +280,15 @@ class VolcatPlots:
             maxradius.append(float(np.max(vrad).values))
 
             satellite.append(das[iii].attrs["platform_ID"])
-
+            fid.append(float(das[iii].feature_id.values))
             # TODO - use feature ID to greoup together features?
             # vvv = volcat.VolcatName(das[iii].attrs['id'])
-            # fid = vvv.vhash['feature id']
+            # fid = vvv.vhash['feature_id']
 
             sid.append(das[iii].attrs["id"])
 
         # self.dset = dsetlist
-        logger.info("Number added {} out of {}".format(n_added, iii))
+        logger.warning("Number added {} out of {}".format(n_added, iii))
         if n_added > 0:
             zzz = zip(
                 dlist,
@@ -298,6 +302,7 @@ class VolcatPlots:
                 maxradius,
                 satellite,
                 sid,
+                fid
             )
             df = pd.DataFrame(list(zzz))
 
@@ -313,6 +318,7 @@ class VolcatPlots:
                 "maxradius",
                 "platform_ID",
                 "ID",
+                "feature_id"
             ]
             self._vdf.add_df(df)
 
@@ -493,7 +499,7 @@ class VolcatPlots:
 
 
 
-    def plot_multiA(self, fignum=1, smooth=20, yscale="linear", bysensor=True):
+    def plot_multiA(self, fignum=1, smooth=20, yscale="linear", bysensor=True,time_sample=None):
 
         sns.set_style("whitegrid")
         fig = plt.figure(fignum, figsize=[10, 10])
@@ -518,7 +524,7 @@ class VolcatPlots:
                 label = "{} {}".format(sensor, newdf.shape[0])
                 self.main_clr = "#" + clist[iii]
                 self.sub_clrs = ["#" + clist2[iii], '#' + clist2[iii]]
-                self.sub_plot_mass(ax1, vdf=newdf, yscale=yscale, label=label)
+                self.sub_plot_mass(ax1, vdf=newdf, yscale=yscale, label=label,time_sample=time_sample)
                 self.sub_plot_area(ax2, vdf=newdf)
                 self.sub_plot_maxht(ax4, vdf=newdf)
                 self.sub_plot_mer(ax3, vdf=newdf, smooth=smooth,yscale=yscale)
@@ -596,7 +602,28 @@ class VolcatPlots:
         ax.set_ylabel("Number of Observations")
         ax.set_xlabel("Time")
 
-    def sub_plot_mass(self, ax, vdf=None, yscale="ln", label=None):
+    def get_mass(self,vdf):
+        mass = vdf.copy()
+        #mass = vdf.drop_duplicates(subset=['time','ID'])
+        mass = mass[['time','platform_ID','mass']]
+        mass = mass.groupby(['time','platform_ID']).sum()
+        mass = mass.reset_index()
+        for pid in mass['platform_ID'].unique():
+            mass2 = mass[mass['platform_ID']==pid]
+            yield pid, mass2[['time','mass']].set_index('time')
+
+    def get_area(self,vdf):
+        area = vdf.copy()
+        #mass = vdf.drop_duplicates(subset=['time','ID'])
+        area = area[['time','platform_ID','area']]
+        area = area.groupby(['time','platform_ID']).sum()
+        area = area.reset_index()
+        for pid in area['platform_ID'].unique():
+            area2 = area[area['platform_ID']==pid]
+            yield pid, mass2[['time','area']].set_index('time')
+
+
+    def sub_plot_mass(self, ax, vdf=None, yscale="ln", label=None,time_sample=None):
 
         def ticks(y, pos):
             pstr = "{:.0f}".format(np.log(y))
@@ -604,13 +631,23 @@ class VolcatPlots:
             #return r"$e^{}$".format(pstr)
 
         if not isinstance(vdf, pd.DataFrame):
-            yval = self.vdf["mass"]
-            xval = self.vdf["time"]
-        else:
-            yval = vdf["mass"]
-            xval = vdf["time"]
+            vdf = self.vdf.copy()
+        
+        for label, time_series in self.get_mass(vdf):
+            if isinstance(time_sample,int):
+                tave = '{}min'.format(time_sample) 
+                time_series = time_series.resample(tave,origin='start').sum()
+            ts = time_series[time_series.mass>0]
+            xval = ts.index.values
+            yval = ts.mass.values
+ 
+            print(xval[0:10])
+            ax.plot(xval, yval, color=self.main_clr, linestyle="", marker=".", label=label)
 
-        ax.plot(xval, yval, color=self.main_clr, linestyle="-", marker=".", label=label)
+        xval = vdf['time']
+        yval = vdf['mass']
+        ax.plot(xval, yval, 'y.', markersize=1,label=None)
+
         # ax.plot(xval,np.log(yval),self.main_clr)
         if yscale == "ln":
             ax.semilogy(base=np.e)
