@@ -133,12 +133,22 @@ def plot_outdat_ts_function(
     else:
         df = dfdat
     sns.set()
+    if 'psize' in df.columns: df = df.drop("psize", axis=1)
+    # dfp = dfp.pivot(index='date',columns='ht')
+    df = df.pivot(index="ht", columns="date")
+    try: 
+       df = df.mass
+    except: 
+       pass
     ts = df.sum()
     if unit == "kg/s":
         yval = ts.values / 3.6e6
     elif unit == "g/h":
         yval = ts.values
+        
     xval = [pd.to_datetime(x) for x in ts.index.values]
+    #xval = [x for x in ts.index.values]
+    print(xval)
     # ax.plot([x[0] for x in ts.index.values], yval, clr)
     ax.plot(
         xval, yval, label=label, color=clr, linestyle="-", marker=marker, alpha=alpha, linewidth=lw

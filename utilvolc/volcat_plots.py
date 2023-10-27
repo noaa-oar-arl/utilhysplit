@@ -90,6 +90,7 @@ class VolcatPlotDF(DFInterface):
         dtp = {"area": float, 'height':float,'radius':float,'feature_id':float,'platform_ID':str,'ID':str}
         try:
             df = pd.read_csv(cname, sep=",", parse_dates=["time"],dtype=dtp)
+            print('reading {}'.format(cname))
         except Exception as eee:
             print("cannot read {}".format(cname))
             print(eee)
@@ -102,6 +103,7 @@ class VolcatPlotDF(DFInterface):
         """
         dftemp = self.read(cname)
         if not dftemp.empty:
+            print('zzzz',dftemp.columns)
             self.add_df(dftemp)
 
     @staticmethod
@@ -149,8 +151,9 @@ class VolcatPlotDF(DFInterface):
                 if isinstance(df, pd.core.frame.DataFrame):
                     self._edf = pd.concat([self._edf, df])
             # self._edf.drop_duplicates()
-        self._edf.sort_values(by="time", inplace=True)
-        self._edf.drop_duplicates(inplace=True,subset=['time','platform_ID','feature_id','ID'])
+        if not self._edf.empty:
+            self._edf.sort_values(by="time", inplace=True)
+            self._edf.drop_duplicates(inplace=True,subset=['time','platform_ID','feature_id','ID'])
         return complete
 
     # extra method
@@ -207,6 +210,20 @@ class VolcatPlots:
     def empty(self):
         return self._vdf.edf.empty
 
+    def make_mass_arrays(self,das):
+        self.vmass = []
+        self.vmasshash = {}
+        self.vrad = []
+        sidlist = list(set([x.attrs['platform_ID'] for x in das]))
+        for sid in sidlist:
+            self.vmasshash[sid] = []
+        for iii in np.arange(0, len(das)):
+            sensor = das[iii].attrs["platform_ID"]
+            vmass = volcat.get_mass(das[iii], clip=True)
+            self.vmasshash[sensor].append(vmass)
+            vrad = volcat.get_radius(das[iii], clip=True)
+            self.vrad.append(vrad)
+
     def make_arrays(self, das):
         print('make arrays')
         masslist = []
@@ -250,7 +267,7 @@ class VolcatPlots:
                 continue
             vrad = volcat.get_radius(das[iii], clip=True)
             # dsetlist.append(das[iii])
-            self.vmass.append(vmass)
+            # self.vmass.append(vmass)
             maxmass.append(float(np.max(vmass).values))
             minmass.append(float(np.min(vmass).values))
 
@@ -275,7 +292,7 @@ class VolcatPlots:
             arealist.append(area)
 
             # mean effective radius
-            radius.append(float(vrad.mean().values))
+            # radius.append(float(vrad.mean().values))
             minradius.append(float(np.min(vrad).values))
             maxradius.append(float(np.max(vrad).values))
 
@@ -382,33 +399,52 @@ class VolcatPlots:
         self.dfstats = dfout
         return dfout
 
-    def volcat_cdf_plot(self, threshold=0, nums=None, skip=1):
+
+
+    def volcat_cdf_plot(self, threshold=0, drange=None,
+                        nums=None, skip=1,ax=None,sensor=None,
+                        clr = ["-m", "-r", "-b", "-c", "-g"]):
         # step = 5
-        clr = ["-m", "-r", "-b", "-c", "-g"]
+        clist = []
+        if not isinstance(skip,int): 
+           skip = int(skip)
+        if skip == 0: skip = 1
+        sidlist = self.vdf['platform_ID'].unique()
+        if not sensor or sensor not in sidlist:
+           sensor = sidlist[0]
+        vmass = self.vmasshash[sensor] 
+        if not ax:
+           fig = plt.figure(1)
+           ax = fig.add_subplot(1,1,1)
         if isinstance(nums, list):
-            vlist = self.vmass[nums[0] : nums[1]]
+            vlist = vmass[nums[0] : nums[1]]
         else:
-            vlist = self.vmass
+            vlist = vmass
+        if isinstance(drange,list):
+            vlist = [x for x in vlist if pd.to_datetime(x.time)>drange[0] 
+                                      and pd.to_datetime(x.time) < drange[1]]
+            print(len(vlist))
         for jjj, volc in enumerate(vlist):
+            
             if not jjj % skip == 0:
                 continue
             # print(self.cdump.time.values[iii])
             # volcat = self.volcat_avg_hash[iii]
             volc = volc.values.flatten()
             volc = [x for x in volc if x > threshold]
+            clist.append(volc)
             try:
                 sdata, y = statmain.cdf(volc)
             except:
                 print("cannot calculate cdf for {}".format(jjj))
                 continue
-            ax = plt.gca()
             if jjj % 5 == 0:
                 lw = 3
                 # print('here')
             else:
                 lw = 1
             ax.step(sdata, y, clr[jjj % len(clr)], linewidth=lw)
-        return ax
+        return ax, clist
 
     def make_spline(self, s=20, vdf=None):
 
@@ -433,7 +469,7 @@ class VolcatPlots:
         s = s / float(len(dtlist))
 
         # self.spline = scipy.interpolate.CubicSpline(self.dtlist,self.tmasslist)
-        self.spline = scipy.interpolate.UnivariateSpline(dtlist, tmasslist, s=s)
+        self.spline = scipy.interpolate.UnivariateSpline(dtlist, tmasslist, s=s,k=2)
         return df2
 
     def set_plot_settings(self):
@@ -497,6 +533,12 @@ class VolcatPlots:
         plt.tight_layout()
         return fig
 
+    def sensor_color(self,cmap='viridis'):
+        sensors = self.vdf.platform_ID.unique()
+        cmaker = colormaker.ColorMaker(
+            cmap, len(sensors), ctype="hex", transparency=None
+        )
+        return cmaker()
 
 
     def plot_multiA(self, fignum=1, smooth=20, yscale="linear", bysensor=True,time_sample=None):
@@ -510,24 +552,17 @@ class VolcatPlots:
         ax4 = fig.add_subplot(2, 2, 4)
 
         if bysensor:
-            sensors = self.vdf.platform_ID.unique()
-            cmaker = colormaker.ColorMaker(
-                "viridis", len(sensors), ctype="hex", transparency=None
-            )
-            clist = cmaker()
-            cmaker = colormaker.ColorMaker(
-                "autumn", len(sensors), ctype="hex", transparency=None
-            )
-            clist2 = cmaker()
+            clist = self.sensor_color(cmap='viridis')
+            clist2 = self.sensor_color(cmap='autumn')
             for iii, sensor in enumerate(self.vdf.platform_ID.unique()):
                 newdf = self.vdf[self.vdf["platform_ID"] == sensor]
                 label = "{} {}".format(sensor, newdf.shape[0])
                 self.main_clr = "#" + clist[iii]
                 self.sub_clrs = ["#" + clist2[iii], '#' + clist2[iii]]
                 self.sub_plot_mass(ax1, vdf=newdf, yscale=yscale, label=label,time_sample=time_sample)
-                self.sub_plot_area(ax2, vdf=newdf)
+                self.sub_plot_area(ax2, vdf=newdf,time_sample=time_sample)
                 self.sub_plot_maxht(ax4, vdf=newdf)
-                self.sub_plot_mer(ax3, vdf=newdf, smooth=smooth,yscale=yscale)
+                self.sub_plot_mer(ax3, vdf=newdf, smooth=smooth,yscale=yscale,time_sample=time_sample)
                 handles, labels = ax1.get_legend_handles_labels()
                 ax1.legend(handles, labels)
         else:
@@ -620,7 +655,7 @@ class VolcatPlots:
         area = area.reset_index()
         for pid in area['platform_ID'].unique():
             area2 = area[area['platform_ID']==pid]
-            yield pid, mass2[['time','area']].set_index('time')
+            yield pid, area2[['time','area']].set_index('time')
 
 
     def sub_plot_mass(self, ax, vdf=None, yscale="ln", label=None,time_sample=None):
@@ -640,8 +675,6 @@ class VolcatPlots:
             ts = time_series[time_series.mass>0]
             xval = ts.index.values
             yval = ts.mass.values
- 
-            print(xval[0:10])
             ax.plot(xval, yval, color=self.main_clr, linestyle="", marker=".", label=label)
 
         xval = vdf['time']
@@ -657,6 +690,24 @@ class VolcatPlots:
         ax.set_ylabel("Total mass (Tg)")
         ax.set_xlabel("Time")
         plt.xticks(rotation=45)
+
+    def sub_plot_mass_area(self,ax,yscale='linear',time_sample=None):
+        """
+        plot mass and area together with different y scales.
+        """
+        clist = self.sensor_color('viridis')
+        clist2 = self.sensor_color('autumn')
+        ax2 = ax.twinx()
+        for iii, sensor in enumerate(self.vdf.platform_ID.unique()):
+            newdf = self.vdf[self.vdf["platform_ID"] == sensor]
+            label = "{} {}".format(sensor, newdf.shape[0])
+            self.main_clr = "#" + clist[iii]
+            #self.sub_clrs = ["#" + clist2[iii], '#' + clist2[iii]]
+            self.sub_plot_mass(ax,vdf=newdf,yscale=yscale,time_sample=time_sample) 
+            self.sub_plot_area(ax2,vdf=newdf,time_sample=time_sample) 
+        ax2.grid(False)
+        plt.xticks(rotation=45)
+        return ax2
 
     def sub_plot_max_mass(self, ax):
         yval = self.vdf["maxmass"]
@@ -683,31 +734,46 @@ class VolcatPlots:
         ax.set_yscale("log")
         ax.set_ylim([miny, maxy])
 
-    def sub_plot_area(self, ax, vdf=None, clr=-1):
+    def sub_plot_area(self, ax, vdf=None, clr=-1,time_sample=None):
+        
         if not isinstance(vdf, pd.DataFrame):
-            yval = self.vdf["area"]
-            xval = self.vdf["time"]
-        else:
-            yval = vdf["area"]
-            xval = vdf["time"]
-        if clr < 0:
-            ax.plot(xval, yval, color=self.main_clr, linestyle="-", marker=".")
-        else:
-            ax.plot(xval, yval, self.sub_clrs[clr])
+            vdf = self.vdf
+
+        for label, time_series in self.get_area(vdf):
+            if isinstance(time_sample,int):
+                tave = '{}min'.format(time_sample) 
+                time_series = time_series.resample(tave,origin='start').sum()
+            ts = time_series[time_series.area>0]
+            xval = ts.index.values
+            yval = ts.area.values
+            print(xval[0:10])
+            ax.plot(xval, yval, color=self.main_clr, linestyle="", marker=".", label=label)
+            if clr < 0:
+                ax.plot(xval, yval, color=self.main_clr, linestyle="-", marker=".")
+            else:
+                ax.plot(xval, yval, self.sub_clrs[clr])
+
         ax.set_ylabel("Total Area (km$^2$)")
         ax.set_xlabel("Time")
 
-    def sub_plot_mer(self, ax, vdf=None, yscale="linear", smooth=0):
+    def sub_plot_mer(self, ax, vdf=None, yscale="linear", smooth=0,time_sample=None):
 
         if not isinstance(vdf, pd.DataFrame):
             df = self.vdf
         else:
             df = vdf
 
-        df = self._vdf.calc_mer(df)
-        xval = df["time"]
-        yval = df["mer"]
-        ax.plot(xval, yval, color=self.main_clr, linestyle="", marker=".")
+        for label, time_series in self.get_mass(vdf):
+            if isinstance(time_sample,int):
+                tave = '{}min'.format(time_sample) 
+                time_series = time_series.resample(tave,origin='start').sum()
+            ts = time_series[time_series.mass>0]
+            df = ts.reset_index()
+
+            df = self._vdf.calc_mer(df)
+            xval = df["time"]
+            yval = df["mer"]
+            ax.plot(xval, yval, color=self.main_clr, linestyle="", marker=".")
 
         # don't smooth if number of points is too small.
         if smooth != 0 and df.shape[0] > 10:
@@ -746,6 +812,6 @@ class VolcatPlots:
             yval = vdf["height"]
             xval = vdf["time"]
 
-        ax.plot(xval, yval, self.main_clr)
+        ax.plot(xval, yval, self.main_clr, linestyle='', marker='.')
         ax.set_ylabel("Maximum height km")
         ax.set_xlabel("Time")

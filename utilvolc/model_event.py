@@ -112,7 +112,7 @@ class ModelForecast:
         sourcelist = pick_source(snames, drange)
         # if doesn't return any, then use all.
         if not sourcelist:
-           print('NO SOURCES')
+           print('NO SOURCES', snames, drange)
            sourcelist = []
         return sourcelist
 

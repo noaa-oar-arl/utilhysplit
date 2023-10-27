@@ -901,6 +901,12 @@ def check_total_mass(dset):
     return masstot
 
 
+def get_polygon(dset):
+    lat = dset.pc_feature_polygon_latitude
+    lon = dset.pc_feature_polygon_longitude
+    return lon, lat
+
+
 def get_total_mass(dset):
     # unit is in Tg.
     """Units are in Tg"""

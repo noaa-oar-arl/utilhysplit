@@ -76,6 +76,9 @@ class EventDisplay:
             pd.DataFrame(), volcano_name=self.volcano_name, tdir=self.tdir
         )
 
+    def read_csv(self):
+        self._vplot.read()
+
     @property
     def tdir(self):
         return self._tdir
@@ -86,8 +89,11 @@ class EventDisplay:
         # read any csv file that is there.
         self._vplot.tdir = tdir
         #print("HERE", tdir)
-        self._vplot.read()
+        # self._vplot.read()
         self._tdir = tdir
+
+    def add_cdf(self, events):
+        self._vplot.make_mass_arrays(events)
 
     def add(self, events):
         #print("HERE add")
@@ -399,9 +405,9 @@ class Events:
         self.get_dir(inp)
 
         self.status = EventStatus(eventid, "Initialized")
+        self.display = EventDisplay(eventid, self.volcano_name, tdir=self.pdir)
 
         # send display output to the parallax corrected directory?
-        self.display = EventDisplay(eventid, self.volcano_name, tdir=self.pdir)
 
         self.events = []  # list of xarray DataSets with volcat data
         self.pcevents = []  # list of xarray DataSets with volcat data
@@ -409,9 +415,14 @@ class Events:
 
         self.eventid = eventid
 
+    def plotcdf(self, smooth=20, yscale="linear",time_sample=None):
+        self.display.add_cdf(self.events)
+        self.display._vplot.volcat_cdf_plot()
+
     def plotsummary(self, smooth=20, yscale="linear",time_sample=None):
         if not self.events:
             logger.warning("May need to add events before plotting summary")
+        self.display.read_csv()
         self.display.add(self.events)
         self.display._vplot.plot_multiA(smooth=smooth, yscale=yscale,time_sample=time_sample)
 
@@ -753,6 +764,9 @@ class Events:
     def generate_fid(self):
         """
         find files which have same observation date in order to combine them.
+
+        TO DO - may need to update this so that features with fid > 1 are matched with
+        those with fid=1. Sometimes the observations dates are close but not the same.
         """
         jtemp = self.get_flistdf()
         jdt = jtemp["observation_date"].unique()
@@ -771,6 +785,12 @@ class Events:
             print(ef)
             print("------------")
         print("done checking fid")
+
+
+    def generate_sensor_subset(self):
+        sensors = list(set([x.attrs['platform_ID'] for x in self.events]))
+        for sid in sensors:
+            yield sid, [x for x in self.events if x.attrs['platform_ID']==sid]
 
     def get_volcat_events(self, bysensor=None, daterange=None, verbose=False):
         # Events class
@@ -981,6 +1001,8 @@ class Events:
             plt.show()
             # plt.close()
 
+
+
     def plots_with_vaas(self, vaas, pstep=1, pc=True):
         vloc = self.get_vloc()
 
@@ -1049,12 +1071,14 @@ class Events:
             das = self.pcevents
         else:
             das = self.events
+
         if isinstance(vlist, int):
             vlist = [vlist]
         elif isinstance(vlist, (list, np.ndarray)):
             vlist = vlist
         else:
             vlist = list(np.arange(0, self.maxi, pstep))
+
         for iii in vlist:
             fig, axrr = plt.subplots(
                 nrows=1,
@@ -1066,6 +1090,8 @@ class Events:
             axlist = axrr.flatten()
             ax = axlist[0]
             ax2 = axlist[1]
+
+            #fid = das[iii].feature_id.attrs['long_name']
 
             vht = volcat.get_height(das[iii], clip=True)
             sns.set()
