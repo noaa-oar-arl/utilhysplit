@@ -17,14 +17,16 @@ def plotpoly(sgeo_poly):
         yield x, y
 
 
-
-
 #def plotpoly(sgeo_poly):
 #    """xy plot of a shapely polygon"""
 #    x, y = sgeo_poly.exterior.xy
 #    # plt.plot(x,y)
 #    return x, y
 
+def calculate_distance(lat1,lon1,lat2,lon2):
+    p1 = sgeo.Point(lon1,lat1)
+    p2 = sgeo.Point(lon2,lat2)
+    return distance(p1,p2)
 
 def distance(p1,p2):
     """
@@ -68,6 +70,38 @@ def bearing(p1, p2):
     angle = np.arctan2(a1, a2)
     angle = (np.degrees(angle) + 360) %360
     return angle
+
+def get_hull(z,thresh1=0.1,thresh2=1000,alpha=10):
+    """
+    z is a 2-d xarray data-array with coordinates latitude, longitude
+    thresh1 and thresh2 are floats or ints.
+    alpha : float
+
+
+    """
+
+    lon = z.longitude.values.flatten()
+    lat = z.latitude.values.flatten()
+    zzz = z.values.flatten()
+    tlist = list(zip(lat,lon,zzz))
+
+    # get lat lon values for values above thresh1 and below thresh2 and non nan.
+    tlist = [x for x in tlist if ~np.isnan(x[2])]
+    tlist = [x for x in tlist if x[2]>=thresh1]
+    tlist = [x for x in tlist if x[2]<=thresh2]
+    lon = [x[1] for x in tlist]
+    lat = [x[0] for x in tlist]
+
+    # create the polygons
+    numpts = len(lon)
+    mpts = make_multi(lon,lat)
+    if numpts >= 4: 
+        ch, ep = concave_hull(mpts,alpha=alpha)
+    else:
+        ch = mpts.convex_hull
+        ep = None
+
+    return ch, ep
 
 
 def concave_hull(mpoints, alpha=1):

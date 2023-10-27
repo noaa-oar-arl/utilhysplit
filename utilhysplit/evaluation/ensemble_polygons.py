@@ -21,33 +21,6 @@ def other_colors(levlist,cmap='viridis'):
     zzz = zip(levlist,cm())
     return dict(zzz) 
 
-
-def get_hull(z,thresh1=0.1,thresh2=1000,alpha=10):
-
-    lat = z.longitude.values.flatten()
-    lon = z.latitude.values.flatten()
-    zzz = z.values.flatten()
-    tlist = list(zip(lat,lon,zzz))
-
-    # get lat lon values for values above thresh1 and below thresh2 and non nan.
-    tlist = [x for x in tlist if ~np.isnan(x[2])]
-    tlist = [x for x in tlist if x[2]>=thresh1]
-    tlist = [x for x in tlist if x[2]<=thresh2]
-    lon = [x[1] for x in tlist]
-    lat = [x[0] for x in tlist]
-
-    # create the polygons
-    numpts = len(lon)
-    mpts = geotools.make_multi(lon,lat)
-    if numpts >= 4: 
-        ch, ep = geotools.concave_hull(mpts,alpha=alpha)
-    else:
-        ch = mpts.convex_hull
-        ep = None
-
-    return ch, ep
-
-
 class HeightPolygonSet:
 
     def __init__(self):
@@ -106,14 +79,16 @@ class HeightPolygons:
             if np.min(diff)>10: continue
             thresh1 = hhh-10
             thresh2 = hhh+10
+            ch, ep = geotools.get_hull(dset,thresh1,thresh2,alpha)
             try:
-                ch, ep = get_hull(dset,thresh1,thresh2,alpha)
+                ch, ep = geotools.get_hull(dset,thresh1,thresh2,alpha)
             except Exception as eee:
                 print(eee)
                 print('error for level', wep.meterev2FL(hhh), hhh,  dset)
                 continue
             # add a buffer around the shape.
             # usually 0.25 degrees because that is resolution of output.
+            #self.ch_hash[hhh] = ch.buffer(0.125)
             self.ch_hash[hhh] = ch
 
 
@@ -143,7 +118,7 @@ class HeightPolygons:
         Returns a HeightPolygons object with all the polygons merged.
         """
         keylist = list(self.ch_hash.keys())
-        polygons = self.ch_hash.values()
+        polygons = list(self.ch_hash.values())
         newpoly = unary_union(polygons)
         #newpoly = newpoly.convex_hull
         #newpoly = newpoly.envelope
@@ -191,7 +166,7 @@ class HeightPolygons:
             if pbuffer>0: ch = self.ch_hash[hhh].buffer(pbuffer)
             else: ch = self.ch_hash[hhh]
             for x,y in geotools.plotpoly(ch):
-                ax.plot(y,x,linewidth=linewidth,color=self.colorhash[hhh],label=label)
+                ax.plot(x,y,linewidth=linewidth,color=self.colorhash[hhh],label=label)
         ax.plot(vloc[1],vloc[0],'c^',markersize=20)
         handles, labels = ax.get_legend_handles_labels()
         if legend:
