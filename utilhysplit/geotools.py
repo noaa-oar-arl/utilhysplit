@@ -5,6 +5,84 @@ import shapely.geometry as sgeo
 from shapely.ops import unary_union,  polygonize, transform
 
 
+# 2023 10 Nov (amc) added poly2points function.
+
+
+def polygon2points(polygon,dx=0.1,dy=0.1,res=0):
+    """
+    polygon : shapely Polygon instance
+   
+
+    returns list of points which are contained in the polygon and evenly spaced by dx and dy.
+    """
+
+    minx,miny,maxx,maxy = polygon.bounds
+    loopmax=1000   
+    dx = dx
+    dy = dy
+
+    if not isinstance(res,(float,int)):
+        res = 1/dx
+    if res != 0: 
+       y = int(miny*res)/res
+    else:
+       y = miny
+
+
+    points = []
+    b = 0
+    doney = False
+    while not doney:
+        donex = False
+        a = 0
+        if res != 0:
+             x = int(minx*res)/res
+        else:
+             x = minx
+        while not donex:
+            p = sgeo.Point(x,y)
+            if polygon.contains(p):
+                points.append(p)
+            
+            x += dx
+            if x > maxx:
+                donex=True
+            a+= 1
+            if a>loopmax: donex=True
+        print(x,y)        
+        y += dy
+        b += 1
+        if y > maxy:
+            doney=True
+        if b > loopmax:
+            doney=True
+    return points    
+            
+
+
+
+
+    def plot_delauney(ax, edge_points, mpts, hull=None):
+        """
+        plotting function for concave_hull output and inputs
+        """
+        lines = LineCollection(edge_points)
+        # fig = plt.figure(1)
+        # ax = fig.add_subplot(1,1,1)
+        # plt.gca().add_collection(lines)
+
+        # plots the delauney triangles
+    ax.add_collection(lines)
+    # plots the delauney triangles
+    dpts = np.array([point.coords[0] for point in mpts])
+    ax.plot(dpts[:, 0], dpts[:, 1], "k.", MarkerSize=1)
+    # plots points on convex hull.
+    if hull:
+        x, y = plotpoly(hull)
+        ax.plot(x, y, "r.")
+    return dpts
+
+
 def plotpoly(sgeo_poly):
     """xy plot of a shapely polygon"""
     if isinstance(sgeo_poly, sgeo.multipolygon.MultiPolygon):
@@ -76,8 +154,6 @@ def get_hull(z,thresh1=0.1,thresh2=1000,alpha=10):
     z is a 2-d xarray data-array with coordinates latitude, longitude
     thresh1 and thresh2 are floats or ints.
     alpha : float
-
-
     """
 
     lon = z.longitude.values.flatten()
@@ -171,5 +247,9 @@ def add_edge(edges, edge_points, coords, iii, jjj):
         edges.add((iii, jjj))
         edge_points.append(coords[[iii, jjj]])
     return edges, edge_points
+
+
+def sample_polygon():
+    return -1
 
 
