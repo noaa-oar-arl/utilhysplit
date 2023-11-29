@@ -5,24 +5,35 @@ import shapely.geometry as sgeo
 from shapely.ops import unary_union,  polygonize, transform
 
 
-# 2023 10 Nov (amc) added poly2points function.
+# 2023 10 Nov (amc) added polygon2points function.
 
 
 def polygon2points(polygon,dx=0.1,dy=0.1,res=0):
     """
     polygon : shapely Polygon instance
-   
-
+    dx : float
+    dy : float
+    res : round bounding box starting point to nearest.
+          res=100, round bounding box to nearest 100th.
+          default is to not round.
+          if None input, then use 1/dx. 
+  
+    
     returns list of points which are contained in the polygon and evenly spaced by dx and dy.
     """
 
     minx,miny,maxx,maxy = polygon.bounds
-    loopmax=1000   
     dx = dx
     dy = dy
 
+    # setting a safetly catch on the loops
+    xloopmax = int(np.abs(maxx-minx)/dx)+10
+    yloopmax = int(np.abs(maxy-miny)/dx)+10
+    loopmax = np.max([xloopmax,yloopmax])
+
+    # for rounding starting point of bounding box.
     if not isinstance(res,(float,int)):
-        res = 1/dx
+       res = 1/dx
     if res != 0: 
        y = int(miny*res)/res
     else:
@@ -49,7 +60,6 @@ def polygon2points(polygon,dx=0.1,dy=0.1,res=0):
                 donex=True
             a+= 1
             if a>loopmax: donex=True
-        print(x,y)        
         y += dy
         b += 1
         if y > maxy:
@@ -62,16 +72,16 @@ def polygon2points(polygon,dx=0.1,dy=0.1,res=0):
 
 
 
-    def plot_delauney(ax, edge_points, mpts, hull=None):
-        """
-        plotting function for concave_hull output and inputs
-        """
-        lines = LineCollection(edge_points)
-        # fig = plt.figure(1)
-        # ax = fig.add_subplot(1,1,1)
-        # plt.gca().add_collection(lines)
+def plot_delauney(ax, edge_points, mpts, hull=None):
+    """
+    plotting function for concave_hull output and inputs
+    """
+    lines = LineCollection(edge_points)
+    # fig = plt.figure(1)
+    # ax = fig.add_subplot(1,1,1)
+    # plt.gca().add_collection(lines)
 
-        # plots the delauney triangles
+    # plots the delauney triangles
     ax.add_collection(lines)
     # plots the delauney triangles
     dpts = np.array([point.coords[0] for point in mpts])
