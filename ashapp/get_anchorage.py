@@ -6,6 +6,9 @@ from utilvolc import runhelper
 def lookup_anchorage(key):
     dhash = {}
     dhash['311360'] = 'Shishaldin'
+    dhash['311070'] = 'Gareloi'
+    dhash['311120'] = 'Great_Sitkin'
+    
 
     if key in dhash.keys():
        return dhash[key]

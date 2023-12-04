@@ -648,6 +648,7 @@ Kita-Iwo-jima,VolcanoIs-Japan,25.424,141.284,2598,M0
 Kizimen,Kamchatka,55.13,160.32,7795,S0
 Klabat,Sulawesi-Indonesia,1.47,125.03,6545,S0
 Kliuchevskoi,Kamchatka,56.057,160.638,15863,M1
+Klyuchevskoy,Kamchatka,56.057,160.638,15863,M1
 Kogaja-jima,RyukyuIs,29.879,129.625,988,S0
 Kolbeinsey_Ridge,Iceland-Nof,66.67,-18.5,16,U0
 Kolokol_Group,KurilIs,46.042,150.05,4357,S0

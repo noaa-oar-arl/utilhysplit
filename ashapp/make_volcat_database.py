@@ -33,11 +33,20 @@ if __name__ == "__main__":
     logger.info('Setting up new data {}'.format(sumdf.shape)) 
     logdflist.append(logdf)
 
+    # Bezymianny
+    edate = datetime.datetime(2021,10,23)
+    hours = 72
+    files = glob.glob(inp['VOLCAT_DIR']+'/Bezymianny/*VOLCAT*nc')
+    vname = volcat.get_name_class(files[0])
+    record = vprops.get_record('Bezymianny') 
+    logdf = volcat.flist2eventdf(files, record)
+    logdflist.append(logdf) 
+
     # Raikoke case
     edate = datetime.datetime(2019,6,21)
     hours = 48
     files = glob.glob(inp['VOLCAT_DIR']+'/Raikoke/*VOLCAT*nc')
-    vname = volcat.VolcatName(files[0])
+    vname = volcat.get_name_class(files[0])
     khash = {'volcano_name':['Raikoke']}
     #record = vprops.get_record('Raikoke') 
     # transform into dictionary
@@ -69,7 +78,7 @@ if __name__ == "__main__":
 
     # Sheveluch case
     #files = glob.glob(inp['VOLCAT_DIR']+'/Sheveluch/*VOLCAT*nc')
-    #vname = volcat.VolcatName(files[0])
+    #vname = volcat.get_name_class(files[0])
     #print(vname.vhash)
 
     #record = vprops.get_record('Sheveluch') 
