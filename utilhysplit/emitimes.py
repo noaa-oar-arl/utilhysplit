@@ -21,9 +21,30 @@ instance there can be emission cycles with duplicate or overlapping start times 
 TO DO: Currently allows users to add emission cycles in any way they wish. For
 instance there can be emission cycles with duplicate or overlapping start times and durations.
 Also the emission cycles can be out of order.
-Also the emission cycles can be out of order. 
-
 """
+
+# 2023 Nov 11 (amc) added minutes2duration function
+# 2023 Nov 11 (amc) made duration a property in EmitLine class. duration can now be input
+#                   as string, integer, or float.
+
+
+def minutes2duration(dt):
+   """
+   dt : int or float. number of minutes.
+   Returns
+   dstr : string in format HHMM
+   examples
+   input 10  output '0010'
+   input 70  output '0110'
+   input 120 output '0200'
+   input 65  output '0105'
+   """
+   if isinstance(dt,float):
+      dt = int(dt)
+   minute = int(dt%60.0)
+   hour = int(np.floor(dt/60.0))
+   dstr = "{:02d}{:02d}".format(hour,minute)
+   return dstr
 
 
 class EmiTimes(object):
@@ -629,7 +650,6 @@ class EmitCycle(object):
         """
         if spnum == 0:
             import sys
-
             print(
                 "ERROR in add_record",
                 sdate,
@@ -752,6 +772,23 @@ class EmitLine(object):
                 + str(nanvalue)
                 + self.message
             )
+
+    @property
+    def duration(self):
+        return self._duration
+
+    @duration.setter
+    def duration(self,duration):
+        """
+        input may be
+        float or integer representing number of minutes of release
+        string in the format HHMM
+        """
+        if isinstance(duration,(int,float)):
+           self._duration=minutes2duration(duration)
+        elif isinstance(duration,str):
+           self._duration=duration
+
 
     def checknan(self, nanvalue):
         """

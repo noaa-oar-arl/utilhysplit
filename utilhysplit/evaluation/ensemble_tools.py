@@ -93,7 +93,7 @@ def APLra(indra, enslist=None, sourcelist=None):
     dims = list(dra2.dims)
     # find which dimension is the 'ens' dimension
     dii = dims.index(dim)
-    # sort along the ensemble axis.
+    # sort along the ensemble axis from smallest to greatest.
     # sort is an inplace operation. returns an empty array.
     # this type of sort only available on numpy array.
     # does not work in xarray dataarray.
@@ -102,7 +102,9 @@ def APLra(indra, enslist=None, sourcelist=None):
     # instead of an 'ensemble' dimension, now have an 'index' dimension.
     dims[dii] = "index"
     newra = xr.DataArray(dvalues, dims=dims, coords=coords2)
+    # gives percentage of concentrations which are smaller than or equal to the one given.
     percents = 100 * (newra.index.values + 1) / len(newra.index.values)
+    #percents = 100-percents
     newra = newra.assign_coords(percent_level=("index", percents))
     return newra
 
@@ -193,6 +195,9 @@ def ATLra(
     # ------------------------------------------------
     # making gridded concentration
     problev = 50
+    slen = len(sourcelist)
+    #problev = np.floor(slen/2)/slen
+    #print('USING problev ', problev)
     apl = APL(indra, problev=problev,sourcelist=sourcelist,enslist=enslist)
     descrip = "Concentrations at {} percentile level".format(problev)
     atthash = {}

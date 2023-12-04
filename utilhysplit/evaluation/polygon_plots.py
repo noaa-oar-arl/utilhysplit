@@ -27,11 +27,12 @@ logger = logging.getLogger(__name__)
 class PlotVAA:
     def __init__(self):
         self._transform = wep.get_transform()
-        self.setup()
+        #self.setup()
         self._timestep = 3
         self._model = xr.DataArray()
-        #self.polygons = HeightPolygons(cmap="viridis")
         self.polygons = None
+        self.fig = None
+        self.axra = None
 
     def setup(self):
         nrow = 3
@@ -84,7 +85,7 @@ class PlotVAA:
             handles, labels = tpoly.plot(
                 ax=self.axra[iii], vloc=vloc, pbuffer=0.15, legend=False, linewidth=lw
             )
-            format_plot(self.axra[iii], self.transform)
+            wep.format_plot(self.axra[iii], self.transform)
             handles, labels = sort_labels(handles, labels)
             self.axra[iii].legend(handles, labels, fontsize=20)
             if plotmass:
@@ -119,7 +120,7 @@ class PlotVAA:
         x = cset.longitude.values
         y = cset.latitude.values
         z = cset.values
-        cb2 = ax.pcolormesh(x, y, z, transform=self.transform, norm=norm, cmap=cm)
+        cb2 = ax.pcolormesh(x, y, z, transform=self.transform, norm=norm, cmap=cmap)
         # cset.plot.pcolormesh(ax=ax,x='longitude',y='latitude',transform=self.transform,cmap='Reds')
         cb = self.fig.colorbar(cb2)
         cb.set_label("mg m$^{-3}$", fontsize=20)
