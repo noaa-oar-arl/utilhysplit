@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
                   ith same time but different feature id.
  2023 Sep 14 AMC  started adding average method to Events class
                   started fleshing out EventStatus class.
+ 2023 DEC 04 AMC added daterange input to write_emit method
+ 2023 DEC 04 AMC added staticmethod make_ax
+ 2023 DEC 04 AMC added plot_polygons method
+ 2023 DEC 04 AMC added search input to create_event_from_fnames function
 """
 
 #TODO 
@@ -651,7 +655,7 @@ class Events:
         ## TO DO - read config file to give summary of run.
         return difiles
 
-    def write_emit(self, overwrite=False, verbose=False):
+    def write_emit(self, overwrite=False, daterange=None, verbose=False):
         """
         write emit-times files.
         """
@@ -667,7 +671,15 @@ class Events:
 
         if not volc_dir or not emit_dir:
             logger.warning("Directories do not exist. use set_dir to add them")
-        flist = self.get_flist(self.edf, volc_dir)
+
+        df2 = self.get_flistdf()
+        if daterange:
+            df2 = df2[
+                (df2.observation_date > daterange[0])
+                & (df2.observation_date <= daterange[1])
+            ]
+        flist = self.get_flist(df2, volc_dir)
+
         for iii, flt in enumerate(flist):
             volcemit = mdi.InsertVolcat(
                 emit_dir,
@@ -1050,6 +1062,56 @@ class Events:
                 plt.title(intime)
             plt.show()
 
+    @staticmethod
+    def make_ax(transform):
+        fig, axrr = plt.subplots(
+            nrows=1,
+            ncols=2,
+            figsize=(20, 5),
+            constrained_layout=True,
+            subplot_kw={"projection": transform},
+        )
+        axlist = axrr.flatten()
+        ax = axlist[0]
+        ax = axlist[0]
+        ax2 = axlist[1]
+        return ax, ax2, fig
+
+    def plot_polygons(
+        self,
+        vlist=None,
+        central_longitude=0,
+    ):
+        from matplotlib.colors import BoundaryNorm
+        import cartopy
+        from utilhysplit.plotutils import vtools
+        from utilhysplit.plotutils import colormaker
+        ncolor = len(vlist)
+        cmake = colormaker.ColorMaker('viridis',ncolor,ctype='rgb')
+        clrs = cmake() 
+
+        transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
+        fig, ax = plt.subplots(
+            nrows=1,
+            ncols=1,
+            figsize=(20, 5),
+            constrained_layout=True,
+            subplot_kw={"projection": transform},
+        )
+        vloc = self.get_vloc()
+        das = self.events
+        volcat_transform = cartopy.crs.PlateCarree(central_longitude=0)
+        for jjj, iii in enumerate(vlist):
+            print(iii)
+            print(das[iii].time.values)
+            lon,lat = volcat.get_polygon(das[iii])
+            print(clrs[jjj])
+            lon2 = [360+x if x < 0 else x for x in lon.values]
+            ax.plot(lon2,lat.values,color=clrs[jjj],transform=volcat_transform)
+        ax.plot(vloc[1],vloc[0],'r^',markersize=10,transform=volcat_transform)
+        wep.format_plot(ax, transform)
+
+
     def plots(
         self,
         pstep,
@@ -1079,20 +1141,9 @@ class Events:
         else:
             vlist = list(np.arange(0, self.maxi, pstep))
 
-        for iii in vlist:
-            fig, axrr = plt.subplots(
-                nrows=1,
-                ncols=2,
-                figsize=(20, 5),
-                constrained_layout=True,
-                subplot_kw={"projection": transform},
-            )
-            axlist = axrr.flatten()
-            ax = axlist[0]
-            ax2 = axlist[1]
-
-            #fid = das[iii].feature_id.attrs['long_name']
-
+        temp = None
+        for jjj, iii in enumerate(vlist):
+            ax, ax2, fig = self.make_ax(transform)
             vht = volcat.get_height(das[iii], clip=True)
             sns.set()
             print(iii)
@@ -1154,11 +1205,10 @@ class Events:
             wep.format_plot(ax, transform)
             wep.format_plot(ax2, transform)
             plt.show()
+            yield fig, ax, ax2, temp
 
-        return ax, ax2, temp
 
-
-def create_event_from_fnames(inp, vname, volclistfile=None):
+def create_event_from_fnames(inp, vname, volclistfile=None, search="VOLCAT*nc"):
     """
     Create Event object  from the filenames of the event netcdf files.
     """
@@ -1166,7 +1216,7 @@ def create_event_from_fnames(inp, vname, volclistfile=None):
         volclistfile = "/hysplit-users/alicec/utilhysplit/ashapp/data/volclist.txt"
     vprops = volcano_names.VolcList(volclistfile)
     vname = fix_volc_name(vname)
-    files = glob.glob("{}/{}/{}".format(inp["VOLCAT_DIR"], vname, "*VOLCAT*nc"))
+    files = glob.glob("{}/{}/{}".format(inp["VOLCAT_DIR"], vname, search))
     record = vprops.get_record(vname)
     record = record.to_dict(orient="records")[0]
     logdf = volcat.flist2eventdf(files, record)

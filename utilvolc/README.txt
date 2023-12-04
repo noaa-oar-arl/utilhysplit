@@ -2,12 +2,54 @@ old clean branch is in /hysplit-users/alicec/clean/utilhysplit. it still has som
 
 TCM
 
+
+   utiltcm
+       classes
+       ParametersIn
+
+       InverseDat - 
+           InvEstimatedEmissions
+           InverseOut2Dat
+   
+
    volcinverse.py
        classes -
        InvDirectory
+       InversionEns
        RunInversion
           uses VolcatHysplit paired data class.
+      
 
+   volctcm
+
+       FUNCTIONS - 
+           remove_near_clear_sky(avg, window)
+
+       TCM class.
+           represents the TCM.
+           attributes:
+               _columns, _tcm
+               n_ctrl
+               tcm_name
+               output
+               tag
+               latlist
+               longlist
+               tcm_lat
+               tcm_lon
+           properties - tcm (readonly), columns
+           methods
+               plot
+               run
+               make_tcm
+               make_tcm_mult
+               make_tcm_names
+               write 
+           
+
+   volcpaired
+       VolcatHysplit class
+ 
 
 MODEL+VOLCAT EVALUATION
 

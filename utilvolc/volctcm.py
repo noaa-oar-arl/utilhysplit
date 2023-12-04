@@ -24,22 +24,31 @@ logger = logging.getLogger(__name__)
 #   remove_near_clear_sky
 
 
+# 2023 Dec 04 (amc) added emtpy method to TCM.
+# 2023 Dec 04 (amc) made n_ctrl a property
+# 2023 Dec 04 (amc) added get_output method
+
 class TCM(TCMInterface):
     def __init__(self, tag='TCM'):
         self._columns = None
-        self._tcm = None
-
-        self.n_ctrl = None
+        self._tcm = np.array([[]])
 
         self.tcm_name = 'TCM_sum.csv'
 
         self.output =  None
 
         self.tag = tag
+
         self.latlist = None
         self.lonlist = None
         self.tcm_lat = None
         self.tcm_lon = None
+
+    def empty(self):
+        if self.n_ctrl=-1:
+           return True
+        else:
+           return False
 
     @property
     def tcm(self):
@@ -53,6 +62,10 @@ class TCM(TCMInterface):
         These are the column headers
         """
         return self._columns
+    
+    @property
+    def n_ctrl(self):
+        return(self.tcm.shape[1] - 1)
 
     @columns.setter
     def columns(self, columns):
@@ -67,7 +80,6 @@ class TCM(TCMInterface):
         remove_sources=None,
         remove_ncs=0,
     ):
-        # InverseAsh class
         """
         Creates a tcm for multiple time periods.
 
@@ -95,13 +107,17 @@ class TCM(TCMInterface):
                 remove_ncs=remove_ncs,
             )
             tcmlist.append(tcm)
+            #print(type(model_lon),model_lon.shape, model_lat.shape)
             latlist.append(np.array(model_lat))
             lonlist.append(np.array(model_lon))
         t3 = np.concatenate(tcmlist, axis=0)
         lat = np.concatenate(latlist, axis=0)
         lon = np.concatenate(lonlist, axis=0)
-        self.latlist = np.array(latlist)
-        self.lonlist = np.array(lonlist)
+        #print(latlist, type(latlist))
+        #self.latlist = np.array(latlist)
+        self.latlist = lat
+        self.lonlist = lon  
+        #self.lonlist = np.array(lonlist)
         if remove_cols:
             nmax = t3.shape[1]
             iremove = []
@@ -118,8 +134,9 @@ class TCM(TCMInterface):
         self._tcm = t3
         self.tcm_lat = lat
         self.tcm_lon = lon
-        self.latlist = np.array(latlist)
-        self.lonlist = np.array(lonlist)
+        #self.latlist = np.array(latlist)
+        #self.lonlist = np.array(lonlist)
+        print('HERE C')
         return t3, lat, lon
 
     def make_outdat(self, dfdat):
@@ -127,7 +144,6 @@ class TCM(TCMInterface):
 
     def plot(self):
         """ """
-        # InverseAsh class
         cb = plt.pcolormesh(np.log10(self.tcm), cmap="tab20")
         plt.colorbar(cb)
 
@@ -136,16 +152,12 @@ class TCM(TCMInterface):
         """
         name : str
         """
-        # InverseAsh class
         astr = ""
         sep = " "
         hstr = ""  # header string
         # print(self.tcm.shape)\
         # this is number of columns minus 1.
         # and needs to be input into Parameters.in.dat
-        self.n_ctrl = self.tcm.shape[1] - 1
-        # print('N_ctrl {}'.format(self.tcm.shape[1]-1))
-        # print('output file {}'.format(name))
         columns = list(self.columns.copy())
         columns.append('obs')
         for iii, line in enumerate(self.tcm):
@@ -298,6 +310,11 @@ class TCM(TCMInterface):
         name2 = "{}_{}".format(self.tag, out_name2)
         return name1, name2
 
+    def get_output(self,subdir):
+        new_name1, new_name2 = self.make_tcm_names()
+        return InverseDat(wdir=subdir, fname = new_name1, fname2 = new_name2)
+
+
     def run(self,execdir,subdir):
         """
         """
@@ -324,17 +341,14 @@ class TCM(TCMInterface):
 
         # run
         Helper.copy(self.tcm_name, inp_name)
-        print(cmd)
         # Helper.execute_with_shell(cmd)
         Helper.execute(cmd)
             # move output files to new names
 
-
-        print('Moving to', new_name1, new_name2)
         Helper.move(out_name1, new_name1)
         Helper.move(out_name2, new_name2)
         Helper.move("fort.188", "fort.188.{}".format(self.tag))
-        self.output = InverseDat(wdir=subdir, fname = new_name1, fname2 = new_name2)
+        #self.output = InverseDat(wdir=subdir, fname = new_name1, fname2 = new_name2)
         
 
 
@@ -342,7 +356,7 @@ class TCM(TCMInterface):
 def make_outdat(sourcehash, tcm_columns, dfdat):
     """
     makeoutdat for InverseAshPart class.
-    dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+    dfdat : pandas dataframe output by InvEstimatedEmissions class get_emis method.
     Returns
     vals : tuple (date, height, emission mass, particle size)
     """
@@ -365,13 +379,13 @@ def make_outdat(sourcehash, tcm_columns, dfdat):
 
 
 # TODO also in volcinverse as a method.
-def make_outdat_df(tcm_columns, dfdat, savename=None, part="basic"):
+def make_outdat_df(vals, savename=None, part="basic"):
     """
-    dfdat : pandas dataframe output by InverseOutDat class get_emis method.
+    dfdat : pandas dataframe output by InvEstimatedEmissions class get_emis method.
             this is a list of tuples (source tag), value from emissions
     """
-    vals = make_outdat(tcm_columns, dfdat)
-    vals = list(zip(*vals))
+    #vals = make_outdat(tcm_columns, dfdat)
+    #vals = list(zip(*vals))
     ht = vals[1]
     time = vals[0]
     # emit = np.array(vals[2])/1.0e3/3600.0

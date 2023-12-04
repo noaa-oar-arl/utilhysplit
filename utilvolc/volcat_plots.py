@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 # TODO plot_dist_stats does not work anymore
 # TODO volcat_describe_plot does not work anymore
 
+
+# 2023 DEC 04 (amc) fixes to how radius information added to dataframe (vrad variable)
+# 2023 DEC 04 (amc) changes to how sidlist is calculated in volcat_cdf_plot
+
 class VolcatPlotDF(DFInterface):
     """
     DataFrame associated with plots in VolcatPlots class.
@@ -103,7 +107,6 @@ class VolcatPlotDF(DFInterface):
         """
         dftemp = self.read(cname)
         if not dftemp.empty:
-            print('zzzz',dftemp.columns)
             self.add_df(dftemp)
 
     @staticmethod
@@ -221,8 +224,8 @@ class VolcatPlots:
             sensor = das[iii].attrs["platform_ID"]
             vmass = volcat.get_mass(das[iii], clip=True)
             self.vmasshash[sensor].append(vmass)
-            vrad = volcat.get_radius(das[iii], clip=True)
-            self.vrad.append(vrad)
+            #vrad = volcat.get_radius(das[iii], clip=True)
+            #self.vrad.append(vrad)
 
     def make_arrays(self, das):
         print('make arrays')
@@ -256,16 +259,16 @@ class VolcatPlots:
                     continue
             n_added += 1
             try:
-                vmass = volcat.get_mass(das[iii], clip=True)
-            except:
-                print("cannot get mass", iii)
+                vmass = volcat.get_mass(das[iii], clip=False)
+            except Exception as eee:
+                print("cannot get mass", iii, eee)
                 continue
             try:
-                vht = volcat.get_height(das[iii], clip=True)
-            except:
-                print("cannot get height", iii)
+                vht = volcat.get_height(das[iii], clip=False)
+            except Exception as eee:
+                print("cannot get height", iii, eee)
                 continue
-            vrad = volcat.get_radius(das[iii], clip=True)
+            vrad = volcat.get_radius(das[iii], clip=False)
             # dsetlist.append(das[iii])
             # self.vmass.append(vmass)
             maxmass.append(float(np.max(vmass).values))
@@ -292,7 +295,7 @@ class VolcatPlots:
             arealist.append(area)
 
             # mean effective radius
-            # radius.append(float(vrad.mean().values))
+            radius.append(float(vrad.mean().values))
             minradius.append(float(np.min(vrad).values))
             maxradius.append(float(np.max(vrad).values))
 
@@ -307,7 +310,7 @@ class VolcatPlots:
         # self.dset = dsetlist
         logger.warning("Number added {} out of {}".format(n_added, iii))
         if n_added > 0:
-            zzz = zip(
+            zzz = list(zip(
                 dlist,
                 arealist,
                 htlist,
@@ -320,8 +323,10 @@ class VolcatPlots:
                 satellite,
                 sid,
                 fid
-            )
-            df = pd.DataFrame(list(zzz))
+            ))
+         
+            df = pd.DataFrame(zzz)
+
 
             df.columns = [
                 "time",
@@ -403,13 +408,14 @@ class VolcatPlots:
 
     def volcat_cdf_plot(self, threshold=0, drange=None,
                         nums=None, skip=1,ax=None,sensor=None,
-                        clr = ["-m", "-r", "-b", "-c", "-g"]):
+                        clr = ["-m", "-r", "-b", "-c", "-g","-y","-k"]):
         # step = 5
         clist = []
         if not isinstance(skip,int): 
            skip = int(skip)
         if skip == 0: skip = 1
-        sidlist = self.vdf['platform_ID'].unique()
+        #sidlist = self.vdf['platform_ID'].unique()
+        sidlist = list(self.vmasshash.keys())
         if not sensor or sensor not in sidlist:
            sensor = sidlist[0]
         vmass = self.vmasshash[sensor] 
@@ -423,7 +429,6 @@ class VolcatPlots:
         if isinstance(drange,list):
             vlist = [x for x in vlist if pd.to_datetime(x.time)>drange[0] 
                                       and pd.to_datetime(x.time) < drange[1]]
-            print(len(vlist))
         for jjj, volc in enumerate(vlist):
             
             if not jjj % skip == 0:
@@ -697,6 +702,7 @@ class VolcatPlots:
         """
         clist = self.sensor_color('viridis')
         clist2 = self.sensor_color('autumn')
+        plt.xticks(rotation=45)
         ax2 = ax.twinx()
         for iii, sensor in enumerate(self.vdf.platform_ID.unique()):
             newdf = self.vdf[self.vdf["platform_ID"] == sensor]
@@ -706,7 +712,6 @@ class VolcatPlots:
             self.sub_plot_mass(ax,vdf=newdf,yscale=yscale,time_sample=time_sample) 
             self.sub_plot_area(ax2,vdf=newdf,time_sample=time_sample) 
         ax2.grid(False)
-        plt.xticks(rotation=45)
         return ax2
 
     def sub_plot_max_mass(self, ax):

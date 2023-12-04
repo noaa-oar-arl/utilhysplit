@@ -12,12 +12,15 @@ logger = logging.getLogger(__name__)
 Classes
     ParametersIn
     InverseDat
-    InverseOutDat
+    InvEstimatedEmissions
 
 Functions
     readoutdat
 """
 
+# 2023 Dec 04 (amc) changed InverseOutDat to InvEstimatedEmissions
+# 2023 Dec 04 (amc) changed self.outdat to self.emissions
+# 2023 Dec 04 (amc) added make_emissions function
 
 class ParametersIn:
     """
@@ -62,14 +65,25 @@ def readoutdat(wdir,fname):
     return df
 
 
-class InverseOutDat:
+class InvEstimatedEmissions:
 
     def __init__(self, fname="out.dat"):
         self.fname = fname
-        self.df = pd.DataFrame()  # dataframe which holds data from out.dat
+        self._df = pd.DataFrame()  # dataframe which holds data from out.dat
+
+    @property
+    def df(self):
+        return self._df.copy()
+
+    @setter.df
+    def df(self,df):
+        self._df = df
 
     def read(self, wdir):
         self.df = readoutdat(wdir, self.fname)
+
+    def make_emissions(self,sourcehash, tcm_columns):
+        return make_emissions(sourcehash,tcm_columns,self.df)
 
     def emis_hist(self, units="g/h",log=True):
         """
@@ -134,11 +148,11 @@ class InverseOut2Dat:
 class InverseDat:
     def __init__(self, wdir, fname="out.dat", fname2="out2.dat"):
         """
-        # out.dat has estimated release rates in same order as tcm columns.
-        # out2.dat has observed(2nd column) and modeled(3rd column) mass loadings.
+        # InvEstmatedEmissions class - out.dat has estimated release rates in same order as tcm columns.
+        # ut2.dat has observed(2nd column) and modeled(3rd column) mass loadings.
         """
         self.wdir = wdir
-        self.outdat = InverseOutDat(fname)
+        self.emissions = InvEstimatedEmissions(fname)
         self.out2dat = InverseOut2Dat(fname2)
         self.read()
 
@@ -150,19 +164,43 @@ class InverseDat:
         Returns :
         df : pandas dataframe/
         """
-        self.outdat.read(self.wdir)
+        self.emissions.read(self.wdir)
         self.out2dat.read(self.wdir)
 
     def get_emis(self, name=None):
         """
         """
-        return self.outdat.df 
+        return self.emissions.df 
 
     def emis_hist(self, units="g/h", log=True):
-        ax = self.outdat.emis_hist(units=units, log=log)
+        ax = self.emissions.emis_hist(units=units, log=log)
         return ax
 
     def plot_conc(self, cmap="viridis"):
         ax =  self.out2dat.plot_conc(cmap=cmap)
         return ax
+
+
+def make_emissions(sourcehash, tcm_columns, dfdat):
+    """
+    makeoutdat for InverseAshPart class.
+    dfdat : pandas dataframe output by InvEstimatedEmissions class get_emis method.
+    Returns
+    vals : tuple (date, height, emission mass, particle size)
+    """
+    # matches emissions from the out.dat file with
+    # the date and time of emission.
+    # uses the tcm_columns array which has the key
+    # and the sourehash dictionary which contains the information.
+    datelist = []
+    htlist = []
+    valra = []
+    psizera = []
+    for val in zip(tcm_columns, dfdat[1]):
+        shash = sourcehash[val[0][0]]
+        datelist.append(shash["sdate"])
+        htlist.append(shash["bottom"])
+        valra.append(val[1])
+        psizera.append(val[0][1])
+    vals = list(zip(datelist, htlist, valra, psizera))
 
