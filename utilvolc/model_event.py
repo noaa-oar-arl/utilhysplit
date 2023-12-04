@@ -24,9 +24,9 @@ from utilvolc.volcat_event import EventStatus
 from utilhysplit.runhandler import ProcessList
 from utilhysplit.plotutils import map_util
 import utilhysplit.evaluation.web_ensemble_plots as wep
+from utilhysplit.evaluation import polygon_plots
 from utilvolc import make_data_insertion as mdi
 from utilhysplit.evaluation import ensemble_tools
-from utilhysplit.evaluation import web_ensemble_plots as wep
 from utilhysplit.evaluation.ensemble_tools import ATL, preprocess, topheight 
 from utilhysplit.evaluation import ensemble_polygons
 
@@ -122,6 +122,7 @@ class ModelForecast:
 
     def make_gridded_qva(self,time_previous=3):
         sourcelist = self.get_sourcelist(time_previous=time_previous)
+        print(sourcelist)
         enslist = self.get_enslist()
         enslist = None #need to fix this.
         #conc = self.model_dset.sel(source=sourcelist)
@@ -164,12 +165,13 @@ class ModelForecast:
         dset = self.model_dset.sel(source=sourcelist).sel(time=timelist)
         wep.height_plot(dset,vlist=vloc,thresh=thresh,unit=unit)
 
-    def get_iwxxm_forecast(self,thresh,problev):
+    def get_iwxxm_forecast(self,problev):
         tp = 1
         if problev==50:
             #conc = self.forecast.Concentration
             sourcelist = self.get_sourcelist(time_previous=tp)
             enslist = self.get_enslist()
+            print(sourcelist)
             conc = self.model_dset.sel(source=sourcelist,ens=enslist)
             conc = conc.median(dim='source').median(dim='ens') 
         elif problev==90:
@@ -203,7 +205,8 @@ class ModelForecast:
         conc = self.get_iwxxm_forecast(thresh,problev)
         #dt = datetime.timedelta(hours=3)
         conc = conc.sel(time=self.timelist)
-        vaa = wep.PlotVAA()
+        vaa = polygon_plots.PlotVAA()
+        vaa.setup()
         vaa.model = conc
  
         if plev==0:
@@ -233,7 +236,7 @@ def pick_source(sss: str,
         #sn = sname.replace('cdump.','cdump_')
         v = mdi.EmitName(sname)
         ddd = v.vhash['observation_date']
-        if ddd > drange[0] and ddd < drange[1]:
+        if ddd >= drange[0] and ddd <= drange[1]:
            new.append(sname)
     return new
 

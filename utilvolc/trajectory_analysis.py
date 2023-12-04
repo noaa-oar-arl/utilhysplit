@@ -90,7 +90,7 @@ class TrajAnalysis:
         return self._trajdf.edf
 
     @trajdf.setter
-    def trajdf(self, tdf):
+    def trajdf(self, edf):
         self._trajdf.tdf = edf 
    
     @property
@@ -229,6 +229,7 @@ class TrajAnalysis:
         return self.analdf
 
     def hists(self,p=1,bins=None,dthresh=5):
+        
         adf = pd.pivot_table(self.analdf,index='Alt Initial',columns='run_num',values='dist')
         fig = plt.figure(1)
         ax = fig.add_subplot(1,1,1)

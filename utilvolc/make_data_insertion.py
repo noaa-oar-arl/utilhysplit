@@ -110,7 +110,7 @@ class EmitName(VolcatName):
         Outputs:
         match: (string) of important identifiying information"""
         # Parse filename for image datetime, event datetime, and volcano id
-        vname = VolcatName(volcat_fname)
+        vname = volcat.get_name_class(volcat_fname)
         pidlist = [prefix]
         pidlist.append(vname.image_date_str)
         for key in ['event vid','satellite platform','feature_id']:

@@ -47,10 +47,22 @@ TODO : not all these functions are currently used.
 
 """
 
-
 def write_summary_file(sumdf, oname):
     sumdf.to_csv(oname)
 
+#def get_summary_file_df_alt(fdir, verbose=False, hours=48, edate=datetime.datetime.now()):
+#    epoch = datetime.datetime(1970,1,1)
+#    now = datetime.datetime.now()  # current time
+#    add_date = now - datetime.timedelta(hours=hours)
+#    addfiles = []  # creating list of files
+#    for files in os.scandir(fdir):
+#        mdate = epoch + datetime.timedelta(seconds=files.stat().st_mtime)
+#        files = os.path.join(fdir, files)  # Joining path and filename
+#        if mdate > add_date:
+#            if verbose:
+#                print(mdate, files)
+#            addfiles.append(files)  
+#    return addfiles
 
 def get_summary_file_df(fdir, verbose=False, hours=48, edate=datetime.datetime.now()):
     """
@@ -83,11 +95,12 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate=datetime.datetime.n
     if verbose:
         print("looking for dates {} to {}".format(sdate, edate))
     while not done:
+        result = glob.glob(fdir + "/*{}*.json".format(s_str))
         if verbose:
             print("Looking for {}".format(sdate))
-        if verbose:
-            print(len(glob.glob(fdir + "/*{}*.json".format(s_str))))
-        flist.extend(glob.glob(fdir + "/*{}*.json".format(s_str)))
+            print(len(result))
+            print(result)
+        flist.extend(result)
         sdate += datetime.timedelta(hours=1)
         s_str = sdate.strftime(strf)
         if sdate > edate:
