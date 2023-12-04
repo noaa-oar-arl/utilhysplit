@@ -2660,7 +2660,7 @@ def construct_efile(
     vres=1000,
     name="emit.txt",
     date_cutoff=None,
-    phash=None,
+    phash={1:'PASH'},
 ):
     """
     vals : output from make_outdat method in Inverse class.
@@ -2676,6 +2676,7 @@ def construct_efile(
     from utilhysplit import emitimes
 
     # print("construct_efile function")
+    #efile = emitimes.EmiTimes(species=phash)
     efile = emitimes.EmiTimes(species=phash)
     # print("splist", efile.splist)
     # efile.set_species(phash)
@@ -2693,8 +2694,9 @@ def construct_efile(
                 break
         height = value[1]
         emis = value[2]
+        print('VALUE', value)
         if len(value) > 3:
-            part = phash[value[3]]
+            part = phash[int(value[3])]
         else:
             part = 1
         # print("construct_efile function:", value, part)
@@ -2780,7 +2782,7 @@ def make_efile(
     vres=1000,
     name="emit.txt",
     date_cutoff=None,
-    phash=None,
+    phash={1:'P060'},
 ):
     efile = construct_efile(
         vals, vlat, vlon, area, emis_threshold, vres, name, date_cutoff, phash

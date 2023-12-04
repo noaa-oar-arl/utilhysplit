@@ -7,7 +7,7 @@ VaacPoly class
 
 import xarray as xr
 import shapely.geometry as sgeo
-from affine import Affine
+#from affine import Affine
 import numpy as np
 from rasterio import features
 import matplotlib.pyplot as plt
@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 def transform_from_latlon(lat, lon):
     lat = np.asarray(lat)
     lon = np.asarray(lon)
-    trans = Affine.translation(lon[0], lat[0])
-    scale = Affine.scale(lon[1]-lon[0], lat[1]-lat[0])
+    #trans = Affine.translation(lon[0], lat[0])
+    #scale = Affine.scale(lon[1]-lon[0], lat[1]-lat[0])
     return trans * scale
 
 

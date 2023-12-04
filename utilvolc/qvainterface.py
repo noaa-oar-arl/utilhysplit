@@ -24,6 +24,39 @@ class AshParamsInterface(ABC):
         pass
 
 
+class ModelForecast(ABC):
+
+    @property
+    @abstractmethod
+    def timedelta(self):
+        """
+        time between forecasts
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def timelist(self):
+        """
+        list of times of the forecasts. 
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def start_time(self):
+        """
+        list of times of the forecasts. 
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def end_time(self):
+        """
+        list of times of the forecasts. 
+        """
+        pass
 
 
 class DFInterface(ABC):

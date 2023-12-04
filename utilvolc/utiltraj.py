@@ -11,8 +11,11 @@ import seaborn as sns
 import numpy as np
 import numpy.ma as ma
 import xarray as xr
+import shapely.geometry as sgeo
+from shapely.ops import nearest_points
 
-from natsort import natsorted
+
+#from natsort import natsorted
 from math import pi
 from monetio.models import hytraj
 from monetio.models import hysplit
@@ -21,9 +24,26 @@ from utilhysplit import emitimes
 from utilvolc import volcat
 from utilvolc.volcat import VolcatName
 from utilvolc import get_area
-from utilvolc.make_data_insertion import make_1D_sub
+from utilhysplit import geotools
+from utilvolc.make_data_insertion import make_1D_sub, EmitName
 
-def trajectory_input_csv(dataset, data_dir, layer_height):
+# 2023 Dec 04 (amc)  added make_btraj_filename function
+# 2023 Dec 04 (amc)  modified combine_traj to handle tdump files with multiple trajectories.
+# 2023 Dec 04 (amc)  modified combine_traj to add observed time, altitude, and area to file
+# 2023 Dec 04 (amc)  modified trajectory_input_csv function for different naming convention.
+# 2023 Dec 04 (amc)  added modified functions for computing distance from trajectory to volcano.
+# 2023 Dec 04 (amc)  removed dependence on natsorted
+
+
+
+
+def make_btraj_filename(volcat_fname):
+    suffix = ''
+    enn = EmitName(None)
+    return enn.make_filename(volcat_fname, prefix='btraj', suffix=suffix) + '.csv'
+
+
+def trajectory_input_csv(dataset, data_dir, layer_height=None):
     """
     Functions reads the xarray datasets and generates csv files which can be used by ash_main.py.
     Input:
@@ -34,9 +54,16 @@ def trajectory_input_csv(dataset, data_dir, layer_height):
     """
     obs_data_orig = pd.DataFrame(make_1D_sub(dataset), columns=['lat','lon','mass','height','area'])
     obs_data_orig['time'] = dataset.time.values
-    obs_data_orig["heightI"] = layer_height
-    obs_data_orig.to_csv(data_dir + f'btraj{"%02d" %layer_height}kmASC3.csv', index = False)
+    if layer_height:
+       obs_data_orig["heightI"] = layer_height
+       fname = f'btraj{"%02d" %layer_height}km.csv'
+    else:
+       fname = make_btraj_filename(dataset.dataset_name)
+    out = os.path.join(data_dir,fname)
+    print('writing', out)
+    obs_data_orig.to_csv(out, index = False)
     return obs_data_orig
+
 
 def combine_traj(fnames, csvfile=None):
     """
@@ -44,6 +71,11 @@ def combine_traj(fnames, csvfile=None):
     csvfile : csv file output by sample_and_write which contains weighting information.
     combined trajectories in different files into one dataframe.
     """
+
+    # 01 November 2023. changed to handle tdump files which may have multiple trajectories.
+    #                   do not over-write the traj_num column. instead add a run_num column.
+
+    #                   Also add the observed altitude and area to the new dataframe.
     trajlist = []
     if csvfile:
         weightcsv = pd.read_csv(csvfile)
@@ -56,17 +88,25 @@ def combine_traj(fnames, csvfile=None):
         # get trajectory number from the file name
         temp = fnn.split(".")
         trajnum = int(temp[-1])
-        # add new column to dataframe with trajectory number
-        df1["traj_num"] = trajnum
+        # add new column to dataframe with run number
+        # the run may have multiple trajectories in it.
+        #df1["traj_num"] = trajnum
+        df1["run_num"] = trajnum
         #print('TRAJNUM', trajnum)
         # add weight information from csvfile to the dataframe
         if csvfile:
             temp = weightcsv.loc[trajnum]
         #    weight = temp.massI
             weight = temp.mass
+            obsalt = temp.height
+            obsarea = temp.area
         else:
             weight = 1
+            obsalt = None
+            obsarea = None
         df1["weight"] = weight
+        df1["obsalt"] = obsalt
+        df1["area"] = obsarea
  
         trajlist.append(df1.copy())
     # concatenate the trajectories into one dataframe.
@@ -82,13 +122,50 @@ def read_traj_output(data_dir, fname, num_layer):
     tnames_path = []
     obs_path = []
     trajectory_data = {}
-    for ii in range(1,num_layer):
-        tdump_files = natsorted(glob.glob(data_dir + f'{fname}_{"%02d" %ii}km/' + 'tdump.ashtest_btraj*'))
+    for ii in range(1,num_layer+1):
+        tdump_files = glob.glob(data_dir + f'{fname}_{"%02d" %ii}km/' + 'tdump.ashtest_btraj*')
+    #for ii in range(1,num_layer):
+    #    tdump_files = natsorted(glob.glob(data_dir + f'{fname}_{"%02d" %ii}km/' + 'tdump.ashtest_btraj*'))
         trajectory_data[f'tdump{ii}'] = tdump_files
         tnames_path.append(trajectory_data[f'tdump{ii}'])
         obs_path.append(data_dir + f'{fname}_{"%02d" %ii}km/' + f'btraj{"%02d" %ii}kmASC3.csv')
     return (tnames_path, obs_path)
 
+
+def traj_volc_dist2(vloc, df):
+    # shapely only does computations in 2d. 
+    # although you can define point and line with a z coordinate.
+    vpoint = sgeo.Point((vloc[1],vloc[0]))
+    x=df.longitude
+    y=df.latitude
+    xy=list(zip(x,y))
+    # creates line segments from trajectory points.
+    tline = sgeo.LineString(xy)
+    # finds closest point on the linestring to volcano.
+    # do this because it may be between trajectory points.
+    a,b = nearest_points(tline,vpoint)
+    # returns distance in km
+    distance = geotools.distance(a,b)
+    return a, distance
+
+
+def traj_volc_dist_km(vloc, df):
+    from utilhysplit.geotools import calculate_distance
+    """
+    The function calculates the distances between each trajectory (at each time step) and the volcano vent.
+    Similar to traj_volc_dist but output is in km.
+    Inputs:
+        volcano: array; lat and lon of the volcano
+        df: dataframe, trajectory characteristics
+    Outputs:
+        dist : array; values of the distances between each point of the trajectory and the volcano.
+    """
+    distlist = []
+    for iii, row in df.iterrows():
+        dist = calculate_distance(row.latitude,row.longitude,vloc[0],vloc[1])
+        distlist.append(dist)
+        dist = np.array(distlist)
+    return dist
 
 def traj_volc_dist(vloc, df):
     """
@@ -99,7 +176,6 @@ def traj_volc_dist(vloc, df):
     Outputs:
         dist : array; values of the distances between each point of the trajectory and the volcano.
     """
-
     dist = []
     deg2km = 111.111
 

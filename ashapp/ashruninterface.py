@@ -13,6 +13,7 @@
 #    EnsembleDispersion - uses the RunDispersion class.
 #    CollectInverse - uses RunDispersion class
 #    CollectEmitTimes - uses RunEmitTimes
+#    CollectTrajectory - uses RunTrajectory
 
 # ModelRunInterface
 #    Interface for creating the model runs
@@ -20,7 +21,7 @@
 #                  - used for unit source runs for inversion
 #    RunEmitTimes - used for data insertion 
 #                 - TODO also use for running results of inversion.
-#    TODO - RunTrajectory,
+#    RunTrajectory - utilizes a trajgenerator function 
 #           
 
 # Then the output must be processed.
@@ -66,10 +67,10 @@
 #     OutputDispersion(ModelOutputInterface)
 #     TODO - graphics
 
-# TODO
-#     forward trajectory runs
-#     ensemble trajectory runs
+# Trajectory Runs
+#     forward trajectory runs 
 #     backward trajectory runs
+#     TODO ensemble trajectory runs
 
 
 #-------------

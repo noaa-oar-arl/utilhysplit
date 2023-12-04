@@ -35,10 +35,6 @@ to look for Emitimes files in which the file names indicate they are valid for d
 the start date and the start data + HoursToEnd.
 Here HoursToEnd is calculated by adding the second input in hours to the start_date.
 
-
-
-This program 
-
 """
     )
 

@@ -4,8 +4,26 @@ import pandas as pd
 """
 Used as input into RunTrajectory class.
 the trajectory generators output a dictionary with height, latitude, longitude.
+the time generators output a time and a trajectory generator.
+
 """
 
+# 2023 Dec 04 (amc) added generate_traj_from_config 
+# 2023 Dec 04 (amc) added generate_height_traj_from_series
+# 2023 Dec 04 (amc) added timegenerate_height_traj_from_obsdf 
+# 2023 Dec 04 (amc) changed generate_traj_from_obsdf to timegenerate_traj_from_obsdf
+
+
+def generate_traj_from_config(inp):
+    outp={}
+    height = inp["height"]
+    if not isinstance(height,(list,np.ndarray)):
+       height = [height]
+    for hgt in height:
+        outp['height'] = hgt
+        outp['latitude'] = lat
+        outp['longitude'] = lon
+        yield outp
 
 def generate_traj_from_config(inp):
     outp={}
@@ -19,6 +37,21 @@ def generate_traj_from_config(inp):
         outp['latitude'] = lat
         outp['longitude'] = lon
         yield outp
+
+def generate_height_traj_from_series(series: pd.core.series.Series,
+                              minz : float,
+                              maxz : float,
+                              dz   : float):
+    # for one location generates trajectories from different heights.
+    for zzz in np.arange(minz,maxz,dz):
+        outp = {}
+        # this is specifically for file from hunga tonga so2 data.
+        # heightI uses the interpolated data as well.
+        outp["height"] = zzz * 1000
+        outp["latitude"] = series.lat
+        outp["longitude"] = series.lon
+        yield outp 
+
 
 def generate_traj_from_df(df):
     for rrr in df.iterrows():
@@ -34,16 +67,14 @@ def generate_traj_from_df(df):
         outp["longitude"] = row.lon
         yield outp 
 
-def generate_traj_from_obsdf(csvname):
+def timegenerate_traj_from_obsdf(csvname):
     """
-    generate back trajectories from a csv file. This will create single tdump file for each sample point.
-  
+    generate back trajectories from a csv file. This will create tdump files grouped by time.
     RETURNS
     tuple (time, generate_traj_from_df function)
     """
     obsdf = pd.read_csv(csvname, parse_dates=["time"])
     #return obsdf
-    outp = {}
     # one trajectory run per time period.
     timelist = obsdf['time'].unique()
     for time in timelist:
@@ -51,22 +82,24 @@ def generate_traj_from_obsdf(csvname):
         time = pd.to_datetime(time)
         yield time, generate_traj_from_df(newdf)
 
-def generate_multrajs_from_obsdf(csvname):
+def timegenerate_height_traj_from_obsdf(csvname,minht=1,dh=1):
     """
     generate back trajectories from a csv file. this will create tdump files grouped in same measured time.
 
     RETURNS
-    tuple (time, generate_traj_from_df function)
+    tuple (time, generate_height_traj_from_series function)
     """
-    obsdf = pd.read_csv(csvname, parse_dates=["time"])
-    #return obsdf
-    outp = {}
-    # multiple trajectories in single file.
-    timelist = obsdf['time'].values
-    for tt in range(len(timelist)):
-        newdf = obsdf.iloc[[tt]]
-        time = timelist[tt]
-        time = pd.to_datetime(time)
-        yield time, generate_traj_from_df(newdf)
+    if isinstance(csvname,str):
+        obsdf = pd.read_csv(csvname, parse_dates=["time"])
+    if isinstance(csvname,pd.DataFrame):
+        obsdf = csvname
+    maxht = np.max(obsdf.height) + 2
+    # trajectory run for each location.
+    # all heights run in the same run for that location.
+    timelist = obsdf['time'].unique()
+    for time in timelist:
+        newdf = obsdf[obsdf['time']==time]
+        for ii,row in newdf.iterrows():
+            yield time, generate_height_traj_from_series(row,minht,maxht,dh)
 
 

@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 # 2023 Feb 27 AMC moved some functions to volcat_legacy.py
 # 2023 Mar 05 AMC update __pc__loop to use np.nanmax instead of np.max for heights
 # 2023 Mar 05 AMC fixed bug in calculation of numd in  set_array function inside correct_pc function
+# 2023 Oct 13 AMC in VolcatName switched fid and feature_id. 
+# 2023 Oct 30 AMC created VolcatNameA class and get_name_class function to deal with Bezymianny data name format. 
 
 """
 This script contains routines that open/read VOLCAT data in xarray format,
@@ -143,7 +145,7 @@ def check_vals(idate, ghash, dset):
 
 def check_name(fnn):
     fn = fnn.split("/")[-1]
-    vn = VolcatName(fn)
+    vn = get_name_class(fn)
     # for key in vn.vhash.keys():
     # print(key, vn.vhash[key])
     edate = vn.vhash["event date"]
@@ -255,8 +257,8 @@ def flist2eventdf(flist, inphash):
     inphash = {k.upper(): val for k, val in inphash.items()}
     for fle in flist:
         try:
-            temp = VolcatName(fle)
-        except:
+            temp = get_name_class(fle)
+        except Exception as eee:
             continue
         vlist.append(temp.vhash)
     vframe = pd.DataFrame.from_dict(vlist)
@@ -266,7 +268,7 @@ def flist2eventdf(flist, inphash):
     cols = [x if x != "idate" else "observation_date" for x in cols]
     cols = [x if x != "filename" else "event_file" for x in cols]
     cols = [x if x != "WMO satellite id" else "SENSOR_WMO_ID_INITIAL" for x in cols]
-    cols = [x if x != "feature id" else "FEATURE_ID" for x in cols]
+    cols = [x if x != "FEATURE_ID" else "feature_id" for x in cols]
     vframe.columns = cols
     checklist = [
         "VOLCANO_NAME",
@@ -277,11 +279,11 @@ def flist2eventdf(flist, inphash):
     ]
     for key in checklist:
         if key in inphash.keys():
-            print('adding {} {}'.format(key,inphash[key]))
+            print('A adding {} :  {}'.format(key,inphash[key]))
             vframe[key.lower()] = inphash[key]
         if key.lower() in inphash.keys():
-            print('adding {}'.format(key))
-            vframe[key.lower()] = inphash[key]
+            print('B adding {}'.format(key))
+            vframe[key.lower()] = inphash[key.lower()]
     return vframe
 
 
@@ -499,7 +501,7 @@ def find_volcat(
         print("directory not valid {}".format(tdir))
     for fln in os.listdir(tdir):
         try:
-            vn = VolcatName(fln)
+            vn = get_name_class(fln)
         except:
             if verbose:
                 print("Not VOLCAT filename {}".format(fln))
@@ -551,6 +553,19 @@ def test_volcat(tdir, daterange=None, verbose=True):
         else:
             print("failed")
 
+def get_name_class(fname):
+    if "/" in fname:
+        temp = fname.split("/")
+        fname = temp[-1]
+    # if full_disk in filename replace with fulldisk because _ is used as separator
+    fname = fname.replace("Full_Disk", "FullDisk")
+    fname = fname.replace("FULL_DISK", "FullDisk")
+    temp = fname.split("_")
+    # current name style with two feature id tags.
+    if temp[5][0] == 'g': return VolcatName(fname)
+    # old name style with only one feature id tags. Bezymianny 2020 data is in this format.
+    elif temp[5][0] == 'v': return VolcatNameA(fname)
+
 
 class VolcatName(FileNameInterface):
     """
@@ -598,14 +613,14 @@ class VolcatName(FileNameInterface):
         self.keylist.append("event scanning strategy")
         self.keylist.append("observation_date")  # should be image date (check)
         self.keylist.append("image time")
-        self.keylist.append("fid")
+        self.keylist.append("feature_id")
         self.keylist.append("event vid")
         self.keylist.append("description")
         self.keylist.append("WMO satellite id")
         self.keylist.append("image scanning strategy")
         self.keylist.append("event_date")  # should be event date (check)
         self.keylist.append("event_time")
-        self.keylist.append("feature id")
+        self.keylist.append("feature_id")
 
     def __lt__(self, other):
         """
@@ -656,14 +671,20 @@ class VolcatName(FileNameInterface):
         # 2023 14 Jan (amc) make sure keys are in the dictionary.
         keys = self.vhash.keys()
         keylist = [x for x in self.keylist if x in keys]
-        val = [self.vhash[x] for x in keylist]
+        val = [str(self.vhash[x]) for x in keylist]
         return str.join("_", val)
 
-    def parse(self, fname):
+    @staticmethod
+    def split_name(fname):
         # if full_disk in filename replace with fulldisk because _ is used as separator
         fname = fname.replace("Full_Disk", "FullDisk")
         fname = fname.replace("FULL_DISK", "FullDisk")
         temp = fname.split("_")
+        return temp
+
+    def parse(self, fname):
+        temp = self.split_name(fname)
+
         if "pc" in temp[-1]:
             self.pc_corrected = True
         jjj = 0
@@ -703,11 +724,36 @@ class VolcatName(FileNameInterface):
         self.date = self.image_date
         return self.vhash
 
+
+    @property
+    def image_date_str(self):
+        return self.image_date.strftime(self.image_dtfmt)
+
     def make_filename(self):
         """
         To do: returns filename given some inputs.
         """
         return -1
+
+class VolcatNameA(VolcatName):
+    # for the Bezymianny data and some older data the first feature id is not there.
+
+    def make_datekeys(self):
+        self.datekeys = [3, 4, 9, 10]
+
+    def make_keylist(self):
+        self.keylist = ["algorithm name"]
+        self.keylist.append("satellite platform")
+        self.keylist.append("event scanning strategy")
+        self.keylist.append("observation_date")  # should be image date (check)
+        self.keylist.append("image time")
+        self.keylist.append("event vid")
+        self.keylist.append("description")
+        self.keylist.append("WMO satellite id")
+        self.keylist.append("image scanning strategy")
+        self.keylist.append("event_date")  # should be event date (check)
+        self.keylist.append("event_time")
+        self.keylist.append("feature_id")
 
 
 def bbox(darray, fillvalue):
@@ -789,7 +835,7 @@ def _get_time(dset):
 # Extracting variables
 
 
-def get_data(dset, vname, clip=True):
+def get_data(dset, vname, clip=False):
     # 18 July 2023 - took expand_dims out of _get_time function and placed it here.
     gen = dset.data_vars[vname]
     atvals = gen.attrs
@@ -809,7 +855,7 @@ def get_data(dset, vname, clip=True):
         try:
             box = bbox(gen, fillvalue)
         except:
-            print("volcat get_data bbox for clipping failed")
+            print("volcat get_data bbox for clipping failed", vname)
             status = False
         if status:
             gen = gen[:, box[0][0] : box[1][0], box[0][1] : box[1][1]]
@@ -893,6 +939,12 @@ def check_total_mass(dset):
     masstot = masstot.sum().values
     # return unit is in Tg
     return masstot
+
+
+def get_polygon(dset):
+    lat = dset.pc_feature_polygon_latitude
+    lon = dset.pc_feature_polygon_longitude
+    return lon, lat
 
 
 def get_total_mass(dset):

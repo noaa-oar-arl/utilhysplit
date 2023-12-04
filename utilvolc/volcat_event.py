@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
                   ith same time but different feature id.
  2023 Sep 14 AMC  started adding average method to Events class
                   started fleshing out EventStatus class.
+ 2023 DEC 04 AMC added daterange input to write_emit method
+ 2023 DEC 04 AMC added staticmethod make_ax
+ 2023 DEC 04 AMC added plot_polygons method
+ 2023 DEC 04 AMC added search input to create_event_from_fnames function
 """
 
 #TODO 
@@ -71,8 +75,16 @@ class EventDisplay:
         )
         self.tdir = tdir
 
+    def reset(self):
+        self._vplot = vp.VolcatPlots(
+            pd.DataFrame(), volcano_name=self.volcano_name, tdir=self.tdir
+        )
+
+    def read_csv(self):
+        self._vplot.read()
+
     @property
-    def tdir(self, tdir):
+    def tdir(self):
         return self._tdir
 
     @tdir.setter
@@ -80,14 +92,17 @@ class EventDisplay:
         # update the directory for VolcatPlots
         # read any csv file that is there.
         self._vplot.tdir = tdir
-        print("HERE", tdir)
-        self._vplot.read()
+        #print("HERE", tdir)
+        # self._vplot.read()
         self._tdir = tdir
 
+    def add_cdf(self, events):
+        self._vplot.make_mass_arrays(events)
+
     def add(self, events):
-        print("HERE add")
+        #print("HERE add")
         self._vplot.make_arrays(events)
-        print("HERE add")
+        #print("HERE add")
         self._vplot.save()
 
 
@@ -155,6 +170,10 @@ class EventDF(DFInterface):
     @property
     def edf(self):
         return self._edf.copy()
+
+    @edf.setter
+    def edf(self,edf):
+        self._edf = edf
 
     @property
     def required_columns(self):
@@ -390,9 +409,9 @@ class Events:
         self.get_dir(inp)
 
         self.status = EventStatus(eventid, "Initialized")
+        self.display = EventDisplay(eventid, self.volcano_name, tdir=self.pdir)
 
         # send display output to the parallax corrected directory?
-        self.display = EventDisplay(eventid, self.volcano_name, tdir=self.pdir)
 
         self.events = []  # list of xarray DataSets with volcat data
         self.pcevents = []  # list of xarray DataSets with volcat data
@@ -400,11 +419,16 @@ class Events:
 
         self.eventid = eventid
 
-    def plotsummary(self, smooth=20, yscale="linear"):
+    def plotcdf(self, smooth=20, yscale="linear",time_sample=None):
+        self.display.add_cdf(self.events)
+        self.display._vplot.volcat_cdf_plot()
+
+    def plotsummary(self, smooth=20, yscale="linear",time_sample=None):
         if not self.events:
             logger.warning("May need to add events before plotting summary")
+        self.display.read_csv()
         self.display.add(self.events)
-        self.display._vplot.plot_multiA(smooth=smooth, yscale=yscale)
+        self.display._vplot.plot_multiA(smooth=smooth, yscale=yscale,time_sample=time_sample)
 
     @property
     def edf(self):
@@ -631,7 +655,7 @@ class Events:
         ## TO DO - read config file to give summary of run.
         return difiles
 
-    def write_emit(self, overwrite=False, verbose=False):
+    def write_emit(self, overwrite=False, daterange=None, verbose=False):
         """
         write emit-times files.
         """
@@ -647,7 +671,15 @@ class Events:
 
         if not volc_dir or not emit_dir:
             logger.warning("Directories do not exist. use set_dir to add them")
-        flist = self.get_flist(self.edf, volc_dir)
+
+        df2 = self.get_flistdf()
+        if daterange:
+            df2 = df2[
+                (df2.observation_date > daterange[0])
+                & (df2.observation_date <= daterange[1])
+            ]
+        flist = self.get_flist(df2, volc_dir)
+
         for iii, flt in enumerate(flist):
             volcemit = mdi.InsertVolcat(
                 emit_dir,
@@ -744,6 +776,9 @@ class Events:
     def generate_fid(self):
         """
         find files which have same observation date in order to combine them.
+
+        TO DO - may need to update this so that features with fid > 1 are matched with
+        those with fid=1. Sometimes the observations dates are close but not the same.
         """
         jtemp = self.get_flistdf()
         jdt = jtemp["observation_date"].unique()
@@ -757,9 +792,17 @@ class Events:
         Indicates whether different features are contained in different files.
         """
         for fid in self.generate_fid():
-            print(fid[["observation_date", "feature_id", "event_file"]])
+            print(fid[["observation_date", "feature_id"]])
+            ef = fid[["event_file"]].values
+            print(ef)
             print("------------")
         print("done checking fid")
+
+
+    def generate_sensor_subset(self):
+        sensors = list(set([x.attrs['platform_ID'] for x in self.events]))
+        for sid in sensors:
+            yield sid, [x for x in self.events if x.attrs['platform_ID']==sid]
 
     def get_volcat_events(self, bysensor=None, daterange=None, verbose=False):
         # Events class
@@ -970,6 +1013,8 @@ class Events:
             plt.show()
             # plt.close()
 
+
+
     def plots_with_vaas(self, vaas, pstep=1, pc=True):
         vloc = self.get_vloc()
 
@@ -1017,6 +1062,56 @@ class Events:
                 plt.title(intime)
             plt.show()
 
+    @staticmethod
+    def make_ax(transform):
+        fig, axrr = plt.subplots(
+            nrows=1,
+            ncols=2,
+            figsize=(20, 5),
+            constrained_layout=True,
+            subplot_kw={"projection": transform},
+        )
+        axlist = axrr.flatten()
+        ax = axlist[0]
+        ax = axlist[0]
+        ax2 = axlist[1]
+        return ax, ax2, fig
+
+    def plot_polygons(
+        self,
+        vlist=None,
+        central_longitude=0,
+    ):
+        from matplotlib.colors import BoundaryNorm
+        import cartopy
+        from utilhysplit.plotutils import vtools
+        from utilhysplit.plotutils import colormaker
+        ncolor = len(vlist)
+        cmake = colormaker.ColorMaker('viridis',ncolor,ctype='rgb')
+        clrs = cmake() 
+
+        transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
+        fig, ax = plt.subplots(
+            nrows=1,
+            ncols=1,
+            figsize=(20, 5),
+            constrained_layout=True,
+            subplot_kw={"projection": transform},
+        )
+        vloc = self.get_vloc()
+        das = self.events
+        volcat_transform = cartopy.crs.PlateCarree(central_longitude=0)
+        for jjj, iii in enumerate(vlist):
+            print(iii)
+            print(das[iii].time.values)
+            lon,lat = volcat.get_polygon(das[iii])
+            print(clrs[jjj])
+            lon2 = [360+x if x < 0 else x for x in lon.values]
+            ax.plot(lon2,lat.values,color=clrs[jjj],transform=volcat_transform)
+        ax.plot(vloc[1],vloc[0],'r^',markersize=10,transform=volcat_transform)
+        wep.format_plot(ax, transform)
+
+
     def plots(
         self,
         pstep,
@@ -1025,6 +1120,7 @@ class Events:
         vlist=None,
         central_longitude=0,
     ):
+        # use scatter plot if there are nan's in the latitude longitude field.
         from matplotlib.colors import BoundaryNorm
         import cartopy
         from utilhysplit.plotutils import vtools
@@ -1037,37 +1133,41 @@ class Events:
             das = self.pcevents
         else:
             das = self.events
+
         if isinstance(vlist, int):
             vlist = [vlist]
         elif isinstance(vlist, (list, np.ndarray)):
             vlist = vlist
         else:
             vlist = list(np.arange(0, self.maxi, pstep))
-        for iii in vlist:
-            fig, axrr = plt.subplots(
-                nrows=1,
-                ncols=2,
-                figsize=(10, 5),
-                constrained_layout=True,
-                subplot_kw={"projection": transform},
-            )
-            axlist = axrr.flatten()
-            ax = axlist[0]
-            ax2 = axlist[1]
-            # ax = fig.add_subplot(1, 2, 1)
-            # ax2 = fig.add_subplot(1, 2, 2)
+
+        temp = None
+        for jjj, iii in enumerate(vlist):
+            ax, ax2, fig = self.make_ax(transform)
             vht = volcat.get_height(das[iii], clip=True)
             sns.set()
             print(iii)
             print("total mass", das[iii].ash_mass_loading_total_mass.values)
             print("area", das[iii].feature_area.values)
+            print("{}: {}".format(das[iii].feature_id.attrs['long_name'], das[iii].feature_id.values))
+            print("event_type {}".format(das[iii].attrs['event_type']))
+
             try:
                 print("instrument---", das[iii].attrs["instrument_ID"])
             except Exception as eee:
                 print("EXCEPTION in plots", eee)
                 print(das[iii].attrs)
                 pass
-            try: 
+            nans_present = np.any(np.isnan(vht.longitude))
+            if nans_present:
+               lat = vht.latitude.values.flatten()
+               lon = vht.longitude.values.flatten()
+               ht = vht.values.flatten() 
+               tlist = list(zip(lon,lat,ht))
+               tlist = [x for x in tlist if ~np.isnan(x[2])]
+               tnew = list(zip(*tlist))
+               ax.scatter(tnew[0],tnew[1],c=tnew[2],s=2,transform=volcat_transform)
+            else: 
                 vht.isel(time=0).plot.pcolormesh(
                     ax=ax,
                     x="longitude",
@@ -1075,64 +1175,48 @@ class Events:
                     cmap="Reds",
                     transform=volcat_transform,
                 )
-            except:
-                print('Failed at ', iii)
-                return das[iii] 
-
-            # ax.set_xlim(xmin,xmax)
-            # ax.set_ylim(ymin,ymax)
-            # plt.tight_layout()
-            # plt.show()
-            # plt.savefig('./animations/bezy_volcat_mass{:03d}.png'.format(iii))
-            # plt.close()
-
-            # plt.savefig('bezy_volcat_2040_ht.png')
-            # print(np.max(vht))
-            # plt.show()
 
             mass = volcat.get_mass(das[iii], clip=True)
-            # sns.set()
-            # vht.isel(time=0).plot.pcolormesh(ax=ax2, x='longitude',y='latitude',cmap='Reds')
             temp = mass.isel(time=0)
-            # cb = plt.pcolormesh(
-            #    temp.longitude.values, temp.latitude.values, np.log10(temp.values)
-            # )
             cmap = plt.get_cmap("viridis")
             norm = BoundaryNorm(levels, ncolors=cmap.N, clip=False)
-            # mass.isel(time=0).plot.pcolormesh(
-            #    ax=ax2, x="longitude", y="latitude", cmap="Reds",transform=volcat_transform
-            #    )
 
-            cb = ax2.pcolormesh(
-                temp.longitude.values,
-                temp.latitude.values,
-                temp.values,
-                norm=norm,
-                transform=volcat_transform,
-            )
+            nans_present = np.any(np.isnan(mass.longitude))
+            if nans_present:
+               lat = mass.latitude.values.flatten()
+               lon = mass.longitude.values.flatten()
+               mmm = mass.values.flatten() 
+               tlist = list(zip(lon,lat,mmm))
+               tlist = [x for x in tlist if ~np.isnan(x[2])]
+               tnew = list(zip(*tlist))
+               cb = ax2.scatter(tnew[0],tnew[1],c=tnew[2],s=2,transform=volcat_transform)
+               plt.title(mass.time.values[0])
+            else:
+
+                cb = ax2.pcolormesh(
+                    temp.longitude.values,
+                    temp.latitude.values,
+                    temp.values,
+                    norm=norm,
+                    transform=volcat_transform,
+                )
             plt.colorbar(cb)
-            ax2.plot(vloc[1], vloc[0], "m^", markersize=5, transform=volcat_transform)
-            # plt.savefig('./animations/bezy_volcat_mass{:03d}.png'.format(iii))
-            # print(np.max(vht))
-            # plt.tight_layout()
-            # plt.close()
+            ax2.plot(vloc[1], vloc[0], "m^", markersize=10, transform=volcat_transform)
             wep.format_plot(ax, transform)
             wep.format_plot(ax2, transform)
             plt.show()
+            yield fig, ax, ax2, temp
 
-        return ax, ax2, temp
 
-
-def create_event_from_fnames(inp, vname, volclistfile=None):
+def create_event_from_fnames(inp, vname, volclistfile=None, search="VOLCAT*nc"):
     """
     Create Event object  from the filenames of the event netcdf files.
     """
-
-    if not isinstance(volclist, str):
-        volclist = "/hysplit-users/alicec/ashapp/data/volclist.txt"
+    if not isinstance(volclistfile, str):
+        volclistfile = "/hysplit-users/alicec/utilhysplit/ashapp/data/volclist.txt"
     vprops = volcano_names.VolcList(volclistfile)
     vname = fix_volc_name(vname)
-    files = glob.glob("{}/{}/{}".format(inp["VOLCAT_DIR"], vname, "*VOLCAT*nc"))
+    files = glob.glob("{}/{}/{}".format(inp["VOLCAT_DIR"], vname, search))
     record = vprops.get_record(vname)
     record = record.to_dict(orient="records")[0]
     logdf = volcat.flist2eventdf(files, record)

@@ -2,7 +2,7 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import datetime
 import sys
-from math import *
+#from math import *
 
 import numpy as np
 import pandas as pd
@@ -15,9 +15,16 @@ def FL2meters(flight_level):
 
 def coarsen(small, large):
     """
+    Match the spatial resolution of small to that of large.
+
+    Input :
     small : xarray
     large : xarray
+
+    Output :
     new : xarray
+    small input xarray which has been coarsened to to match spatial resolution of large.
+
     """
 
     boundary = 'trim'
@@ -40,9 +47,19 @@ def coarsen(small, large):
     #new = new.coarsen(z=num, boundary=boundary).mean()
     return new
 
+def timeslice(dra,latitude,longitude):
+    """
+     for dra with coordinates z, time, x, y
+     returns dra with coordinates z, time
+     sliced along x~longitude and y~latitude
+    """
+    xi, yi = dra.monet.nearest_ij(lat=latitude, lon=longitude)
+    return dra.isel(x=xi,y=yi)
 
 def xslice(dra, longitude, volcat=False):
-    # dra is xrarray
+    """
+    dra : xrarray
+    """
     latitude = dra.latitude.values[0][0]
     if volcat:
         # Since VOLCAT is on an irregular grid, making the mid point of the slice be
@@ -56,7 +73,9 @@ def xslice(dra, longitude, volcat=False):
 
 
 def yslice(dra, latitude, volcat=False):
-    # dra is xrarray
+    """
+    dra : xrarray
+    """
     longitude = dra.longitude.values[0][0]
     if volcat:
         # Since VOLCAT is on an irregular grid, making the mid point of the slice be

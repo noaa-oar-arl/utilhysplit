@@ -11,4 +11,5 @@ ndump = 3,
 numpar = 200000,
 ninit = 1,
 area=1,
+kagl=0,
 /

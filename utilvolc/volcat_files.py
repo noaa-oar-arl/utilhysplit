@@ -47,10 +47,22 @@ TODO : not all these functions are currently used.
 
 """
 
-
 def write_summary_file(sumdf, oname):
     sumdf.to_csv(oname)
 
+#def get_summary_file_df_alt(fdir, verbose=False, hours=48, edate=datetime.datetime.now()):
+#    epoch = datetime.datetime(1970,1,1)
+#    now = datetime.datetime.now()  # current time
+#    add_date = now - datetime.timedelta(hours=hours)
+#    addfiles = []  # creating list of files
+#    for files in os.scandir(fdir):
+#        mdate = epoch + datetime.timedelta(seconds=files.stat().st_mtime)
+#        files = os.path.join(fdir, files)  # Joining path and filename
+#        if mdate > add_date:
+#            if verbose:
+#                print(mdate, files)
+#            addfiles.append(files)  
+#    return addfiles
 
 def get_summary_file_df(fdir, verbose=False, hours=48, edate=datetime.datetime.now()):
     """
@@ -83,11 +95,12 @@ def get_summary_file_df(fdir, verbose=False, hours=48, edate=datetime.datetime.n
     if verbose:
         print("looking for dates {} to {}".format(sdate, edate))
     while not done:
+        result = glob.glob(fdir + "/*{}*.json".format(s_str))
         if verbose:
             print("Looking for {}".format(sdate))
-        if verbose:
-            print(len(glob.glob(fdir + "/*{}*.json".format(s_str))))
-        flist.extend(glob.glob(fdir + "/*{}*.json".format(s_str)))
+            print(len(result))
+            print(result)
+        flist.extend(result)
         sdate += datetime.timedelta(hours=1)
         s_str = sdate.strftime(strf)
         if sdate > edate:
@@ -586,7 +599,7 @@ def open_dataframe(fname, varname=None):
     return data
 
 
-def delete_old(directory, days=7, verbose=False):
+def delete_old(directory, days=7, verbose=False,dry_run=True):
     """Determines the age of the files in the specified folder.
     Deletes files older than 7 days, since this is the length of time
     the files exist on the wisconsin ftp site.
@@ -599,16 +612,20 @@ def delete_old(directory, days=7, verbose=False):
     """
 
     # import
+    epoch = datetime.datetime(1970,1,1)
     now = datetime.datetime.now()  # current time
-    deletetime = now - (days * 86400)  # delete time
+    deletedate = now - datetime.timedelta(hours=days*24)
     deletefiles = []  # creating list of files to delete
-    for files in os.listdir(directory):
+    for files in os.scandir(directory):
+        mdate = epoch + datetime.timedelta(seconds=files.stat().st_mtime)
         files = os.path.join(directory, files)  # Joining path and filename
-        if os.stat(files).st_mtime < deletetime:
-            if os.path.isfile(files):
-                deletefiles.append(files)  # Creating list of files to delete
-    if verbose:
-        print("Files to be deleted: " + str(deletefiles))
+        if mdate < deletedate:
+            if verbose:
+                print(files, mdate)
+            deletefiles.append(files)  # Creating list of files to delete
+
+    if dry_run: return deletefiles
+
     size = 0.0
     count = 0
     for count, deletef in enumerate(deletefiles):
@@ -623,7 +640,7 @@ def delete_old(directory, days=7, verbose=False):
             + " MB."
         )
     else:
-        return None
+        return deletefiles
 
 
 def get_log_list(data):

@@ -7,10 +7,14 @@ from ashapp.ashruninterface import ModelCollectionInterface
 from ashapp.runtrajectory import RunTrajectory
 from utilhysplit.runhandler import ProcessList
 from utilvolc.runhelper import is_input_complete
-from ashapp.trajectory_generators import generate_traj_from_obsdf
-
+from ashapp.trajectory_generators import timegenerate_traj_from_obsdf
+from ashapp.trajectory_generators import timegenerate_height_traj_from_obsdf
+from math import floor
 logger = logging.getLogger(__name__)
 
+
+# 2023 Dec 4 (amc) setup method changed to utilize generate_height_traj_from_obsdf generator
+#                  old functionality retained in setup2 method.
 
 
 class CollectTrajectory(ModelCollectionInterface):
@@ -74,11 +78,34 @@ class CollectTrajectory(ModelCollectionInterface):
         command_list = []
         inp = self._inp.copy()
         csvname = '{}/{}.csv'.format(inp['WORK_DIR'],self.JOBID)
+        if not os.path.isfile(csvname):
+            edate = inp['start_date'] + datetime.timedelta(hours=1)
+            daterange = [inp['start_date'], edate] 
+            csvname = udi.find_btraj_file(inp['WORK_DIR'],daterange)
+            csvname = csvname[-1]
+            print('CSVNAME', csvname, daterange)
+        #csvname = '{}/{}.csv'.format(inp['WORK_DIR'],self.JOBID)
         iii=0
-        for time, trajgen in generate_traj_from_obsdf(csvname):
-            print(time, type(time))
-            import sys
-            #sys.exit()
+        # first level to start trajectories at in km above msl. 
+        #  use at or slightly below vent height. 
+        minht = floor(inp['bottom'])/1000.0
+        for time, trajgen in timegenerate_height_traj_from_obsdf(csvname,minht=minht):
+            inp['start_date'] = time
+            inp['jobid'] = '{}.{}'.format(self.JOBID, iii)
+            run = RunTrajectory(inp,trajgen)
+            command = run.run_model(overwrite=False)
+            if isinstance(command,(str,list)): command_list.append(command) 
+            self._filelist.extend(run.filelist)
+            iii += 1
+        return command_list
+
+    def setup2(self, overwrite):
+        from ashapp.runtrajectory import RunTrajectory
+        command_list = []
+        inp = self._inp.copy()
+        csvname = '{}/{}.csv'.format(inp['WORK_DIR'],self.JOBID)
+        iii=0
+        for time, trajgen in timegenerate_traj_from_obsdf(csvname):
             inp['start_date'] = time
             inp['jobid'] = '{}.{}'.format(self.JOBID, iii)
             run = RunTrajectory(inp,trajgen)

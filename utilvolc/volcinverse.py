@@ -26,7 +26,7 @@ from utilvolc.inversioninterface import RunInversionInterface
 from utilvolc.inversioninterface import TCMInterface
 from utilvolc.volcpaired import VolcatHysplit
 from utilvolc import invhelper
-from utilvolc.volctcm import TCM
+from utilvolc.volctcm import TCM, make_outdat_df
 from utilvolc import plottcm
 
 # def save_emis_gefs(inverse):
@@ -48,7 +48,10 @@ logger = logging.getLogger(__name__)
 """
 
 # 2023 Aug 21 (amc) ParametersIn moved to utiltcm.py
-
+# 2023 Dec 04 (amc) Added InversionEns class
+# 2023 Dec 04 (amc) modified _paired_data attribute in RunInversion class
+# 2023 Dec 04 (amc) added make_output method to RunInversion class
+# 2023 Dec 04 (amc) modified make_outdat, make_outdat_df, plot_outdat_ts, and copy method.
 
 def check_type_basic(check):
     if isinstance(check, int):
@@ -199,8 +202,47 @@ class InvDirectory:
         self.execdir = execdir
         self.hysplitdir = hysplitdir
 
+class InversionEns:
+
+    def __init__(self,name=None):
+        self.name = name
+        self.invrunlist = []
+
+    def add_inversion(self, invrun):
+        # invrun is RunInversion class
+        self.invrunlist.append(invrun.copy())
+
+    def plot_outdat_ts(self, ilist,fignum=1,cmap='viridis'):
+        if not isinstance(ilist,list):
+           ilist = np.arange(0,len(self.invrunlist))
+        cm = colormaker.ColorMaker(cmap, len(ilist), ctype="hex", transparency=None)
+        cmlist = cm()
+        sns.set()
+        sns.set_style("whitegrid")
+        fig = plt.figure(fignum, figsize=(10, 5))
+        ax = fig.add_subplot(1, 1, 1)
+        for nnn, iii in enumerate(ilist):
+            run = self.invrunlist[iii]
+            clr = '#' + cmlist[nnn]
+            label = run.directories.subdir.split('/')[-1]
+            run.plot_outdat_ts(ax=ax,log=False,clr=clr,label=label)
+
+
+#class InversionOutput():
+
+#    def __init__(self,inp):
+#        self._ilist = None
+#        self._inp = {}  #dictionary with information from the config file.
+#        self._directories = None
+#        self._tcm = TCM()
+ 
+#    def make_outdat(self):
+#        return (self._tcm.make_outdat())
+
 
 class RunInversion(RunInversionInterface):
+     # do do
+
     def __init__(self, inp):
 
         # keys which need to be in inp
@@ -211,15 +253,22 @@ class RunInversion(RunInversionInterface):
         self._inp = {}  #dictionary with information from the config file.
         self.inp = inp
 
+        print('setting up directories')
         self._directories = InvDirectory()
         self.set_directory(self.inp)
 
-        self._paired_data = VolcatHysplit(inp, self._directories.modeldir, inp["fname"],
-                                          self._directories.obsdir)
+        print('setting up paired data')
+        self._paired_data = VolcatHysplit()
+        print(inp['fname'])
+        dset = xr.open_dataset(inp['fname'])
+        self._paired_data.add_cdump_dset(dset)
+        self._paired_data.vdir = self.inp['OBS_DIR']
+
+        print('setting up TCM')
         self._tcm = TCM()
 
         # can be constructed in the inp setter from inp['configdir'] and inp['configfile'].
-        self._sourcehash = {}
+        #self._sourcehash = {}
 
     def set_directory(self, inp):
         self._directories.set_directory(
@@ -261,8 +310,20 @@ class RunInversion(RunInversionInterface):
     def directories(self):
         return self._directories
 
+    def make_output(self):
+        rcopy = InversionOutput()
+        rcopy._input - self._input
+        rcopy._directories = self._directories
+        rcopy._tcm = self._tcm
+        return rcopy
+
+
     def copy(self):
-        return -1
+        rcopy = RunInversion(self.inp)
+        rcopy._paired_data = self._paired_data
+        rcopy._directories = self._directories
+        rcopy._tcm = self._tcm
+        return rcopy
 
     def print_summary(self):
         return -1
@@ -316,7 +377,7 @@ class RunInversion(RunInversionInterface):
 
         # get the cdump and volcat data
         for tii in tiilist:
-            model = self._paired_data.cdump_hash[tii]
+            model = self._paired_data.cdump_mass_hash[tii]
             obs = self._paired_data.volcat_avg_hash[tii]
             pdata.append((model,obs))
 
@@ -325,8 +386,12 @@ class RunInversion(RunInversionInterface):
         self._tcm.write(tcm_name)
         return -1
 
-    # TODO also a funciton in volctcm.
     def make_outdat(self):
+        dfdat = self.tcm.output.get_emis()
+        volcinverse.make_outdat(self._sourcehash, self.tcm.columns, dfdat)
+
+    # TODO also a funciton in volctcm.
+    def make_outdat_old(self):
         """
         makeoutdat for InverseAshPart class.
         dfdat : pandas dataframe output by InverseOutDat class get_emis method.
@@ -353,7 +418,7 @@ class RunInversion(RunInversionInterface):
         vals = list(zip(datelist, htlist, valra, psizera))
         return vals
 
-    def plot_outdat_ts(self, log=False, fignum=1, unit="kg/s", ax=None):
+    def plot_outdat_ts(self, log=False, fignum=1, unit="kg/s", ax=None, clr='k', label=''):
         # InverseAshPart class
 
         # plots time series of MER. summed along column.
@@ -364,13 +429,19 @@ class RunInversion(RunInversionInterface):
             fig = plt.figure(fignum, figsize=(10, 5))
             ax = fig.add_subplot(1, 1, 1)
         df = self.make_outdat_df()
-        ax, ts = plottcm.plot_outdat_ts_psize_function(df,ax=ax,log=log)
+        #ax, ts = plottcm.plot_outdat_ts_psize_function(df,ax=ax,log=log)
+        ax, ts = plottcm.plot_outdat_ts_function(df,ax=ax,log=log,clr=clr,label=label)
         handles, labels = ax.get_legend_handles_labels()
         ax.legend(handles, labels)
         return ax, ts
 
+    def make_outdat_df(self):
+        dfdat = self.tcm.output.get_emis()
+        vals = self._tcm.make_outdat(dfdat)
+        return make_outdat_df(vals)
+
     # to do -also a function in volctcm.py
-    def make_outdat_df(self, savename=None, part="basic"):
+    def make_outdat_df_old(self, savename=None, part="basic"):
         # InverseAsh class
         """
         dfdat : pandas dataframe output by InverseOutDat class get_emis method.
@@ -438,6 +509,10 @@ class RunInversion(RunInversionInterface):
         inp = self.inp.copy()
         inp['durationOfSimulation']=24
         inp['WORK_DIR'] = self.directories.subdir
+        inp['HoursToEnd']=100
+        inp['qvaflag'] = True
+        inp['Use_Mastin_eq'] = False
+        inp['fraction_of_fine_ash'] = 1
         arun = MainEmitTimes(inp,jobid)
         arun.doit()
 

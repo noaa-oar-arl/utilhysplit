@@ -108,7 +108,7 @@ def writelanduse(
             fid.write("180    360    \n")
             fid.write("2 \n")
             fid.write("0.2 \n")
-            fid.write(landusedir + " \n")
+            fid.write("'" + landusedir + "' \n")
             if not path.isdir(landusedir) and verbose:
                 print("writelanduse function WARNING:")
                 print("landuse directory does not exist", landusedir)

@@ -23,6 +23,8 @@ class WashingtonPage: gets url location of iwxxm file
 class iwxxmCollection: processes collections of iwxxmVAA
 
 2023 22 MAR  (AMC) added support for multiple polygons in obs or forecast.
+2023 04 DEC  (AMC) vaa2emit and vaa2traj start adding support for turning polygons 
+                   into trajectory runs or emit-times files.
 
 """
 
@@ -452,6 +454,11 @@ def get_poly(vhash):
     else:
         poly = sgeo.Polygon()
     return poly
+
+
+def vaa2emit(vaa,inp={'WORK_DIR':'./','JOBID':'777'},dt=0):
+    inp = vaa2traj(vaa,inp=inp,dt=dt)
+    return inp
 
 
 
