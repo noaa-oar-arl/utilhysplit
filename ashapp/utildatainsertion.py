@@ -31,12 +31,22 @@ def find_emit_file_alt(wdir):
     efile = [x.split("/")[-1] for x in efile]
     return efile
 
+def find_btraj_file(wdir, daterange, rtype="fname"):
+    # first look for files with volcat naming convention.
+    elist = find_di_file(wdir, daterange, "btraj", rtype=rtype)
+    if not (list(elist)):
+       import glob
+       efile = glob.glob(wdir + "btraj*.csv")
+       elist = [x.split("/")[-1] for x in efile] 
+    return elist
 
 def find_emit_file(wdir, daterange, rtype="fname"):
     # first look for files with volcat naming convention.
     elist = find_di_file(wdir, daterange, "EMIT", rtype=rtype)
     if not (list(elist)):
         elist = find_emit_file_alt(wdir)
+    #import sys
+    #sys.exit()
     return elist
 
 
@@ -48,7 +58,6 @@ def find_cdump_df_alt(wdir, jobid):
     for eff in efile:
         stage = "{}_{}".format(eff, jobid)
         cfile = filelocator.get_cdump_filename(stage)
-        print("find cdump", eff, cfile)
         cnames.append(cfile)
     df = pd.DataFrame(cnames, columns=["filename"])
     df["file descriptor"] = "cdump"
@@ -70,6 +79,9 @@ def find_cdump_df(wdir, jobid, daterange):
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
     edf = mdi.get_emit_name_df(wdir, ftype)
+    #print('aaaaaaaaaaa')
+    #print(wdir,ftype)
+    #print(edf)
     if "file descriptor" not in edf.columns:
         return []
     edf = edf[edf["file descriptor"] == ftype]

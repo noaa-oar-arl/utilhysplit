@@ -56,9 +56,13 @@ class RunTrajectory(ModelRunInterface):
     def __init__(self, inp, trajgenerator):
         """
         A trajectory run from inputs.
+
         inp['height'] may be a list of heights or a single height in meters.
+ 
         durationOfSimulation is number or hours for simulation to run.
                              A negative number will result in backwards trajectories.
+
+        trajgenerator is a generator function which yields latitude, longitude, height in meters.
         """
 
         # 16 instance attributes  may be too many?
