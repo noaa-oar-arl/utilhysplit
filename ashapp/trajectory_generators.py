@@ -84,7 +84,8 @@ def timegenerate_traj_from_obsdf(csvname):
 
 def timegenerate_height_traj_from_obsdf(csvname,minht=1,dh=1):
     """
-    generate back trajectories from a csv file. this will create tdump files grouped in same measured time.
+    generate back trajectories from a csv file. 
+    this will create tdump files for each observation point with multiple heights.
 
     RETURNS
     tuple (time, generate_height_traj_from_series function)
@@ -93,6 +94,7 @@ def timegenerate_height_traj_from_obsdf(csvname,minht=1,dh=1):
         obsdf = pd.read_csv(csvname, parse_dates=["time"])
     if isinstance(csvname,pd.DataFrame):
         obsdf = csvname
+    # change this to change what the maximum height that is used.
     maxht = np.max(obsdf.height) + 2
     # trajectory run for each location.
     # all heights run in the same run for that location.

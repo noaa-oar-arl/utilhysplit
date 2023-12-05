@@ -31,6 +31,7 @@ from utilvolc.volcat_files import EventFile
 from utilvolc.volcat_files import get_summary_file_df
 from utilvolc.volcat_files import get_log_files
 from utilvolc.volcat_files import check_file
+from utilvolc.utiltraj import trajectory_input_csv
 
 from utilvolc import volcat_plots as vp
 
@@ -708,6 +709,17 @@ class Events:
                 logger.info(
                     "Emit-times file exists {}".format(volcemit.make_emit_filename())
                 )
+
+
+    def write_back_trajectory_csv(self,
+                                  numlist=None,
+                                  daterange=None):
+        if isinstance(numlist,int):
+            numlist = [numlist]
+        for num in numlist:
+            dset = self.events[num]
+
+            trajectory_input_csv(dset, self.edir) 
 
     def write_parallax_corrected(
         # Events class

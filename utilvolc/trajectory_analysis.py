@@ -17,15 +17,16 @@ class TrajDF:
 
     def __init__(self):
         self._edf = pd.DataFrame()
+       
 
     @property
     def edf(self):
-        return self._tdf
+        return self._edf
 
     # to do - add some checks.
     @edf.setter
-    def edf(self,tdf):
-        self._tdf = tdf
+    def edf(self,edf):
+        self._edf = edf
 
 class TrajAnalDF(DFInterface):
     # columns which are required
@@ -91,7 +92,7 @@ class TrajAnalysis:
 
     @trajdf.setter
     def trajdf(self, edf):
-        self._trajdf.tdf = edf 
+        self._trajdf.edf = edf 
    
     @property
     def analdf(self):
@@ -213,8 +214,8 @@ class TrajAnalysis:
                 #print(a.x, a.y)
                 #print(traj_num, dist, ialt)
                
-            print('observed altitude is', set(obsalt)) 
-            print('-----------------')
+            #print('observed altitude is', set(obsalt)) 
+            #print('-----------------')
             zzz = list(zip(*alist))
             plt.plot(zzz[2],zzz[1],'--k.')
             obs = obsalt[0]*1000.0
