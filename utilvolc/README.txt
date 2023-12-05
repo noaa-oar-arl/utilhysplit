@@ -1,6 +1,8 @@
-old clean branch is in /hysplit-users/alicec/clean/utilhysplit. it still has some untracked files in it.
+# Back Trajectory 
 
-TCM
+
+
+# Inverse Modeling
 
 
    utiltcm
@@ -51,13 +53,13 @@ TCM
        VolcatHysplit class
  
 
-MODEL+VOLCAT EVALUATION
+## MODEL+VOLCAT EVALUATION
 
    volcpaired.py
        VolcatHysplit class
 
 
-VOLCAT
+## VOLCAT
 
     volcat.py for reading VOLCAT netcdf event files.
        DONE - TODO - _get_time function needs checking / updating
@@ -101,7 +103,7 @@ VOLCAT
         OneEventTime class (helper class)
 
 
-Model data
+## Model data
    model_event.py contains classes for helping with QVA creation.
 
         ModelEvent class 
@@ -123,7 +125,7 @@ qvainterface.py
 
 
 
-INTERFACES
+## INTERFACES
 
     ashapp/ashruninterface  classes for running HYSPLIT model, postprocessing output and creating graphics.
 
@@ -133,14 +135,12 @@ INTERFACES
     utilvolc/inversioninterface 
 
 
-DATA INSERTION
+# DATA INSERTION
     ashapp/DImain.py 
     ashapp/make_volcat_database.py  run this to create a csv file from the sumdf file created by get_summary_file_df.
 
 
-SOME GUI attempts
-    ashapp/volc_ui.py
-    ashapp/
+
 
 
 
