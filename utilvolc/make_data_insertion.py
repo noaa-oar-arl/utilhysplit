@@ -47,6 +47,7 @@ def make_1D_sub(dset):
     """Makes compressed 1D arrays of latitude, longitude, ash height,
     mass emission rate, and area
     For use in writing emitimes files. See self.write_emit()
+    Also used for writing files to generate trajectories from (see utiltraj.trajectory_input_csv)
     Input:
     areafile: (boolean) True if area netcdf is created
     correct_parallax: use parallax corrected lat/lon (default = True)
