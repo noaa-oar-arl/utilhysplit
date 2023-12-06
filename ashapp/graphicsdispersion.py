@@ -26,17 +26,35 @@ import xarray as xr
 
 from utilvolc.runhelper import Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelOutputInterface
+from ashapp.plotting_functions import create_parxplot, create_concentration_plot, create_massloading_plot
 
 
 logger = logging.getLogger(__name__)
 
 
+# create_maptext
+# get_maptext_info
+# generate_kmz
+# create_zipped_up_file
+
+
+
 class GraphicsDispersion(ModelOutputInterface):
+    ilist = [("WORK_DIR",'req'),
+             ("jobid",'req'),
+             ("jobname",'req'),
+             ("MAP_DIR",'req'),
+             ("HYSPLIT_DIR",'req'),
+             ("mapBackground",'req')]
+
 
     def __init__(self,inp):
         self._inputlist = []
         self._outputlist = []
+        self._fhash = {}
         self.inp = inp
+        self.filelocator = inp
+
 
     @property
     def inputlist(self):
@@ -49,7 +67,23 @@ class GraphicsDispersion(ModelOutputInterface):
     # no setter
     @property
     def outputlist(self):
+        outputlist = []
+        output.list.append(self._fhash['parxplot'])
         return self._outputlist
+
+
+    def _get_filenames(self):
+        fhash = {}
+        # input files
+        fhash['pardump'] = self.filelocator.get_pardump_filename()
+        fhash['cdump'] = self.filelocator.get_cdump_filename()
+
+        # output files
+        fhash['parxplot'] = self.filelocator.get_parxplot_filename(ptype='html')
+        fhash['concplot'] = self.filelocator.get_concplot_filename(stage=0,frame=None,ptype='html')
+        fhash['massplot'] = self.filelocator.get_massloading_filename(stage=0,frame=None,ptype='html')
+        return fhash       
+ 
 
     def check(self):
        rval = True
@@ -59,6 +93,48 @@ class GraphicsDispersion(ModelOutputInterface):
        return True
 
     def postprocess(self):
+        stage=0
+
+        #create_maptext(inp)
+        inputname = self._fhash['cdump']
+        outputname = self._fhash['massplot']
+        create_massloading_plot(self.inp,inputname, outputname, conc_multiplier=1)
+
+        # create the particle plot.
+        pardump_filename = self._fhash['pardump']
+        parxplot_outputname = self._fhash['parxplot']
+        rval = create_parxplot(self.inp,pardump_filename, parxplot_outputname)
+
+        # create the concentration plot
+        cdump_filename = self._fhash['cdump']
+        concplot = self._fhash['concplot']
+        print('CONCPLOT', concplot)
+        create_concentration_plot(self.inp, cdump_filename, concplot, conc_multiplier=1)
+
+        #create_concentration_montage(stage=stage) 
+        #make_awips_netcdf()
         return True
 
+    @property
+    def filelocator(self):
+        #self._filelist = list(set(self._filelist))
+        return self._filelocator
+
+    @filelocator.setter
+    def filelocator(self, finp):
+        """
+        input dictionary  with WORK_DIR, jobid, jobname
+        or MetFileFinder object.
+        """
+        if isinstance(finp, dict):
+            self._filelocator = JobFileNameComposer(
+                finp["WORK_DIR"], finp["jobid"], finp["jobname"]
+            )
+            # get all the filenames here.
+            self._fhash = self._get_filenames()
+        else:
+            # TO DO? add test for type.
+            self._filelocator = finp
+        # after the filelocator is set, need to redo the filenames
+        # self._get_filenames()
 

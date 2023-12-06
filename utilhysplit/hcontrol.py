@@ -28,6 +28,7 @@ FUNCTIONS
 # 2023 Sep 26 (AMC) added kwargs to NameList write method so can write without header.
 #                   changed gem to a kwarg.
 # 2023 Sep 26 (AMC) added a line_ending property to NameList class so can write withouth ',' at line ends.
+# 2023 Dec 05 (AMC) replaced exception in parse_num_met function with test for length of array.
 
 logger = logging.getLogger(__name__)
 
@@ -200,16 +201,15 @@ class ConcGrid:
         self.get_nlev()
         self.annotate = False
 
-
     @property
     def outdir(self):
         return self._outdir
 
     @outdir.setter
-    def outdir(self,outdir):
+    def outdir(self, outdir):
         if outdir[-1] != "/":
-           outdir += "/"
-        self._outdir = outdir 
+            outdir += "/"
+        self._outdir = outdir
 
     def copy(self):
         return ConcGrid(
@@ -379,7 +379,7 @@ class ConcGrid:
         try:
             self.centerlat = float(temp[0])
         except TypeError:
-            print("warning: center latitude not a float", temp[0])
+            print("warning: center latitude not a float", type(temp[0]))
             ret = False
         try:
             self.centerlon = float(temp[1])
@@ -479,7 +479,6 @@ class Species:
         decay="0.0",
         resuspension="0.0",
     ):
-
         self.name = name
         self.rate = rate
         self.duration = duration
@@ -665,7 +664,7 @@ class NameList:
         if working_directory[-1] != "/":
             working_directory += "/"
         self.wdir = working_directory
-        self.line_ending = ','
+        self.line_ending = ","
 
     @property
     def keys(self):
@@ -677,9 +676,8 @@ class NameList:
         return self._line_ending
 
     @line_ending.setter
-    def line_ending(self,line_ending):
+    def line_ending(self, line_ending):
         self._line_ending = line_ending
-
 
     def print_help(self, order=None, sep=":"):
         rstr = ""
@@ -794,7 +792,6 @@ class NameList:
                 self.nlist[key] = temp[1].strip(",").strip()
         return True
 
-
     def __str__(self):
         # 9/28/2023 remove key.lower() so write with same case as input.
         order = self.order
@@ -809,7 +806,12 @@ class NameList:
                 print("WARNING: " + str(key) + " " + str(self.nlist[key]) + " not str")
                 kstr = False
             if not kstr:
-                rstr += str(key) + "=" + str(self.nlist[key]) + "{}\n".format(self.line_ending)
+                rstr += (
+                    str(key)
+                    + "="
+                    + str(self.nlist[key])
+                    + "{}\n".format(self.line_ending)
+                )
         return rstr
 
     def write(self, order=None, verbose=False, overwrite=True, query=False, **kwargs):
@@ -824,16 +826,15 @@ class NameList:
         if gem=True then will write &GENPARM at beginning of file rather than &SETUP
         """
 
-        if 'gem' in kwargs.keys():
-            gem = kwargs['gem']
+        if "gem" in kwargs.keys():
+            gem = kwargs["gem"]
         else:
-            gem= False
+            gem = False
 
-        if 'noheader' in kwargs.keys():
-            noheader = kwargs['noheader']
+        if "noheader" in kwargs.keys():
+            noheader = kwargs["noheader"]
         else:
-            noheader= False
-
+            noheader = False
 
         rval = writeover(self.wdir + self.fname, overwrite, query, verbose=verbose)
         if rval == -1:
@@ -1261,10 +1262,13 @@ class HycsControl:
         """
         temp = line.split()
         num1 = int(temp[0])
-        try:
-            num2 = int(temp[1])
-        except:
-            num2 = 1
+        num2 = 1
+        if len(temp)>1:
+           num2 = int(temp[1])
+        #try:
+        #    num2 = int(temp[1])
+        #except (ValueError,TypeError,IndexError):
+        #    num2 = 1
         return num2 * num1
 
     def read(self, verbose=False):

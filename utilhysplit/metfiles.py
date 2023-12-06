@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # TODO
 # if using archived gdas1, does not figure out
 # how many files to use correctly.
+# gdas1 is challenging because of the w1 format.
 
 # 2023 Jan 15 (amc) in MetFileFinder split mstr attribute into forecast_mstr and archive_mstr.
 # 2023 Jan 15 (amc) added some logger debug statements.
@@ -72,10 +73,14 @@ class MetFileFinder:
     def set_ens_member(self, suffix):
         self.suffix = suffix
         logger.debug("set_ens_member")
-        self.forecast_mstr = get_forecast_str(self.metid+suffix, self.forecast_directory)
-        #self.forecast_mstr += "." + suffix
-        self.archive_mstr = get_forecast_str(self.metid+suffix, self.forecast_directory)
-        #self.archive_mstr += "." + suffix
+        self.forecast_mstr = get_forecast_str(
+            self.metid + suffix, self.forecast_directory
+        )
+        # self.forecast_mstr += "." + suffix
+        self.archive_mstr = get_forecast_str(
+            self.metid + suffix, self.forecast_directory
+        )
+        # self.archive_mstr += "." + suffix
         logger.info("Setting mstr for ensemble {}".format(self.forecast_mstr))
 
     def find_forecast_cycle(self, dstart, duration, cycle):
@@ -188,7 +193,7 @@ def weed_files(metfiles, dstart, duration, metid, metstr):
     for count, mfile in enumerate(metfiles):
         logger.debug("{}".format(mfile))
         # metf = mfile.split("/")[-1]
-        #metdir = mfile.replace(metf, "")
+        # metdir = mfile.replace(metf, "")
         mdate = datetime.datetime.strptime(mfile, metstr)
         edate = mdate + datetime.timedelta(hours=mhash["forecast_length"])
         metlist.append(mfile)
@@ -251,12 +256,12 @@ def get_archive_str(metid, ARCDIR="/pub/archive"):
 
 
 def check_for_suffix(metid):
-    suffix=None
+    suffix = None
     if "gefs" in metid.lower():
-        met = "gefs"
+        #met = "gefs"
         for suffix in gefs_suffix_list():
             if suffix in metid.lower():
-               return suffix
+                return suffix
     return suffix
 
 
@@ -276,8 +281,8 @@ def get_forecast_str(metid, FCTDIR="/pub/forecast"):
     elif "gefs" in metid.lower():
         met = "gefs"
         suffix = check_for_suffix(metid)
-        if suffix:  
-           met = 'gefs.{}'.format(suffix)
+        if suffix:
+            met = "gefs.{}".format(suffix)
     else:
         logger.warning("Did not recognize MET name for forecast {}.".format(metid))
         logger.warning("Will look for archived data")
@@ -285,7 +290,7 @@ def get_forecast_str(metid, FCTDIR="/pub/forecast"):
     # metnamefinal = 'No data found'
     #        metime = dtm
     metdir = path.join(FCTDIR, "%Y%m%d/")
-    metfilename = "hysplit.t%Hz." + met 
+    metfilename = "hysplit.t%Hz." + met
     if "gfs" in metid.lower():
         metfilename += "f"
         # metfilename = 'hysplit.' + metime.strftime('t%Hz') + '.' + met
@@ -480,8 +485,9 @@ class MetFiles:
             # also need to increment the edate to get next possible file name
             try:
                 edate = edate + self.mdt
-            except:
-                print("HERE HERE HERE", edate, self.mdt)
+            except BaseException as eee:
+                logger.warning(eee)
+                logger.warning('Failed to add mdt to edate')
                 sys.exit()
             # if not path.isfile(temp):
             #    temp = temp.lower()
