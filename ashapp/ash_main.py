@@ -82,7 +82,6 @@ If different naming convention then will simply create runs for all EMIT files i
 """
     )
 
-
 def create_run_instance(jid, runinp):
     """
     create the correct object for the type of run and return it.
@@ -98,6 +97,9 @@ def create_run_instance(jid, runinp):
                  set of heights
     trajectory : gefs : runs forward trajectories at predetermined set of heights
                  for each GEFS ensemble member.
+
+    If qva is in the runflag then
+    
     """
     logger.info("Creating run Instance")
 
@@ -118,14 +120,18 @@ def create_run_instance(jid, runinp):
             crun = MainDispersion(runinp, jid)
             logger.info("Dispersion")
 
+    elif 'polygon' in runinp["runflag"].lower():
+        from maindispersion import MainEmitTimes
+        crun = MainEmitTimes(runinp, jid)
+        logger.info("Use EmitTimes created from polygon")
+
     elif 'datainsertion' in runinp["runflag"].lower():
         # This handles GEFS as well as deterministic runs.
         from maindispersion import MainEmitTimes
-
         crun = MainEmitTimes(runinp, jid)
         logger.info("Use EmitTimes files")
 
-    elif 'inverse' in runinp["runflag"]:
+    elif 'inverse' in runinp["runflag"].lower():
         if runinp["meteorologicalData"].lower() == "gefs":
             # this one generates a separate netcdf file
             # for each gefs member

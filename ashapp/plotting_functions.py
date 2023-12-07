@@ -2,90 +2,131 @@
 # -----------------------------------------------------------------------------
 # Air Resources Laboratory
 #
-# plotting_functions.py 
+# plotting_functions.py
 #
 # -----------------------------------------------------------------------------
 #
 #
 # -----------------------------------------------------------------------------
-
 
 # from abc mport ABC, abstractmethod
 import datetime
 import glob
 import logging
 import os
-import shutil
 import subprocess
 import sys
 import zipfile
 
-import numpy as np
-import requests
-import xarray as xr
-
-from monetio.models import hysplit
-from utilhysplit import hcontrol
-import utilhysplit.metfiles as metfile
-from utilvolc.runhelper import  Helper, JobFileNameComposer
+from utilvolc.runhelper import Helper
 from utilhysplit.plotutils.concplotutil import ConcplotColors
 
 logger = logging.getLogger(__name__)
 
 
 def cleanup(self):
+    # TO DO test and modify
     psfiles = glob.glob("*.ps")
     for psf in psfiles:
         Helper.remove(psf)
     return -1
 
+
+def check_output_type(outputname):
+    temp = outputname.split(".")
+    if "ps" in temp[-1].lower():
+        return "+g0"
+    elif "html" in temp[-1].lower():
+        return "+g1"
+    elif "svg" in temp[-1].lower():
+        return "+g1"
+    else:
+        return "+g0"
+
+
 def create_parxplot(inp, pardump_filename, outputname):
     # 11/13/2020 do not create kml for pardump.
     # files too large and not useful.
-    # 12/6/2023 use the +g1 option to generate svg file instead of converting ps to gif.
     maparg = "-j" + os.path.join(inp["MAP_DIR"], "arlmap")
-    JOBID  = inp['jobid']
+    JOBID = inp["jobid"]
+    convert_exe = inp["CONVERT_EXE"]
+    ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
+    resolution = inp["graphicsresolution"]
+
+    output_type = check_output_type(outputname)
     # gisoption = self.inp['gisOption']
     gisoption = 0
     c = [
         os.path.join(inp["HYSPLIT_DIR"], "exec", "parxplot"),
         "-i" + pardump_filename,
         "-k1",
-        "+g1",
+        output_type,
         "-o" + outputname,
-        #"-p{}".format(JOBID),
+        # "-p{}".format(JOBID),
         "-a{}".format(gisoption),
         maparg,
     ]
     logger.warning(" ".join(c))
     Helper.execute(c)
-    #outputname = outputname.replace("ps", JOBID)
+    rval = check_and_convert(
+        outputname,
+        output_type,
+        JOBID,
+        convert_exe,
+        ghostscript_exe,
+        final_type="gif",
+        resolution=resolution,
+    )
+    return rval
+
+
+def check_and_convert(
+    outputname,
+    intial_type,
+    JOBID,
+    convert_exe,
+    ghostscript_exe,
+    final_type="gif",
+    resolution=80,
+):
     if not os.path.exists(outputname):
         logger.debug(outputname)
         logger.error(
             "******************************************************************************"
         )
         logger.error(
-            "The model was not able to create a particle plot for job {}.".format(
-                JOBID
+            "The model was not able to create {} plot for job {}.".format(
+                outputname, JOBID
             )
         )
         logger.error(
             "******************************************************************************"
         )
-        rval = (False, JOBID, 'PARXPLOT FAILED')
+        rval = (False, JOBID, "FAILED")
     else:
-        rval = (True, JOBID, 'PARXPLOT PASSED')
+        if intial_type == "+g0":
+            convert_ps_to_image(
+                convert_exe,
+                ghostscript_exe,
+                outputname,
+                outputname.replace("ps", final_type),
+                resolution=resolution,
+            )
+        rval = (True, JOBID, "PASSED")
     return rval
+
 
 def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier=1):
     # create dispersion png plot using python concplot.
     # Units in g/m2
     gisopt = inp["gisOption"]
     mapopt = inp["mapBackground"]
-    mapdir = inp['MAP_DIR']
-    hdir = inp['HYSPLIT_DIR']
-    JOBID = inp['jobid']
+    mapdir = inp["MAP_DIR"]
+    hdir = inp["HYSPLIT_DIR"]
+    JOBID = inp["jobid"]
+    convert_exe = inp["CONVERT_EXE"]
+    ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
+    resolution = inp["graphicsresolution"]
 
     clrs = ConcplotColors()
     # want in grams. output in mg.
@@ -101,9 +142,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
             "0.01::{}".format(clrs.get("grey")),
         ]
     )
-    logger.info(
-        "Creating column mass loading graphics for job {}.".format(JOBID)
-    )
+    logger.info("Creating column mass loading graphics for job {}.".format(JOBID))
     if mapopt == "terrain":
         maparg = "--street-map=0"
     elif mapopt == "toner":
@@ -112,6 +151,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
         maparg = "-j" + os.path.join(mapdir, "arlmap")
 
     fortran_concplot = True
+    output_type = check_output_type(outputname)
     if fortran_concplot:
         # c = [self.inp['PYTHON_EXE'],
         #     os.path.join(self.inp['HYSPLIT_DIR'], 'exec', 'concplot.py'),
@@ -119,7 +159,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
             os.path.join(hdir, "exec", "concplot"),
             "-i" + inputname,
             "-c4",
-            "+g1",  # html output.
+            output_type,  # svg or ps
             "-v" + contours,
             "-e4",  # mass loading
             "-d4",  # over all levels
@@ -134,7 +174,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
             #'-m{}'.format(self.inp['mapProjection']),
             #'-z{}'.format(self.inp['zoomFactor']),
             #'-l1',
-            # maparg,
+            maparg,
             "-a{}".format(gisopt),
             #'-g0:{}'.format(self.inp['spatialPlotRadius']),
             "-k1",
@@ -145,43 +185,40 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
 
     logger.info("Executing concplot " + " ".join(c))
     Helper.execute(c)
-    #outputname = outputname.replace("ps", JOBID)
-    if not os.path.exists(outputname):
-        logger.error(
-            "******************************************************************************"
-        )
-        logger.debug(outputname)
-        logger.error(
-            "The model was not able to create a graphic file for job {}.".format(
-                JOBID
-            )
-        )
-        logger.error(
-            "******************************************************************************"
-        )
-        rval = (False, JOBID, "GRAPHICS_FAILED")
-        # sys.exit(3)
-    else:
-        rval = (True, JOBID, "GRAPHICS_PASSED")
-        # make the kmz file.
-        # if the -p option used need to use the get_gelabel_filename method.
-        #gelist = self.make_gelabel(self.filelocator.get_gelabel_filename)
-        # self.make_gelabel(self.filelocator.get_basic_gelabel_filename)
-        # fnames = [self.filelocator.get_basic_kml_filename()]
-        #fnames = ["HYSPLIT_ps.kml"]
-        #fnames = [self.filelocator.get_basic_kml_filename()]
-        #logger.info("KML FILE NAME {}".format(fnames[0]))
-        #fnames.extend(gelist)
-        #logger.info("GELIST FILE NAME {}".format(fnames[1]))
-        #self.generate_kmz(
-        #    fnames, self.filelocator.get_kmz_filename(stage="massload")
-        #)
-        # remove the kml and gelabel files
-        #for fn in fnames:
-        #    Helper.remove(fn)
+    # outputname = outputname.replace("ps", JOBID)
+    rval = check_and_convert(
+        outputname,
+        output_type,
+        JOBID,
+        convert_exe,
+        ghostscript_exe,
+        final_type="png",
+        resolution=resolution,
+    )
+    # TODO - put this in a different function?
+    #        test that it works.
+    # make the kmz file.
+    # if the -p option used need to use the get_gelabel_filename method.
+    # gelist = self.make_gelabel(self.filelocator.get_gelabel_filename)
+    # self.make_gelabel(self.filelocator.get_basic_gelabel_filename)
+    # fnames = [self.filelocator.get_basic_kml_filename()]
+    # fnames = ["HYSPLIT_ps.kml"]
+    # fnames = [self.filelocator.get_basic_kml_filename()]
+    # logger.info("KML FILE NAME {}".format(fnames[0]))
+    # fnames.extend(gelist)
+    # logger.info("GELIST FILE NAME {}".format(fnames[1]))
+    # self.generate_kmz(
+    #    fnames, self.filelocator.get_kmz_filename(stage="massload")
+    # )
+    # remove the kml and gelabel files
+    # for fn in fnames:
+    #    Helper.remove(fn)
     return rval
 
-def make_gelabel(hysplitdir, filenamer):
+
+def make_gelabel(hysplitdir, filenamer, JOBID):
+    # TO DO - make it work.
+
     # the get_basic_gelabel_filename method should be passed if the -p
     # option was not used and files have form GELABEL_??_ps.txt.
     # otherwise the get_gelabel_filename method should be passed.
@@ -204,16 +241,17 @@ def make_gelabel(hysplitdir, filenamer):
     gelabel = filenamer(frame=iii, ptype="ps")
     logger.debug(gelabel + " NAME ")
     gelist = []
-    while os.path.isfile(gelabel):
-        gelabelgif = filenamer(frame=iii, ptype="gif")
-        gelist.append(gelabelgif)
-        logger.debug(gelabel + " NAME " + gelabelgif)
-        self.convert_ps_to_image(gelabel, gelabelgif, resolution=80)
-        iii += 1
-        gelabel = filenamer(frame=iii, ptype="ps")
-        if iii > 100:
-            break
+    # while os.path.isfile(gelabel):
+    #    gelabelgif = filenamer(frame=iii, ptype="gif")
+    #    gelist.append(gelabelgif)
+    #    logger.debug(gelabel + " NAME " + gelabelgif)
+    #    self.convert_ps_to_image(gelabel, gelabelgif, resolution=80)
+    #    iii += 1
+    #    gelabel = filenamer(frame=iii, ptype="ps")
+    # if iii > 100:
+    #    break
     return gelist
+
 
 def create_concentration_plot(inp, inputname, outputname, conc_multiplier=1):
     """
@@ -222,11 +260,15 @@ def create_concentration_plot(inp, inputname, outputname, conc_multiplier=1):
 
     took out the -p option which makes filename.jobid
     """
-    JOBID = inp['jobid']
-    hdir = inp['HYSPLIT_DIR']
-    mapopt = inp['mapBackground']
-    mapdir = inp['MAP_DIR']
-   
+    JOBID = inp["jobid"]
+    hdir = inp["HYSPLIT_DIR"]
+    mapopt = inp["mapBackground"]
+    mapdir = inp["MAP_DIR"]
+    convert_exe = inp["CONVERT_EXE"]
+    ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
+    output_type = check_output_type(outputname)
+    resolution = inp["graphicsresolution"]
+
     # create dispersion png plot using python concplot.
     clrs = ConcplotColors()
     contours = "+".join(
@@ -259,11 +301,11 @@ def create_concentration_plot(inp, inputname, outputname, conc_multiplier=1):
             os.path.join(hdir, "exec", "concplot"),
             "-i" + inputname,
             "-c4",
-            "+g1",   # output in html 
+            output_type,  # output in ps or svg
             "-v" + contours,
             "-umg",  # output in mg
             #'+n',
-            #"-p" + str(JOBID),
+            # "-p" + str(JOBID),
             "-x{:2.2e}".format(conc_multiplier),
             "-o" + outputname,
             "-s0",  # sum species
@@ -281,24 +323,20 @@ def create_concentration_plot(inp, inputname, outputname, conc_multiplier=1):
     #         os.path.join(self.inp['HYSPLIT_DIR'], 'exec', 'concplot.py'),
     logger.debug("Executing concplot " + " ".join(c))
     Helper.execute(c)
-    outputname = outputname.replace("ps", JOBID)
-    if not os.path.exists(outputname):
-        logger.error(
-            "******************************************************************************"
-        )
-        logger.error(
-            "The model was not able to create a concentration graphic file for job {}.".format(
-                JOBID
-            )
-        )
-        logger.error(
-            "******************************************************************************"
-        )
-        rval =  (False, JOBID, "CONCENTRATION GRAPHICS_FAILED")
-    else:
-        rval =  (True, JOBID, "CONCENTRATION GRAPHICS_PASSED")
+    rval = check_and_convert(
+        outputname,
+        output_type,
+        JOBID,
+        convert_exe,
+        ghostscript_exe,
+        final_type="png",
+        resolution=resolution,
+    )
+    return rval
 
-def create_montage_page(self, flin, flout, stage, iii, jjj):
+
+def create_montage_page(inp, inputnamelist, outputname, stage, iii, jjj):
+    # TODO modify and test.
     """
     flin : function which generates filename
     flout : function which generates filename
@@ -307,24 +345,24 @@ def create_montage_page(self, flin, flout, stage, iii, jjj):
     stage : input for flin and flout
     """
     done = False
-    outputname = flout(stage, frame=jjj)
     # self.filelocator.get_concentration_montage_filename(stage,frame=jjj)
-    jlist, levlist = self.set_qva_levels()
+    # jlist, levlist = set_qva_levels()
     # rlist = []
-    montage = self.inp["CONVERT_EXE"].replace("convert", "montage")
+    montage = inp["CONVERT_EXE"].replace("convert", "montage")
     c = [montage]
-    for lev in levlist:
-        fname = flin(stage=stage, frame=iii)
-        # self.filelocator.get_concplot_filename(stage=stage,frame=iii)
-        if not os.path.exists(fname):
+    for inputname in inputnamelist:
+        lev = 0
+        # for lev in levlist:
+        #    self.filelocator.get_concplot_filename(stage=stage,frame=iii)
+        if not os.path.exists(inputname):
             done = True
-            logger.debug("file does not exist {}".format(fname))
+            logger.debug("file does not exist {}".format(inputname))
             break
         c.append("-label '{}'".format(lev))
         c.append("-pointsize 20")
-        c.append("-trim {}".format(fname))
+        c.append("-trim {}".format(inputname))
         iii += 1
-    if done == True:
+    if done:
         return None, done, iii
     c.extend(["-geometry 200x200", "-tile 2x6", outputname])
     # logger.debug("Create montage: " + " ".join(c))
@@ -333,6 +371,7 @@ def create_montage_page(self, flin, flout, stage, iii, jjj):
     Helper.execute_with_shell(c)
     return outputname, done, iii
 
+
 def create_concentration_montage(self, stage):
     flout = self.filelocator.get_concentration_montage_filename
     flin = self.filelocator.get_concplot_filename
@@ -340,6 +379,7 @@ def create_concentration_montage(self, stage):
     file_addlist.append(self.filelocator.get_parxplot_filename)
     stagein = [stage, stage, stage]
     self.create_montage_pdf(stagein, flin, flout, file_addlist)
+
 
 def create_montage_pdf(self, stage, flin, flout, file_addlist):
     """
@@ -381,12 +421,13 @@ def create_montage_pdf(self, stage, flin, flout, file_addlist):
         logger.debug("MONTAGE PDF {}".format(" ".join(c)))
         Helper.execute_with_shell(c)
 
-def convert_ps_to_image(convert_exe, ghostscript_exe, 
-                        ps_filename, gif_filename, resolution=0, trim=True):
 
+def convert_ps_to_image(
+    convert_exe, ghostscript_exe, ps_filename, gif_filename, resolution=80, trim=True
+):
     logger.debug("Creating images from ps {}".format(ps_filename))
-    if resolution == 0:
-        resolution = inp["graphicsResolution"]
+    # if resolution == 0:
+    #    resolution = inp["graphicsResolution"]
 
     if not os.path.exists(ps_filename):
         logger.warn(
@@ -439,6 +480,7 @@ def convert_ps_to_image(convert_exe, ghostscript_exe,
     p1.stdout.close()  # allow p1 to receive a SIGPIPE if p2 exists.
     stdoutdata, stderrdata = p2.communicate()
 
+
 def convert_ps_to_pdf(inp, ps_filename, pdf_filename):
     if not os.path.exists(ps_filename):
         logger.warn(
@@ -464,14 +506,13 @@ def convert_ps_to_pdf(inp, ps_filename, pdf_filename):
     logger.info("Creating PDF " + " ".join(cproc))
     Helper.execute(cproc)
 
+
 def get_maptext_info(inp, metfilefinder):
     maptexthash = {}
     rstr = "HYSPLIT dispersion run. "
     maptexthash["run_description"] = rstr
 
-    metfiles = metfilefinder.find(
-        inp["start_date"], inp["durationOfSimulation"]
-    )
+    metfiles = metfilefinder.find(inp["start_date"], inp["durationOfSimulation"])
     if metfiles:
         metfiles = list(zip(*metfiles))[1]
     else:
@@ -481,10 +522,12 @@ def get_maptext_info(inp, metfilefinder):
 
     return maptexthash
 
-def create_maptext(inp,maptexthash,conc_multiplier,ash_reduction):
+
+def create_maptext(inp, maptexthash, conc_multiplier, ash_reduction):
     # TO DO - write meteorology
     # vertical distribution.
     # MER and m63.
+    JOBID = inp["jobid"]
     descripline = maptexthash["run_description"]
 
     now = datetime.datetime.utcnow().strftime("%m/%d/%Y %H:%M UTC")
@@ -522,9 +565,7 @@ def create_maptext(inp,maptexthash,conc_multiplier,ash_reduction):
     )
     poll = "Pollutant: Ash \n"
     ## TO DO calculate release quantity
-    release_a = "Start: {}  Duration: {} h {} min\n".format(
-        estart, ehours, eminutes
-    )
+    release_a = "Start: {}  Duration: {} h {} min\n".format(estart, ehours, eminutes)
     release_b = "Release: {}    m63: {:1g}\n".format(emission_rate, m63)
     info_a = "Vertical distribution: {}{}  GSD: {}{}  Particles: {}\n".format(
         "uniform", sp8, "default", sp8, "20,000"
@@ -554,8 +595,10 @@ def create_maptext(inp,maptexthash,conc_multiplier,ash_reduction):
         fid.write("\n")
         fid.close()
 
+
 # def generate_shape_file(self):
 # no shape files generated now.
+
 
 def generate_kmz(inp, kml_filenames, kmz_filename):
     for f in kml_filenames:
@@ -583,6 +626,7 @@ def generate_kmz(inp, kml_filenames, kmz_filename):
             if os.path.exists(f):
                 bn = os.path.basename(f)
                 z.write(f, arcname=bn)
+
 
 def create_zipped_up_file(inp, filename, files):
     if not files:

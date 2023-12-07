@@ -1,6 +1,6 @@
 HYSPLIT_DIR=/hysplit-users/alicec/hysplitdev/
 MAP_DIR=/hysplit-users/alicec/hysplitdev/graphics/
-WORK_DIR=/hysplit-users/alicec/tmp/tests/dispersion/
+WORK_DIR=/hysplit-users/alicec/tmp/tests/dispersion3/
 CONVERT_EXE=convert
 PYTHON_EXE=/hysplit-users/alicec/anaconda3/envs/hysplit/bin/python
 forecastDirectory=/pub/archives/
@@ -10,7 +10,7 @@ DATA_DIR=/hysplit-users/alicec/utilhysplit/ashapp/
 owner=A. Person
 VolcanoName=Bezymianny
 area = 314160000
-top=12880
+top=20880
 bottom=2880
 start_date=2020:10:21:20
 durationOfSimulation=24

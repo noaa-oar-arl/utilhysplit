@@ -174,7 +174,8 @@ class RunDispersion(ModelRunInterface):
 
     @property
     def filelocator(self):
-        self._filelist = list(set(self._filelist))
+        # why is this here?
+        # self._filelist = list(set(self._filelist))
         return self._filelocator
 
     @filelocator.setter

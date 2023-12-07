@@ -79,9 +79,11 @@ class GraphicsDispersion(ModelOutputInterface):
         fhash['cdump'] = self.filelocator.get_cdump_filename()
 
         # output files
-        fhash['parxplot'] = self.filelocator.get_parxplot_filename(ptype='html')
-        fhash['concplot'] = self.filelocator.get_concplot_filename(stage=0,frame=None,ptype='html')
-        fhash['massplot'] = self.filelocator.get_massloading_filename(stage=0,frame=None,ptype='html')
+        ptype = 'ps'
+        # could use html or svg for svg files
+        fhash['parxplot'] = self.filelocator.get_parxplot_filename(ptype=ptype)
+        fhash['concplot'] = self.filelocator.get_concplot_filename(stage=0,frame=None,ptype=ptype)
+        fhash['massplot'] = self.filelocator.get_massloading_filename(stage=0,frame=None,ptype=ptype)
         return fhash       
  
 
