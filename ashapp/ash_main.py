@@ -122,6 +122,14 @@ def create_run_instance(jid, runinp):
 
     elif 'polygon' in runinp["runflag"].lower():
         from maindispersion import MainEmitTimes
+        from utilhysplit import polygon2emit
+        # first need to write the emit-times file.
+        runinp['emitfilename'] = '{}/{}.{}'.format(runinp['WORK_DIR'],runinp['emitfilename'],jid)
+        polygon2emit.polygon2emit(runinp['polygon'],height=runinp['top'],
+                                  time=runinp['start_date'],thickness=1000,
+                                  filename=runinp['emitfilename'])
+       
+        # then create the HYSPLIT runs based on the emit-times file. 
         crun = MainEmitTimes(runinp, jid)
         logger.info("Use EmitTimes created from polygon")
 

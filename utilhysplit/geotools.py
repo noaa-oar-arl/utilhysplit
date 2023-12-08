@@ -68,10 +68,6 @@ def polygon2points(polygon,dx=0.1,dy=0.1,res=0):
             doney=True
     return points    
             
-
-
-
-
 def plot_delauney(ax, edge_points, mpts, hull=None):
     """
     plotting function for concave_hull output and inputs
@@ -92,7 +88,6 @@ def plot_delauney(ax, edge_points, mpts, hull=None):
         ax.plot(x, y, "r.")
     return dpts
 
-
 def plotpoly(sgeo_poly):
     """xy plot of a shapely polygon"""
     if isinstance(sgeo_poly, sgeo.multipolygon.MultiPolygon):
@@ -103,7 +98,6 @@ def plotpoly(sgeo_poly):
         x, y = sgeo_poly.exterior.xy
         # plt.plot(x,y)
         yield x, y
-
 
 #def plotpoly(sgeo_poly):
 #    """xy plot of a shapely polygon"""

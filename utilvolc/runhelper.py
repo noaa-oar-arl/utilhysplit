@@ -258,6 +258,10 @@ def make_inputs_from_file(wdir, config_file="ash_config.txt"):
     config = NameList(fname=config_file, working_directory=wdir)
     config.read()
 
+    if 'polygon' in config.nlist.keys():
+       config.nlist['polygon'] = process_polygon(config.nlist['polygon'])
+       config.nlist['emitfilename'] = 'EMITpolygon_{}'.format(config.nlist['jobname'])
+
     # convert dates to datetime objects.
     #temp = list(map(int, config.nlist["start_date"].split(":")))
     if not 'start_date' in config.nlist.keys():
@@ -299,6 +303,50 @@ class EventSetUp:
        self.inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
        self.inp['VOLCAT_DIR']= '/pub/ECMWF/JPSS/VOLCAT/Files/'
 
+
+
+def process_polygon(pstring):
+    """
+    pstring : string representing vertices of polygon.
+    The string is like the strings used in volcanic ash advisories.
+    N,S are used in front of the latitude points.
+    W,E are used in front of the longitude points.
+    (latitude, longitude) pairs are separated by dashes -
+    latitude, longitude are given without decimal points to the 100th's place.
+    Example
+    N4843 W10929-N4838 W10834-N4423 W10644-N4413 W10737-N4843 W10929
+    Representing
+    (48.43,-109.29),(48.38,-108.34),(44.23,-106.44),(44.13,-107.37)
+    """
+
+
+    temp = pstring.split('-')
+    lon = -999.0
+    lat = -999.0
+    vlist = []
+    for vertice in temp:
+        tvv = vertice.split()
+        for val in tvv:
+            if 'n' in val.lower():
+                lat = val.lower()
+                lat = lat.replace('n','')
+                lat = int(lat)/100.0
+            elif 's' in val.lower():
+                lat = val.lower()
+                lat = lat.replace('s','')
+                lat = -1 *int(lat)/100.0
+            elif 'w' in val.lower():
+                lon = val.lower()
+                lon = lon.replace('w','')
+                lon = -1 *int(lon)/100.0
+            elif 'e' in val.lower():
+                lon = val.lower()
+                lon = lon.replace('e','')
+                lon = int(lon)/100.0
+        vlist.append((lon,lat))
+    return vlist
+ 
+ 
 
 class JobSetUp:
     def __init__(self):
@@ -393,6 +441,12 @@ class JobSetUp:
         # below are currently always the same.
         self.inp["source_type"] = "uniform"
 
+        #polygon optional input
+        if 'polygon' in self.inp.keys():
+            self.inp['polygon'] = process_polygon(self.inp['polygon'])
+            self.inp['emitfilename'] = 'EMITpolygon_{}'.format(self.inp['jobname'])
+
+
     def ensure_trailing_slash(self, dir):
         if dir[-1] != os.sep:
             return dir + os.sep
@@ -401,7 +455,7 @@ class JobSetUp:
     def add_test_directories(self):
         tdir = '/hysplit-users/alicec/'
         self.inp['HYSPLIT_DIR'] = '{}hdev/'.format(tdir)
-        self.inp['MAP_DIR'] = '/hysplit-users/alicec/hdev/graphics/'
+        self.inp['MAP_DIR'] = '/hysplit-users/alicec/tags/hysplit.v5.3.0/graphics/'
         self.inp['WORK_DIR'] = '/hysplit-users/alicec/tmp/testing/'
         self.inp['DATA_DIR'] = '/hysplit-users/alicec/utilhysplit/ashapp/'
         self.inp['FILES_DIR'] = './'
@@ -527,10 +581,73 @@ class JobSetUp:
         return self.inp
 
 
+# volcat_events.py Events class has
+# ndir, pdir, edir, idir and a get_dir method.
+
+class VolcatDirectories:
+    ilist = ['JPSS_DIR',
+             'VOLCAT_LOGFILES',
+             'VOLCAT_DIR']
+
+    def __init__(self,inp,volcano_name):
+        self.get_dir(inp)
+
+    def defaults(self):
+        self.inp['JPSS_DIR'] = '/pub/jpsss_upload'
+        self.inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
+        self.inp['VOLCAT_DIR']= '/pub/ECMWF/JPSS/VOLCAT/Files/'
+        return -1
+
+    def event_directories(self, inp, volcano_name, verbose=False, make=True):
+        """
+        inp : dictionary with key VOLCAT_DIR
+
+        ndir : top level directory where volcat netcdf files are located.
+        pdir : directory where the parallax corrected files are to be
+        edir : directory where emit-times files are written.
+        idir : directory where runs for inversions are written.
+
+        """
+        if not isinstance(inp, dict):
+            return None
+        if "VOLCAT_DIR" not in inp.keys():
+            logger.warning("get_dir method input does not contain VOLCAT_DIR")
+            return None
+        tdir = inp["VOLCAT_DIR"]
+        if volcano_name != "Unknown":
+            ndir = os.path.join(inp["VOLCAT_DIR"], self.volcano_name)
+        else:
+            ndir = inp["VOLCAT_DIR"]
+        pdir = os.path.join(ndir, "pc_corrected")
+        edir = os.path.join(ndir, "emitimes")
+        idir = os.path.join(ndir, "inverse")
+
+        if verbose:
+            logger.info("Downloading to {}".format(ndir))
+            logger.info("parallax corrected to {}".format(pdir))
+            logger.info("emit times files to {}".format(edir))
+        #set_dir(ndir, pdir, edir, idir, make=make)
+        return ndir, pdir, edir, idir
+
+
+class HYSPLITDirectories:
+
+    def __init__(self,inp,volcano_name):
+        return -1
+
+
+class DirectoryManager:
+
+    def __init__(self, inp, JOBID, jobname):
+        self.job = Job(JOBID, jobname)
+
+        return -1
+
+
 class Job:
-    def __init__(self, JOBID, jobName):
-        self.JOBID = JOBID
-        self.name = jobName
+    def __init__(self, JOBID, jobname):
+        self.JOBID = JOBID   # created for each HYSPLIT run
+        self.name = jobname  # indicates what event the run belongs to.
 
     def __str__(self):
         return "{}_{}".format(self.name, self.JOBID)

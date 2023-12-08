@@ -84,6 +84,15 @@ class GraphicsDispersion(ModelOutputInterface):
         fhash['parxplot'] = self.filelocator.get_parxplot_filename(ptype=ptype)
         fhash['concplot'] = self.filelocator.get_concplot_filename(stage=0,frame=None,ptype=ptype)
         fhash['massplot'] = self.filelocator.get_massloading_filename(stage=0,frame=None,ptype=ptype)
+
+        #TODO
+        # create montage
+        # create allplots.pdf
+        # create awips2 netcdf files
+        # create massloading kmz file
+        # GELABEL files?
+        # zip files
+
         return fhash       
  
 

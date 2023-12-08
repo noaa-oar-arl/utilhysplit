@@ -11,13 +11,12 @@ from utilvolc.runhelper import is_input_complete
 
 logger = logging.getLogger(__name__)
 
+# 2023 Dec 07 (amc) added emit_file_finder attribute to class.
+
 
 class CollectEmitTimes(ModelCollectionInterface):
     """
-    Runs regular dispersion runs with GEFS.
-    TODO - will this also handle other types of runs with GEFS?
-           This could be done just by replacing the RunDispersion class
-           with a different  ModelRunInterface class.
+    Creates runs from Emittimes files.
     """
 
     # list of required (req) and optional (opt) inputs
@@ -42,7 +41,13 @@ class CollectEmitTimes(ModelCollectionInterface):
         self._filehash = {}
         self._filelist = []
 
+        self._emit_file_finder = None
+
         self._status = {"MAIN": "INITIALIZED"}
+
+    @property
+    def emit_file_finder(self):
+        return self._emit_file_finder
 
     @property
     def filehash(self):
@@ -76,7 +81,6 @@ class CollectEmitTimes(ModelCollectionInterface):
         self._status = status
 
     def setup(self, overwrite):
-
         inp = self._inp
 
         vals = [x[0] for x in RunEmitTimes.ilist]
@@ -90,7 +94,8 @@ class CollectEmitTimes(ModelCollectionInterface):
         drange = [inp["start_date"], edate]
         command_list = []
 
-        emitlist = udi.find_emit_file(inp["WORK_DIR"], drange)
+        self._emit_file_finder.wdir = inp["WORK_DIR"]
+        emitlist = self._emit_file_finder.find(drange)
         # emitlist is np.ndarray and using not to test a full np.ndarray
         # gives an error that truth value of array with more than one element is ambiguous.
         # however can test a regular list like this.
@@ -102,7 +107,8 @@ class CollectEmitTimes(ModelCollectionInterface):
             suffix = emitfile.split("/")[-1]
             suffix = suffix.replace("EMIT_", "")
             suffix = suffix.replace("EMIT", "")
-            newinp["jobid"] = "{}_{}".format(self.JOBID, suffix)
+            if str(self.JOBID) not in suffix:
+                newinp["jobid"] = "{}_{}".format(self.JOBID, suffix)
             newinp["emitfile"] = emitfile
             run = RunEmitTimes(newinp)
             command = run.run_model(overwrite=False)
@@ -135,16 +141,16 @@ class CollectEmitTimes(ModelCollectionInterface):
             time.sleep(5)
             num_proces = processhandler.checkprocs()
             total_time = 0
-            logger.info('Number of processes running {}'.format(num_proces))
+            logger.info("Number of processes running {}".format(num_proces))
             while num_proces >= 10:
-                  num_proces = processhandler.checkprocs()
-                  max_time = 10 * 60
-                  seconds_to_wait = 10
-                  total_time += seconds_to_wait
-                  time.sleep(seconds_to_wait)
-                  if total_time > max_time: 
-                     logger.info('max time reached')
-                     break
+                num_proces = processhandler.checkprocs()
+                max_time = 10 * 60
+                seconds_to_wait = 10
+                total_time += seconds_to_wait
+                time.sleep(seconds_to_wait)
+                if total_time > max_time:
+                    logger.info("max time reached")
+                    break
         # wait for runs to finish
         done = False
         seconds_to_wait = 30
@@ -167,7 +173,6 @@ class CollectEmitTimes(ModelCollectionInterface):
 
 class GEFSEmitTimes(CollectEmitTimes):
     def setup(self, overwrite):
-
         inp = self.inp.copy()
 
         edir_alt = os.path.join(inp["WORK_DIR"], inp["VolcanoName"], "emitimes/")
@@ -187,7 +192,6 @@ class GEFSEmitTimes(CollectEmitTimes):
             self.status = "FAILED no emittimes files found to create runs from"
 
         for metsuffix in gefs_suffix_list():
-
             for emitfile in emitlist:
                 suffix = emitfile.split("/")[-1]
                 suffix = suffix.replace("EMIT_", "")

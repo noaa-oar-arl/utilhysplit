@@ -5,20 +5,39 @@ import logging
 import os
 import pandas as pd
 
-# import xarray as xr
-
-# import hysplit
 from utilhysplit.emitimes import EmiTimes
 
-# from ashapp.ashbase import AshRun
 from utilvolc import make_data_insertion as mdi
 from utilvolc.runhelper import AshDINameComposer
 
-# from hysplitdata.traj import model
-# from hysplitplot import timezone
-
-
 logger = logging.getLogger(__name__)
+
+
+# 2023 Dec 07 (amc) added classes for finding emit-files. may need to add interface later.
+class EmitFileFinder:
+    """
+    First looks for files with names that follow the VOLCAT naming convention.
+    If none are found looks for all files that start with EMIT.
+    """
+
+    def __init__(self, wdir=None):
+        self.wdir = wdir
+
+    def find(self, daterange=None):
+        return find_emit_file(self.wdir, daterange)
+
+
+class DetEmitFileFinder:
+    """
+    Returns just one emit-file which is input
+    """
+
+    def __init__(self, wdir=None, filename="EMITIMES.txt"):
+        self.wdir = wdir
+        self.filename = filename
+
+    def find(self, daterange=None):
+        return [os.path.join(self.wdir, self.filename)]
 
 
 def find_emit_file_alt(wdir):
@@ -31,22 +50,25 @@ def find_emit_file_alt(wdir):
     efile = [x.split("/")[-1] for x in efile]
     return efile
 
+
 def find_btraj_file(wdir, daterange, rtype="fname"):
     # first look for files with volcat naming convention.
     elist = find_di_file(wdir, daterange, "btraj", rtype=rtype)
     if not (list(elist)):
-       import glob
-       efile = glob.glob(wdir + "btraj*.csv")
-       elist = [x.split("/")[-1] for x in efile] 
+        import glob
+
+        efile = glob.glob(wdir + "btraj*.csv")
+        elist = [x.split("/")[-1] for x in efile]
     return elist
+
 
 def find_emit_file(wdir, daterange, rtype="fname"):
     # first look for files with volcat naming convention.
     elist = find_di_file(wdir, daterange, "EMIT", rtype=rtype)
     if not (list(elist)):
         elist = find_emit_file_alt(wdir)
-    #import sys
-    #sys.exit()
+    # import sys
+    # sys.exit()
     return elist
 
 
@@ -79,9 +101,9 @@ def find_cdump_df(wdir, jobid, daterange):
 
 def find_di_file(wdir, daterange, ftype, rtype="fname"):
     edf = mdi.get_emit_name_df(wdir, ftype)
-    #print('aaaaaaaaaaa')
-    #print(wdir,ftype)
-    #print(edf)
+    # print('aaaaaaaaaaa')
+    # print(wdir,ftype)
+    # print(edf)
     if "file descriptor" not in edf.columns:
         return []
     edf = edf[edf["file descriptor"] == ftype]
@@ -134,17 +156,17 @@ def read_emittimes(emitfile):
     # print('ecycle', ecycle)
     # number of locations that need to be in CONTROL file.
     inp["nlocs"] = ecycle.nrecs
-    inp['ncycles'] = etf.ncycles
+    inp["ncycles"] = etf.ncycles
     # starting date of this cycle
     sdate = ecycle.sdate
     inp["start_date"] = sdate
     # duration of this cycle
     # cduration = ecycle.duration
-   
+
     # get first line locations
     erecord = ecycle.recordra[0]
-    inp['latitude'] = erecord.lat
-    inp['longitude'] = erecord.lon
+    inp["latitude"] = erecord.lat
+    inp["longitude"] = erecord.lon
 
     # set to 0 since these will be from emit-times
     inp["rate"] = 0
