@@ -183,7 +183,9 @@ class GEFSEmitTimes(CollectEmitTimes):
         drange = [inp["start_date"], edate]
         command_list = []
 
-        emitlist = udi.find_emit_file(inp["WORK_DIR"], drange)
+        self._emit_file_finder.wdir = inp["WORK_DIR"]
+        emitlist = self._emit_file_finder.find(drange)
+        #emitlist = udi.find_emit_file(inp["WORK_DIR"], drange)
         # emitlist is np.ndarray and using not to test a full np.ndarray
         # gives an error that truth value of array with more than one element is ambiguous.
         # however can test a regular list like this.
@@ -196,7 +198,9 @@ class GEFSEmitTimes(CollectEmitTimes):
                 suffix = emitfile.split("/")[-1]
                 suffix = suffix.replace("EMIT_", "")
                 suffix = suffix.replace("EMIT", "")
-                inp["jobid"] = "{}_{}_{}".format(self.JOBID, suffix, metsuffix)
+                if str(self.JOBID) not in suffix:
+                    #newinp["jobid"] = "{}_{}".format(self.JOBID, suffix)
+                    inp["jobid"] = "{}_{}_{}".format(self.JOBID, suffix, metsuffix)
                 inp["emitfile"] = emitfile
                 run = RunEmitTimes(inp)
                 run.metfilefinder.set_ens_member(metsuffix)

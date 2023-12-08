@@ -251,14 +251,16 @@ class MainEmitTimes(MainDispersion):
             self._modelrun = GEFSEmitTimes(inp, self.JOBID)
         else:
             self._modelrun = CollectEmitTimes(inp, self.JOBID)
-            if "emitfile" in inp.keys():
-                # used for polygon data insertion
-                self._modelrun._emit_file_finder = DetEmitFileFinder(
-                    filename=inp["emitfile"]
-                )
-            else:
-                # usef for volcat data insertion and other data insertions.
-                self._modelrun._emit_file_finder = EmitFileFinder()
+
+        # set the way the EmitTimes files are found.
+        if "emitfile" in inp.keys():
+            # used for polygon data insertion
+            self._modelrun._emit_file_finder = DetEmitFileFinder(
+                filename=inp["emitfile"]
+            )
+        else:
+            # usef for volcat data insertion and other data insertions.
+            self._modelrun._emit_file_finder = EmitFileFinder()
 
         inp["Use_Mastin_eq"] = False
         inp["fraction_of_fine_ash"] = 1
