@@ -14,7 +14,6 @@ class AshAttributes:
     def __init__(self, attr={},dstr="%Y-%m-%d %H:%M:%S"):
         self.dstr = dstr
         self.attr = attr
-        #self._attr = check_attributes(attr,dstr=self.dstr)
         self._keylist = ['mult',
                         'meteorological data',
                         'jobname',
@@ -163,7 +162,6 @@ class HYSPLITAshNetcdf:
         # has the multiplication factor
         # been changd through changemult method.
         self._changed = False       
- 
 
     @property
     def cxra(self):

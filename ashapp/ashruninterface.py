@@ -38,7 +38,7 @@
 #   MainDispersion(MainRunInterface)
 #     RunDispersion(ModelRunInterface)
 #     OutputDispersion(ModelOutputInterface)
-#     TODO - graphics
+#     TODO - graphics - started in graphicsdispersion.py
 
 # Ensemble dispersion runs
 #   MainEnsemble(MainDispersion)

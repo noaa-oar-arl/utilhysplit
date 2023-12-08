@@ -225,6 +225,7 @@ class MainEmitTimes(MainDispersion):
     ilist = []
     ilist.extend(CollectEmitTimes.ilist)
     ilist.extend(OutputDispersion.ilist)
+    ilist.extend(GraphicsDispersion.ilist)
 
     # 2023 Dec 07 (amc) added EmitFileFinder classes.
 

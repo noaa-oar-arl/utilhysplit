@@ -65,7 +65,7 @@ class OutputDispersion(ModelOutputInterface):
         return self._outputlist
 
     def cdumpxraname(self):
-        return "xrfile.{}.nc".format(self.JOBID)
+        return os.path.join(self.inp['WORK_DIR'], "xrfile.{}.nc".format(self.JOBID))
 
     def set_outputlist(self):
         outputlist = []

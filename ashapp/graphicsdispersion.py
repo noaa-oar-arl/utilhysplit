@@ -45,7 +45,8 @@ class GraphicsDispersion(ModelOutputInterface):
              ("jobname",'req'),
              ("MAP_DIR",'req'),
              ("HYSPLIT_DIR",'req'),
-             ("mapBackground",'req')]
+             ("mapBackground",'req'),
+             ('graphicsResolution','req')]
 
 
     def __init__(self,inp):

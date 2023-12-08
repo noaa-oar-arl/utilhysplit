@@ -51,7 +51,7 @@ def create_parxplot(inp, pardump_filename, outputname):
     JOBID = inp["jobid"]
     convert_exe = inp["CONVERT_EXE"]
     ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
-    resolution = inp["graphicsresolution"]
+    resolution = inp["graphicsResolution"]
 
     output_type = check_output_type(outputname)
     # gisoption = self.inp['gisOption']
@@ -126,7 +126,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
     JOBID = inp["jobid"]
     convert_exe = inp["CONVERT_EXE"]
     ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
-    resolution = inp["graphicsresolution"]
+    resolution = inp["graphicsResolution"]
 
     clrs = ConcplotColors()
     # want in grams. output in mg.
@@ -267,7 +267,7 @@ def create_concentration_plot(inp, inputname, outputname, conc_multiplier=1):
     convert_exe = inp["CONVERT_EXE"]
     ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
     output_type = check_output_type(outputname)
-    resolution = inp["graphicsresolution"]
+    resolution = inp["graphicsResolution"]
 
     # create dispersion png plot using python concplot.
     clrs = ConcplotColors()
