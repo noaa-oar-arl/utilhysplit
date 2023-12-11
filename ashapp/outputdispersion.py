@@ -101,10 +101,14 @@ class OutputDispersion(ModelOutputInterface):
             # blist = [(cdumpname, source_tag, met_tag)]
             century = 100 * (int(self.inp["start_date"].year / 100))
             species = None
+            #ainp = {}
             ainp = self.inp.copy()
             ainp["mult"] = 1
+            if 'polygon' in ainp.keys():
+               ainp['polygon'] = str(ainp['polygon'])
             # print(type(ainp["generatingPostscript"]))
             # ainp goes into the attributes for the netcdf file.
+            #self._ncfile.make_cdump_xra(blist, century, species=species, inp=ainp)
             self._ncfile.make_cdump_xra(blist, century, species=species, inp=ainp)
         mult = self.get_conc_multiplier()
         change = self._ncfile.changemult(mult)

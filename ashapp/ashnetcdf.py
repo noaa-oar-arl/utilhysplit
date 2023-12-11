@@ -6,23 +6,26 @@ import xarray as xr
 from monetio.models import hysplit
 from ashapp import utils
 from utilvolc.runhelper import Helper
+
 logger = logging.getLogger(__name__)
 utils.setup_logger()
 
-class AshAttributes:
+# 2023 Dec 11 (amc) added attribute check. writing lists > 1d does not work.
 
-    def __init__(self, attr={},dstr="%Y-%m-%d %H:%M:%S"):
+
+class AshAttributes:
+    def __init__(self, attr={}, dstr="%Y-%m-%d %H:%M:%S"):
         self.dstr = dstr
         self.attr = attr
-        self._keylist = ['mult',
-                        'meteorological data',
-                        'jobname',
-                        'durationOfSimulation',
-                        'latitude',
-                        'longitude',
-                        'eflag']
-       
-     
+        self._keylist = [
+            "mult",
+            "meteorological data",
+            "jobname",
+            "durationOfSimulation",
+            "latitude",
+            "longitude",
+            "eflag",
+        ]
 
     def __call__(self):
         return self._attr
@@ -35,46 +38,46 @@ class AshAttributes:
         return self._dstr
 
     @dstr.setter
-    def dstr(self,indstr):
-        testdate = datetime.datetime(2020,2,1,0)
+    def dstr(self, indstr):
+        testdate = datetime.datetime(2020, 2, 1, 0)
         default = indstr
         self._dstr = indstr
         # make sure it is valid
         try:
-           tstr = testdate.strftime(indstr)
-           test = datetime.datetime.strptime(tstr,self._dstr) 
+            tstr = testdate.strftime(indstr)
+            _ = datetime.datetime.strptime(tstr, self._dstr)
         except ValueError:
-           self._dstr = default  
-           raise ValueError('invalid input for dstr') 
+            self._dstr = default
+            raise ValueError("invalid input for dstr")
 
     @property
     def attr(self):
         return self._attr
 
     @attr.setter
-    def attr(self,inp):
-        if not isinstance(inp,dict):
-           logger.warning('input should be a dictionary. converting to dictionary.')
-           temp = {}
-           temp['INPUT1'] = inp
-           inp = temp
-        inp2 = check_attributes(inp,self.dstr)
-        self._attr=inp2
+    def attr(self, inp):
+        if not isinstance(inp, dict):
+            logger.warning("input should be a dictionary. converting to dictionary.")
+            temp = {}
+            temp["INPUT1"] = inp
+            inp = temp
+        inp2 = check_attributes(inp, self.dstr)
+        self._attr = inp2
 
-    def update(self,inp):
-        if not isinstance(inp,dict):
-           logger.warning('input should be a dictionary. converting to dictionary.')
-           temp = {}
-           keys = self.attr.keys()
-           iii = 1
-           newkey = 'INPUT1'
-           while newkey in keys:
-                 newkey = 'INPUT{}'.format(iii)
-                 iii+=1
-           temp[newkey] = inp
-           inp = temp
-        inp2 = check_attributes(inp,self.dstr)
-        self._attr.update(inp2) 
+    def update(self, inp):
+        if not isinstance(inp, dict):
+            logger.warning("input should be a dictionary. converting to dictionary.")
+            temp = {}
+            keys = self.attr.keys()
+            iii = 1
+            newkey = "INPUT1"
+            while newkey in keys:
+                newkey = "INPUT{}".format(iii)
+                iii += 1
+            temp[newkey] = inp
+            inp = temp
+        inp2 = check_attributes(inp, self.dstr)
+        self._attr.update(inp2)
 
     def reset(self):
         self._attr = {}
@@ -84,21 +87,21 @@ class AshAttributes:
         return self._keylist
 
     @keylist.setter
-    def keylist(self,klist):
-        if isinstance(klist,list):
-           self._keylist = klist
-        elif isinstance(klist,(str,np.ndarray)):
-           self._keylist = list(klist)
+    def keylist(self, klist):
+        if isinstance(klist, list):
+            self._keylist = klist
+        elif isinstance(klist, (str, np.ndarray)):
+            self._keylist = list(klist)
 
     def check(self):
         nflist = []
         for key in self._keylist:
             if key not in self._attr.keys():
-               logger.warning('key not found in attributes {}'.format(key))
-               nflist.append(key)
-        return nflist 
+                logger.warning("key not found in attributes {}".format(key))
+                nflist.append(key)
+        return nflist
 
-    #def inp2attr(self):
+    # def inp2attr(self):
     #    """
     #    return dictionary where all values are strings.
     #    This is so it can be written as attributes to netcdf file.
@@ -118,7 +121,14 @@ class AshAttributes:
     #            atthash[key] = val
     #    return atthash
 
-def check_attributes(atthashin,dstr="%Y-%m-%d %H:%M:%S"):
+
+def check_for_multi_dimensional_list(inlist):
+    for val in inlist:
+        if isinstance(val, (list, tuple, np.ndarray)):
+            return True
+
+
+def check_attributes(atthashin, dstr="%Y-%m-%d %H:%M:%S"):
     """
     Make sure all attributes have forms that can be written to netcdf well.
     convert all np.ndarray to lists.
@@ -128,40 +138,48 @@ def check_attributes(atthashin,dstr="%Y-%m-%d %H:%M:%S"):
     atthash = atthashin.copy()
     for key in atthash.keys():
         val = atthash[key]
-        if isinstance(val, np.ndarray):
+        if isinstance(val, (list, tuple, np.ndarray)):
             newval = list(val)
-            atthash[key] = newval
-        elif isinstance(val,datetime.datetime):
+            if not check_for_multi_dimensional_list(newval):
+                atthash[key] = newval
+            else:
+                logger.warning(
+                    "cannot add multidimensional value as attribute: key:{} value:{}".format(
+                        key, newval
+                    )
+                )
+                atthash[key] = "Multidimensinal Object"
+
+        elif isinstance(val, datetime.datetime):
             newval = val.strftime(dstr)
-            atthash[key] = newval  
-        elif isinstance(val,bool):
+            atthash[key] = newval
+        elif isinstance(val, bool):
             newval = str(val)
-            atthash[key] = newval  
-        elif isinstance(val,type(None)):
-            newval = 'None'
-            atthash[key] = newval  
-        elif isinstance(val,dict):
-            newval = check_attributes(val,dstr)
-            atthash[key] = newval  
+            atthash[key] = newval
+        elif isinstance(val, type(None)):
+            newval = "None"
+            atthash[key] = newval
+        elif isinstance(val, dict):
+            newval = check_attributes(val, dstr)
+            atthash[key] = newval
+
     return atthash
 
-    
 
 class HYSPLITAshNetcdf:
-
     def __init__(self, fname):
         self.fname = fname
 
         self._cxra = xr.DataArray()
         self._attr = AshAttributes()
-        self._datasetname = 'HYSPLIT'
+        self._datasetname = "HYSPLIT"
 
         # keeps track of status.
         # does file exists?
         self._fexists = self.read()
         # has the multiplication factor
         # been changd through changemult method.
-        self._changed = False       
+        self._changed = False
 
     @property
     def cxra(self):
@@ -172,19 +190,25 @@ class HYSPLITAshNetcdf:
         return self._attr
 
     def empty(self):
-        if self._cxra.ndim == 0: return True
-        else: return False
+        if self._cxra.ndim == 0:
+            return True
+        else:
+            return False
 
-    def assign_attrs(self,inp):
+    def assign_attrs(self, inp):
         self.attr.update(inp)
-        logger.debug('adding attributes {}'.format(self.attr))
+        logger.debug("adding attributes {}".format(self.attr))
         self._cxra = self._cxra.assign_attrs(self.attr.attr)
 
     def make_cdump_xra(self, blist, century=None, species=None, inp={}):
-        print('BLIST', blist)
+        print("BLIST", blist)
         self._cxra = hysplit.combine_dataset(
-            blist, century=century, sample_time_stamp="start", species=species,
-            verbose=False)
+            blist,
+            century=century,
+            sample_time_stamp="start",
+            species=species,
+            verbose=False,
+        )
         self.assign_attrs(inp)
 
     def close(self):
@@ -192,46 +216,46 @@ class HYSPLITAshNetcdf:
             self._cxra.close()
         except Exception as eee:
             logger.warning(eee)
-            print('could not close')
+            print("could not close")
         self._cxra = xr.DataArray()
 
     def read(self):
         if os.path.isfile(self.fname):
             logger.info("netcdf file exists. Opening {}".format(self.fname))
             cxra = xr.open_dataset(self.fname)
-            logger.info('data variable {}'.format(list(cxra.data_vars.keys())[0]))
+            logger.info("data variable {}".format(list(cxra.data_vars.keys())[0]))
             cxra = cxra[list(cxra.data_vars.keys())[0]]
             self._cxra = cxra
-            self._fexists=True
+            self._fexists = True
         else:
-            self._fexists=False
-        return  self._fexists
+            self._fexists = False
+        return self._fexists
 
-    def changemult(self,mult):
-        if 'mult' not in self._cxra.attrs.keys():
-           logger.warning('mult not in attributes')
-           self._changed=False
-           return self._changed
+    def changemult(self, mult):
+        if "mult" not in self._cxra.attrs.keys():
+            logger.warning("mult not in attributes")
+            self._changed = False
+            return self._changed
         pmult = self._cxra.attrs["mult"]
         if np.isclose(pmult, mult, atol=0, rtol=0.1):
-           self._changed = False
+            self._changed = False
         else:
-           self._cxra = mult * self._cxra / pmult
-           self.assign_attrs({'mult':mult})
-           self._changed = True
+            self._cxra = mult * self._cxra / pmult
+            self.assign_attrs({"mult": mult})
+            self._changed = True
         return self._changed
 
     def remove(self):
         if os.path.isfile(self.fname):
             Helper.remove(self.fname)
-        self._fexists=False
+        self._fexists = False
 
-    def write_with_compression(self,overwrite=False):
+    def write_with_compression(self, overwrite=False):
         if self._fexists:
-           # remove the old file if it has been changed or
-           # overwrite is set.
-           if self._changed or overwrite: 
-              self.remove()
+            # remove the old file if it has been changed or
+            # overwrite is set.
+            if self._changed or overwrite:
+                self.remove()
         if not self._fexists:
             cxra2 = self._cxra.to_dataset(name=self._datasetname)
             ehash = {"zlib": True, "complevel": 9}
@@ -239,5 +263,5 @@ class HYSPLITAshNetcdf:
             vhash = {}
             for vvv in vlist:
                 vhash[vvv] = ehash
+            print("VHASH", vhash)
             cxra2.to_netcdf(self.fname, encoding=vhash)
-

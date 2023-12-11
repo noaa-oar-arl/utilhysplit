@@ -600,7 +600,7 @@ def create_maptext(inp, maptexthash, conc_multiplier, ash_reduction):
 # no shape files generated now.
 
 
-def generate_kmz(inp, kml_filenames, kmz_filename):
+def generate_kmz(hysplit_dir, kml_filenames, kmz_filename, compresslevel):
     for f in kml_filenames:
         if not os.path.exists(f):
             logger.warn(
@@ -611,16 +611,16 @@ def generate_kmz(inp, kml_filenames, kmz_filename):
             return
 
     files = [
-        os.path.join(inp["HYSPLIT_DIR"], "guicode", "noaa_google.gif"),
-        os.path.join(inp["HYSPLIT_DIR"], "guicode", "logocon.gif"),
-        os.path.join(inp["HYSPLIT_DIR"], "graphics", "blueball.png"),
-        os.path.join(inp["HYSPLIT_DIR"], "graphics", "greenball.png"),
-        os.path.join(inp["HYSPLIT_DIR"], "graphics", "redball.png"),
+        os.path.join(hysplit_dir, "guicode", "noaa_google.gif"),
+        os.path.join(hysplit_dir, "guicode", "logocon.gif"),
+        os.path.join(hysplit_dir, "graphics", "blueball.png"),
+        os.path.join(hysplit_dir, "graphics", "greenball.png"),
+        os.path.join(hysplit_dir, "graphics", "redball.png"),
     ]
     files += kml_filenames
 
     with zipfile.ZipFile(
-        kmz_filename, "w", compresslevel=inp["zip_compression_level"]
+        kmz_filename, "w", compresslevel=compresslevel
     ) as z:
         for f in files:
             if os.path.exists(f):
@@ -633,7 +633,7 @@ def create_zipped_up_file(inp, filename, files):
         return False
     logger.debug("{} files to be zipped {}".format(filename, "\n".join(files)))
     with zipfile.ZipFile(
-        filename, "w", compresslevel=inp["zip_compression_level"]
+        filename, "w", compresslevel=compresslevel
     ) as z:
         for f in files:
             if os.path.exists(f):

@@ -201,6 +201,8 @@ class GEFSEmitTimes(CollectEmitTimes):
                 if str(self.JOBID) not in suffix:
                     #newinp["jobid"] = "{}_{}".format(self.JOBID, suffix)
                     inp["jobid"] = "{}_{}_{}".format(self.JOBID, suffix, metsuffix)
+                else:
+                    inp["jobid"] = "{}_{}".format(suffix, metsuffix)
                 inp["emitfile"] = emitfile
                 run = RunEmitTimes(inp)
                 run.metfilefinder.set_ens_member(metsuffix)

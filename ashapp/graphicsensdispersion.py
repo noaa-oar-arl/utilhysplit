@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 
-class GraphicsDispersion(ModelOutputInterface):
+class GraphicsEnsembleDispersion(ModelOutputInterface):
     ilist = [("WORK_DIR",'req'),
              ("jobid",'req'),
              ("jobname",'req'),
@@ -110,22 +110,22 @@ class GraphicsDispersion(ModelOutputInterface):
         #create_maptext(inp)
         inputname = self._fhash['cdump']
         outputname = self._fhash['massplot']
-        plotf.create_massloading_plot(self.inp,inputname, outputname, conc_multiplier=1)
+        #plotf.create_massloading_plot(self.inp,inputname, outputname, conc_multiplier=1)
 
         # create the particle plot.
         pardump_filename = self._fhash['pardump']
         parxplot_outputname = self._fhash['parxplot']
-        rval = plotf.create_parxplot(self.inp,pardump_filename, parxplot_outputname)
+        #rval = plotf.create_parxplot(self.inp,pardump_filename, parxplot_outputname)
 
         # create the concentration plot
         cdump_filename = self._fhash['cdump']
         concplot = self._fhash['concplot']
         print('CONCPLOT', concplot)
-        plotf.create_concentration_plot(self.inp, cdump_filename, concplot, conc_multiplier=1)
+        #plotf.create_concentration_plot(self.inp, cdump_filename, concplot, conc_multiplier=1)
      
         kmlnames = [] # kml filenames
         kmzfilename = 'kmzfile.kmz' 
-        plotf.generate_kmz(self.inp['HYSPLIT_DIR'],kmlnames,kmzfilename,self.inp['zip_compression_level'])
+        #plotf.generate_kmz(self.inp['HYSPLIT_DIR'],kmlnames,kmzfilename,self.inp['zip_compression_level'])
         #create_concentration_montage(stage=stage) 
         #make_awips_netcdf()
         return True

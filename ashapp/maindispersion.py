@@ -20,6 +20,7 @@ from ashapp.collectemittimes import CollectEmitTimes, GEFSEmitTimes
 from ashapp.collectinverse import CollectInverse
 from ashapp.ensembledispersion import EnsembleDispersion
 from ashapp.graphicsdispersion import GraphicsDispersion
+from ashapp.graphicsensdispersion import GraphicsEnsembleDispersion
 from ashapp.outputdispersion import OutputDispersion
 from ashapp.rundispersion import RunDispersion
 from ashapp.runtrajectory import RunTrajectory
@@ -249,8 +250,10 @@ class MainEmitTimes(MainDispersion):
 
         if inp["meteorologicalData"].lower() == "gefs":
             self._modelrun = GEFSEmitTimes(inp, self.JOBID)
+            self._modelgraphics = GraphicsEnsembleDispersion(inp)
         else:
             self._modelrun = CollectEmitTimes(inp, self.JOBID)
+            self._modelgraphics = GraphicsDispersion(inp)
 
         # set the way the EmitTimes files are found.
         if "emitfile" in inp.keys():
@@ -265,7 +268,6 @@ class MainEmitTimes(MainDispersion):
         inp["Use_Mastin_eq"] = False
         inp["fraction_of_fine_ash"] = 1
         self._modeloutput = OutputDispersion(inp, [])
-        self._modelgraphics = GraphicsDispersion(inp)
 
         utils.setup_logger()
 
@@ -370,6 +372,7 @@ class MainEnsemble(MainDispersion):
     ilist = []
     ilist.extend(EnsembleDispersion.ilist)
     ilist.extend(OutputDispersion.ilist)
+    ilist.extend(GraphicsEnsembleDispersion.ilist)
 
     def __init__(self, inp, JOBID):
         """
@@ -393,7 +396,7 @@ class MainEnsemble(MainDispersion):
         inp["fraction_of_fine_ash"] = 0.05
         self._modelrun = EnsembleDispersion(inp, self.JOBID)
         self._modeloutput = OutputDispersion(inp, [])
-        self._modelgraphics = GraphicsDispersion(inp)
+        self._modelgraphics = GraphicsEnsembleDispersion(inp)
 
         utils.setup_logger()
 
