@@ -6,7 +6,11 @@ from utilhysplit import geotools
 
 
 
-def polygon2emit(polygon, height, thickness, time, dy=0.1,filename='EMITIMES.txt'):
+def polygon2emit(polygon, height, thickness, time, dy=0.1,filename='EMITIMES.txt',concentration=2e-3):
+    """
+    concentration should be given in g/m3.
+    default is 2e-3 g/m3 (2 mg/m3)
+    """
     if isinstance(polygon,list):
        polygon = sgeo.Polygon(polygon)
     lats = [[x[1] for x in polygon.exterior.coords]]
@@ -22,8 +26,7 @@ def polygon2emit(polygon, height, thickness, time, dy=0.1,filename='EMITIMES.txt
     points = [(p.x,p.y) for p in points]
     dt = 5          # 5 minute release
                     # approx 1000m thickness
-    conc = 0.2e-3                 # assume 0.2 mg/m3 thickness
-    mass = conc * area*thickness  # gives mass in grams
+    mass = concentration * area*thickness  # gives mass in grams
     rate = mass*60/dt # grams/hour
     species=1
     heat=0

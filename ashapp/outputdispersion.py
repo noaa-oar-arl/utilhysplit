@@ -51,6 +51,11 @@ class OutputDispersion(ModelOutputInterface):
 
         self._ncfile = HYSPLITAshNetcdf(self.cdumpxraname())
 
+
+    @property
+    def ncfile(self):
+        return self._ncfile
+
     @property
     def inputlist(self):
         return self._inputlist

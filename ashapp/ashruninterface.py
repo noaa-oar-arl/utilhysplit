@@ -235,7 +235,10 @@ class LevelSetterInterface(ABC):
 
 
 class ModelOutputInterface(ABC):
-
+    # 2023 Dec 12 (amc) added ncfile property
+    # purpose is to be able to pass the xarray or dataframe
+    # with data to the class handling the graphics generation. 
+ 
     @abstractmethod
     def postprocess(self):
         """
@@ -265,6 +268,17 @@ class ModelOutputInterface(ABC):
       list of output files
       """
       pass
+
+
+    @property
+    @abstractmethod
+    def ncfile(self):
+        """
+        structure which contains the output data.
+        For trajectories a pandas dataframe
+        For concentration the HysplitAshNetcdf class
+        """
+        pass
 
 class MainRunInterface(ABC):
     """

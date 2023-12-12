@@ -27,7 +27,9 @@ import xarray as xr
 from utilvolc.runhelper import Helper, JobFileNameComposer
 from ashapp.ashruninterface import ModelOutputInterface
 import ashapp.plotting_functions as plotf
-
+from utilhysplit.evaluation import web_ensemble_plots as wep
+from monetio.models import hysplit
+from ashapp.cdump2xml import HysplitKml
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +48,8 @@ class GraphicsDispersion(ModelOutputInterface):
              ("MAP_DIR",'req'),
              ("HYSPLIT_DIR",'req'),
              ("mapBackground",'req'),
-             ('graphicsResolution','req')]
+             ('graphicsResolution','req'),
+             ('zip_compression_level','req')]
 
 
     def __init__(self,inp):
@@ -55,7 +58,22 @@ class GraphicsDispersion(ModelOutputInterface):
         self._fhash = {}
         self.inp = inp
         self.filelocator = inp
+        #self._ncfile = ashnetcdf.HYSPLITAshNetcdf('TEMP')
+        self._ncfile = None
 
+    def ingest_model_output(self, modeloutput):
+        """ modeloutput - class with ModelOutputInterface as base class
+        """
+        self.inputlist = modeloutput.outputlist
+        self._ncfile = modeloutput._ncfile
+    
+    def load_ncfile(self,ncfile):
+        self._ncfile = ashnetcdf.HYSPLITAshNetcdf(self._fhash['xrfile'])
+        #self._ncfile = ncfile
+
+    @property
+    def ncfile(self):
+        return self._ncfile
 
     @property
     def inputlist(self):
@@ -78,6 +96,7 @@ class GraphicsDispersion(ModelOutputInterface):
         # input files
         fhash['pardump'] = self.filelocator.get_pardump_filename()
         fhash['cdump'] = self.filelocator.get_cdump_filename()
+        fhash['xrfile'] = self.filelocator.get_xrfile()
 
         # output files
         ptype = 'ps'
@@ -85,6 +104,7 @@ class GraphicsDispersion(ModelOutputInterface):
         fhash['parxplot'] = self.filelocator.get_parxplot_filename(ptype=ptype)
         fhash['concplot'] = self.filelocator.get_concplot_filename(stage=0,frame=None,ptype=ptype)
         fhash['massplot'] = self.filelocator.get_massloading_filename(stage=0,frame=None,ptype=ptype)
+        fhash['kmz'] = self.filelocator.get_kmz_filename()
 
         #TODO
         # create montage
@@ -122,14 +142,47 @@ class GraphicsDispersion(ModelOutputInterface):
         concplot = self._fhash['concplot']
         print('CONCPLOT', concplot)
         plotf.create_concentration_plot(self.inp, cdump_filename, concplot, conc_multiplier=1)
-     
-        kmlnames = [] # kml filenames
-        kmzfilename = 'kmzfile.kmz' 
-        plotf.generate_kmz(self.inp['HYSPLIT_DIR'],kmlnames,kmzfilename,self.inp['zip_compression_level'])
+ 
+        self.generate_kmz() 
         #create_concentration_montage(stage=stage) 
         #make_awips_netcdf()
         return True
 
+    def load_netcdf(self):
+        if os.path.isfile(self._fhash['xrfile']):
+           temp = xr.open_dataset(self._fhash['xrfile'])
+           self._ncinput = temp[list(temp.data_vars.keys())[0]]
+        else:
+           logger.warning('could not find {}'.format(self._fhash['xrfile'])) 
+
+    def get_massloading(self):
+        cxra = self._ncfile.cxra
+        self.mxra = hysplit.hysp_massload(cxra)
+        return self.mxra
+
+    def generate_kmz(self):
+        jobid = self.inp['jobid']
+        units = 'g/m2'
+        mxra = self.get_massloading()
+        levels = wep.set_levels(mxra)
+        mxra = mxra.isel(ens=0,source=0)
+        legend_label = 'Mass Loading' 
+        h2xml = HysplitKml(levels=levels,
+                           sourcehash=self.inp,
+                           units=units,
+                           jobid=jobid,
+                           legend_label=legend_label)
+
+        attrs = self._ncfile.cxra.attrs
+        kmlname = self._fhash['kmz'].replace('kmz','kml')
+        h2xml.create(mxra,attrs,kmlname)
+
+
+        compresslevel = self.inp['zip_compression_level']
+        hdir = self.inp['HYSPLIT_DIR']
+        efiles = plotf.get_kmz_files(hdir)
+        h2xml.create_kmz(compresslevel,efiles)
+ 
     @property
     def filelocator(self):
         #self._filelist = list(set(self._filelist))

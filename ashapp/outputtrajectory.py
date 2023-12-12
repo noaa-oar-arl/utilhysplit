@@ -38,6 +38,11 @@ class OutputTrajectory(ModelOutputInterface):
         self.inp = inp
         self._inputlist = filelist
         self._outputlist = self.set_outputlist()
+        self._ncfile = None
+
+    @property
+    def ncfile(self):
+        return self._ncfile 
 
     @property
     def inputlist(self):
@@ -65,6 +70,7 @@ class OutputTrajectory(ModelOutputInterface):
             pass 
         # trajectory  dataframe
         tdf =  hytraj.combine_dataset(flist,taglist,renumber=True)
+        self._ncfile = tdf
         tdf.to_csv(self.what_is_outputfilename())
         return tdf
 

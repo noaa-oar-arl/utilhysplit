@@ -596,8 +596,16 @@ def create_maptext(inp, maptexthash, conc_multiplier, ash_reduction):
         fid.close()
 
 
-# def generate_shape_file(self):
-# no shape files generated now.
+
+def get_kmz_files(hysplit_dir):
+    files = [
+        os.path.join(hysplit_dir, "guicode", "noaa_google.gif"),
+        os.path.join(hysplit_dir, "guicode", "logocon.gif"),
+        os.path.join(hysplit_dir, "graphics", "blueball.png"),
+        os.path.join(hysplit_dir, "graphics", "greenball.png"),
+        os.path.join(hysplit_dir, "graphics", "redball.png"),
+    ]
+    return files
 
 
 def generate_kmz(hysplit_dir, kml_filenames, kmz_filename, compresslevel):
@@ -610,13 +618,7 @@ def generate_kmz(hysplit_dir, kml_filenames, kmz_filename, compresslevel):
             )
             return
 
-    files = [
-        os.path.join(hysplit_dir, "guicode", "noaa_google.gif"),
-        os.path.join(hysplit_dir, "guicode", "logocon.gif"),
-        os.path.join(hysplit_dir, "graphics", "blueball.png"),
-        os.path.join(hysplit_dir, "graphics", "greenball.png"),
-        os.path.join(hysplit_dir, "graphics", "redball.png"),
-    ]
+    files = get_kmz_files(hysplit_dir)
     files += kml_filenames
 
     with zipfile.ZipFile(

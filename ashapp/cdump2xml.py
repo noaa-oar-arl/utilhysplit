@@ -460,6 +460,13 @@ class HysplitKml:
         set_style_dict : can be used to change colors.
 
     """
+    ilist = [('latitude','opt'),
+             ('longitude','opt'),
+             ('VolcanoName','opt'),
+             ('start_date','opt'),
+             ('top','opt'),
+             ('bottom','opt')
+            ]
 
     # usage
     # add_root()

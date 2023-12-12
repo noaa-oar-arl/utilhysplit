@@ -79,7 +79,6 @@ class MainDispersion(MainRunInterface):
         inp["fraction_of_fine_ash"] = 0.01
         self._modeloutput = OutputDispersion(inp, [])
         self._modelgraphics = GraphicsDispersion(inp)
-
         utils.setup_logger()
 
     @property
@@ -183,7 +182,7 @@ class MainDispersion(MainRunInterface):
 
         # make the graphics
         if self.modeloutput.check():
-            self.modelgraphics.inputlist = self.modeloutput.outputlist
+            self.modelgraphics.ingest_model_output(self.modeloutput)
             self.modelgraphics.postprocess()
 
         # update the run status

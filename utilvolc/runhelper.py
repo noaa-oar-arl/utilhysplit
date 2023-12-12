@@ -425,13 +425,15 @@ class JobSetUp:
         )
         self.inp["samplingIntervalHours"] = inp["samplingIntervalInHours"]
         self.inp["meteorologicalData"] = inp["meteorologicalData"]
-        self.inp["polygon"] = None  # input polygon points to start from.
         # runflag can be 'trajectory' or 'dispersion'
         if inp["runType"] == 0:
             self.inp["runflag"] = "trajectory"
         else:
             self.inp["runflag"] = "dispersion"
         self.inp["jobname"] = inp["runIdentifier"]
+        if 'PolygonString' in inp.keys():
+            self.inp["polygon"] = inp['PolygonString']  # input polygon points to start from.
+
         # eflag should be a float. Large values give smaller plumes.
         # concentration value is multiplied by 10^(-1 * eflag)
         # This is because currently VAAC is used to using an 'ash reduction'
