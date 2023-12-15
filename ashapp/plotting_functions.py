@@ -609,6 +609,10 @@ def get_kmz_files(hysplit_dir):
 
 
 def generate_kmz(hysplit_dir, kml_filenames, kmz_filename, compresslevel):
+    if isinstance(kml_filenames,str):
+       kml_filenames = [kml_filenames]
+       
+
     for f in kml_filenames:
         if not os.path.exists(f):
             logger.warn(
@@ -641,3 +645,73 @@ def create_zipped_up_file(inp, filename, files):
             if os.path.exists(f):
                 z.write(f)
     return True
+
+
+def create_trajectory_plot(inp, inputname, outputname, stage, gist_status_file):
+    jobid = inp['jobid']
+    mapdir = inp['MAP_DIR']
+    hdir = inp['HYSPLIT_DIR']
+    convert_exe = inp["CONVERT_EXE"]
+    ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
+    resolution = inp["graphicsResolution"]
+    if "mapBackground" not in inp.keys():
+        mapopt = "toner"
+    else:
+        mapopt = inp["mapBackground"]
+    fn = gist_status_file
+    fns = [inputname]
+    logger.info("Creating trajectory graphics for job {}.".format(jobid))
+
+    ptype = "png"
+    #outputname = self.filelocator.get_trajplot_filename(stage, ptype=ptype)
+    gisopt = 3  # self.inp.gisOption
+    if gisopt == 1:
+        msg = "GIS shapefile creation for job {}.".format(jobid)
+        logger.info(msg)
+        with open(fn, "at") as f:
+            f.write(msg)
+            f.write("\n")
+    elif gisopt == 3: # creates a kmls file
+        msg = "Google Earth file creation for job {}.".format(jobid)
+        logger.info(msg)
+        with open(fn, "at") as f:
+            f.write(msg)
+            f.write("\n")
+
+    if mapopt == "terrain":
+        maparg = "--street-map=0"
+    elif mapopt == "toner":
+        maparg = "--street-map=1"
+    else:
+        maparg = "-j" + os.path.join(mapdir, "arlmap")
+
+    # trajectory output
+    c = [
+        #self.inp["PYTHON_EXE"],
+        #os.path.join(self.inp["HYSPLIT_DIR"], "exec", "trajplot.py"),
+        os.path.join(hdir,'exec','trajplot'),
+        "-i" + "+".join(fns),
+        "+n",
+        "-o" + outputname,
+        "-s1",
+        "-l1",
+        maparg,
+        "-a{}".format(gisopt),
+        "-k1"
+        #'-g0:{}'.format(self.inp['spatialPlotRadius']),
+        #'-p' + fileidentifier,  # this changes the ending. do not use.
+        #'-m{}'.format(self.inp['mapProjection']),
+        #'-z{}'.format(self.inp['zoomFactor']),
+    ]
+    logger.info(c)
+    Helper.execute(c)
+    rval = check_and_convert(
+        outputname,
+        'ps',
+        jobid,
+        convert_exe,
+        ghostscript_exe,
+        final_type="png",
+        resolution=resolution,
+    )
+    return rval

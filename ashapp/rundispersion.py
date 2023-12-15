@@ -275,7 +275,7 @@ class RunDispersion(ModelRunInterface):
     def create_run_command(self):
         command = [
             os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
-            str(self.filelocator.job),
+            str(self.filelocator.make_suffix()),
         ]
         return command
 

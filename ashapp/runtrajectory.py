@@ -261,7 +261,7 @@ class RunTrajectory(ModelRunInterface):
             logger.info("execute {}".format(type(command)))
             Helper.execute(command)
         else:
-            logger.info("No run to execture")
+            logger.info("No run to execute")
 
     def run_model(self, overwrite=False):
         # make control and setup files

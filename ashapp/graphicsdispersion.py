@@ -87,7 +87,7 @@ class GraphicsDispersion(ModelOutputInterface):
     @property
     def outputlist(self):
         outputlist = []
-        output.list.append(self._fhash['parxplot'])
+        #output.list.append(self._fhash['parxplot'])
         return self._outputlist
 
 
@@ -113,7 +113,6 @@ class GraphicsDispersion(ModelOutputInterface):
         # create massloading kmz file
         # GELABEL files?
         # zip files
-
         return fhash       
  
 
@@ -181,6 +180,7 @@ class GraphicsDispersion(ModelOutputInterface):
         compresslevel = self.inp['zip_compression_level']
         hdir = self.inp['HYSPLIT_DIR']
         efiles = plotf.get_kmz_files(hdir)
+        efiles.append(kmlname)
         h2xml.create_kmz(compresslevel,efiles)
  
     @property
