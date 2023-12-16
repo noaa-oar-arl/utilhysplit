@@ -49,6 +49,7 @@ class GraphicsTrajectory(ModelOutputInterface):
              ("HYSPLIT_DIR",'req'),
              ("mapBackground",'req'),
              ('graphicsResolution','req'),
+             ("CONVERT_EXE",'req'),
              ('zip_compression_level','req')]
 
 

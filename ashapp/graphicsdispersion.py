@@ -47,6 +47,8 @@ class GraphicsDispersion(ModelOutputInterface):
              ("jobname",'req'),
              ("MAP_DIR",'req'),
              ("HYSPLIT_DIR",'req'),
+             ("CONVERT_EXE",'req'),
+             ("graphicsResolution",'req'),
              ("mapBackground",'req'),
              ('graphicsResolution','req'),
              ('zip_compression_level','req')]

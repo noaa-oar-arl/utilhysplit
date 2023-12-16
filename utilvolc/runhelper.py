@@ -141,7 +141,7 @@ def is_input_complete(ilist,inp):
         zlist = ilist
     extra = [x for x in inp.keys() if x not in zlist]
     for val in extra:
-            logger.warning('Extra inputs {}'.format(val))
+            logger.debug('Extra inputs {}'.format(val))
     return complete
 
 def make_dir(data_dir, newdir="pc_corrected", verbose=False):

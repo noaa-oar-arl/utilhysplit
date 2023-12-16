@@ -1,3 +1,4 @@
+from ashapp.level_setter import set_qva_levels
 import numpy as np
 import pandas as pd
 
@@ -14,22 +15,36 @@ the time generators output a time and a trajectory generator.
 # 2023 Dec 04 (amc) changed generate_traj_from_obsdf to timegenerate_traj_from_obsdf
 
 
-def generate_traj_from_config(inp):
-    outp={}
-    height = inp["height"]
-    if not isinstance(height,(list,np.ndarray)):
-       height = [height]
-    for hgt in height:
-        outp['height'] = hgt
-        outp['latitude'] = lat
-        outp['longitude'] = lon
-        yield outp
+#def generate_traj_from_config(inp):
+#    outp={}
+#    height = inp["height"]
+#    if not isinstance(height,(list,np.ndarray)):
+#       height = [height]
+#    for hgt in height:
+#        outp['height'] = hgt
+#        outp['latitude'] = lat
+#        outp['longitude'] = lon
+#        yield outp
+
+
+def generate_qva_traj_from_config(inp):
+    bottom = int(inp['bottom']*3.28084/100)
+    top = int(inp['top']*3.28084/100)
+    levels = set_qva_levels(bottom,top,dz=50)
+    inp['height'] = levels[0]
+    for traj in generate_traj_from_config(inp):
+        yield traj
+
 
 def generate_traj_from_config(inp):
+    for key in ['height','top','bottom']:
+        if key in inp.keys():
+           hkey = key
+           break
     outp={}
     lat = inp["latitude"]
     lon = inp["longitude"]
-    height = inp["height"]
+    height = inp[hkey]
     if not isinstance(height,(list,np.ndarray)):
        height = [height]
     for hgt in height:

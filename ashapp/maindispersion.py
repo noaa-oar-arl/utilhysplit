@@ -51,6 +51,7 @@ method in order to loop through all the GEFS members.
 """
 
 
+
 class MainDispersion(MainRunInterface):
     ilist = []
     ilist.extend(RunDispersion.ilist)
@@ -96,6 +97,7 @@ class MainDispersion(MainRunInterface):
     @inp.setter
     def inp(self, inp):
         self._inp.update(inp)
+        #print('checking inp', inp.keys())
         complete = is_input_complete(self.ilist, self._inp)
         if not complete:
             logger.warning("Inputs not complete")
@@ -222,7 +224,7 @@ class MainDispersion(MainRunInterface):
 
 
 class MainEmitTimes(MainDispersion):
-    ilist = []
+    ilist = [('meteorologicalData','req')]
     ilist.extend(CollectEmitTimes.ilist)
     ilist.extend(OutputDispersion.ilist)
     ilist.extend(GraphicsDispersion.ilist)
@@ -401,13 +403,18 @@ class MainEnsemble(MainDispersion):
 
 
 class MainTrajectory(MainDispersion):
-    ilist = []
+    # 2023 DEC 16 (amc) change trajectory generator to generate_qva_traj_from_config
+    #                   in order to produce trajectories at different height levels.
+
+    
+    ilist = [('top','opt'),('bottom','opt')] #neeeded for generate_qva_from_config 
     ilist.extend(RunTrajectory.ilist)
     ilist.extend(OutputTrajectory.ilist)
+    ilist.extend(GraphicsTrajectory.ilist)
     # these are set in the main routines.
 
     def __init__(self, inp, JOBID):
-        from ashapp.trajectory_generators import generate_traj_from_config
+        from ashapp.trajectory_generators import generate_qva_traj_from_config
 
         # 14 instance attributes
         self.JOBID = JOBID  # string
@@ -422,7 +429,7 @@ class MainTrajectory(MainDispersion):
         self.filelocator = None
         # self.maptexthash = {}
         if self.inp["runflag"] == "trajectory":
-            trajgenerator = generate_traj_from_config(inp)
+            trajgenerator = generate_qva_traj_from_config(inp)
             self._modelrun = RunTrajectory(inp, trajgenerator)
         elif self.inp["runflag"] == "backtrajectoryfromobs":
             self._modelrun = CollectTrajectory(inp, self.JOBID)

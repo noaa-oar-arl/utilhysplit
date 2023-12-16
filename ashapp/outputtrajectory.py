@@ -28,7 +28,7 @@ utils.setup_logger()
 class OutputTrajectory(ModelOutputInterface):
 
     #ilist = [('starte_date','req')]
-    ilist = ['jobid']
+    ilist = [('jobid','req')]
 
     def __init__(self, inp, filelist):
         """

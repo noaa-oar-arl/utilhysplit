@@ -46,7 +46,6 @@ class RunTrajectory(ModelRunInterface):
         ("durationOfSimulation",'req'),
         ("latitude",'req'),
         ("longitude",'req'),
-        ("height",'opt'),
         ("start_date",'req'),
         ("jobid",'req'),
         ("jobname",'req')
@@ -57,8 +56,6 @@ class RunTrajectory(ModelRunInterface):
         """
         A trajectory run from inputs.
 
-        inp['height'] may be a list of heights or a single height in meters.
- 
         durationOfSimulation is number or hours for simulation to run.
                              A negative number will result in backwards trajectories.
 
