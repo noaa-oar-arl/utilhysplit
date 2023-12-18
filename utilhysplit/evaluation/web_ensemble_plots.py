@@ -41,6 +41,7 @@ from matplotlib.colors import BoundaryNorm
 
 import cartopy
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+import matplotlib.ticker as mticker
 from monetio.models import hysplit
 from utilhysplit.evaluation.ensemble_tools import ATL, preprocess, topheight
 from utilhysplit.plotutils.colormaker import ColorMaker
@@ -614,7 +615,7 @@ def reset_plots():
     mpl.rcParams.update(mpl.rcParamsDefault)
 
 
-def format_plot(ax, transform):
+def format_plot(ax, transform, xticks=None):
     setup_logger_warning(level=logging.WARNING)
     # ax.add_feature(cartopy.feature.LAND)
     # ax.add_feature(cartopy.feature.BORDERS)
@@ -631,6 +632,7 @@ def format_plot(ax, transform):
     # don't use a different central_longitude when
     # making the tick labels.
     # return 1
+
     gl = ax.gridlines(
         crs=transform,
         draw_labels=True,
@@ -643,6 +645,8 @@ def format_plot(ax, transform):
     gl.bottom_labels = True
     gl.right_labels = False
     gl.left_labels = True
+    if isinstance(xticks,list):
+       gl.xlocator = mticker.FixedLocator(xticks)
     gl.xformatter = LONGITUDE_FORMATTER
     gl.yformatter = LATITUDE_FORMATTER
     gl.xlabel_style = {"size": 20, "color": "gray"}
