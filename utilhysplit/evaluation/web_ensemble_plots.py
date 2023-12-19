@@ -5,7 +5,6 @@ Classes
 
 Functions
     label_ax
-    get_transform
     decide_central_longitude
     shift_sub
     shift_xvals
@@ -17,9 +16,6 @@ Functions
     set_ATL_text
     plot_ATL
     meterv2FL
-    setup_plot
-    reset_plots
-    format_plot
     ATLsubplot
     massload_ensemble_mean
 
@@ -32,20 +28,20 @@ Functions
 import datetime
 import logging
 
-import matplotlib as mpl
+#import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
 from matplotlib.colors import BoundaryNorm
 
-import cartopy
-from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
-import matplotlib.ticker as mticker
+#import cartopy
 from monetio.models import hysplit
 from utilhysplit.evaluation.ensemble_tools import ATL, preprocess, topheight
 from utilhysplit.plotutils.colormaker import ColorMaker
 from utilhysplit.evaluation.ensemble_polygons import HeightPolygons
+import utilhysplit.plotutils.map_util  as mutil
+#import mutil.format_plot, mutil.reset_plots, mutil.setup_plot
 
 logger = logging.getLogger(__name__)
 
@@ -181,12 +177,6 @@ def label_ax(ax, label, transform):
     )
 
 
-def get_transform(central_longitude=0):
-    transform = cartopy.crs.PlateCarree(central_longitude=central_longitude, globe=None)
-    # transform = cartopy.crs.AzimuthalEquidistant(central_longitude=180)
-    return transform
-
-
 def decide_central_longitude(xorg):
     # currently works when lon values are 0-360.
     min_x = np.min(xorg)
@@ -258,7 +248,7 @@ def get_source_str(vlist):
 
 def height_plot(revash, thresh=0.2, figname="None", vlist=None, unit="FL"):
     # TO DO add plotting of bottom height.
-    setup_plot()
+    mutil.setup_plot()
     source = get_source_str(vlist)
     figname = "None"
     if "source" in revash.dims:
@@ -342,7 +332,7 @@ def massload_plot(revash, enslist=None, sourcelist=None, name="None", vlist=None
     vlist: tuple of [latitude, longitude] with volcano location
     enslist:
     """
-    setup_plot()
+    mutil.setup_plot()
     mass = massload_ensemble_mean(revash, enslist, sourcelist)
     fignamelist = []
 
@@ -391,7 +381,7 @@ def sub_massload_plot(x, y, z, transform, levels, labeldata, name="None", vlist=
     # cb2 = ax.pcolormesh(x,y,z,cmap=cmap,transform=transform,norm=norm)
     if isinstance(vlist, (np.ndarray, list, tuple)):
         ax.plot(vlist[1], vlist[0], "r^", transform=data_transform)
-    format_plot(ax, data_transform)
+    mutil.format_plot(ax, data_transform)
     label_ax(dax, labeldata, data_transform)
     cb = plt.colorbar(cb2)
     cb.set_label("g/m$^2$")
@@ -426,7 +416,7 @@ def sub_height_plot(
     if isinstance(vlist, (np.ndarray, list, tuple)):
         ax.plot(vlist[1], vlist[0], "r^", transform=data_transform)
 
-    format_plot(ax, data_transform)
+    mutil.format_plot(ax, data_transform)
     cb = plt.colorbar(cb2, ticks=levels)
     if labeldata:
         label_ax(dax, labeldata, data_transform)
@@ -497,7 +487,7 @@ def ATLtimeloop(
         plotATL(rtot, vlist, name=figname, levels=clevels, thresh=thresh, title=title2)
         iii += 1
         fignamelist.append(figname)
-    reset_plots()
+    mutil.reset_plots()
     return fignamelist
 
 
@@ -533,7 +523,7 @@ def plotATL(
     creates subplot for each vertical level.
     """
 
-    setup_plot()
+    mutil.setup_plot()
     x = rtot.longitude
     y = rtot.latitude
 
@@ -603,55 +593,6 @@ def meterev2FL(meters):
     return "FL{:2.0f}".format(meters / 30.48)
 
 
-def setup_plot():
-    mpl.rcParams.update(mpl.rcParamsDefault)
-    mpl.rcParams["font.family"] = "sans-serif"
-    # mpl.use('pdf')
-    plt.style.use("seaborn-poster")
-    # plt.style.use('fivethirtyeight')
-
-
-def reset_plots():
-    mpl.rcParams.update(mpl.rcParamsDefault)
-
-
-def format_plot(ax, transform, xticks=None):
-    setup_logger_warning(level=logging.WARNING)
-    # ax.add_feature(cartopy.feature.LAND)
-    # ax.add_feature(cartopy.feature.BORDERS)
-    ax.coastlines("50m")
-    # This allows latitude and longitude axis
-    # to have different scales.
-    ax.set_aspect("auto", adjustable=None)
-    # this will increase data limit to keep aspect ratio 1
-    # ax.set_aspect(1, adjustable='datalim')
-    # this will adjust axxes to  keep aspect ratio 1
-    # when this is used, text is often mis-placed.
-    # ax.set_aspect(1, adjustable='box')
-
-    # don't use a different central_longitude when
-    # making the tick labels.
-    # return 1
-
-    gl = ax.gridlines(
-        crs=transform,
-        draw_labels=True,
-        linewidth=1,
-        color="gray",
-        alpha=0.5,
-        linestyle="--",
-    )
-    gl.top_labels = False
-    gl.bottom_labels = True
-    gl.right_labels = False
-    gl.left_labels = True
-    if isinstance(xticks,list):
-       gl.xlocator = mticker.FixedLocator(xticks)
-    gl.xformatter = LONGITUDE_FORMATTER
-    gl.yformatter = LATITUDE_FORMATTER
-    gl.xlabel_style = {"size": 20, "color": "gray"}
-    gl.ylabel_style = {"size": 20, "color": "gray"}
-
 
 def ATLsubplot(
     ax,
@@ -685,7 +626,7 @@ def ATLsubplot(
         ax.plot(vlist[0], vlist[1], "r^")
     # except Exception as ex:
     #    print('exception {} {}'.format(type(ex).__name__, ex.args)
-    format_plot(ax, transform)
+    mutil.format_plot(ax, transform)
     ax.text(
         xplace,
         yplace,
