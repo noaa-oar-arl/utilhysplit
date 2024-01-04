@@ -149,7 +149,9 @@ def check_attributes(atthashin, dstr="%Y-%m-%d %H:%M:%S"):
                     )
                 )
                 atthash[key] = "Multidimensinal Object"
-
+        elif isinstance(val, np.datetime64):
+            newval = str(val)
+            atthash[key] = newval
         elif isinstance(val, datetime.datetime):
             newval = val.strftime(dstr)
             atthash[key] = newval
@@ -250,6 +252,20 @@ class HYSPLITAshNetcdf:
             Helper.remove(self.fname)
         self._fexists = False
 
+    @staticmethod
+    def convert_time(cxra):
+        """
+        makes sure that the time values are in numpy.datetime64[ns] precision.
+        sometimes it is only numpy.datetime64[us] precision which causes problems 
+        when writing to netcdf. this may be fixed in future versions of xarray.
+        Doing this does produce a warning.
+        TODO - first convert tvals to datetime64[ns]. not sure how to do this though.
+        """
+        tvals = cxra.time.values
+        cxra2 = cxra.drop('time')
+        cxra2 = cxra2.assign_coords(time=('time',tvals))
+        return cxra2
+
     def write_with_compression(self, overwrite=False):
         if self._fexists:
             # remove the old file if it has been changed or
@@ -258,6 +274,11 @@ class HYSPLITAshNetcdf:
                 self.remove()
         if not self._fexists:
             cxra2 = self._cxra.to_dataset(name=self._datasetname)
+
+            # make sure time is numpy.datetime64[ns] otherwise have trouble writing.
+            # this may be fixed in future versions of xarray.
+            cxra2 = self.convert_time(cxra2) 
+
             ehash = {"zlib": True, "complevel": 9}
             vlist = [x for x in cxra2.data_vars]
             vhash = {}
