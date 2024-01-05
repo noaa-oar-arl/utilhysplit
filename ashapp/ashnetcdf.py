@@ -199,11 +199,20 @@ class HYSPLITAshNetcdf:
 
     def assign_attrs(self, inp):
         self.attr.update(inp)
+        print('attrbutes', self.attr.attr)
         logger.debug("adding attributes {}".format(self.attr))
         self._cxra = self._cxra.assign_attrs(self.attr.attr)
 
     def make_cdump_xra(self, blist, century=None, species=None, inp={}):
-        print("BLIST", blist)
+        """
+        INPUTS:
+        blist : tuple (cdump filename, ensemble tag, metid)
+        century : 1900 or 2000
+        species : species id list if none will get all.
+        inp : dictionary of attrbutes to be added to existing attributes
+        values in inp dictionary will over-ride those in the attributes.
+        """
+
         self._cxra = hysplit.combine_dataset(
             blist,
             century=century,
@@ -211,7 +220,9 @@ class HYSPLITAshNetcdf:
             species=species,
             verbose=False,
         )
-        self.assign_attrs(inp)
+        existing = self._cxra.attrs
+        existing.update(inp)
+        self.assign_attrs(existing)
 
     def close(self):
         try:

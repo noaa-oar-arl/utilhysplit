@@ -301,7 +301,7 @@ class MainInverse(MainDispersion):
         inp["Use_Mastin_eq"] = False
         inp["fraction_of_fine_ash"] = 1
         self._modeloutput = OutputDispersion(inp, [])
-        self._modelgraphics = GraphicsDispersion(inp)
+        self._modelgraphics = GraphicsInverse(inp)
 
         utils.setup_logger()
 

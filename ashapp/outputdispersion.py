@@ -70,8 +70,7 @@ class OutputDispersion(ModelOutputInterface):
         return self._outputlist
 
     def cdumpxraname(self):
-        return os.path.join(self.inp['WORK_DIR'], "xrfile.{}.nc".format(self.JOBID))
-
+        return os.path.join(self.inp['WORK_DIR'], "xrfile.{}.nc".format(self.JOBID)) 
     def set_outputlist(self):
         outputlist = []
         outputlist.append(self.cdumpxraname())
@@ -99,69 +98,16 @@ class OutputDispersion(ModelOutputInterface):
         if self._ncfile.empty():
             blist = []
             blist = [x for x in self.inputlist if "cdump" in x[0]]
-            # cdumpname = cdumpname[0]
-            # logger.info('Creating xra for cdump files {}'.format(cdumpname))
-            # source_tag = "Line to {:1.0f} km".format(self.inp["top"] / 1000.0)
-            # met_tag = self.inp["meteorologicalData"]
-            # blist = [(cdumpname, source_tag, met_tag)]
             century = 100 * (int(self.inp["start_date"].year / 100))
             species = None
-            #ainp = {}
             ainp = self.inp.copy()
             ainp["mult"] = 1
             if 'polygon' in ainp.keys():
                ainp['polygon'] = str(ainp['polygon'])
-            # print(type(ainp["generatingPostscript"]))
-            # ainp goes into the attributes for the netcdf file.
-            #self._ncfile.make_cdump_xra(blist, century, species=species, inp=ainp)
             self._ncfile.make_cdump_xra(blist, century, species=species, inp=ainp)
         mult = self.get_conc_multiplier()
         change = self._ncfile.changemult(mult)
         return self._ncfile.cxra
-
-    # no longer needed?
-    #def write_cdump_xra(self):
-        # convert to mg /m3
-   #     mult = self.get_conc_multiplier()
-   #     change = self._ncfile.changemult(mult)
-   #     if change:
-   #         ainp = self.inp
-   #         ainp["mult"] = mult
-   #         Helper.remove(os.path.join(self.inp["WORK_DIR"], fname))
-   #         self._ncfile.assign_attrs(ainp)
-   #         self._ncfile.write_with_compression()
-#
-#        if not self._ncfile.empty():
-#            logger.info(
-#                "make_awips_netcdf: cxra empty. cannot create awips\
-#                         files"
-#            )
-#            return []
-
-    # TODO modify this.
-    def make_awips_netcdf(self):
-        #import cdump2netcdf
-        # TODO update this!
-        #ghash = {}
-        #ghash["source_latitude"] =  self.inp["latitude"]
-        #ghash["source_longitude"] = self.inp["longitude"]
-        #ghash["source_name"] =      self.inp["VolcanoName"]
-        #ghash["emission_start"] =   self.inp["start_date"]
-        #ghash["emission_duration_hours"] = self.inp["emissionHours"]
-        # in mg
-        #mult = self.get_conc_multiplier(self.inp['top'],self.inp['bottom'])
-        #mer = mult / 1e6 / 3600  # kg released in a second.
-        #ghash["MER"] = mer
-        #ghash["MER_unit"] = "kg/s"
-        #logger.debug("MULT value for awips {:3e}".format(mult))
-        #awipsname = self.filelocator.get_awips_filename(stage=0)
-        #c2n = cdump2netcdf.Cdump2Awips(
-        #    self._cxra, awipsname, munit="mg", jobid=self.JOBID, globalhash=ghash
-        #)
-        #awips_files = c2n.create_all_files()
-        awips_files = []
-        # returns list of awips files that were created.
-        return awips_files
 
     def get_conc_multiplier(self):
         """
@@ -188,3 +134,5 @@ class OutputDispersion(ModelOutputInterface):
         #conc_multiplier = 10 ** (-1 * eflag)
         conc_multiplier = eflag * M63
         return M63 * conc_multiplier
+
+

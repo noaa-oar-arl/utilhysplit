@@ -634,7 +634,7 @@ def generate_kmz(hysplit_dir, kml_filenames, kmz_filename, compresslevel):
                 z.write(f, arcname=bn)
 
 
-def create_zipped_up_file(inp, filename, files):
+def create_zipped_up_file(filename, files,compresslevel=9):
     if not files:
         return False
     logger.debug("{} files to be zipped {}".format(filename, "\n".join(files)))

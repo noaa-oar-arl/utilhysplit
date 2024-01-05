@@ -16,7 +16,7 @@
 #    CollectTrajectory - uses RunTrajectory
 
 # ModelRunInterface
-#    Interface for creating the model runs
+#    Interface for creating the one model run
 #    RunDispersion - used for regular dispersion runs
 #                  - used for unit source runs for inversion
 #    RunEmitTimes - used for data insertion 
@@ -28,22 +28,27 @@
 
 # ModelOutputInterface
 #     Interface for processing model output.
-#     OutputDispersion
+#     OutputDispersion  - creates netcdf file from cdump output
+#     OututTrajectory   - creates csv (pandas dataframe) from tdump output
+#     GraphicsDispersion 
+#     GraphicsTrajectory    
+
 
 # -----------------------------------------------------------------------------
-# The OutputDispersion class is utilized by all in order to
+# The OutputDispersion class is utilized by all dispersion run sets in order to
 # put information from all model runs into a netcdf file using hysplit.combine_dataset.
 
 # Simple dispersion runs
 #   MainDispersion(MainRunInterface)
 #     RunDispersion(ModelRunInterface)
 #     OutputDispersion(ModelOutputInterface)
-#     TODO - graphics - started in graphicsdispersion.py
+#     GraphicsDispersion(ModelOutputInterface)
 
 # Ensemble dispersion runs
 #   MainEnsemble(MainDispersion)
 #     EnsembleDispersion(ModelCollectionInterface)
 #     OutputDispersion(ModelOutputInterface)
+#     
 #     TODO - grapics
 
 # Data insertion runs
@@ -65,11 +70,15 @@
 #     MainGEFSInverse(MainInverse)
 #     CollectInverse(ModelCollectionInterface)
 #     OutputDispersion(ModelOutputInterface)
+#     
 #     TODO - graphics
 
 # Trajectory Runs
-#     forward trajectory runs 
-#     backward trajectory runs
+#     RunTrajectory (forward run from vent)
+#     CollectTrajectory (run using a csv file as input for starting points)
+#                        utilized for running the backward trajectories from obs.
+#                        can also be used for foward runs.    
+#    
 #     TODO ensemble trajectory runs
 
 
