@@ -24,7 +24,8 @@ import numpy as np
 import requests
 import xarray as xr
 
-from utilvolc.runhelper import Helper, JobFileNameComposer
+from utilvolc.runhelper import Helper
+from filenamer import  JobFileNameComposer
 from ashapp.ashruninterface import ModelOutputInterface
 import ashapp.plotting_functions as plotf
 from utilhysplit.evaluation import web_ensemble_plots as wep

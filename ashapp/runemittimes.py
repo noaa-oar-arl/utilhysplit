@@ -19,7 +19,8 @@ import numpy as np
 
 from utilhysplit import hcontrol
 from utilhysplit.metfiles import MetFileFinder
-from utilvolc.runhelper import is_input_complete, Helper, JobFileNameComposer
+from utilvolc.runhelper import is_input_complete, Helper
+from filenamer import JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
 import ashapp.utildatainsertion as utildi
 

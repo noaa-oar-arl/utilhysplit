@@ -24,12 +24,13 @@ import numpy as np
 import requests
 import xarray as xr
 
-from utilvolc.runhelper import Helper, JobFileNameComposer
+from utilvolc.runhelper import Helper
+from filenamer import  JobFileNameComposer
 from ashapp.ashruninterface import ModelOutputInterface
 import ashapp.plotting_functions as plotf
 from utilhysplit.evaluation import web_ensemble_plots as wep
 from monetio.models import hysplit
-from ashapp.cdump2xml import HysplitKml
+from ashapp.cdump2xml import HysplitKml, generate_kmz
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,25 @@ logger = logging.getLogger(__name__)
 # generate_kmz
 # create_zipped_up_file
 
+# Ensemble graphics that are created.
+# CONCENTRATION
+# jobname_jobid_montage_0-0.png
+# jobname_jobid_montage_0-1.png
+# PARTICLE
+# jobname_jobid_part_0-0.gif
+# MASSLOAD
+# jobname_jobid_massload_0-0.png
+
+# Dispersion run graphics that are created
+# CONCENTRATION
+# jobname_jobid_montage_0-0.png
+# 
+# MASSLOAD
+# jobname_jobid_massload_0-0.gif (DONE)
+
+
+# PDF with all plots
+# jobname_jobid_allplots_0.pdf
 
 
 class GraphicsDispersion(ModelOutputInterface):
@@ -62,6 +82,18 @@ class GraphicsDispersion(ModelOutputInterface):
         self.filelocator = inp
         #self._ncfile = ashnetcdf.HYSPLITAshNetcdf('TEMP')
         self._ncfile = None
+
+    def get_metid(self):
+        if 'Meteorological Model ID' in self._ncfile._cxra.attrs.keys():
+           return self._ncfile._cxra.attrs['Meteorological Model ID']
+        else:
+           return 'Unknown'
+
+    def get_conc_multiplier(self):
+        if 'mult' in self._ncfile._cxra.attrs.keys():
+           return self._ncfile._cxra.attrs['mult']
+        else:
+           return 1
 
     def ingest_model_output(self, modeloutput):
         """ modeloutput - class with ModelOutputInterface as base class
@@ -109,9 +141,11 @@ class GraphicsDispersion(ModelOutputInterface):
         fhash['parxplot'] = self.filelocator.get_parxplot_filename(ptype=ptype)
         fhash['concplot'] = self.filelocator.get_concplot_filename(stage=0,frame=None,ptype=ptype)
         fhash['massplot'] = self.filelocator.get_massloading_filename(stage=0,frame=None,ptype=ptype)
-        fhash['kmz'] = self.filelocator.get_kmz_filename()
+        fhash['allpdf'] = self.filelocator.get_allplotspdf_filename()
 
+        fhash['kmz'] = self.filelocator.get_kmz_filename()
         fhash['awips'] = self.filelocator.get_awips_filename(stage=0)
+        fhash['allzip'] = self.filelocator.get_zipped_filename()
 
         #TODO
         # create montage
@@ -122,7 +156,6 @@ class GraphicsDispersion(ModelOutputInterface):
         # zip files
         return fhash       
  
-
     def check(self):
        rval = True
        for fff in self._fhash:
@@ -131,34 +164,88 @@ class GraphicsDispersion(ModelOutputInterface):
                rval=False
        return rval
 
+    def get_pdf_plotlist(self):
+        zlist = []
+        job = self._filelocator.make_suffix()
+        for basename in ['massload','parxplot','concplot']:
+            bsn = self._filelocator.basenamehash[basename]
+            zff = glob.glob(self.inp['WORK_DIR'] + '/{}*{}*gif'.format(job,basename))     
+            zlist.extend(zff)   
+            zff= glob.glob(self.inp['WORK_DIR'] + '/{}*{}*png'.format(job,basename))        
+            zlist.extend(zff)
+        return zlist
+
+    def get_zipfiles(self):
+        job = self._filelocator.make_suffix()
+        zipfiles = []
+        zipfiles.append(self._fhash['cdump'])
+        zipfiles.append(self._fhash['allpdf'])
+        zipfiles.append(self._fhash['kmz'])  
+        cfiles = glob.glob(self.inp['WORK_DIR'] + '/CONTROL*{}*'.format(job))
+        sfiles = glob.glob(self.inp['WORK_DIR']  + '/SETUP*{}*'.format(job))
+        mfiles = glob.glob(self.inp['WORK_DIR']  + '/MESSAGE*{}*'.format(job))
+        pfiles = glob.glob(self.inp['WORK_DIR']  + '/pardump*{}*'.format(job))
+        zipfiles.extend(cfiles)
+        zipfiles.extend(sfiles)
+        zipfiles.extend(mfiles) 
+        zipfiles.extend(pfiles) 
+        zipfiles.append(self._fhash['xrfile'])
+        return zipfiles
+
     def postprocess(self):
         stage=0
+        cm = self.get_conc_multiplier()
+        massload=True
+        parxplot=True
+        plotconc=False
+        make_awips=True
+        create_zipfiles=True
 
-        #create_maptext(inp)
+        if massload:
+            # -------------------------------------------------------
+            # massloading plot
+            inputname = self._fhash['cdump']
+            outputname = self._fhash['massplot']
+            inp = self.inp.copy()
+            inp['run_description'] = 'HYSPLIT dispersion run'
+            inp['conc_multplier'] = cm
+            plotf.create_maptext(inp)
+            plotf.create_massloading_plot(inp,inputname, outputname, conc_multiplier=cm)
+      
+            # kmz file created from massloading.
+            self.generate_kmz() 
+          
+            # remove GELABEL files
+            plotf.clean_gelabel(inp['WORK_DIR'])
+            plotf.clean_ps(inp['WORK_DIR'])
+            
+        # -----------------------------------------------------------
+        if parxplot:
+            # create the particle plot.
+            pardump_filename = self._fhash['pardump']
+            parxplot_outputname = self._fhash['parxplot']
+            rval = plotf.create_parxplot(self.inp,pardump_filename, parxplot_outputname)
 
-        # massloading plot
-        inputname = self._fhash['cdump']
-        outputname = self._fhash['massplot']
-        plotf.create_massloading_plot(self.inp,inputname, outputname, conc_multiplier=1)
+        if plotconc:
+            # create the concentration plot
+            cdump_filename = self._fhash['cdump']
+            concplot = self._fhash['concplot']
+            plotf.create_concentration_plot(self.inp, cdump_filename, concplot, conc_multiplier=1)
 
-        # create the particle plot.
-        pardump_filename = self._fhash['pardump']
-        parxplot_outputname = self._fhash['parxplot']
-        rval = plotf.create_parxplot(self.inp,pardump_filename, parxplot_outputname)
+        if make_awips:
+            # still need the montage and awips file.
+            # also the maptext and gelabel.
+            #create_concentration_montage(stage=stage) 
+            self.make_awips_netcdf()
 
-        # create the concentration plot
-        cdump_filename = self._fhash['cdump']
-        concplot = self._fhash['concplot']
-        plotf.create_concentration_plot(self.inp, cdump_filename, concplot, conc_multiplier=1)
+        # create pdf with all plots
+        graphicsfiles = self.get_pdf_plotlist()
+        plotf.make_allplots_pdf(self.inp['CONVERT_EXE'],graphicsfiles,self._fhash['allpdf'])
 
-        # kmz file 
-        self.generate_kmz() 
-
-        # still need the montage and awips file.
-        # also the maptext and gelabel.
-        #create_concentration_montage(stage=stage) 
-        self.make_awips_netcdf()
-
+        # create zipped file with files
+        zipfiles = self.get_zipfiles()
+        if create_zipfiles:
+           plotf.create_zipped_up_file(self._fhash['allpdf'], zipfiles, self.inp['zip_compression_level'])
         return True
 
     def load_netcdf(self):
@@ -196,12 +283,25 @@ class GraphicsDispersion(ModelOutputInterface):
         awips_files = c2n.create_all_files()
         self._fhash['awipslist'] = awips_files
         compresslevel = self.inp['zip_compression_level']
-        plotf.create_zipped_up_file(self._fhash['awips'], awips_files,compresslevel)
+        plotf.create_zipped_up_file('{}.zip'.format(awipsname), awips_files,compresslevel)
 
-
-        # returns list of awips files that were created.
 
     def generate_kmz(self):
+        # uses output from concplot
+        hdir = self.inp['HYSPLIT_DIR']
+        jobid = self.inp['jobid']
+        gelist = plotf.make_gelabel(self.inp, self._filelocator.get_gelabel_filename,jobid)
+        klist = gelist
+        klist.append('HYSPLIT_ps.kml')
+        compresslevel = self.inp['zip_compression_level']
+        efiles = plotf.get_kmz_files(hdir)
+        klist.extend(efiles)
+        kmzfilename = self._fhash['kmz']
+        generate_kmz(klist,kmzfilename,compresslevel)
+
+
+    def generate_kmz_python(self):
+        # uses the HysplitKml class
         jobid = self.inp['jobid']
         units = 'g/m2'
         mxra = self.get_massloading()
@@ -219,8 +319,6 @@ class GraphicsDispersion(ModelOutputInterface):
         attrs = self._ncfile.cxra.attrs
         kmlname = self._fhash['kmz'].replace('kmz','kml')
         h2xml.create(mxra,attrs,kmlname)
-
-
         compresslevel = self.inp['zip_compression_level']
         hdir = self.inp['HYSPLIT_DIR']
         efiles = plotf.get_kmz_files(hdir)

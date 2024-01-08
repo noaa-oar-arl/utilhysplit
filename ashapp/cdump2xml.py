@@ -112,12 +112,12 @@ def make_legend(colors, levels, name, unit="g/m$^2$", date="", label=""):
     figlegend = plt.figure(figsize=(3, ht))
     # figlegend = plt.figure()
     ax1 = figlegend.add_subplot(1, 1, 1)
-    ax1.legend(handles, labels, loc="center", prop={"size": sz}, frameon=False)
+    ax1.legend(handles, labels, loc="center", prop={"size": sz}, frameon=True,borderpad=1)
     ax1.axis("off")
     ax1.text(0, 1.1, date, transform=ax1.transAxes, size=sz)
-    ax1.text(0, -0.1, label, transform=ax1.transAxes, size=sz)
+    ax1.text(0, 0.1, label, transform=ax1.transAxes, size=sz)
     plt.savefig(name)
-
+    return ax1
 
 def add_overlay(screen, over, scr, rot, size):
 

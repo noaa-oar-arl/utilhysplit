@@ -6,92 +6,94 @@
 # Classes
 # Helper class contains functions for executing commands.
 # JobSetUp class setups the dictionary which contains information for ash runs.
-# Job and JobFileNameComposer class create filenames.
 # ConcplotColors class
 
 # Functions
 # make_inputs_from_file . returns an instance of JobSetUp class.
 # make_dir
-# list_dirs 
+# list_dirs
 
-# 18 APR 2020 (SYZ) - Initial.
-# 15 Jun 2020 (AMC) - Adapted from locusts.py
-# 07 Jun 2023 (AMC) - move ConcplotColors to utilhysplit.plotutils directory
-# -----------------------------------------------------------------------------
-
-# from abc import ABC, abstractmethod
 import datetime
 import glob
 import logging
 import os
 import pathlib
-
 # import pytz
 import shutil
 import subprocess
 import sys
 
+# 18 APR 2020 (SYZ) - Initial.
+# 15 Jun 2020 (AMC) - Adapted from locusts.py
+# 07 Jun 2023 (AMC) - move ConcplotColors to utilhysplit.plotutils directory
+# 08 Jan 2024 (AMC) - move FileNameComposer to filenamer.py
+# -----------------------------------------------------------------------------
 from utilhysplit.hcontrol import NameList
 
 logger = logging.getLogger(__name__)
 
 
-
 class VolcList:
-    def __init__(self,vfile):
+    def __init__(self, vfile):
         import pandas as pd
-        self.df = pd.read_csv(vfile,
-                  header=0,
-                  index_col=False,
-                  names=['volcano_name',
-                         'volcano_region','volcano_lat',
-                         'volcano_lon','volcano_elevation','type'])
+
+        self.df = pd.read_csv(
+            vfile,
+            header=0,
+            index_col=False,
+            names=[
+                "volcano_name",
+                "volcano_region",
+                "volcano_lat",
+                "volcano_lon",
+                "volcano_elevation",
+                "type",
+            ],
+        )
         self.empty = pd.DataFrame()
         self.vlist = self.df.volcano_name.unique()
 
-
-    def find_exact(self,vname):
+    def find_exact(self, vname):
         match = [x for x in self.vlist if vname.lower() == x.lower()]
         if match:
-            return self.df[self.df.volcano_name==match[0]]
+            return self.df[self.df.volcano_name == match[0]]
         else:
             return self.empty
 
-    def find_close(self,vname):
+    def find_close(self, vname):
         possible = [x for x in self.vlist if vname.lower() in x.lower()]
-        return self.df[self.df['volcano_name'].isin(possible)]
+        return self.df[self.df["volcano_name"].isin(possible)]
 
-    def find_start(self,vname):
+    def find_start(self, vname):
         lnn = len(vname)
         possible = [x for x in self.vlist if vname.lower() in x[0:lnn].lower()]
-        return self.df[self.df['volcano_name'].isin(possible)]
+        return self.df[self.df["volcano_name"].isin(possible)]
 
-
-    def find(self,vname):
+    def find(self, vname):
         guess = self.find_exact(vname)
-        if  guess.empty:
-           guess = self.find_start(vname)
         if guess.empty:
-           guess = self.find_close(vname)
-        return guess    
+            guess = self.find_start(vname)
+        if guess.empty:
+            guess = self.find_close(vname)
+        return guess
 
-    def get_record(self,vname):
+    def get_record(self, vname):
         df = self.find(vname)
-        return df.to_dict(orient='records')
+        return df.to_dict(orient="records")
 
 
 def complicated2str(a):
     """
     Convert nested list of dictionary and strings to a string
     """
-    rstr = ''
-    if isinstance(a,list):
+    rstr = ""
+    if isinstance(a, list):
         bbb = [complicated2str(x) for x in a]
-        bbb = str.join(', ',bbb)
+        bbb = str.join(", ", bbb)
         rstr += bbb
-    elif isinstance(a,dict):
+    elif isinstance(a, dict):
         for key in a.keys():
-            bbb = str(key) + ':' + complicated2str(a[key]) + '\n'
+            bbb = str(key) + ":" + complicated2str(a[key]) + "\n"
             rstr += bbb
     else:
         bbb = str(a)
@@ -99,7 +101,7 @@ def complicated2str(a):
     return rstr
 
 
-def is_input_complete(ilist,inp):
+def is_input_complete(ilist, inp):
     """
     ilist : list of tuples (key, 'req' or 'opt')
             The key is the dictionary key that should be present.
@@ -114,16 +116,15 @@ def is_input_complete(ilist,inp):
 
     logger writes warning if required value not present.
     logger writes info if optional values not present
-    logger writes info if extra values are present. 
+    logger writes info if extra values are present.
     """
- 
 
-    complete=True
-    
-    if isinstance(ilist[0],tuple):
+    complete = True
+
+    if isinstance(ilist[0], tuple):
         for iii in ilist:
             if iii[0] not in inp.keys():
-                if iii[1] == 'req':
+                if iii[1] == "req":
                     logger.warning("Input does not contain {}".format(iii[0]))
                     complete = False
                 else:
@@ -134,15 +135,15 @@ def is_input_complete(ilist,inp):
                 logger.warning("Input does not contain {}".format(iii[0]))
                 complete = False
 
-
-    if isinstance(ilist[0],tuple):
+    if isinstance(ilist[0], tuple):
         zlist = list(zip(*ilist))[0]
     else:
         zlist = ilist
     extra = [x for x in inp.keys() if x not in zlist]
     for val in extra:
-            logger.debug('Extra inputs {}'.format(val))
+        logger.debug("Extra inputs {}".format(val))
     return complete
+
 
 def make_dir(data_dir, newdir="pc_corrected", verbose=False):
     """Create new directory if it does not exist.
@@ -150,9 +151,9 @@ def make_dir(data_dir, newdir="pc_corrected", verbose=False):
     datadir: Directory in which to create new directory (string)
     newdir: name of new directory (string). If none then will just use datadir.
     """
-    if not isinstance(data_dir,str):
-       data_dir = str(data_dir)
-    if isinstance(newdir,str):
+    if not isinstance(data_dir, str):
+        data_dir = str(data_dir)
+    if isinstance(newdir, str):
         new_data_dir = os.path.join(data_dir, newdir)
     else:
         new_data_dir = data_dir
@@ -164,9 +165,10 @@ def make_dir(data_dir, newdir="pc_corrected", verbose=False):
         if verbose:
             logger.info("Directory created {}".format(new_data_dir))
     if os.path.exists(new_data_dir):
-       return True
+        return True
     else:
-       return False
+        return False
+
 
 def list_dirs(data_dir):
     """Lists subdirectories within give directory
@@ -194,12 +196,12 @@ class Helper:
             logger.info(stdoutdata)
             print(stdoutdata)
         else:
-            logger.info('executed with no stdout data')
+            logger.info("executed with no stdout data")
         if stderrdata is not None:
             logger.error(stderrdata)
             print(stderrdata)
         else:
-            logger.info('executed with no stderr data')
+            logger.info("executed with no stderr data")
 
     def execute(cmd, **kwargs):
         """
@@ -258,23 +260,27 @@ def make_inputs_from_file(wdir, config_file="ash_config.txt"):
     config = NameList(fname=config_file, working_directory=wdir)
     config.read()
 
-    if 'polygon' in config.nlist.keys():
-       config.nlist['polygon'] = process_polygon(config.nlist['polygon'])
-       config.nlist['emitfilename'] = 'EMITpolygon_{}'.format(config.nlist['jobname'])
+    if "polygon" in config.nlist.keys():
+        config.nlist["polygon"] = process_polygon(config.nlist["polygon"])
+        config.nlist["emitfilename"] = "EMITpolygon_{}".format(config.nlist["jobname"])
 
     # convert dates to datetime objects.
-    #temp = list(map(int, config.nlist["start_date"].split(":")))
-    if not 'start_date' in config.nlist.keys():
-        print('cannot find start_date {}'.format(config.nlist.keys()))
+    # temp = list(map(int, config.nlist["start_date"].split(":")))
+    if "start_date" not in config.nlist.keys():
+        print("cannot find start_date {}".format(config.nlist.keys()))
         sys.exit()
     else:
         try:
             temp = list(map(int, config.nlist["start_date"].split(":")))
         except Exception as eee:
             logger.warning(eee)
-            logger.warning('start date not in right format {}'.format(config.nlist["start_date"]))
-            sys.exit() 
-        config.nlist["start_date"] = datetime.datetime(temp[0], temp[1], temp[2], temp[3])
+            logger.warning(
+                "start date not in right format {}".format(config.nlist["start_date"])
+            )
+            sys.exit()
+        config.nlist["start_date"] = datetime.datetime(
+            temp[0], temp[1], temp[2], temp[3]
+        )
 
     # convert values to floats where possible.
     for key in config.nlist.keys():
@@ -293,16 +299,14 @@ def make_inputs_from_file(wdir, config_file="ash_config.txt"):
 
 
 class EventSetUp:
-
     def __init__(self):
-       self.inp = {}
-       self.set_directories()
+        self.inp = {}
+        self.set_directories()
 
     def set_directories(self):
-       self.inp['JPSS_DIR'] = '/pub/jpsss_upload'
-       self.inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
-       self.inp['VOLCAT_DIR']= '/pub/ECMWF/JPSS/VOLCAT/Files/'
-
+        self.inp["JPSS_DIR"] = "/pub/jpsss_upload"
+        self.inp["VOLCAT_LOGFILES"] = "/pub/ECMWF/JPSS/VOLCAT/LogFiles/"
+        self.inp["VOLCAT_DIR"] = "/pub/ECMWF/JPSS/VOLCAT/Files/"
 
 
 def process_polygon(pstring):
@@ -319,46 +323,44 @@ def process_polygon(pstring):
     (48.43,-109.29),(48.38,-108.34),(44.23,-106.44),(44.13,-107.37)
     """
 
-
-    temp = pstring.split('-')
+    temp = pstring.split("-")
     lon = -999.0
     lat = -999.0
     vlist = []
     for vertice in temp:
         tvv = vertice.split()
         for val in tvv:
-            if 'n' in val.lower():
+            if "n" in val.lower():
                 lat = val.lower()
-                lat = lat.replace('n','')
-                lat = int(lat)/100.0
-            elif 's' in val.lower():
+                lat = lat.replace("n", "")
+                lat = int(lat) / 100.0
+            elif "s" in val.lower():
                 lat = val.lower()
-                lat = lat.replace('s','')
-                lat = -1 *int(lat)/100.0
-            elif 'w' in val.lower():
+                lat = lat.replace("s", "")
+                lat = -1 * int(lat) / 100.0
+            elif "w" in val.lower():
                 lon = val.lower()
-                lon = lon.replace('w','')
-                lon = -1 *int(lon)/100.0
-            elif 'e' in val.lower():
+                lon = lon.replace("w", "")
+                lon = -1 * int(lon) / 100.0
+            elif "e" in val.lower():
                 lon = val.lower()
-                lon = lon.replace('e','')
-                lon = int(lon)/100.0
-        vlist.append((lon,lat))
+                lon = lon.replace("e", "")
+                lon = int(lon) / 100.0
+        vlist.append((lon, lat))
     return vlist
- 
- 
+
 
 class JobSetUp:
     def __init__(self):
         self.inp = {}
 
-    def write(self,fname,wdir='./'):
+    def write(self, fname, wdir="./"):
         inp = self.inp.copy()
-        inp['start_date'] = inp['start_date'].strftime('%Y:%m:%d:%H')
-        output = NameList(fname=fname,working_directory=wdir)
+        inp["start_date"] = inp["start_date"].strftime("%Y:%m:%d:%H")
+        output = NameList(fname=fname, working_directory=wdir)
         output.add_n(inp)
-        output.line_ending = ''
-        output.write(overwrite=True,noheader=True) 
+        output.line_ending = ""
+        output.write(overwrite=True, noheader=True)
 
     def parse_inputs(self, a):
         self.add_run_params(a)
@@ -431,8 +433,10 @@ class JobSetUp:
         else:
             self.inp["runflag"] = "dispersion"
         self.inp["jobname"] = inp["runIdentifier"]
-        if 'PolygonString' in inp.keys():
-            self.inp["polygon"] = inp['PolygonString']  # input polygon points to start from.
+        if "PolygonString" in inp.keys():
+            self.inp["polygon"] = inp[
+                "PolygonString"
+            ]  # input polygon points to start from.
 
         # eflag should be a float. Large values give smaller plumes.
         # concentration value is multiplied by 10^(-1 * eflag)
@@ -443,11 +447,10 @@ class JobSetUp:
         # below are currently always the same.
         self.inp["source_type"] = "uniform"
 
-        #polygon optional input
-        if 'polygon' in self.inp.keys():
-            self.inp['polygon'] = process_polygon(self.inp['polygon'])
-            self.inp['emitfilename'] = 'EMITpolygon_{}'.format(self.inp['jobname'])
-
+        # polygon optional input
+        if "polygon" in self.inp.keys():
+            self.inp["polygon"] = process_polygon(self.inp["polygon"])
+            self.inp["emitfilename"] = "EMITpolygon_{}".format(self.inp["jobname"])
 
     def ensure_trailing_slash(self, dir):
         if dir[-1] != os.sep:
@@ -455,18 +458,19 @@ class JobSetUp:
         return dir
 
     def add_test_directories(self):
-        tdir = '/hysplit-users/alicec/'
-        self.inp['HYSPLIT_DIR'] = '{}hdev/'.format(tdir)
-        self.inp['MAP_DIR'] = '/hysplit-users/alicec/tags/hysplit.v5.3.0/graphics/'
-        self.inp['WORK_DIR'] = '/hysplit-users/alicec/tmp/testing/'
-        self.inp['DATA_DIR'] = '/hysplit-users/alicec/utilhysplit/ashapp/'
-        self.inp['FILES_DIR'] = './'
-        self.inp['PYTHON_EXE'] = '/hysplit-users/alicec/anaconda3/envs/hysplit/bin/python'
-        self.inp['forecastDirectory'] = '/pub/forecast/'
-        self.inp['archivesDirectory'] = '/pub/archives/'
-        self.inp['CONVERT_EXE'] = 'convert'      
-        self.inp['GHOSTSCRIPT_EXE'] = 'gs'      
- 
+        tdir = "/hysplit-users/alicec/"
+        self.inp["HYSPLIT_DIR"] = "{}hdev/".format(tdir)
+        self.inp["MAP_DIR"] = "/hysplit-users/alicec/tags/hysplit.v5.3.0/graphics/"
+        self.inp["WORK_DIR"] = "/hysplit-users/alicec/tmp/testing/"
+        self.inp["DATA_DIR"] = "/hysplit-users/alicec/utilhysplit/ashapp/"
+        self.inp["FILES_DIR"] = "./"
+        self.inp[
+            "PYTHON_EXE"
+        ] = "/hysplit-users/alicec/anaconda3/envs/hysplit/bin/python"
+        self.inp["forecastDirectory"] = "/pub/forecast/"
+        self.inp["archivesDirectory"] = "/pub/archives/"
+        self.inp["CONVERT_EXE"] = "convert"
+        self.inp["GHOSTSCRIPT_EXE"] = "gs"
 
     def add_directories(self, inp):
         self.inp["HYSPLIT_DIR"] = inp["readyProperties"]["directory"]["hysplit"]
@@ -502,12 +506,12 @@ class JobSetUp:
     def make_test_inputs(self):
         vname = "Kilauea"
         # vname = "bezy"
-        #vname = 'Reventador'
+        # vname = 'Reventador'
         self.inp["owner"] = "A. Person"
         self.inp["top"] = 20000
         self.inp["durationOfSimulation"] = 24
-        self.inp['rate'] = 1
-        self.inp['area'] = 1
+        self.inp["rate"] = 1
+        self.inp["area"] = 1
         testdate = datetime.datetime.now() - datetime.timedelta(hours=24)
         # testdate = datetime.datetime(2020,10,10,11)
         testminutes = 15
@@ -557,7 +561,7 @@ class JobSetUp:
             self.inp["longitude"] = -153.54
             self.inp["bottom"] = 7021
         if vname.lower() == "kilauea":
-            #self.inp["meteorologicalData"] = "NAMHHI"
+            # self.inp["meteorologicalData"] = "NAMHHI"
             self.inp["meteorologicalData"] = "GFS0p25"
             self.inp["VolcanoName"] = "Kilauea"
             self.inp["latitude"] = 19.421
@@ -586,18 +590,17 @@ class JobSetUp:
 # volcat_events.py Events class has
 # ndir, pdir, edir, idir and a get_dir method.
 
-class VolcatDirectories:
-    ilist = ['JPSS_DIR',
-             'VOLCAT_LOGFILES',
-             'VOLCAT_DIR']
 
-    def __init__(self,inp,volcano_name):
+class VolcatDirectories:
+    ilist = ["JPSS_DIR", "VOLCAT_LOGFILES", "VOLCAT_DIR"]
+
+    def __init__(self, inp, volcano_name):
         self.get_dir(inp)
 
     def defaults(self):
-        self.inp['JPSS_DIR'] = '/pub/jpsss_upload'
-        self.inp['VOLCAT_LOGFILES'] = '/pub/ECMWF/JPSS/VOLCAT/LogFiles/'
-        self.inp['VOLCAT_DIR']= '/pub/ECMWF/JPSS/VOLCAT/Files/'
+        self.inp["JPSS_DIR"] = "/pub/jpsss_upload"
+        self.inp["VOLCAT_LOGFILES"] = "/pub/ECMWF/JPSS/VOLCAT/LogFiles/"
+        self.inp["VOLCAT_DIR"] = "/pub/ECMWF/JPSS/VOLCAT/Files/"
         return -1
 
     def event_directories(self, inp, volcano_name, verbose=False, make=True):
@@ -615,7 +618,7 @@ class VolcatDirectories:
         if "VOLCAT_DIR" not in inp.keys():
             logger.warning("get_dir method input does not contain VOLCAT_DIR")
             return None
-        tdir = inp["VOLCAT_DIR"]
+        #tdir = inp["VOLCAT_DIR"]
         if volcano_name != "Unknown":
             ndir = os.path.join(inp["VOLCAT_DIR"], self.volcano_name)
         else:
@@ -628,435 +631,9 @@ class VolcatDirectories:
             logger.info("Downloading to {}".format(ndir))
             logger.info("parallax corrected to {}".format(pdir))
             logger.info("emit times files to {}".format(edir))
-        #set_dir(ndir, pdir, edir, idir, make=make)
+        # set_dir(ndir, pdir, edir, idir, make=make)
         return ndir, pdir, edir, idir
 
 
-class HYSPLITDirectories:
 
-    def __init__(self,inp,volcano_name):
-        return -1
 
-
-class DirectoryManager:
-
-    def __init__(self, inp, JOBID, jobname):
-        self.job = Job(JOBID, jobname)
-
-        return -1
-
-
-class Job:
-    def __init__(self, JOBID, jobname):
-        self.JOBID = JOBID   # created for each HYSPLIT run
-        self.name = jobname  # indicates what event the run belongs to.
-
-    def __str__(self):
-        return "{}_{}".format(self.name, self.JOBID)
-
-    def __repr__(self):
-        return "{}_{}".format(self.name, self.JOBID)
-
-
-def read_suffix(self,fnamestr):
-    temp = fnamestr.split('.')
-    suffix = temp[-1]
-    temp2 = suffix.split('_')
-    jobname = temp2[0]
-    jobid = temp2[1]
-    if len(temp2)==3:
-       stage = temp2[2]
-    return jobname, jobid, stage 
-
-
-class JobFileNameComposer:
-
-    def __init__(self, workDir, jobId, jobname):
-        """
-        jobname : identifies a particular event.
-        jobId   : identifies a particular hysplit run
-        stage   : identifies a particular part of a hysplit run.
-
-        Examples:
-
-        Eruption of Popocatepetl. 
-        All runs have jobname of Popocatepetl.
-        jobid is set for each 'run'
-
-        An ensemble run with the GEFS would have 31 stages (members).
-        The stage would identify the GEFS member used.
-
-        run for inverse modeling, the stages would identify the different unit source runs.
-        if GEFS is used then stage identifies both the GEFS member and unit source run.
-        The unit source runs are usually identified by start-time MMDDHH and start height in meters.
-        e.g. 102201_11880.
-
-        """
-        self.workDirectory = workDir
-        self.job = Job(jobId, jobname)
-        self._stagelist = []
-        self._basenamehash = self.set_defaults()
-
-    def set_defaults(self):
-        basenamehash = {}
-        basenamehash['tdump'] = 'tdump' 
-        basenamehash['cdump'] = 'cdump' 
-        basenamehash['pardump'] = 'pardump' 
-        basenamehash['message'] = 'MESSAGE' 
-        basenamehash['control'] = 'CONTROL' 
-        basenamehash['setup'] = 'SETUP' 
-        basenamehash['concplot'] = 'concplot' 
-        basenamehash['parxplot'] = 'parxplot' 
-        basenamehash['awips'] = 'awips2' 
-        basenamehash['massload'] = 'massload' 
-        basenamehash['trajplot'] = 'traj'
-        return basenamehash
-
-    @property
-    def basenamehash(self):
-        return self._basenamehash
-
-    @basenamehash.setter
-    def basenamehash(self,inp):
-        if isinstance(inp,dict):
-            basenamehash.update(inp)
-
-    @property
-    def stagelist(self):
-        return list(set(self._stagelist))
-
-    def make_suffix(self,stage=None):
-        if stage==0: stage=None
-
-        if isinstance(stage,(int,float,str)):
-            if stage not in self._stagelist:
-                self._stagelist.append(stage)
-            return "{}_{}".format(self.job, stage)
-        else: 
-            return self.job
-
-    def get_control_filename(self,stage=None):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['control']
-        return '{}.{}'.format(prefix,suffix)
-
-    def get_setup_filename(self,stage=None):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['setup']
-        return '{}.{}'.format(prefix,suffix)
-
-    def get_pardump_filename(self,stage=None):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['pardump']
-        return '{}.{}'.format(prefix,suffix)
-
-    def get_cdump_filename(self,stage=None):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['cdump']
-        return '{}.{}'.format(prefix,suffix)
-
-    def get_tdump_filename(self,stage=None):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['tdump']
-        return '{}.{}'.format(prefix,suffix)
-
-    def get_message_filename(self,stage=None):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['message']
-        return '{}.{}'.format(prefix,suffix)
-
-    def get_awips_filename(self, stage=None):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['awips']
-        return "{}.{}.nc".format(prefix,suffix)
-
-    def get_concplot_filename(self,stage=None,frame=None,ptype='ps'):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['concplot']
-        if not frame:
-            return "{}_{}.{}".format(prefix,suffix,ptype)
-        else:
-            frame = self.check_frame()
-            return "{}_{}_{:01d}.{}".format(prefix, suffix, frame, ptype)
-
-    def get_parxplot_filename(self, stage=0, frame=None, ptype="gif"):
-        suffix = self.make_suffix(stage)
-        prefix = self.basenamehash['parxplot']
-        if not frame:
-            return "{}_{}.{}".format(prefix,suffix,ptype)
-        else:
-            frame = self.check_frame()
-            return "{}_{}_{:01d}.{}".format(prefix, suffix, frame, ptype)
-
-    def get_xrfile(self):
-        # netcdf file that can be read by xarray module
-        # all the stages are combined in this file so no need to input stage.
-        suffix = self.make_suffix(stage=None)
-        return "xrfile.{}.nc".format(suffix)
-
-    def check_frame(self,frame):
-       if isinstance(frame,float):
-          frame = int(frame)
-       if not isinstance(frame,int):
-          frame=0
-          logger.warning('get_massloading_filename frame input must be float or integer {}'.format(type(frame)))
-       return frame
- 
-    def get_massloading_filename(self, stage=0, frame=0, ptype="gif"):
-        frame = self.check_frame(frame)
-        base = self.basenamehash['massload']
-        prefix = self.make_suffix(stage) 
-        return "{}_{}_{:01d}.{}".format(prefix, base, frame, ptype)
-
-    def get_zipped_filename(self):
-        suffix = self.make_suffix(stage=None)
-        return "JOBID{}.zip".format(suffix)
-
-    def get_trajplot_filename(self, stage=0, frame=None, ptype="gif"):
-        base = self.basenamehash['trajplot']
-        prefix = self.make_suffix(stage) 
-        if not frame:
-            return "{}_{}.{}".format(prefix, base, ptype)
-        else:
-            frame = self.check_frame(frame)
-            return "{}_{}_{:04d}.{}".format(prefix, base, frame, ptype)
-
-    def get_kmz_filename(self, stage=0):
-        base = 'HYSPLIT'
-        prefix = self.make_suffix(stage)
-        suffix = 'kmz'  
-        return '{}_{}.{}'.format(prefix,base,suffix)
-
-    def get_trajplot_kml_filename(self, stage=0,frame=None):
-        # kml file is produced by trajplot. Name is same as the trajplot name.
-        # but with kml instead of ps.
-        trajplot = self.get_trajplot_filename(stage,frame,ptype='ps')
-        return trajplot.replace('.ps','_01.kml')
-
-
-    def get_kml_filename(self, stage=0):
-        # kml file is produced by trajplot. Name is same as the trajplot name.
-        # but with kml instead of ps.
-        base = 'HYSPLIT'
-        prefix = self.make_suffix(stage)
-        suffix = 'kml'  
-        return '{}_{}.{}'.format(prefix,base,suffix)
-
-
-    #def get_awips_filenames(self, stage=0):
-    #    files = glob.glob("awips2.{}*nc".format(self.job))
-    #    return files
-
-    def get_gis_status_filename(self, stage=0):
-        if stage > 0:
-            return "{}_gis.{}.txt".format(self.job, stage)
-        return "{}_gis.txt".format(self.job)
-
-    #def get_gistmp_filename(self, stage=0):
-    #    if stage > 0:
-    #        return "{}_gistmp.{}.txt".format(self.job, stage)
-    #    return "{}_gistmp.txt".format(self.job)
-
-    #def get_concplot_ps_filename(self, stage=0, ptype="ps"):
-    #    if stage > 0:
-    #        return "{}_conc_{}.{}".format(self.job, stage, ptype)
-    #    return "{}_conc.{}".format(self.job, ptype)
-
-    #def get_summary_pdf_filename(self):
-    #    return "{}_allplots.pdf".format(self.job)
-
-    #def basic_filename(self, stage, tag="conc", ptype="gif"):
-    #    return "{}_{}_{}.{}".format(self.job, tag, stage, ptype)
-
-    #def filename_with_frame(self, stage, frame=0, tag="conc", ptype="gif"):
-    #    return "{}_{}_{}-{:01d}.{}".format(self.job, tag, stage, frame, ptype)
-
-    #def filename_with_frame2(self, stage, frame=0, tag="conc", ptype="gif"):
-    #    return "{}_{}_{}{:04d}.{}".format(self.job, tag, stage, frame, ptype)
-
-    #def get_trajplot_kml_filename(self, stage=0, frame=None):
-    #    tag = "traj"
-    #    ptype = "kml"
-    #    return "{}_{}_{}_{:02d}.{}".format(self.job, tag, stage, frame, ptype)
-
-    #def get_trajplot_filename(self, stage=0, frame=None, ptype="gif"):
-    #    tag = "traj"
-    #    if frame is None:
-    #        return self.basic_filename(stage, tag, ptype)
-    #    else:
-    #        return self.filename_with_frame2(stage, frame, tag, ptype)
-
-    #def get_concplot_filename(self, stage=0, frame=None, ptype="gif"):
-    #    tag = "conc"
-    #    if frame is None:
-    #        return self.basic_filename(stage, tag, ptype)
-    #    else:
-    #        return self.filename_with_frame(stage, frame, tag, ptype)
-
-    #def get_exceedance_filename(self, stage=0, frame=None, ptype="gif"):
-    #    tag = "exceedance"
-    #    if frame is None:
-    #        return self.basic_filename(stage, tag, ptype)
-    #    else:
-    #        return self.filename_with_frame(stage, frame, tag, ptype)
-
-    #def get_massloading_filename(self, stage=0, frame=None, ptype="gif"):
-    #    tag = "massload"
-    #    if frame is None:
-    #        return self.basic_filename(stage, tag, ptype)
-    #    else:
-    #        return self.filename_with_frame(stage, frame, tag, ptype)
-
-    #def get_parxplot_filename(self, stage=0, frame=None, ptype="gif"):
-    #    tag = "part"
-    #    if frame is None:
-    #        return self.basic_filename(stage, tag, ptype)
-    #    else:
-    #        return self.filename_with_frame(stage, frame, tag, ptype)
-
-    #def get_concentration_montage_filename(self, stage, frame, ptype="gif"):
-    #    tag = "montage"
-    #    if frame is None:
-    #        return self.basic_filename(stage, tag, ptype)
-    #    else:
-    #        return self.filename_with_frame(stage, frame, tag, ptype)
-
-    #def get_totalpdf_filename(self, stage):
-    #    tag = "allplots"
-    #    ptype = "pdf"
-    #    return self.basic_filename(stage, tag, ptype)
-
-    #def get_zipped_filename(self, tag=""):
-    #    return "{}JOBID{}.zip".format(tag, self.job)
-
-    #def get_gis_zip_filename(self, stage=0):
-    #    if stage > 0:
-    #        return "{}_gis.{}.zip".format(self.job, stage)
-    #    return "{}_gis.zip".format(self.job)
-
-    #def get_basic_kml_filename(self, program="concplot"):
-    #    if program == "concplot":
-    #        ktype = ""
-    #    elif program == "parxplot":
-    #        ktype = "part"
-    #    else:
-    #        ktype = ""
-    #    return "HYSPLIT{}_{}.kml".format(ktype, self.job.JOBID)
-
-    # def get_kml_filename(self, stage=0, frame=1):
-    # if stage > 0:
-    #    return '{}_HYSPLIT_{:02d}.{}.kml'.format(self.job, frame, stage)
-    # return '{}_HYSPLIT_{:02d}.kml'.format(self.job, frame)
-
-    def get_gelabel_filename(self, frame=1, ptype="ps"):
-        if ptype == "txt":
-            return "GELABEL_{:02d}_{}.{}".format(frame, self.job.JOBID, ptype)
-        else:
-            return "GELABEL_{:02d}_{}.{}".format(frame, self.job.JOBID, ptype)
-
-    def get_basic_gelabel_filename(self, frame=1, ptype="ps"):
-        if ptype == "txt":
-            return "GELABEL_{:02d}_ps.{}".format(frame, ptype)
-        else:
-            return "GELABEL_{:02d}_ps.{}".format(frame, ptype)
-
-    #def get_kmz_filename(self, stage=0):
-    #    return "{}_HYSPLIT_{}.kmz".format(self.job, stage)
-
-    def get_maptext_filename(self):
-        return "MAPTEXT.{}".format(self.job)
-
-    def get_maptext_filename_for_zip(self):
-        return "{}_MAPTEXT.txt".format(self.job)
-
-    #def get_awips_filenames(self, stage=0):
-    #    files = glob.glob("awips2.{}.nc".format(self.job))
-    #    return files
-
-
-    #def get_xrfile(self):
-        # netcdf file that can be read by xarray module
-        # all the stages are combined in this file so no need to input stage.
-        #return "xrfile.{}.nc".format(self.job)
-
-
-    def get_all_ashbase_filenames(self, stage=0):
-        # Note the progress file and the run summary file are generated
-        # by the Application layer written in Java.
-        files = [
-            "{}_progress.txt".format(self.job),
-            "{}_run_setup_summary.txt".format(self.job),
-        ]
-
-        # cdump files
-        files += glob.glob("{}_cdump*".format(self.job))
-        files += glob.glob("cdump_{}".format(self.job))
-        # netcdf files
-        files += glob.glob("xrfile.{}.nc".format(self.job.JOBID))
-        # pardump file
-        files += glob.glob("{}_pardump*".format(self.job))
-        files += glob.glob("pardump_{}".format(self.job))
-
-        ## TEXT files which need .txt extension added.
-        # MESSAGE file
-        txtfiles = glob.glob("MESSAGE*{}".format(self.job.JOBID))
-        # CONTROL file
-        txtfiles += glob.glob("CONTROL*{}".format(self.job.JOBID))
-        # SETUP file
-        txtfiles += glob.glob("SETUP*{}".format(self.job.JOBID))
-        ## TEXT files which need .txt extension added.
-        # tdump files
-        txtfiles += glob.glob("{}_tdump*".format(self.job))
-        txtfiles += glob.glob("tdump_{}".format(self.job))
-
-        # add .txt extension onto these files.
-        # use copy instead of move so that if it is re-run it still works.
-        [Helper.copy(x, "{}.txt".format(x)) for x in txtfiles]
-        files += ["{}.txt".format(x) for x in txtfiles]
-
-        # maptext file
-        files += glob.glob("{}_MAPTEXT.txt".format(self.job))
-        # KMZ files
-        files += glob.glob("{}_*.kmz".format(self.job))
-        # PDF files
-        files += glob.glob("{}_allplots*.pdf".format(self.job))
-
-        # png files
-        files += glob.glob("{}_traj*.png".format(self.job))
-
-        # get rid of any None
-        files = [x for x in files if x]
-
-        return files
-
-
-class AshDINameComposer(JobFileNameComposer):
-    # used only in utildatainsertion right now for find_cdump_df_alt
-    # for finding cdump files
-
-
-    def get_cdump_filename(self, stage="EMIT_0"):
-        cdumpfilename = self.get_di_filename(stage,'cdump.')
-        return cdumpfilename
-
-    def get_di_filename(self,stage,cstr):
-        stage = str(stage)
-        if 'EMIT_' in stage:
-            filename = stage.replace("EMIT_", cstr)
-        elif 'EMITIMES_' in stage:
-            filename = stage.replace("EMITIMES_", cstr)
-        elif 'EMITIMES' in stage:
-            filename = stage.replace("EMITIMES", cstr)
-        elif 'EMIT' in stage:
-            filename = stage.replace("EMIT", cstr)
-        else:
-            filename = '{}.{}'.format(cstr,stage)
-        return filename
-
-    def get_control_filename(self, stage="EMIT_0"):
-        controlfilename = self.get_di_filename(stage,'CONTROL.')
-        return controlfilename
-
-    def get_setup_filename(self, stage=0):
-        setupfilename = self.get_di_filename(stage,'SETUP.')
-        return setupfilename

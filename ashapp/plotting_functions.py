@@ -115,6 +115,17 @@ def check_and_convert(
         rval = (True, JOBID, "PASSED")
     return rval
 
+def clean_gelabel(wdir):
+    gelabel = glob.glob(wdir + '/*GELABEL*')
+    for gel in gelabel:
+        Helper.remove(gel)
+
+def clean_ps(wdir):
+    postscript = glob.glob(wdir + '/*ps')
+    for pscrpt in postscript:
+        Helper.remove(pscrpt)
+
+
 
 def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier=1):
     # create dispersion png plot using python concplot.
@@ -127,7 +138,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
     convert_exe = inp["CONVERT_EXE"]
     ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
     resolution = inp["graphicsResolution"]
-
+    print('JOBID', JOBID)
     clrs = ConcplotColors()
     # want in grams. output in mg.
     conc_multiplier = conc_multiplier / 1000.0
@@ -166,7 +177,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
             "-ug",  # units of m2 rather than m3.
             #'+n',
             # this will change otput name of kml file.
-            # "-p" + str(JOBID),
+            #"-p" + str(JOBID), 
             "-x{:2.2e}".format(conc_multiplier),
             "-o" + outputname,
             "-s0",  # sum species
@@ -192,7 +203,7 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
         JOBID,
         convert_exe,
         ghostscript_exe,
-        final_type="png",
+        final_type="gif",
         resolution=resolution,
     )
     # TODO - put this in a different function?
@@ -216,8 +227,10 @@ def create_massloading_plot(inp, inputname, outputname, stage=0, conc_multiplier
     return rval
 
 
-def make_gelabel(hysplitdir, filenamer, JOBID):
-    # TO DO - make it work.
+def make_gelabel(inp, filenamer, JOBID):
+    convert_exe = inp["CONVERT_EXE"]
+    ghostscript_exe = inp["GHOSTSCRIPT_EXE"]
+    hdir = inp["HYSPLIT_DIR"]
 
     # the get_basic_gelabel_filename method should be passed if the -p
     # option was not used and files have form GELABEL_??_ps.txt.
@@ -228,11 +241,12 @@ def make_gelabel(hysplitdir, filenamer, JOBID):
     # gelabel executable creates ps files of the legend from the txt file with
 
     c = [
-        os.path.join(hysplitdir, "exec", "gelabel"),
+        os.path.join(hdir, "exec", "gelabel"),
     ]
     # check to see if -p option is needed.
-    if filenamer(frame=1, ptype="txt").split(".")[0][-2:] != "ps":
-        c.append("-p{}".format(JOBID))
+    #if filenamer(frame=1, ptype="txt").split(".")[0][-2:] != "ps":
+    #    c.append("-p{}".format(JOBID))
+    print(c)
     logger.debug(" ".join(c))
     Helper.execute(c)
 
@@ -241,15 +255,15 @@ def make_gelabel(hysplitdir, filenamer, JOBID):
     gelabel = filenamer(frame=iii, ptype="ps")
     logger.debug(gelabel + " NAME ")
     gelist = []
-    # while os.path.isfile(gelabel):
-    #    gelabelgif = filenamer(frame=iii, ptype="gif")
-    #    gelist.append(gelabelgif)
-    #    logger.debug(gelabel + " NAME " + gelabelgif)
-    #    self.convert_ps_to_image(gelabel, gelabelgif, resolution=80)
-    #    iii += 1
-    #    gelabel = filenamer(frame=iii, ptype="ps")
-    # if iii > 100:
-    #    break
+    while os.path.isfile(gelabel):
+        gelabelgif = filenamer(frame=iii, ptype="gif")
+        gelist.append(gelabelgif)
+        logger.debug(gelabel + " NAME " + gelabelgif)
+        convert_ps_to_image(convert_exe,ghostscript_exe,gelabel, gelabelgif, resolution=80)
+        iii += 1
+        gelabel = filenamer(frame=iii, ptype="ps")
+        if iii > 100:
+            break
     return gelist
 
 
@@ -380,6 +394,14 @@ def create_concentration_montage(self, stage):
     stagein = [stage, stage, stage]
     self.create_montage_pdf(stagein, flin, flout, file_addlist)
 
+def make_allplots_pdf(convert_exe,montage_list, allplotsname):
+    c = [convert_exe]
+    c.extend(montage_list)
+    c.append(allplotsname)
+    logger.debug("MONTAGE PDF {}".format(" ".join(c)))
+    Helper.execute_with_shell(c)
+
+    
 
 def create_montage_pdf(self, stage, flin, flout, file_addlist):
     """
@@ -506,90 +528,67 @@ def convert_ps_to_pdf(inp, ps_filename, pdf_filename):
     logger.info("Creating PDF " + " ".join(cproc))
     Helper.execute(cproc)
 
-
-def get_maptext_info(inp, metfilefinder):
-    maptexthash = {}
-    rstr = "HYSPLIT dispersion run. "
-    maptexthash["run_description"] = rstr
-
-    metfiles = metfilefinder.find(inp["start_date"], inp["durationOfSimulation"])
-    if metfiles:
-        metfiles = list(zip(*metfiles))[1]
-    else:
-        metfiles = "unknown"
-
-    maptexthash["infoc"] = ",".join(metfiles)
-
-    return maptexthash
-
-
-def create_maptext(inp, maptexthash, conc_multiplier, ash_reduction):
-    # TO DO - write meteorology
-    # vertical distribution.
-    # MER and m63.
+def create_maptext(inp):
     JOBID = inp["jobid"]
-    descripline = maptexthash["run_description"]
-
-    now = datetime.datetime.utcnow().strftime("%m/%d/%Y %H:%M UTC")
-
-    emission_rate = conc_multiplier()  # gives rate in mg/hour
-    emission_rate = "{:2.1e} kg/h".format(emission_rate / 1e6)
-
+    descripline = inp["run_description"]
+    emission_rate = inp['conc_multplier']
     name = inp["VolcanoName"]
-
     emission = float(inp["emissionHours"])
-    ehours = int(emission)
-    eminutes = round((emission - int(emission)) * 60)
-
-    m63 = ash_reduction
-
     lat = inp["latitude"]
     lon = inp["longitude"]
     alt = inp["bottom"]
     top = inp["top"]
-    sp8 = "        "
     estart = inp["start_date"].strftime("%Y %m %d %H:%M UTC")
+    m63 = inp['fraction_of_fine_ash'] 
+    metid = inp['meteorologicalData']  
+    owner = inp['owner']
+    wdir = inp['WORK_DIR']
+    sp8 = "        "
+    now = datetime.datetime.utcnow().strftime("%m/%d/%Y %H:%M UTC")
+    emission_rate = "{:2.1e} kg/h".format(emission_rate / 1e6)
 
-    # metid = self.inp["meteorologicalData"]
-    # start_lon
-    # start_lat
-    # data[0] #alert type
-    # vaac
-    # hgts[0]
-    # data[7]  #Alert detection time
-    jobidline = "Job ID: {}   Job Name: {}   Job Completion: {}\n".format(
-        JOBID, inp["jobname"], now
+    ehours = int(emission)
+    eminutes = round((emission - int(emission)) * 60)
+    jobidline = "Job ID: {}   Job Completion: {}\n".format(
+        JOBID, now
     )
     volcanoline = "Volcano: {}{} lat: {} lon: {}{}Hgt: {} to {} m\n".format(
         name, sp8, lat, lon, sp8, alt, top
     )
     poll = "Pollutant: Ash \n"
+
     ## TO DO calculate release quantity
     release_a = "Start: {}  Duration: {} h {} min\n".format(estart, ehours, eminutes)
     release_b = "Release: {}    m63: {:1g}\n".format(emission_rate, m63)
     info_a = "Vertical distribution: {}{}  GSD: {}{}  Particles: {}\n".format(
-        "uniform", sp8, "default", sp8, "20,000"
+        "uniform", sp8, "default", sp8, "?"
     )
-    info_b = "Meteorology: {}\n".format(inp["meteorologicalData"])
-    info_c = maptexthash["infoc"]
-    owner = "Run by: {}\n".format(inp["owner"])
+    info_b = "Meteorology: {}\n".format(metid)
+    info_c = '' # used to be the actual metfiles used.
+    owner = "Run by: {}\n".format(owner)
+    strlist = [jobidline,descripline, volcanoline,poll,release_a,release_b,info_a,info_b,info_c,owner]
+    write_maptext(wdir,strlist)
 
-    with open(inp["WORK_DIR"] + "MAPTEXT.CFG", "w") as fid:
+def write_maptext(wdir, strlist, fname='MAPTEXT.CFG'):
+    """
+    jobidline, descripline, sourceline, poll, release_a, release_b, info_a, info_b, info_c, owner
+    """
+    with open(os.path.join(wdir,fname), "w") as fid:
         fid.write("  \n")
         fid.write("  \n")
-        fid.write(jobidline)
+        fid.write(strlist[0])
         fid.write("  \n")
-        fid.write(descripline)
+        fid.write(strlist[1])
         fid.write("  \n")
         fid.write("  \n")
-        fid.write(volcanoline)
-        fid.write(poll)
-        fid.write(release_a)
-        fid.write(release_b)
-        fid.write(info_a)
-        fid.write(info_b)
-        fid.write(info_c)
-        fid.write(owner)
+        fid.write(strlist[2])
+        fid.write(strlist[3])
+        fid.write(strlist[4])
+        fid.write(strlist[5])
+        fid.write(strlist[6])
+        fid.write(strlist[7])
+        fid.write(strlist[8])
+        fid.write(strlist[9])
         # current = dtime.utcnow()
         # fid.write('Job Start: '+current.strftime('%B %d, %Y')+' at '+current.strftime('%H:%M:%S')+' UTC \n')
         fid.write("\n")
@@ -607,12 +606,15 @@ def get_kmz_files(hysplit_dir):
     ]
     return files
 
-
 def generate_kmz(hysplit_dir, kml_filenames, kmz_filename, compresslevel):
+    """
+    hysplit_dir : directory where noaa_google.gif, logocon.gif etc. files are located.
+    kml_filenames : list of filenames to be zipped into the kmz file.
+    kmz_filename  : str - name of kmz file to be created
+    compresslevel : used to set compression for the zipfile
+    """
     if isinstance(kml_filenames,str):
        kml_filenames = [kml_filenames]
-       
-
     for f in kml_filenames:
         if not os.path.exists(f):
             logger.warn(
@@ -621,31 +623,22 @@ def generate_kmz(hysplit_dir, kml_filenames, kmz_filename, compresslevel):
                 )
             )
             return
-
     files = get_kmz_files(hysplit_dir)
     files += kml_filenames
+    create_zipped_up_file(kmz_filename, files, compresslevel)
 
-    with zipfile.ZipFile(
-        kmz_filename, "w", compresslevel=compresslevel
-    ) as z:
-        for f in files:
-            if os.path.exists(f):
-                bn = os.path.basename(f)
-                z.write(f, arcname=bn)
-
-
-def create_zipped_up_file(filename, files,compresslevel=9):
+def create_zipped_up_file(filename,files,compresslevel=9):
     if not files:
         return False
     logger.debug("{} files to be zipped {}".format(filename, "\n".join(files)))
     with zipfile.ZipFile(
         filename, "w", compresslevel=compresslevel
-    ) as z:
-        for f in files:
-            if os.path.exists(f):
-                z.write(f)
+    ) as zzz:
+        for fff in files:
+            if os.path.exists(fff):
+                bsn = os.path.basename(fff)
+                zzz.write(fff, arcname=bsn)
     return True
-
 
 def create_trajectory_plot(inp, inputname, outputname, stage, gist_status_file):
     jobid = inp['jobid']

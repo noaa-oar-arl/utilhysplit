@@ -24,7 +24,8 @@ import numpy as np
 import requests
 import xarray as xr
 
-from utilvolc.runhelper import Helper, JobFileNameComposer
+from utilvolc.runhelper import Helper
+from filenamer import  JobFileNameComposer
 from ashapp.ashruninterface import ModelOutputInterface
 import ashapp.plotting_functions as plotf
 
@@ -46,6 +47,7 @@ class GraphicsEnsembleDispersion(ModelOutputInterface):
              ("MAP_DIR",'req'),
              ("HYSPLIT_DIR",'req'),
              ("mapBackground",'req'),
+             ("CONVERT_EXE",'req'),
              ('graphicsResolution','req')]
 
 
