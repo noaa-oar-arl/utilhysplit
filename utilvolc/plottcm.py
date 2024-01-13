@@ -108,7 +108,7 @@ def plot_outdat_ts_psize_function(
     return ax, ts
 
 
-def plot_outdat_ts_function(
+def plot_emissions_timeseries(
     dfdat,
     log=False,
     fignum=1,
@@ -135,12 +135,13 @@ def plot_outdat_ts_function(
     sns.set()
     if 'psize' in df.columns: df = df.drop("psize", axis=1)
     # dfp = dfp.pivot(index='date',columns='ht')
-    df = df.pivot(index="ht", columns="date")
+    df = df.pivot(index="date", columns="ht")
     try: 
        df = df.mass
     except: 
        pass
-    ts = df.sum()
+    ts = df.sum(axis=1)
+    print('HERE', ts)
     if unit == "kg/s":
         yval = ts.values / 3.6e6
     elif unit == "g/h":
@@ -172,8 +173,11 @@ def plot_outdat_profile_function(
         df = df.dropna()
     else:
         df = dfdat
-
-    ts = df.sum(axis=1)
+ 
+    if 'psize' in df.columns: df = df.drop("psize", axis=1)
+    # dfp = dfp.pivot(index='date',columns='ht')
+    df2 = df.pivot(index="ht", columns="date")
+    ts = df2.sum(axis=1)
     sns.set()
     xval = ts.values * 1 / 1e12
     try:

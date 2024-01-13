@@ -28,6 +28,7 @@ from utilvolc.volcpaired import VolcatHysplit
 from utilvolc import invhelper
 from utilvolc.volctcm import TCM, make_outdat_df
 from utilvolc import plottcm
+from utilvolc import volctcm
 
 # def save_emis_gefs(inverse):
 #    tlist = 'gec00'
@@ -228,20 +229,15 @@ class InversionEns:
             run.plot_outdat_ts(ax=ax,log=False,clr=clr,label=label)
 
 
-#class InversionOutput():
-
-#    def __init__(self,inp):
-#        self._ilist = None
-#        self._inp = {}  #dictionary with information from the config file.
-#        self._directories = None
-#        self._tcm = TCM()
- 
-#    def make_outdat(self):
-#        return (self._tcm.make_outdat())
-
 
 class RunInversion(RunInversionInterface):
-     # do do
+    # workflow
+    # test = RunInversion(inp)
+    # test.setup_paired_data(ilist)
+    # (optional) test.paired_data.compare_plotsA(iii)
+    # test.setup_tcm(tiilist......)
+    # test._tcm.run(execdir, subdir)
+    # 
 
     def __init__(self, inp):
 
@@ -317,7 +313,6 @@ class RunInversion(RunInversionInterface):
         rcopy._tcm = self._tcm
         return rcopy
 
-
     def copy(self):
         rcopy = RunInversion(self.inp)
         rcopy._paired_data = self._paired_data
@@ -349,7 +344,6 @@ class RunInversion(RunInversionInterface):
             print('Preparing paired data for {} {}'.format(d1,d2))
             self._paired_data.prepare_one_time(time)
                 
-
     def setup_tcm(self,tiilist, 
                   concmult=1,
 
@@ -366,8 +360,6 @@ class RunInversion(RunInversionInterface):
         tag = invhelper.create_runtag(basetag,tiilist,remove_cols,remove_rows,remove_sources,remove_ncs)
         self.directories.subdir = tag
         print('subdir', self.directories.subdir) 
-
-
         tcm_name = '{}.{}.txt'.format(self.inp['jobname'],tcm_name)
         tcm_name = os.path.join(self.directories.subdir,tcm_name) 
 
@@ -386,9 +378,15 @@ class RunInversion(RunInversionInterface):
         self._tcm.write(tcm_name)
         return -1
 
-    def make_outdat(self):
-        dfdat = self.tcm.output.get_emis()
-        volcinverse.make_outdat(self._sourcehash, self.tcm.columns, dfdat)
+    #def make_emissions(self):
+    #    dfdat = self.tcm.output.get_emis()
+    #    emission_df = volctcm.make_outdat(self._sourcehash, self.tcm.columns, dfdat)
+    #    return emission_df
+
+    #def plot_emissions_ts(self):
+    #    emission_df = self.make_emissions()
+    #    plottcm.plot_emissions_timeseries(emission_df,log=True,marker='o') 
+
 
     # TODO also a funciton in volctcm.
     def make_outdat_old(self):
@@ -429,6 +427,7 @@ class RunInversion(RunInversionInterface):
             fig = plt.figure(fignum, figsize=(10, 5))
             ax = fig.add_subplot(1, 1, 1)
         df = self.make_outdat_df()
+        #ax, ts = plottcm.plot_outdat_ts_psize_function(df,ax=ax,log=log)
         #ax, ts = plottcm.plot_outdat_ts_psize_function(df,ax=ax,log=log)
         ax, ts = plottcm.plot_outdat_ts_function(df,ax=ax,log=log,clr=clr,label=label)
         handles, labels = ax.get_legend_handles_labels()
@@ -489,19 +488,19 @@ class RunInversion(RunInversionInterface):
             dfout.to_csv(savename)
         return dfout
 
-    def plot_outdat_profile(self, fignum=1, unit="kg", ax=None):
+    #def plot_outdat_profile(self, fignum=1, unit="kg", ax=None):
         # InverseAshPart class
-        dfdat = self.tcm.output.get_emis()
-        if not ax:
-            sns.set()
-            sns.set_style("whitegrid")
-            fig = plt.figure(fignum, figsize=(10, 5))
-            ax = fig.add_subplot(1, 1, 1)
-        df = self.make_outdat_df(dfdat, part="basic")
-        ax, ts = plottcm.plot_outdat_profile_psize_function(df,ax=ax)
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles, labels)
-        return ax, ts
+    #    dfdat = self.tcm.output.get_emis()
+    #    if not ax:
+    #        sns.set()
+    #        sns.set_style("whitegrid")
+    #        fig = plt.figure(fignum, figsize=(10, 5))
+    #        ax = fig.add_subplot(1, 1, 1)
+    #    df = self.make_outdat_df(dfdat, part="basic")
+    #    ax, ts = plottcm.plot_outdat_profile_psize_function(df,ax=ax)
+    #    handles, labels = ax.get_legend_handles_labels()
+    #    ax.legend(handles, labels)
+    #    return ax, ts
 
     def run_hysplit(self):
         from ashapp.maindispersion import MainEmitTimes

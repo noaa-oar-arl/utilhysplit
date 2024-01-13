@@ -5,6 +5,7 @@ import numpy as np
 import os
 import pandas as pd
 import seaborn as sns
+from utilvolc import plottcm
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ Classes
     ParametersIn
     InverseDat
     InvEstimatedEmissions
-
+    InvOut2dat 
 Functions
     readoutdat
 """
@@ -21,6 +22,7 @@ Functions
 # 2023 Dec 04 (amc) changed InverseOutDat to InvEstimatedEmissions
 # 2023 Dec 04 (amc) changed self.outdat to self.emissions
 # 2023 Dec 04 (amc) added make_emissions function
+# here is a difference
 
 class ParametersIn:
     """
@@ -67,23 +69,47 @@ def readoutdat(wdir,fname):
 
 class InvEstimatedEmissions:
 
-    def __init__(self, fname="out.dat"):
+    def __init__(self, fname="out.dat",sourcehash=None,columns=None):
         self.fname = fname
-        self._df = pd.DataFrame()  # dataframe which holds data from out.dat
+        self._df = pd.DataFrame()    # dataframe which holds data from out.dat
+        self.sourcehash = sourcehash # dictionary with informtion about what the columns mean.
+        self.columns = columns       # column names
 
     @property
     def df(self):
         return self._df.copy()
 
-    @setter.df
+    @df.setter
     def df(self,df):
         self._df = df
+
+    @property
+    def sourcehash(self):
+        return self._sourcehash
+
+    @sourcehash.setter
+    def sourcehash(self,sourcehash):
+        if isinstance(sourcehash,dict):
+           self._sourcehash=sourcehash
+        else:
+           self._sourcehash = {}
+
+    @property
+    def columns(self):
+        return self._columns
+
+    @columns.setter
+    def columns(self,columns):
+        if isinstance(columns,(list,np.ndarray)):
+           self._columns = columns
+        else:
+           self.columns = []
 
     def read(self, wdir):
         self.df = readoutdat(wdir, self.fname)
 
-    def make_emissions(self,sourcehash, tcm_columns):
-        return make_emissions(sourcehash,tcm_columns,self.df)
+    def make_emissions(self):
+        return make_emissions(self.sourcehash,self.columns,self.df)
 
     def emis_hist(self, units="g/h",log=True):
         """
@@ -106,6 +132,10 @@ class InvEstimatedEmissions:
         ax.set_xlabel("Log emission (g/h)")
         print(nmax)
         return ax
+
+    def plot_timeseries(self,log=True,marker='o'):
+        edf = self.make_emissions()
+        plottcm.plot_emissions_timeseries(edf,log,marker)
 
 
 class InverseOut2Dat:
@@ -152,6 +182,8 @@ class InverseDat:
         # ut2.dat has observed(2nd column) and modeled(3rd column) mass loadings.
         """
         self.wdir = wdir
+        fname = os.path.join(wdir,fname)
+        fname2 = os.path.join(wdir,fname2)
         self.emissions = InvEstimatedEmissions(fname)
         self.out2dat = InverseOut2Dat(fname2)
         self.read()
@@ -167,7 +199,7 @@ class InverseDat:
         self.emissions.read(self.wdir)
         self.out2dat.read(self.wdir)
 
-    def get_emis(self, name=None):
+    def get_emis(self,sourcehash=None, name=None):
         """
         """
         return self.emissions.df 
@@ -197,10 +229,12 @@ def make_emissions(sourcehash, tcm_columns, dfdat):
     valra = []
     psizera = []
     for val in zip(tcm_columns, dfdat[1]):
-        shash = sourcehash[val[0][0]]
+        shash = sourcehash[val[0]]
         datelist.append(shash["sdate"])
         htlist.append(shash["bottom"])
         valra.append(val[1])
         psizera.append(val[0][1])
     vals = list(zip(datelist, htlist, valra, psizera))
+    emission_df = pd.DataFrame.from_records(vals,columns=['date','ht','mass','psize'])
+    return emission_df
 
