@@ -11,17 +11,18 @@ logger = logging.getLogger(__name__)
 
 """
 Classes
-    ParametersIn
-    InverseDat
-    InvEstimatedEmissions
-    InvOut2dat 
+    ParametersIn  - for Parameters_in.dat file
+    InvEstimatedEmissions - for estimated emissions out.dat output from inverse
+    InvOut2dat  - for the out2.dat output from inverse.
 Functions
     readoutdat
+    make_emissions
 """
 
 # 2023 Dec 04 (amc) changed InverseOutDat to InvEstimatedEmissions
 # 2023 Dec 04 (amc) changed self.outdat to self.emissions
 # 2023 Dec 04 (amc) added make_emissions function
+# 2024 Jan 13 (amc) removed InverseDat class
 # here is a difference
 
 class ParametersIn:
@@ -71,6 +72,7 @@ class InvEstimatedEmissions:
 
     def __init__(self, fname="out.dat",sourcehash=None,columns=None):
         self.fname = fname
+        # properties
         self._df = pd.DataFrame()    # dataframe which holds data from out.dat
         self.sourcehash = sourcehash # dictionary with informtion about what the columns mean.
         self.columns = columns       # column names
@@ -133,9 +135,36 @@ class InvEstimatedEmissions:
         print(nmax)
         return ax
 
+    def plot(self,log=True,thresh=0):
+        edf = self.make_emissions()
+        plottcm.plot_emissions(edf,log=log,thresh=thresh)
+
     def plot_timeseries(self,log=True,marker='o'):
+        """
+        plots a time series of the emissions
+        """
         edf = self.make_emissions()
         plottcm.plot_emissions_timeseries(edf,log,marker)
+
+    def plot_profile(self,log=True,marker='o'):
+        """
+        plots a time series of the emissions
+        """
+        edf = self.make_emissions()
+        plottcm.plot_emissions_profile(edf,marker=marker)
+
+    def write_emit(self,vlat,vlon,threshold=50,area=1,name='EMIT.txt',date_cutoff=None):
+        from utilvolc.tcm_emit import construct_efile
+        phash = {1:'PASH'}
+        edf = self.make_emissions()
+        time = edf['date'].values
+        ht = edf['ht'].values
+        mass = edf['mass'].values
+        vals = list(zip(time,ht,mass))
+        efile = construct_efile(vals,vlat,vlon,area=area,emis_threshold=50,name=name,
+                                date_cutoff=date_cutoff,phash=phash)
+        print('writing efile {}'.format(name))
+        efile.write_new(name) 
 
 
 class InverseOut2Dat:
@@ -173,43 +202,6 @@ class InverseOut2Dat:
         nval = np.max(df["observed"])
         # plot 1:1 line
         plt.plot([0, nval], [0, nval], "--b", linewidth=1)
-        return ax
-
-class InverseDat:
-    def __init__(self, wdir, fname="out.dat", fname2="out2.dat"):
-        """
-        # InvEstmatedEmissions class - out.dat has estimated release rates in same order as tcm columns.
-        # ut2.dat has observed(2nd column) and modeled(3rd column) mass loadings.
-        """
-        self.wdir = wdir
-        fname = os.path.join(wdir,fname)
-        fname2 = os.path.join(wdir,fname2)
-        self.emissions = InvEstimatedEmissions(fname)
-        self.out2dat = InverseOut2Dat(fname2)
-        self.read()
-
-    def read(self):
-        """
-        name : str : filename of out.dat file which has estimated release rates in same
-                     order as tcm columns. Currently first column is just a dummy.
-
-        Returns :
-        df : pandas dataframe/
-        """
-        self.emissions.read(self.wdir)
-        self.out2dat.read(self.wdir)
-
-    def get_emis(self,sourcehash=None, name=None):
-        """
-        """
-        return self.emissions.df 
-
-    def emis_hist(self, units="g/h", log=True):
-        ax = self.emissions.emis_hist(units=units, log=log)
-        return ax
-
-    def plot_conc(self, cmap="viridis"):
-        ax =  self.out2dat.plot_conc(cmap=cmap)
         return ax
 
 

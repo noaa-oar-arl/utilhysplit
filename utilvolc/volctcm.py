@@ -10,7 +10,7 @@ import xarray as xr
 from utilvolc.runhelper import Helper
 
 from utilvolc.inversioninterface import TCMInterface
-from utilvolc.utiltcm import ParametersIn, InverseDat
+from utilvolc.utiltcm import ParametersIn
 from utilvolc import utiltcm
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,18 @@ class TCM(TCMInterface):
         self.tcm_lat = None
         self.tcm_lon = None
         self._history = ["initialized"]
+
+        
+
+    @property
+    def subdir(self):
+        return self._subdir
+
+    @subdir.setter
+    def subdir(self,subdir):
+        self._subdir = subdir
+    
+
 
     @property
     def history(self):
@@ -322,10 +334,6 @@ class TCM(TCMInterface):
         name2 = "{}_{}".format(self.tag, out_name2)
         return name1, name2
 
-    #def get_output(self,subdir):
-    #    new_name1, new_name2 = self.make_tcm_names()
-    #    return InverseDat(wdir=subdir, fname = new_name1, fname2 = new_name2)
-
     def run(self,execdir,subdir):
         """
         """
@@ -378,7 +386,6 @@ class TCM(TCMInterface):
         fname = os.path.join(subdir,new_name1)
         self.emissions= utiltcm.InvEstimatedEmissions(fname,columns=self.columns)
         self.emissions.read(subdir)
-
 
     def create_outdat(self,subdir):
         new_name1, new_name2 = self.make_tcm_names()

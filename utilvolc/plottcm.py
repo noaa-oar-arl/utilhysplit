@@ -159,7 +159,10 @@ def plot_emissions_timeseries(
     return ax, df
 
 
-def plot_outdat_profile_function(
+
+
+
+def plot_emissions_profile(
     dfdat, fignum=1, unit="km", ax=None, clr="k", label=None, alpha=1, lw=1, marker="o"
 ):
     if not ax:
@@ -206,4 +209,40 @@ def plot_outdat_profile_function(
     # print('total {} Tg'.format(totalmass))
     return ax, totalmass
 
+
+
+def plot_emissions(
+    df, log=False, fignum=1, cmap="Blues", unit="kg/s", thresh=0
+    ):
+    # InverseAsh class
+    """
+    vals is output by make_outdat.
+    """
+    fig = plt.figure(fignum, figsize=(10, 5))
+    #vals = list(zip(*vals))
+    mass = df['mass'].values
+    ht = df['ht'].values / 1e3
+    time = df['date'].values
+    sns.set()
+    sns.set_style("whitegrid")
+    # output in kg/s?/
+    if unit == "kg/s":
+        emit = np.array(mass) / 1.0e3 / 3600.0
+    elif unit == "kg/h":
+        emit = np.array(mass) / 1.0e3
+    elif unit == "g/h":
+        emit = np.array(mass) / 1.0
+    vpi = np.where(emit < thresh)
+    emit[vpi] = 0
+    if not log:
+        cb = plt.scatter(time, ht, c=emit, s=100, cmap=cmap, marker="s")
+    else:
+
+        cb = plt.scatter(
+            time, ht, c=np.log10(emit), s=100, cmap=cmap, marker="s"
+        )
+        # cb = plt.pcolormesh(vals[0],ht,emit,cmap=cmap)
+    cbar = plt.colorbar(cb)
+    cbar.ax.set_ylabel(unit)
+    fig.autofmt_xdate()
 
