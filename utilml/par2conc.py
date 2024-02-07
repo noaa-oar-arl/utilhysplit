@@ -15,7 +15,7 @@ from sklearn.cluster import KMeans
 from sklearn.mixture import BayesianGaussianMixture as BGM
 from sklearn.mixture import GaussianMixture as GMM
 
-#import monet
+import monet
 import monetio.models.pardump as pardump
 from utilhysplit.fixlondf import fixlondf
 
@@ -385,7 +385,7 @@ def fit_timeloop(
     pmethod = "p_" + method
     # masslist = []
     # fit each unique date in the period.
-    dlist = pardf.date.unique()
+    dlist = list(pardf.date.unique())
     dlist.sort()
     for ndate in dlist:
         pdn = pardf[pardf.date == ndate]
@@ -445,8 +445,8 @@ def draw_ellipse(position, covariance, ax=None, **kwargs):
 
     # Draw the Ellipse
     for nsig in range(1, 4):
-        # print('HERE', nsig, width, height, angle)
-        ax.add_patch(Ellipse(position, nsig * width, nsig * height, angle, **kwargs))
+        print('HERE', nsig, width, height, angle)
+        ax.add_patch(Ellipse(xy=position, width=nsig * width, height=nsig * height, angle=angle))
 
 
 def get_kde(bandwidth, kernel="gaussian"):
@@ -535,6 +535,33 @@ def get_lra(lmin, lmax, dd):
     return lra
 
 
+def save_gmm(gmm, gname):
+    np.save('{}_weights'.format(gname), gmm.weights_, allow_pickle=False) 
+    np.save('{}_means'.format(gname), gmm.means_, allow_pickle=False) 
+    np.save('{}_covariances'.format(gname), gmm.covariances_, allow_pickle=False) 
+    return True
+
+
+def load_gmm(gname):
+    means = np.load('{}_means.npy'.format(gname))
+    covar = np.load('{}_covariances.npy'.format(gname))
+    
+    gmm = GMM(n_components=len(means), covariance_type='full')
+    gmm.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(covar))
+    gmm.weights_ = np.load('{}_weights.npy'.format(gname))
+    gmm.means_ = means
+    gmm.covariances = covar
+    return gmm
+   
+def load_massfit(self, gname):
+    gmm = load_gmm(gname)
+    xra = np.load('{}_xra.npy'.format(gname))
+    with open('{}_mass.txt','r') as fid:
+         mass = fid.readline()
+         mass = float(mass)
+    mfit = Massfit(gmm,xra,mass=mass)
+    return mfit 
+
 class MassFit:
 
     """
@@ -551,7 +578,7 @@ class MassFit:
         mass: float : mass represented by latitude longitude points
         min_par_num : int : used to decrease n_components if necessary.
         """
-        self.gmm = gmm
+        self._gmm = gmm
         self.xra = xra
         self.fit = True
         self.check_n_components(min_par_num=min_par_num)
@@ -565,6 +592,17 @@ class MassFit:
         #                   .format(self.gmm.tol))
         self.mass = mass
         self.htunits = self.get_ht_units()
+
+    def save(self,gname):
+        save_gmm(self.gmm,gname)
+        np.save('{}_xra'.format(gname), self.xra, allow_pickle=False)
+        with open('{}_mass.txt'.format(gname), 'w') as fid:
+             fid.write('{:2.8e}'.format(self.mass))
+        return True  
+
+    #@property
+    #def gmm(self):
+    #    return self._gmm
 
     def check_n_components(self, min_par_num=50, min_n=2):
         """
@@ -1005,6 +1043,8 @@ class MassFit:
             covariance = np.array([[one, two], [three, four]])
             draw_ellipse(position, covariance, ax, alpha=www * wfactor)
 
+        return ax
+
     def get_ht_ra(self, htmin, htmax, dh):
         """ """
         # first convert to km.
@@ -1101,9 +1141,9 @@ class MassFit:
         # probability 'under curve' calculated using the cumulative distribution
         # function. Should be used for larger volumes. May produce error with
         # very small volumes because involves subtraction of small floats.
-        # elif method == 'cdf':
-        #    self.get_conc3(dd, dh, latra, lonra, htra, buf=buf, time=time,
-        #                   mass=mass)
+        elif method == 'cdf':
+            self.get_conc3(dd, dh, latra, lonra, htra, buf=buf, time=time,
+                           mass=mass)
         dra = monet.monet_accessor._dataset_to_monet(
             self.dra, lat_name="y", lon_name="x"
         )
@@ -1141,10 +1181,12 @@ class MassFit:
         # to get the mass in that volume.
         # Divide by volume (in m^3) to get
         # concentration.
+
+        # TO DO - this should be changed to computing the volume for each grid cell
+        # for the case of 
         deg2meter = 111e3
-        # dlon = np.min(latra) + (np.max(latra)-np.min(latra))/2
-        # dlon = dd * deg2meter * np.cos(dlon *np.pi /180.0)
-        dlon = dd * deg2meter
+        midlat = latra.mean()
+        dlon = dd * deg2meter * np.cos(midlat *np.pi /180.0)
         volume = dh * (dd * deg2meter) * dlon
         if self.htunits == "km":
             volume = volume * 1000.0
