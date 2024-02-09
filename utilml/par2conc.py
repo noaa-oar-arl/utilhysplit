@@ -231,6 +231,11 @@ def par2fit(
     logger.debug("par2fit mult {} mass {}".format(mult, mass))
     lon = df2["lon"].values
     lat = df2["lat"].values
+
+    if 'date' in df2.columns:
+        date = df2.date.unique()
+        date = date[0]
+
     hval = "ht"
     if "agl" in df2.columns.values:
         if msl:
@@ -269,7 +274,7 @@ def par2fit(
     else:
         print("Not valid method ", method)
         sys.exit()
-    mfit = MassFit(gmm, xra, mass, min_par_num=min_par_num)
+    mfit = MassFit(gmm, xra, mass, time=date, min_par_num=min_par_num)
     return mfit
 
 
@@ -541,11 +546,36 @@ def save_gmm(gmm, gname):
     np.save('{}_covariances'.format(gname), gmm.covariances_, allow_pickle=False) 
     return True
 
+def gmm2str(gmm):
+    weights =  gmm.weights_ 
+    means = gmm.means_
+    covar = gmm.covariances_
+
+    number = len(weights)
+    rstr = 'Number: {}\n'.format(number)
+    glist = list(zip(weights,means,covar))
+    # put in order of weights
+    glist.sort()
+    glist.reverse()
+    for val in glist:
+        rstr +=  'Weight: {}\n'.format(val[0])
+        meanstr = 'Means: {}, {}, {} \n'.format(val[1][0],val[1][1], val[1][2])
+        rstr += meanstr
+
+        cstr = 'Covariance: \n'
+        ccc = val[2]
+        cstr += '{:2.6e}, {:2.6e}, {:2.6e}\n'.format(ccc[0][0], ccc[0][1], ccc[0][2]) 
+        cstr += '{:2.6e}, {:2.6e}, {:2.6e}\n'.format(ccc[1][0], ccc[1][1], ccc[1][2]) 
+        cstr += '{:2.6e}, {:2.6e}, {:2.6e}\n'.format(ccc[2][0], ccc[2][1], ccc[2][2]) 
+
+        rstr += cstr
+        rstr += '\n'
+    return rstr   
+
 
 def load_gmm(gname):
     means = np.load('{}_means.npy'.format(gname))
     covar = np.load('{}_covariances.npy'.format(gname))
-    
     gmm = GMM(n_components=len(means), covariance_type='full')
     gmm.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(covar))
     gmm.weights_ = np.load('{}_weights.npy'.format(gname))
@@ -553,14 +583,19 @@ def load_gmm(gname):
     gmm.covariances = covar
     return gmm
    
-def load_massfit(self, gname):
+def load_massfit( gname):
     gmm = load_gmm(gname)
     xra = np.load('{}_xra.npy'.format(gname))
-    with open('{}_mass.txt','r') as fid:
+    with open('{}_mass.txt'.format(gname),'r') as fid:
          mass = fid.readline()
          mass = float(mass)
-    mfit = Massfit(gmm,xra,mass=mass)
+         time = fid.readline()
+         time = datetime.datetime.strptime(time,"%Y%m%d_%H%M")
+    mfit = MassFit(gmm,xra,mass=mass,time=time)
     return mfit 
+
+
+
 
 class MassFit:
 
@@ -569,7 +604,7 @@ class MassFit:
     If we can keep giving it different xra values then we can
     """
 
-    def __init__(self, gmm, xra, mass=1, min_par_num=50):
+    def __init__(self, gmm, xra, mass=1, min_par_num=50, time=None):
         """
         gmm : GuassianModelMixture object
               OR KED or BGM
@@ -578,8 +613,10 @@ class MassFit:
         mass: float : mass represented by latitude longitude points
         min_par_num : int : used to decrease n_components if necessary.
         """
-        self._gmm = gmm
+        self.gmm = gmm
+        self.mass = mass
         self.xra = xra
+        self.time = time
         self.fit = True
         self.check_n_components(min_par_num=min_par_num)
         self.fitloop()
@@ -590,14 +627,51 @@ class MassFit:
         # if not self.fit.converged_:
         #   logger.warning('Fit did not converge tolderance {}'.\
         #                   .format(self.gmm.tol))
-        self.mass = mass
         self.htunits = self.get_ht_units()
 
-    def save(self,gname):
+    # Gaussian Mixture Model
+    @property
+    def gmm(self):
+        """
+        GaussianMixture object
+        """
+        return self._gmm
+
+    @gmm.setter
+    def gmm(self,gmm):
+        self._gmm = gmm
+
+    @property
+    def mass(self):
+        return self._mass
+
+    @mass.setter
+    def mass(self,mass):
+           self._mass = mass
+
+    def make_savename(self,base=None):
+        if isinstance(base,str): base = base + '_'
+        else: base = ''
+      
+        ncomponents = self.gmm.n_components
+        nc = 'n{}_'.format(ncomponents) 
+        if isinstance(self.time,datetime.datetime):
+           dstr = self.time.strftime("%Y%m%d_%H%M_")
+        elif isinstance(self.time,str):
+           dstr = self.time
+        else:
+           dstr = ''
+        sname = '{}{}{}gmmfit'.format(base,nc,dstr)
+        return sname
+
+    
+    def save(self,gname=None):
+        gname = self.make_savename(base=gname)
         save_gmm(self.gmm,gname)
         np.save('{}_xra'.format(gname), self.xra, allow_pickle=False)
         with open('{}_mass.txt'.format(gname), 'w') as fid:
-             fid.write('{:2.8e}'.format(self.mass))
+             fid.write('{:2.8e}\n'.format(self.mass))
+             fid.write(self.time.strftime('%Y%m%d_%H%M'))
         return True  
 
     #@property
@@ -1054,8 +1128,8 @@ class MassFit:
             dh = dh / 1000.0
         # htmin = np.floor(htmin)
         # htmax = np.ceil(htmax)
-        if htmin <= 0.01:
-            htmin = -0.02
+        if  htmin <= 0.01:
+            htmin = -2*dh
         htra = np.arange(htmin, htmax, dh)
         # then convert back to m.
 
@@ -1075,10 +1149,12 @@ class MassFit:
         latmax = np.max(lat) + buf
         lonmin = np.min(lon) - buf
         lonmax = np.max(lon) + buf
-        htmin = np.min(ht) - buf
-        htmax = np.max(ht) + buf
+        htmin = np.floor(np.min(ht)/dh)*dh 
+        htmax = np.ceil(np.max(ht)/dh)*dh 
         latra = get_lra(latmin, latmax, dd)
         lonra = get_lra(lonmin, lonmax, dd)
+
+        print('HERE', htmin, htmax)
         htra = self.get_ht_ra(htmin, htmax, dh)
         return latra, lonra, htra
 
@@ -1208,9 +1284,8 @@ class MassFit:
         # create the xarray
         dra = xr.DataArray(conc2, coords=coords, dims=dims)
         # add time dimensions
-        # if time:
-        #    dra['time'] = time
-        #    dra = self.dra.expand_dims(dim='time')
+        dra['time'] = self.time
+        dra = dra.expand_dims(dim='time')
 
         # modify xarray.
         # self.dra = monet.monet_accessor._dataset_to_monet(dra, lat_name='y', lon_name='x')
@@ -1258,6 +1333,9 @@ class MassFit:
         area = (dd * deg2meter) ** 2
         massload = np.exp(score) * dd**2 * self.mass / area
         return lonra, latra, massload
+
+
+    
 
 
 def use_gmm(gmm, xra, mass=1, label=True, ax=None):
