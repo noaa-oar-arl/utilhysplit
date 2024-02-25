@@ -7,6 +7,62 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 import matplotlib.ticker as mticker
 import numpy as np
 
+
+
+class PlotParams:
+
+    def __init__(self,ctemp,minval):
+
+        xxx = ctemp.longitude.values
+        yyy = ctemp.latitude.values
+        zzz = ctemp.values
+        zzz = np.where(zzz>minval,zzz,np.nan)
+
+        xtemp = np.where(zzz>minval,xxx,np.nan)
+        xmin = np.nanmin(xtemp)
+        xmax = np.nanmax(xtemp)
+
+        self.central_longitude = 0
+
+        # if data is crossing the dateline.
+        if xmin< 0 and xmax>0:
+           self.central_longitude = 180
+           # minimum is now the largest negative number
+           xtemp2 = np.where(xtemp<0,xtemp,np.nan)
+           xmin = np.nanmax(xtemp2)        
+           # maximumis now the smallest positive number
+           xtemp2 = np.where(xtemp>0,xtemp,np.nan)
+           xmax = np.nanmin(xtemp2)        
+           xticks = set_ticks(xmin,xmax,nticks=4)
+           # for setting the limits in the graph,
+           # xmin and xmax have to be set with 180 =0
+           xmax1 = xmax  
+           xmax = 1 * (xmin + self.central_longitude)
+           xmin = -1 * (self.central_longitude - xmax1) 
+        else:
+           xticks = set_ticks(xmin,xmax,nticks=4)
+        xbuffer = 0.1 * (xmax-xmin)
+        if xbuffer > 10: xbuffer=10
+        xmin = xmin-xbuffer
+        xmax = xmax + 2*xbuffer
+
+        ytemp = np.where(zzz>minval,yyy,np.nan)
+        ymin = np.nanmin(ytemp)
+        ymax = np.nanmax(ytemp)
+        ybuffer = 0.1 * (ymax-ymin)
+        ymin = ymin - ybuffer
+        ymax = ymax + 2*ybuffer
+        yticks = set_ticks(ymin,ymax,nticks=4)
+
+        self.ymin = ymin
+        self.ymax = ymax
+        self.xmin = xmin
+        self.xmax = xmax
+        self.xticks = xticks
+        self.yticks = yticks
+
+
+
 def set_ticks(xmin,xmax,nticks):
     if xmin<0 and xmax>0:
        xticks = set_ticks_dateline(xmax,xmin,nticks)

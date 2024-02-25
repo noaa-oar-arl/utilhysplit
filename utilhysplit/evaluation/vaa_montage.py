@@ -8,7 +8,7 @@ import seaborn as sns
 import xarray as xr
 
 from utilhysplit.evaluation.ensemble_tools import topheight
-from utilhysplit.plotutils.map_util import get_transform, format_plot, set_ticks
+from utilhysplit.plotutils.map_util import get_transform, format_plot, PlotParams
 import ashapp.utils as utils
 import utilhysplit.evaluation.web_ensemble_plots as wep
 from monetio.models import hysplit
@@ -179,52 +179,19 @@ class VAAMontage:
       
          
         ctemp = hysplit.hysp_massload(self.cdump)
-        ctemp = ctemp # convert from mg/m3 to g/m2.
+        # ctemp = ctemp # convert from mg/m3 to g/m2.
 
         # levels and boundaries stay the same on the page.
         levels = wep.set_levels(ctemp.values)
-        print('levels', levels)
-        #return ctemp
-        xxx = ctemp.longitude.values
-        yyy = ctemp.latitude.values
-        zzz = ctemp.values
-        zzz = np.where(zzz>levels[0]/100.0,zzz,np.nan)
 
-        xtemp = np.where(zzz>levels[0],xxx,np.nan)
-        xmin = np.nanmin(xtemp)
-        xmax = np.nanmax(xtemp)
-
-        # if data is crossing the dateline.
-        if xmin< 0 and xmax>0:
-           self.central_longitude = 180
-           # minimum is now the largest negative number
-           xtemp2 = np.where(xtemp<0,xtemp,np.nan)
-           xmin = np.nanmax(xtemp2)        
-           # maximumis now the smallest positive number
-           xtemp2 = np.where(xtemp>0,xtemp,np.nan)
-           xmax = np.nanmin(xtemp2)        
-           xticks = set_ticks(xmin,xmax,nticks=4)
-           # for setting the limits in the graph,
-           # xmin and xmax have to be set with 180 =0
-           xmax1 = xmax  
-           xmax = 1 * (xmin + self.central_longitude)
-           xmin = -1 * (self.central_longitude - xmax1) 
-        else:
-           xticks = set_ticks(xmin,xmax,nticks=4)
-        xbuffer = 0.1 * (xmax-xmin)
-        if xbuffer > 10: xbuffer=10
-        xmin = xmin-xbuffer
-        xmax = xmax + 2*xbuffer
-
-        ytemp = np.where(zzz>levels[0],yyy,np.nan)
-        ymin = np.nanmin(ytemp)
-        ymax = np.nanmax(ytemp)
-        ybuffer = 0.1 * (ymax-ymin)
-        ymin = ymin - ybuffer
-        ymax = ymax + 2*ybuffer
- 
-
-        yticks = set_ticks(ymin,ymax,nticks=4)
+        pm = PlotParams(ctemp,levels[0])
+        self.central_longitude = pm.central_longitude
+        xmax = pm.xmax
+        xmin = pm.xmin
+        ymax = pm.ymax
+        ymin = pm.ymin
+        yticks = pm.yticks
+        xticks = pm.xticks
 
         norm = BoundaryNorm(levels,ncolors=self.cmap.N,clip=False)
 
