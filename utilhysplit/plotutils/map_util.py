@@ -11,16 +11,52 @@ import numpy as np
 
 class PlotParams:
 
-    def __init__(self,ctemp,minval):
+    def __init__(self,ctemp,minval,nticks=4):
+        """
+        ctemp : dataArray with longitude, latitude coordinates
+        minval : float indicating lowest value in ctemp array which needs to
+                 be shown in the plot.
+        nticks : integer indicating number of tick lables
+
+        Will calculate the correct boundary for the plot xmin, xmax, ymin, ymax
+        which can be utilized to set the limits.
+
+        Will calculate whether the data crosses the dateline and thus the central
+        longitude needs to be 180 degrees. If so, then the boundaries xmin, xmax, ymin, ymax
+        are adjusted to condier the 180 degrees as 0.
+
+        Will calculate evenly spaced tick marks given by lists xticks, yticks.
+
+        """
 
         xxx = ctemp.longitude.values
         yyy = ctemp.latitude.values
         zzz = ctemp.values
         zzz = np.where(zzz>minval,zzz,np.nan)
+        if np.all(np.isnan(zzz)):
+           self.set_nans(nticks)   
+           self.empty = True
+        else:
+           self.set_y(zzz,yyy,minval,nticks) 
+           self.set_x(zzz,xxx,minval,nticks) 
+           self.empty = False
 
+    def set_nans(self,nticks):
+        # default if it is all nans.
+        self.central_longitude = 0
+        self.xmin = 0
+        self.xmax = 180
+        self.xticks = set_xticks(self.xmin,self.xmax,nticks=nticks)
+        self.ymin = 0
+        self.ymax = 90
+        self.yticks = set_ticks_normal(self.ymin,self.ymax,nticks=nticks)
+        
+
+    def set_x(self,zzz,xxx,minval,nticks):
         xtemp = np.where(zzz>minval,xxx,np.nan)
         xmin = np.nanmin(xtemp)
         xmax = np.nanmax(xtemp)
+
 
         self.central_longitude = 0
 
@@ -33,37 +69,40 @@ class PlotParams:
            # maximumis now the smallest positive number
            xtemp2 = np.where(xtemp>0,xtemp,np.nan)
            xmax = np.nanmin(xtemp2)        
-           xticks = set_ticks(xmin,xmax,nticks=4)
+           xticks = set_ticks(xmin,xmax,nticks=nticks)
            # for setting the limits in the graph,
            # xmin and xmax have to be set with 180 =0
            xmax1 = xmax  
            xmax = 1 * (xmin + self.central_longitude)
            xmin = -1 * (self.central_longitude - xmax1) 
         else:
-           xticks = set_ticks(xmin,xmax,nticks=4)
+           xticks = set_xticks(xmin,xmax,nticks=nticks)
         xbuffer = 0.1 * (xmax-xmin)
         if xbuffer > 10: xbuffer=10
         xmin = xmin-xbuffer
         xmax = xmax + 2*xbuffer
+        self.xmin = xmin
+        self.xmax = xmax
+        self.xticks = xticks
 
+    def set_y(self,zzz,yyy,minval,nticks):
         ytemp = np.where(zzz>minval,yyy,np.nan)
         ymin = np.nanmin(ytemp)
         ymax = np.nanmax(ytemp)
         ybuffer = 0.1 * (ymax-ymin)
         ymin = ymin - ybuffer
         ymax = ymax + 2*ybuffer
-        yticks = set_ticks(ymin,ymax,nticks=4)
+        # yticks go from negative (at the bottom) to positive (at the top)
+        yticks = set_ticks_normal(ymin,ymax,nticks=nticks)
 
         self.ymin = ymin
         self.ymax = ymax
-        self.xmin = xmin
-        self.xmax = xmax
-        self.xticks = xticks
         self.yticks = yticks
 
 
 
-def set_ticks(xmin,xmax,nticks):
+def set_xticks(xmin,xmax,nticks):
+    # xticks go from positive (west) to negative (east)
     if xmin<0 and xmax>0:
        xticks = set_ticks_dateline(xmax,xmin,nticks)
     elif xmin>0 and xmax<0:
@@ -94,16 +133,13 @@ def set_ticks_normal(xmin,xmax,nticks=3):
        last = np.ceil(xmax*10)/10
     span = last-first
     dx = span/nticks
-    print('DX', dx)
     # round to nearest 5 if greater than 10
     if np.abs(dx) > 10:
-       print('here')
        dx = int(int(dx/5.0)*5)
     elif np.abs(dx) > 1:
        dx = int(np.floor(dx))
-    else:
+    elif dx > 0.1:
        dx = int(dx*10)/10.0
-    print('DX', dx)
     rticks = np.arange(first,last+dx,dx)
     rticks = [int(x*100)/100 for x in rticks]
     return list(rticks)
