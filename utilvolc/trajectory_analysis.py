@@ -108,6 +108,9 @@ class TrajAnalysis:
         return start.time.unique()[0]
 
     def get_start_hull(self,alpha):
+        """
+        concave hull around starting points.
+        """
         start = self.get_start()
         lon = start.longitude.values
         lat = start.latitude.values
@@ -120,10 +123,14 @@ class TrajAnalysis:
            ep = None
         return ch, ep
 
-    def compare(self,other,trajlist):
+    def compare(self,other,trajlist,color='b',color2='r',pbuffer=0):
         linestyle=''
         markersize=8
         shull,ep = other.get_start_hull(alpha=1)
+        if pbuffer> 0: 
+          print('YES',pbuffer)
+          shull = shull.buffer(pbuffer) 
+        #shull = shull.buffer(0.05)
         ctime = other.start_time 
         clow = datetime.datetime(ctime.year, ctime.month,ctime.day,ctime.hour)
         
@@ -137,10 +144,10 @@ class TrajAnalysis:
            start2 = start[start.run_num.isin(trajlist)]
         else:
            start2 = start
+        zlist = []
+        alist = []
         for rnum in dfall2.run_num.unique():
             temp = dfall2[dfall2.run_num==rnum]
-            alist = []
-            zlist = []
             for trajnum in temp.traj_num.unique():
                 #print('working on traj {}'.format(trajnum))
                 temp2 = temp[temp.traj_num==trajnum]
@@ -153,15 +160,16 @@ class TrajAnalysis:
                 zval = temp2.altitude.values[0]
                 if shull.contains(point): 
                     plt.plot(temp2.longitude, temp2.latitude,linestyle=linestyle,
-                         marker='.',color='b',markersize=markersize,label=ialt)
+                         marker='.',color=color,markersize=markersize,label=ialt)
                     alist.append((lon,lat,ialt,point,zval))
                     ax = plt.gca()
-                    ax.text(temp2.longitude,temp2.latitude,str(ialt),transform=ax.transAxes)
+                    #ax.text(temp2.longitude,temp2.latitude,str(ialt),transform=ax.transAxes)
                 else:    
                     plt.plot(temp2.longitude, temp2.latitude,linestyle=linestyle,
-                         marker='+',color='r',markersize=markersize,label=ialt)
+                         marker='+',color=color2,markersize=markersize,label=ialt)
                     zlist.append((lon,lat,ialt,point,zval))
                     
+        print('HERE')
         return alist,zlist 
 
     def make_dist_df(self,vloc):
@@ -284,7 +292,7 @@ class TrajAnalysis:
         for rnum in dfall2.run_num.unique():
             temp = dfall2[dfall2.run_num==rnum]
             if rnum%skip ==0: linestyle='--'
-            else: linestyle = '' 
+            else: linestyle = '--' 
             for trajnum in temp.traj_num.unique():
                 #print('working on traj {}'.format(trajnum))
                 temp2 = temp[temp.traj_num==trajnum]
@@ -295,7 +303,7 @@ class TrajAnalysis:
                          marker='.',markersize=markersize,label=ialt)
                 #utiltraj.traj_volc_dist(vloc,temp)
             
-            plt.plot(start.longitude, start.latitude,linestyle='',marker='.',alpha=0.5)
+            plt.plot(start.longitude, start.latitude,linestyle='',marker='.',alpha=0.5,markersize=markersize)
             plt.plot(start2.longitude, start2.latitude,linestyle='',marker='*',alpha=0.5)
             plt.plot(vloc[1],vloc[0],'r^',markersize=20)
             ax = plt.gca()

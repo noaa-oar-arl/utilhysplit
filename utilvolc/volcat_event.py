@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
  2023 DEC 04 AMC added plot_polygons method
  2023 DEC 04 AMC added search input to create_event_from_fnames function
  2024 FEB 25 AMC change so emit-times writes rate in mg/h not g/h.
+ 2024 Mar 01 AMC better plotting for polygons and plot function using map_util
 """
 
 #TODO 
@@ -1117,15 +1118,8 @@ class Events:
             latlist.extend(list(lat.values))
         params = map_util.PolygonPlotParams(lonlist,latlist)
         central_longitude = params.central_longitude
-        #central_longitude = 180
-        print(central_longitude)
-        print(params.xmin, params.xmax)
-        print(params.xticks)
-        print(params.ymin, params.ymax)
-        print(params.yticks)
         dy = params.ymax - params.ymin
         dx = params.xmax - params.xmin
-        print(dx,dy)
         transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
         fig, ax = plt.subplots(
             nrows=1,
@@ -1160,8 +1154,8 @@ class Events:
         from matplotlib.colors import BoundaryNorm
         import cartopy
         from utilhysplit.plotutils import vtools
+        from utilhysplit.plotutils import map_util
 
-        transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
         volcat_transform = cartopy.crs.PlateCarree(central_longitude=0)
 
         vloc = self.get_vloc()
@@ -1179,8 +1173,12 @@ class Events:
 
         temp = None
         for jjj, iii in enumerate(vlist):
-            ax, ax2, fig = self.make_ax(transform)
             vht = volcat.get_height(das[iii], clip=True)
+            params = map_util.PlotParams(vht,minval=1,nticks=4)
+            central_longitude = params.central_longitude
+            transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
+
+            ax, ax2, fig = self.make_ax(transform)
             sns.set()
             print(iii)
             print("total mass", das[iii].ash_mass_loading_total_mass.values)
@@ -1238,8 +1236,10 @@ class Events:
                 )
             plt.colorbar(cb)
             ax2.plot(vloc[1], vloc[0], "m^", markersize=10, transform=volcat_transform)
-            map_util.format_plot(ax, transform)
-            map_util.format_plot(ax2, transform)
+            map_util.format_plot(ax, volcat_transform, xticks=params.xticks, yticks=params.yticks)
+            map_util.format_plot(ax2, volcat_transform,xticks=params.xticks,yticks=params.yticks)
+            ax.set_xlim(params.xmin,params.xmax)
+            ax.set_ylim(params.ymin,params.ymax)
             plt.show()
             #yield fig, ax, ax2, temp
 

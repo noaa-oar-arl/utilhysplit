@@ -23,10 +23,13 @@ Class: InsertVolcat
      make_1D: makes 1D arrays of lat, lon, ash height, ash mass, and area
      write_emit: writes emitimes files
 
-     rate is written in units of g/h
+     3/2/2024
+     modify so by default rate is written in units of mg/h instead of g/h.
+     
 
 --------------
 """
+
 
 import os
 import datetime
@@ -79,6 +82,7 @@ def make_1D_sub(dset):
 class EmitName(VolcatName):
     """
     class for names of Emit times files written from VOLCAT files
+    3/2/2024 - This will need to be changed to use with the new volcat files.
     """
 
     def __init__(self, fname):
@@ -231,6 +235,12 @@ class InsertVolcat:
         vname: volcano name - default is None (string)
         vid: volcano id - default is None (string)
         fname: str,list or None. name of volcat file (string)  or list of names. default is None
+
+        Properties:
+        rate unit - can be mg/h, g/h, or kg/h.
+                    Assumes volcat data is in grams and calculates correct conversion.
+
+
         Outputs:
         --------------
         """
@@ -250,6 +260,7 @@ class InsertVolcat:
         self.vid = vid
         self.layer = layer
         self.centered = centered
+        self.rate_unit = 'mg/h'
 
         if isinstance(fname, list):
             self.fnamelist = fname
@@ -258,6 +269,26 @@ class InsertVolcat:
        # else:
        #     self.fnamelist = self.find_fnames()
         self.emit_name = None
+
+    @property
+    def rate_unit(self):
+        return self._rate_unit
+
+    @rate_unit.setter
+    def rate_unit(self, rate_unit):
+        possible = ['mg/h','g/h','kg/h']
+        if rate_unit in possible:
+           self._rate_unit = rate_unit
+        else:
+           logger.warning('rate unit not recognized {}'.format(rate_unit))
+                   
+    @property
+    def unit_conversion(self):
+        if self.rate_unit == 'g/h': return 1
+        elif self.rate_unit == 'mg/h': return 1000
+        elif self.rate_unit == 'kg/h' : return 1e-3
+        else: self.rate_unit = 1
+        return self.rate_unit
 
     def set_duration(self, duration):
         self.duration = duration
@@ -454,7 +485,7 @@ class InsertVolcat:
                 print("---- Emitimes file NOT written: " + self.wdir + filename)
             return False
 
-        const = 60.0 / float(self.duration)
+        const = 60.0 / float(self.duration) * self.unit_conversion
         records = np.shape(hgt)[0] * self.pollnum
 
         if self.layer > 0.0:
@@ -462,7 +493,7 @@ class InsertVolcat:
         f = open(os.path.join(self.wdir, filename), "w")
         f.write("YYYY MM DD HH DURATION(HHMM) #RECORDS \n")
         f.write(
-            "YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE(g/hr) AREA(m2) HEAT(w) \n"
+            "YYYY MM DD HH MM DURATION(HHMM) LAT LON HGT(m) RATE({}) AREA(m2) HEAT(w) \n".format(self.rate_unit)
         )
         f.write("{:%Y %m %d %H} {} {}\n".format(date_time, self.duration, records))
         h = 0
@@ -471,6 +502,7 @@ class InsertVolcat:
             while i < len(self.pollpercents):
                 # AMR: 8/3/2021 - added this for layer flag
                 # AMR: 8/23/2021 - added centered flag
+                rate = mass[h]*area[h]*const*self.pollpercents[i]
                 if layer > 0.0 and centered:
                     layhalf = float(layer) / 2.0
                     f.write(
@@ -480,7 +512,7 @@ class InsertVolcat:
                             lat[h],
                             lon[h],
                             hgt[h] - float(layhalf),
-                            mass[h] * area[h] * const * self.pollpercents[i],
+                            rate,
                             area[h],
                             heat,
                         )

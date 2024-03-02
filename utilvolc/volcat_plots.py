@@ -674,7 +674,9 @@ class VolcatPlots:
             vdf = self.vdf.copy()
         
         for label, time_series in self.get_mass(vdf):
+            print(label)
             if isinstance(time_sample,int):
+                print('sample time {}'.format(time_sample))
                 tave = '{}min'.format(time_sample) 
                 time_series = time_series.resample(tave,origin='start').sum()
             ts = time_series[time_series.mass>0]
@@ -684,7 +686,7 @@ class VolcatPlots:
 
         xval = vdf['time']
         yval = vdf['mass']
-        ax.plot(xval, yval, 'y.', markersize=1,label=None)
+        #ax.plot(xval, yval, 'yo', markersize=2,label=None)
 
         # ax.plot(xval,np.log(yval),self.main_clr)
         if yscale == "ln":
@@ -708,8 +710,9 @@ class VolcatPlots:
             newdf = self.vdf[self.vdf["platform_ID"] == sensor]
             label = "{} {}".format(sensor, newdf.shape[0])
             self.main_clr = "#" + clist[iii]
-            #self.sub_clrs = ["#" + clist2[iii], '#' + clist2[iii]]
-            self.sub_plot_mass(ax,vdf=newdf,yscale=yscale,time_sample=time_sample) 
+            self.sub_clrs = ["#" + clist2[iii], '#' + clist2[iii]]
+            self.sub_plot_mass(ax,vdf=newdf,yscale=yscale,time_sample=time_sample)
+            self.main_clr = "#" + clist2[iii]
             self.sub_plot_area(ax2,vdf=newdf,time_sample=time_sample) 
         ax2.grid(False)
         return ax2

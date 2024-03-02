@@ -192,7 +192,7 @@ class ModelForecast:
     def polygon(self,thresh,problev):
         phash = {}
         for time in self.timelist:
-            dset = self.get_iwxxm_forecast(thresh,problev)
+            dset = self.get_iwxxm_forecast(problev)
             zlevs = np.arange(0,len(dset.z.values))
             dset = dset.sel(time=time) 
             top,bottom = topheight(dset,time=time,level=zlevs,thresh=thresh)
@@ -202,7 +202,7 @@ class ModelForecast:
         return phash
 
     def plot_vaa_forecast(self,vloc,thresh=0.2,problev=50,plev=3):
-        conc = self.get_iwxxm_forecast(thresh,problev)
+        conc = self.get_iwxxm_forecast(problev)
         #dt = datetime.timedelta(hours=3)
         conc = conc.sel(time=self.timelist)
         vaa = polygon_plots.PlotVAA()
@@ -236,6 +236,7 @@ def pick_source(sss: str,
         #sn = sname.replace('cdump.','cdump_')
         v = mdi.EmitName(sname)
         ddd = v.vhash['observation_date']
+        #print(sname, ddd) 
         if ddd >= drange[0] and ddd <= drange[1]:
            new.append(sname)
     return new
