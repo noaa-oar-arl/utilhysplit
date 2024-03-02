@@ -7,6 +7,61 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 import matplotlib.ticker as mticker
 import numpy as np
 
+class PolygonPlotParams:
+
+    def __init__(self,lonvals,latvals,nticks=4):
+        xxx = lonvals
+        yyy = latvals
+        self.set_x(xxx,nticks)
+        self.set_y(yyy,nticks)
+
+
+    def set_x(self,xxx,nticks):
+        xmin = np.nanmin(xxx)
+        xmax = np.nanmax(xxx)
+        self.central_longitude = 0
+
+        # if data is crossing the dateline.
+        if xmin< 0 and xmax>0:
+           self.central_longitude = 180
+           # minimum is now the largest negative number
+           #xtemp2 = np.where(xtemp<0,xtemp,np.nan)
+           xtemp2 = [x for x in xxx if x < 0]
+           xmin = np.nanmax(xtemp2)        
+           # maximumis now the smallest positive number
+           #xtemp2 = np.where(xtemp>0,xtemp,np.nan)
+           xtemp2 = [x for x in xxx if x > 0]
+           xmax = np.nanmin(xtemp2)        
+           xticks = set_xticks(xmin,xmax,nticks=nticks)
+           # for setting the limits in the graph,
+           # xmin and xmax have to be set with 180 =0
+           xmax1 = xmax  
+           xmax = 1 * (xmin + self.central_longitude)
+           xmin = -1 * (self.central_longitude - xmax1) 
+        else:
+           xticks = set_xticks(xmin,xmax,nticks=nticks)
+        xbuffer = 0.1 * (xmax-xmin)
+        if xbuffer > 10: xbuffer=10
+        xmin = xmin-xbuffer
+        xmax = xmax + 2*xbuffer
+        self.xmin = xmin
+        self.xmax = xmax
+        self.xticks = xticks
+ 
+    def set_y(self,yyy,nticks):
+        ymin = np.nanmin(yyy)
+        ymax = np.nanmax(yyy)
+        ybuffer = 0.1 * (ymax-ymin)
+        ymin = ymin - ybuffer
+        ymax = ymax + 2*ybuffer
+        # yticks go from negative (at the bottom) to positive (at the top)
+        yticks = set_ticks_normal(ymin,ymax,nticks=nticks)
+
+        self.ymin = ymin
+        self.ymax = ymax
+        self.yticks = yticks
+
+
 
 
 class PlotParams:
@@ -57,7 +112,6 @@ class PlotParams:
         xmin = np.nanmin(xtemp)
         xmax = np.nanmax(xtemp)
 
-
         self.central_longitude = 0
 
         # if data is crossing the dateline.
@@ -69,7 +123,7 @@ class PlotParams:
            # maximumis now the smallest positive number
            xtemp2 = np.where(xtemp>0,xtemp,np.nan)
            xmax = np.nanmin(xtemp2)        
-           xticks = set_ticks(xmin,xmax,nticks=nticks)
+           xticks = set_xticks(xmin,xmax,nticks=nticks)
            # for setting the limits in the graph,
            # xmin and xmax have to be set with 180 =0
            xmax1 = xmax  
