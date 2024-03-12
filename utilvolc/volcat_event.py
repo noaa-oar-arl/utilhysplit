@@ -1146,7 +1146,7 @@ class Events:
         self,
         pstep,
         pc=False,
-        levels=[0.02, 0.2, 0.3, 2, 5, 10, 50],
+        levels=[0.02, 0.2, 0.3, 2, 5, 10,25,50,100], hlevels=np.arange(0,30,1),
         vlist=None,
         central_longitude=0,
     ):
@@ -1178,6 +1178,8 @@ class Events:
             central_longitude = params.central_longitude
             transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
 
+            cmap = plt.get_cmap("Reds")
+            normh = BoundaryNorm(hlevels, ncolors=cmap.N, clip=False)
             ax, ax2, fig = self.make_ax(transform)
             sns.set()
             print(iii)
@@ -1200,13 +1202,14 @@ class Events:
                tlist = list(zip(lon,lat,ht))
                tlist = [x for x in tlist if ~np.isnan(x[2])]
                tnew = list(zip(*tlist))
-               ax.scatter(tnew[0],tnew[1],c=tnew[2],s=2,transform=volcat_transform)
+               cb1 = ax.scatter(tnew[0],tnew[1],c=tnew[2],s=2,transform=volcat_transform)
             else: 
-                vht.isel(time=0).plot.pcolormesh(
+                cb1 = vht.isel(time=0).plot.pcolormesh(
                     ax=ax,
                     x="longitude",
                     y="latitude",
                     cmap="Reds",
+                    norm=normh,
                     transform=volcat_transform,
                 )
 
@@ -1234,12 +1237,21 @@ class Events:
                     norm=norm,
                     transform=volcat_transform,
                 )
-            plt.colorbar(cb)
+            masscb = plt.colorbar(cb)
+            masscb.set_label('Column mass loading g m$^{-2}$')
+
+            #cb1.set_label('Height')
+            #htcb = ax.colorbar(cb)
+            #masscb.set_label('Column mass loading g m$^{-2}$')
+
+            ax.plot(vloc[1], vloc[0], "m^", markersize=10, transform=volcat_transform)
             ax2.plot(vloc[1], vloc[0], "m^", markersize=10, transform=volcat_transform)
             map_util.format_plot(ax, volcat_transform, xticks=params.xticks, yticks=params.yticks)
             map_util.format_plot(ax2, volcat_transform,xticks=params.xticks,yticks=params.yticks)
-            ax.set_xlim(params.xmin,params.xmax)
-            ax.set_ylim(params.ymin,params.ymax)
+            #ax.set_xlim(params.xmin,params.xmax)
+            #ax.set_ylim(params.ymin,params.ymax)
+            #ax2.set_xlim(params.xmin,params.xmax)
+            #ax2.set_ylim(params.ymin,params.ymax)
             plt.show()
             #yield fig, ax, ax2, temp
 

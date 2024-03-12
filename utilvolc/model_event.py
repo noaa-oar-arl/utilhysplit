@@ -109,19 +109,19 @@ class ModelForecast:
         snames = self.model_dset.source.values
         # use data insertions up to dt h earlier.
         drange = [self.start_time-dt, self.start_time]
-        sourcelist = pick_source(snames, drange)
+        sourcelist,dlist = pick_source(snames, drange)
         # if doesn't return any, then use all.
         if not sourcelist:
            print('NO SOURCES', snames, drange)
            sourcelist = []
-        return sourcelist
+        return sourcelist, dlist
 
     def get_enslist(self):
         enslist = self.model_dset.ens.values
         return enslist
 
     def make_gridded_qva(self,time_previous=3):
-        sourcelist = self.get_sourcelist(time_previous=time_previous)
+        sourcelist,dlist = self.get_sourcelist(time_previous=time_previous)
         print(sourcelist)
         enslist = self.get_enslist()
         enslist = None #need to fix this.
@@ -151,12 +151,104 @@ class ModelForecast:
         ehash["FrequencyOfExceedance"] = encoding
         self.forecast.to_netcdf(qva_filename, encoding=ehash)
 
-    def plot_mean_mass(self,vloc):
-        sourcelist = self.get_sourcelist(time_previous=3)
+
+    def get_attrs(self):
+        atthash = {}
+        atts = self.model_dset.attrs
+        for key in ['latitude','longitude','Level top heights (m)','sample time hours','VolcanoName']:
+            if key in atts.keys():
+               atthash[key] = atts[key]
+        return atthash
+   
+    def plot_mean_mass2(self,vloc):
+        from utilhysplit.evaluation import vaa_montage
+        from utilhysplit.evaluation.ensemble_tools import preprocess
         dt = datetime.timedelta(hours=3)
-        timelist = [self.start_time+n*dt for n in [0,1,2,3,4,5]]
-        dset = self.model_dset.sel(source=sourcelist).sel(time=timelist)
-        wep.massload_plot(dset,vlist=vloc)
+        timelist = [self.start_time+n*dt for n in [0,1,2,3,4,5,6]]
+        try:
+            dset = self.model_dset.sel(time=timelist)
+        except:
+            print(timelist)
+            return
+        dset,dim = preprocess(dset) 
+        print('HERE',dim)
+        #dset = dset.mean(dim=dim)
+        dset.attrs.update(self.get_attrs())
+        if isinstance(vloc,(tuple,list,np.ndarray)):
+           dset.attrs.update({'longitude':vloc[1],'latitude':vloc[0]})
+        vm = vaa_montage.VAAMontage(dset,columns=3)
+        return vm 
+ 
+    def plot_mean_mass(self,vloc=None,extrasource=None,time_previous=3):
+        from utilhysplit.evaluation import vaa_montage
+        from utilhysplit.evaluation.ensemble_tools import preprocess
+        sourcelist,dlist = self.get_sourcelist(time_previous=time_previous)
+        if isinstance(extrasource,list):
+           sourcelist.extend(extrasource)
+        dt = datetime.timedelta(hours=3)
+        templist = [self.start_time+n*dt for n in [0,1,2,3,4,5,6]]
+        timelist = []
+        for ttt in templist:
+            if ttt in self.model_dset.time.values:
+               timelist.append(ttt)
+            else:
+               print('warning time not in dset', ttt)  
+        dset = self.model_dset.sel(time=timelist)
+        dset,dim = preprocess(dset,sourcelist=sourcelist) 
+        print(time_previous, sourcelist, dset.source.values)
+        dset = dset.max(dim=dim)
+        dset.attrs.update(self.get_attrs())
+        if isinstance(vloc,(tuple,list,np.ndarray)):
+           dset.attrs.update({'longitude':vloc[1],'latitude':vloc[0]})
+        d0 = self.start_time - dt
+        dlist.sort()
+        dstr = '{} to {}'.format(dlist[0].strftime("%Y %m/%d %H:%M UTC"), dlist[-1].strftime("%m/%d %H:%M UTC"))
+        mstr = '\n Number of runs {}. Maximum value from all runs.'.format(len(dlist))
+        dset.attrs.update({'source':'Data Insertion {} {}'.format(dstr, mstr)})
+        vm = vaa_montage.VAAMontage(dset,columns=3)
+        try:
+            fig = vm.plotpage()
+        except:
+            pass
+        return vm
+
+    def plot_concentration(self,vloc=None,pagenum=0,time_previous=3):
+        from utilhysplit.evaluation import concentration_montage
+        from utilhysplit.evaluation.ensemble_tools import preprocess
+        sourcelist,dlist = self.get_sourcelist(time_previous=time_previous)
+        dt = datetime.timedelta(hours=3)
+        timelist = [self.start_time+n*dt for n in [0,1,2,3,4,5,6]]
+        dset = self.model_dset.sel(time=timelist)
+        print(dset.source.values)
+        print(dset)
+        dset,dim = preprocess(dset,sourcelist=sourcelist) 
+        print(dset.source.values)
+        dset = dset.max(dim=dim)
+        dset.attrs.update(self.get_attrs())
+        if isinstance(vloc,(tuple,list,np.ndarray)):
+           dset.attrs.update({'longitude':vloc[1],'latitude':vloc[0]})
+        d0 = self.start_time - dt
+        dstr = '{} to {}'.format(d0.strftime("%Y %m/%d %H:%M UTC"), self.start_time.strftime("%m/%d %H:%M UTC"))
+        dset.attrs.update({'source':'Data Insertion {}'.format(dstr)})
+        vm = concentration_montage.ConcentrationMontage(dset,columns=3)
+        fig = vm.plotpage(pagenum)
+        return vm
+
+    def plot_concentration2(self,vloc):
+        from utilhysplit.evaluation import concentration_montage
+        from utilhysplit.evaluation.ensemble_tools import preprocess
+        dt = datetime.timedelta(hours=3)
+        timelist = [self.start_time+n*dt for n in [0,1,2,3,4,5,6]]
+        dset = self.model_dset.sel(time=timelist)
+        dset,dim = preprocess(dset) 
+        print('HERE',dim)
+        #dset = dset.mean(dim=dim)
+        dset.attrs.update(self.get_attrs())
+        if isinstance(vloc,(tuple,list,np.ndarray)):
+           dset.attrs.update({'longitude':vloc[1],'latitude':vloc[0]})
+        vm = concentration_montage.ConcentrationMontage(dset,columns=3)
+        return vm
+
 
     def plot_height(self,vloc,thresh=0.2,unit='km'):
         sourcelist = self.get_sourcelist(time_previous=3)
@@ -232,14 +324,18 @@ def pick_source(sss: str,
 
     """
     new = []
+    dlist = []
     for sname in sss:
         #sn = sname.replace('cdump.','cdump_')
-        v = mdi.EmitName(sname)
+        try:
+             v = mdi.EmitName(sname)
+        except:
+             continue
         ddd = v.vhash['observation_date']
-        #print(sname, ddd) 
         if ddd >= drange[0] and ddd <= drange[1]:
            new.append(sname)
-    return new
+           dlist.append(ddd)
+    return new, dlist
 
 
 class ModelEvent:
@@ -288,7 +384,7 @@ class ModelEvent:
             snames = dset.source.values
             # use data insertions up to dt h earlier.
             drange = [start, end]
-            sourcelist = pick_source(snames, drange)
+            sourcelist,dlist = pick_source(snames, drange)
             if sourcelist:
                elist.append(key)
             #if sourcelist:

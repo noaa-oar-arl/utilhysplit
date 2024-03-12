@@ -50,7 +50,6 @@ class TCM(TCMInterface):
         self.tcm_lon = None
         self._history = ["initialized"]
 
-        
 
     @property
     def subdir(self):
@@ -59,8 +58,6 @@ class TCM(TCMInterface):
     @subdir.setter
     def subdir(self,subdir):
         self._subdir = subdir
-    
-
 
     @property
     def history(self):
@@ -334,7 +331,7 @@ class TCM(TCMInterface):
         name2 = "{}_{}".format(self.tag, out_name2)
         return name1, name2
 
-    def run(self,execdir,subdir):
+    def run(self,execdir='./'):
         """
         """
         out_name1 = "out.dat"
@@ -345,11 +342,11 @@ class TCM(TCMInterface):
         #for iii, tcm in enumerate(self.tcm_names):
 
         print("run_tcm tag", self.tag)
-        os.chdir(subdir)
+        os.chdir(self.subdir)
         print("working in ", os.getcwd())
         params = ParametersIn(os.path.join(execdir, "Parameters_in.dat.original"))
         params.change_and_write(
-            os.path.join(subdir, "Parameters_in.dat"), self.n_ctrl
+            os.path.join(self.subdir, "Parameters_in.dat"), self.n_ctrl
         )
 
 
@@ -377,15 +374,15 @@ class TCM(TCMInterface):
 
         Helper.move("fort.188", "fort.188.{}".format(self.tag))
         try:
-            self.create_emissions(subdir)
+            self.create_emissions()
         except Exception as eee:
             logger.warning('could not get output {}'.format(eee))
 
-    def create_emissions(self,subdir):
+    def create_emissions(self):
         new_name1, new_name2 = self.make_tcm_names()
-        fname = os.path.join(subdir,new_name1)
+        fname = os.path.join(self.subdir,new_name1)
         self.emissions= utiltcm.InvEstimatedEmissions(fname,columns=self.columns)
-        self.emissions.read(subdir)
+        self.emissions.read(self.subdir)
 
     def create_outdat(self,subdir):
         new_name1, new_name2 = self.make_tcm_names()
