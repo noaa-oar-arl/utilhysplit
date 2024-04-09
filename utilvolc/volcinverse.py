@@ -63,7 +63,6 @@ def check_type_basic(check):
         return True
     return False
 
-
 # def check_type_iterable(check):
 
 
@@ -300,50 +299,46 @@ class RunInversion(RunInversionInterface):
     def tcm(self):
         return self._tcm
 
+    def clear(self):
+        self._tcm = None   # whatever the current tcm is.
+        self.tcmhash = {}  # dictionary with all tcm's.
+        
+
     def set_tcm(self,tag):
+        """
+        sets the current tcm 
+        """
         if tag in self.tcmhash.keys():
             self._tcm = self.tcmhash[tag]
         else:
             print('does not exist {}'.format(tag))
 
+    def print_summary(self):
+        return -1
+
     @property
     def directories(self):
         return self._directories
-
-    #def make_output(self):
-    #    rcopy = InversionOutput()
-    #    rcopy._input - self._input
-    #    rcopy._directories = self._directories
-    #    rcopy._tcm = self._tcm
-    #    return rcopy
 
     def copy(self):
         rcopy = RunInversion(self.inp)
         rcopy._paired_data = self._paired_data
         rcopy._directories = self._directories
         rcopy._tcm = self._tcm
-        rcopy.tcm_hash = tcm_hash
+        rcopy.tcmhash = tcmhash
         return rcopy
 
-    #def print_summary(self):
-    #    return -1
-
-    #def get_times(self):
-    #    kyy = ['start_date', 'durationOfSimulation']
-    #    shash =  {key:self.inp[key] for key in kyy}
-    #    dlist = invhelper.create_dlist(shash)
-    #    return dlist
-
     def setup_paired_data(self, ilist=None):
+        print('setting up paired data')
         dlist = self._paired_data.get_times()
         if isinstance(ilist,list):
-           dlist = dlist[ilist[0]:ilist[1]]
+           dlist = dlist[ilist[0]:ilist[-1]]
         print('Times to prepare {}'.format(len(dlist)))
         for time in dlist:
             d1 = time[0].strftime("%Y %m/%d %HZ")
             d2 = time[1].strftime("%Y %m/%d %HZ")
             logger.info('Preparing paired data for {} {}'.format(d1,d2))
-            print('Preparing paired data for {} {}'.format(d1,d2))
+            #print('Preparing paired data for {} {}'.format(d1,d2))
             self._paired_data.prepare_one_time(time)
                 
     def setup_tcm(self,tiilist, 
@@ -354,7 +349,17 @@ class RunInversion(RunInversionInterface):
                   remove_sources=False,
                   remove_ncs = 0,
                   tcm_name='tcm'):
-        
+        """
+        create an instance of TCM class and creates and writes the tcm file.
+        Makes this tcm class instance the current one and also adds it to the dictionary.
+        INPUTS
+        tiilist : list of integers representing observation times to use in the inversion.
+        concmult : 
+        remove_cols :
+        remove_sources :
+        remove_ncs : don't use clear sky obs within this number of pixels of obs.
+        rcm_name : 
+        """   
         # setup the directory and name structure 
         basetag = self.inp['jobname']
         tag = invhelper.create_runtag(basetag,tiilist,remove_cols,remove_rows,remove_sources,remove_ncs)
@@ -372,20 +377,27 @@ class RunInversion(RunInversionInterface):
         for tii in tiilist:
             model = self._paired_data.cdump_mass_hash[tii]
             obs = self._paired_data.volcat_avg_hash[tii]
+            print('TIME', tii, model.time.values)
             pdata.append((model,obs))
 
         # create and setup the tcm  
         current_tcm = TCM()
         columns = self._paired_data.cdump.ens.values
         current_tcm.columns = columns
-        current_tcm.subdir = tag
+        current_tcm.subdir = self.directories.subdir
         current_tcm.make_tcm_mult(pdata,concmult,remove_cols,remove_rows,remove_sources,remove_ncs)
         current_tcm.write(tcm_name)
-        
+       
         # add tcm to the dictionary and 
         # set the current tcm.
-        self.tcm_hash[tag] = tcm
+        self.tcmhash[tag] = current_tcm
         self._tcm = current_tcm
+
+        # run the tcm
+        self._tcm.run(self.directories.execdir)
+        # add the sourcehash to the emissions object instance
+        self._tcm.emissions.sourcehash = self._sourcehash
+
         return -1
 
     def load_tcm(self):
@@ -394,8 +406,24 @@ class RunInversion(RunInversionInterface):
         """
         return -1
 
+
     def run_hysplit(self):
+        """
+        create the EMIT file for the current tcm
+        run HYSPLIT for the EMIT file found in the current tcm subdirectory.
+        """
         from ashapp.maindispersion import MainEmitTimes
+
+        # write the emit-times file.
+        vlat = self.inp['latitude']
+        vlon = self.inp['longitude']
+        ename = os.path.join(self.tcm.subdir, 'EMIT.txt')
+        threshold = 100
+        if 'area' in self.inp.keys(): area = self.inp['area']
+        else: area=1
+        self.tcm.emissions.write_emit(vlat,vlon,threshold,area=area,name=ename)
+
+        # Setup and run HYSPLIT
         jobid = self.directories.subdir.split('/')[-1]
         inp = self.inp.copy()
         inp['durationOfSimulation']=24

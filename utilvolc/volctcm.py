@@ -141,12 +141,14 @@ class TCM(TCMInterface):
             nmax = t3.shape[1]
             iremove = []
             # very last column is obs. So start with second to last column.
-            for nnn in np.arange(nmax - 2, 0, -1):
+            for nnn in np.arange(nmax - 2, -1, -1):
                 test = t3[:, nnn]
+                print(nnn, self.columns[nnn])
                 if np.all(test == 0.0):
+                    print('removed')
                     iremove.append(nnn)
                 else:
-                    break
+                    continue
             t3 = np.delete(t3, iremove, axis=1)
             if len(self.columns) > 0:
                 self.columns = np.delete(self.columns, iremove, axis=0)
@@ -155,7 +157,6 @@ class TCM(TCMInterface):
         self.tcm_lon = lon
         #self.latlist = np.array(latlist)
         #self.lonlist = np.array(lonlist)
-        print('HERE C')
         return t3, lat, lon
 
     #def make_outdat(self, sourcehash):
@@ -271,7 +272,7 @@ class TCM(TCMInterface):
         model = model.fillna(0)
         # remove columns which have no contribution at all.
         if remove_cols:
-            model = model.where(model > 0)
+            model = xr.where(model > 0,model,np.nan)
             model = model.dropna(dim="ens", how="all")
 
         model_lat = model.latitude.values.reshape(s1, 1)
@@ -320,7 +321,7 @@ class TCM(TCMInterface):
         self.tcm_lat = model_lat
         self.tcm_lon = model_lon
         # this contains the keys that can be matched in the sourcehash attribute.
-        self.tcm_columns = columns
+        self.columns = columns
         return tcm, model_lat, model_lon, columns
 
     def make_tcm_names(self):

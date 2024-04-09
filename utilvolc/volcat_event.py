@@ -23,9 +23,7 @@ from utilvolc.volcat import flist2eventdf
 
 from utilhysplit.runhandler import ProcessList
 from utilhysplit.plotutils import map_util
-import utilhysplit.evaluation.web_ensemble_plots as wep
 from utilvolc import make_data_insertion as mdi
-from utilhysplit.evaluation import ensemble_tools
 
 from utilvolc.volcat_files import EventFile
 from utilvolc.volcat_files import get_summary_file_df
@@ -978,7 +976,7 @@ class Events:
                 if pd.to_datetime(vmass.time.values) > daterange[1]:
                     continue
 
-            transform = wep.get_transform(central_longitude=-180)
+            transform = map_util.get_transform(central_longitude=-180)
             fig, axarr = plt.subplots(
                 nrows=1,
                 ncols=2,
@@ -1023,7 +1021,7 @@ class Events:
             if vloc[0] != -999:
                 ax2.plot(vloc[1], vloc[0], "m^", markersize=5)
             # ax = plt.gca()
-            transform = wep.get_transform()
+            transform = map_util.get_transform()
             map_util.format_plot(ax, transform)
             map_util.format_plot(ax2, transform)
 

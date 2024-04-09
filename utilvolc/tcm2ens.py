@@ -3,6 +3,8 @@ import datetime
 import numpy as np
 import xarray as xr
 from utilvolc import volcMER
+from utilhysplit.evaluation import ensemble_tools
+from utilhysplit.evaluation import vaa_atl_montage
 
 # take a tcm matrix and create a source term ensemble.
 
@@ -24,6 +26,19 @@ class SourceEns:
     def __init__(self, tcmra):
         self.sources = tcmra.source.values
         self.tcmra = tcmra       
+        self.forecast_list = []
+        self.evector_list = []
+        self._attrs = {}
+        self.attrs = tcmra.attrs
+
+    @property
+    def attrs(self):
+        return self._attrs
+
+    @attrs.setter
+    def attrs(self, atthash):
+        if isinstance(atthash,dict):
+           self._attrs.update(atthash) 
  
     @property
     def vent_height(self):
@@ -35,7 +50,6 @@ class SourceEns:
         if unit.lower() == 'ft':
            vht = vht * 0.3048 
         self._ventht = vht
-
 
     @property
     def start_range(self):
@@ -115,16 +129,56 @@ class SourceEns:
 
 
     def generate_ensemble(self,nnn=10):
+        # dot product in xarray is slow.
+        # this is known issue.
+        # see https://stackoverflow.com/questions/47180126/xarray-too-slow-for-performance-critical-code
         samples = self.return_samples(nnn)
-        self.forecast_list = []
-        self.evector_list = []
         for sss in samples:
             print('working on', sss)
             emission_vector = self.get_evector(sss[0],sss[1],sss[2])
             self.evector_list.append(emission_vector)
-            print('dot product')
+           # def udot(tcm,ev):
+           #     func = lambda x,y: np.dot(x,y)
+           #     return xr.apply_ufunc(func,tcm,ev)
+            #print('dot product')
+            #self.forecast_list.append(udot(self.tcmra.isel(ens=0), emission_vector))
+                
+
+            #print('dot product')
             self.forecast_list.append(self.tcmra.dot(emission_vector))
 
+    def plot(self,ilist=None,cmap='viridis',tlist=None):
+        temp = self.get_ensemble(ilist)
+        if tlist is not None:
+           temp = temp.isel(time=tlist) 
+        probvm = vaa_atl_montage.VAAMontageATL(temp,cmap=cmap)
+        probvm.vaathresh=0.01
+        #fig = probvm.plotpage()
+        return probvm
 
+    def write_ensemble(self,name):
+        temp = get_ensemble(ilist=None)
+        temp.to_netcdf(name) 
+
+    def get_ensemble(self,ilist=None):
+        # not working for unknown reason.
+        # preprocess is messing up the coordinates.
+        # seems to work ok on the jupyter notebook but not here.
+        if ilist is None:
+           fcl = self.forecast_list
+        else:
+           fcl = self.forecast_list[ilist]
+        new = xr.concat(self.forecast_list,dim='source')
+        slist = new.source.values
+        new = new.assign_coords(source=('source',slist))
+        #print(new.source.values)
+        #print(new)
+        temp,dim= ensemble_tools.preprocess(new)
+        #print('---------------------')
+        print(type(temp))
+        temp = temp.rename({"ens":"metens"})
+        temp = temp.rename({"source":"ens"})
+        temp = temp.assign_attrs(self.attrs)
+        return temp
     
 

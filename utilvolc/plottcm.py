@@ -141,7 +141,6 @@ def plot_emissions_timeseries(
     except: 
        pass
     ts = df.sum(axis=1)
-    print('HERE', ts)
     if unit == "kg/s":
         yval = ts.values / 3.6e6
     elif unit == "g/h":
@@ -156,6 +155,8 @@ def plot_emissions_timeseries(
     )
     # fig.autofmt_xdate()
     ax.set_ylabel("MER {}".format(unit), fontsize=15)
+    plt.xticks(rotation=45)
+    if log: ax.set_yscale('log')
     return ax, df
 
 

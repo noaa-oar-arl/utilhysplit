@@ -135,23 +135,23 @@ class InvEstimatedEmissions:
         print(nmax)
         return ax
 
-    def plot(self,log=True,thresh=0):
+    def plot(self,log=True,thresh=0,cmap='Blues'):
         edf = self.make_emissions()
-        plottcm.plot_emissions(edf,log=log,thresh=thresh)
+        plottcm.plot_emissions(edf,log=log,thresh=thresh,cmap=cmap)
 
-    def plot_timeseries(self,log=True,marker='o'):
+    def plot_timeseries(self,log=True,marker='o',ax=None,clr='k'):
         """
         plots a time series of the emissions
         """
         edf = self.make_emissions()
-        plottcm.plot_emissions_timeseries(edf,log,marker)
+        plottcm.plot_emissions_timeseries(edf,log,marker,clr=clr,ax=ax)
 
-    def plot_profile(self,log=True,marker='o'):
+    def plot_profile(self,log=True,marker='o',ax=None,clr='k'):
         """
         plots a time series of the emissions
         """
         edf = self.make_emissions()
-        plottcm.plot_emissions_profile(edf,marker=marker)
+        plottcm.plot_emissions_profile(edf,marker=marker,ax=ax,clr=clr)
 
     def write_emit(self,vlat,vlon,threshold=50,area=1,name='EMIT.txt',date_cutoff=None):
         from utilvolc.tcm_emit import construct_efile
@@ -178,7 +178,7 @@ class InverseOut2Dat:
         df.columns = ['index','observed','model']
         self.df = df 
 
-    def plot_conc(self, cmap="viridis"):
+    def plot_conc(self, cmap="viridis",thresh=1e-15):
         if np.all(np.isnan(self.df.model.values)):
            logger.warning('plotting failed. All values in the model column are nan')
            return 
@@ -187,9 +187,13 @@ class InverseOut2Dat:
         sns.set_style("whitegrid")
         df = self.df
         # plt.plot(df['observed'],df['model'],'k.',MarkerSize=3)
+        df['keep'] = df.apply(lambda x: x['observed']>=thresh or x['model']>=thresh, axis=1)
+        df2 = df[df['keep']]
+
+
         cb = plt.hist2d(
-            df["observed"],
-            df["model"],
+            df2["observed"],
+            df2["model"],
             cmap=cmap,
             norm=mpl.colors.LogNorm(),
             bins=[20, 20],
