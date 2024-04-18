@@ -42,6 +42,7 @@ class PolygonPlotParams:
            xticks = set_xticks(xmin,xmax,nticks=nticks)
         xbuffer = 0.1 * (xmax-xmin)
         if xbuffer > 10: xbuffer=10
+        if xbuffer < 0.1: xbuffer=xmax-xmin
         xmin = xmin-xbuffer
         xmax = xmax + 2*xbuffer
         self.xmin = xmin
@@ -53,7 +54,7 @@ class PolygonPlotParams:
         ymax = np.nanmax(yyy)
         ybuffer = 0.1 * (ymax-ymin)
         ymin = ymin - ybuffer
-        ymax = ymax + 2*ybuffer
+        ymax = ymax + 3*ybuffer
         # yticks go from negative (at the bottom) to positive (at the top)
         yticks = set_ticks_normal(ymin,ymax,nticks=nticks)
 
@@ -123,18 +124,31 @@ class PlotParams:
            # maximumis now the smallest positive number
            xtemp2 = np.where(xtemp>0,xtemp,np.nan)
            xmax = np.nanmin(xtemp2)        
+
+           xbuffer = 0.1 * (xmax-xmin)
+           if xbuffer > 10: xbuffer=2
+           if xbuffer < 0.1: xbuffer=xmax-xmin
+           xmin = xmin+xbuffer
+           xmax = xmax - xbuffer
+
+
+
            xticks = set_xticks(xmin,xmax,nticks=nticks)
            # for setting the limits in the graph,
            # xmin and xmax have to be set with 180 =0
            xmax1 = xmax  
            xmax = 1 * (xmin + self.central_longitude)
            xmin = -1 * (self.central_longitude - xmax1) 
+
         else:
+
+           xbuffer = 0.1 * (xmax-xmin)
+           if xbuffer > 10: xbuffer=2
+           if xbuffer < 0.1: xbuffer=xmax-xmin
+           xmin = xmin-xbuffer
+           xmax = xmax + 2*xbuffer
            xticks = set_xticks(xmin,xmax,nticks=nticks)
-        xbuffer = 0.1 * (xmax-xmin)
-        if xbuffer > 10: xbuffer=10
-        xmin = xmin-xbuffer
-        xmax = xmax + 2*xbuffer
+
         self.xmin = xmin
         self.xmax = xmax
         self.xticks = xticks
@@ -144,6 +158,8 @@ class PlotParams:
         ymin = np.nanmin(ytemp)
         ymax = np.nanmax(ytemp)
         ybuffer = 0.1 * (ymax-ymin)
+        if ybuffer > 10: ybuffer=2
+        if ybuffer < 0.1: ybuffer=ymax-ymin
         ymin = ymin - ybuffer
         ymax = ymax + 2*ybuffer
         # yticks go from negative (at the bottom) to positive (at the top)
@@ -212,7 +228,7 @@ def draw_map(fignum, ax = None, fs=20):
     #        scale='50m', facecolor = cfeature.COLORE['water'])
 
     #ax.add_feature(states.edgecolor='gray')
-    ax.add_feature(cfeature.LAND)
+    ax.add_feature(cfeature.LAND, edgecolor='gray')
     return ax
 
 def reset_plots():

@@ -28,13 +28,33 @@ setup(name='utilhysplit',
           'pandas', 'netcdf4', 'xarray', 'matplotlib', 'lxml', 'scipy',
           'seaborn', 'cartopy', 'monetio', 'datetime', 'numpy', 'shapely'
       ])
+
+# 12/19/2023 reinstall anaconda.
+# remove the old anaconda3 directory.
+# bash Anaconda3-2023.09-0-Linux-x86_64.sh
+# conda activate doesn't work until run
+# conda init
+# conda install pandas
+# conda install xarray
+# conda install -c conda-forge jupyterlab
+# conda install cartopy
+# conda install shapely
+# conda install seaborn
+# conda install netcdf4
+# conda install lxml (downgrades libnetcdf and libxml)
+# conda install scipy
+
+#envai
+# added conda install scikit-learn:
+
+#-------------------------------------------------------------
 # extra_requires={'xesmf;platform_system!="Windows"'})
 
 # if notebook or ipython is not installed in the environment, then
 # if you run notebook or ipython it will start up but not be using that environment.
 # 10/5/2023 venv
-#conda install xarray   2023.6.0
-#conda install shapely
+# x conda install xarray   2023.6.0
+#x conda install shapely
 #conda install netcdf4  1.6.2
 #conda install seaborn
 #conda install lxml

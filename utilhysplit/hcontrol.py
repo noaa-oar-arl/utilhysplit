@@ -29,6 +29,7 @@ FUNCTIONS
 #                   changed gem to a kwarg.
 # 2023 Sep 26 (AMC) added a line_ending property to NameList class so can write withouth ',' at line ends.
 # 2023 Dec 05 (AMC) replaced exception in parse_num_met function with test for length of array.
+# 2024 Mar 20 (AMC) NameList class added remove method and modified add_n method 
 
 logger = logging.getLogger(__name__)
 
@@ -537,7 +538,7 @@ class Species:
                 self.date = datetime.datetime.strptime(
                     lines[2].strip(), "%y %m %d %H %M"
                 )
-                self.datestr = self.date.strftime("%y %M %D %H")
+                self.datestr = self.date.strftime("%y %m %d %H %M")
             except BaseException:
                 print("warning: date not valid", lines[2])
                 self.date = lines[2].strip()
@@ -652,6 +653,7 @@ class Species:
 
 class NameList:
     """class which represents HYSPLIT SETUP.CFG file,
+    All keys are stored as lower case.
     This class can also be used to write GENPARM.CFG file for hycs_gem.
     In write method set gem=True"""
 
@@ -691,15 +693,26 @@ class NameList:
 
     def add_n(self, nlist):
         """
-        add a whole dictionary.
+        nlist : dictionary
+        update setup dictionary with a new dictionary.
+        makes sure all keys are lower case. 
         """
-        self.nlist = nlist
+        addlist = []
+        for key in nlist:
+            addlist[key.lower()] = nlist[key]
+        self.nlist.update(addlist)
+
+    def remove(self,name):
+        if name.lower() in self.nlist.keys():
+           self.nlist.pop(name.lower())
 
     def add(self, name, value):
         """
         add one line
+        name : str is the key
+        value : value 
         """
-        if name.lower() in ["poutf", "efile"]:
+        if name.lower() in ["poutf", "efile","pinpf"]:
             if value[0] != "'":
                 value = "'" + value
             if value[-1] != "'":

@@ -33,7 +33,10 @@ def align(ds1, ds2, tol=0.01,verbose=False):
         dnew2 = change_grid(ds2, newatt)
 
         dnew1, dnew2 = align_grids(dnew1, dnew2, tolerance=tol)
-    return dnew1, dnew2
+        return dnew1, dnew2
+    else:
+        dnew1, dnew2 = align_grids(dnew1, dnew2, tolerance=tol)
+        return dnew1, dnew2 
 
 
 

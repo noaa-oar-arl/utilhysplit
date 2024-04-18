@@ -20,6 +20,7 @@ if __name__ == "__main__":
    helper = runhelper.Helper
    helper.remove('index.html')
    ftpname = 'ftp.ssec.wisc.edu/pub/volcat/daily_so2_composites/'
+   so2dir = '/pub/ECMWF/JPSS/VOLCAT/SO2Files/'
    os.system("wget -P" + './'  + " " + ftpname)
    vidlist = []
    dlist = []
@@ -29,4 +30,5 @@ if __name__ == "__main__":
                 aaa = line.split('"')
                 fname = [x for x in aaa if 'VOLCAT' in x]
                 fname = fname[0]
-                os.system("wget -P " + " /pub/ECMWF/JPSS/VOLCAT/SO2Files/  {}/{}".format(ftpname,fname))
+                if not os.path.isfile('{}/{}'.format(so2dir,fname)):
+                    os.system("wget -N -P " + " {}  {}/{}".format(so2dir,ftpname,fname))

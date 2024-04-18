@@ -90,9 +90,15 @@ def plot_delauney(ax, edge_points, mpts, hull=None):
 
 def plotpoly(sgeo_poly):
     """xy plot of a shapely polygon"""
-    if isinstance(sgeo_poly, sgeo.multipolygon.MultiPolygon):
+    if isinstance(sgeo_poly, (sgeo.multipolygon.MultiPolygon,sgeo.GeometryCollection)):
         for poly in sgeo_poly.geoms:
-            x,y = poly.exterior.xy
+            try:
+                print(type(poly))
+                x,y = poly.exterior.xy
+            except:
+                print(type(poly))
+                x = None
+                y = None
             yield x,y
     else:
         x, y = sgeo_poly.exterior.xy
@@ -153,7 +159,7 @@ def bearing(p1, p2):
     angle = (np.degrees(angle) + 360) %360
     return angle
 
-def get_hull(z,thresh1=0.1,thresh2=1000,alpha=10):
+def get_hull(z,thresh1=0.1,thresh2=1000,alpha=10,central_longitude=0):
     """
     z is a 2-d xarray data-array with coordinates latitude, longitude
     thresh1 and thresh2 are floats or ints.
@@ -170,12 +176,21 @@ def get_hull(z,thresh1=0.1,thresh2=1000,alpha=10):
     tlist = [x for x in tlist if x[2]>=thresh1]
     tlist = [x for x in tlist if x[2]<=thresh2]
     lon = [x[1] for x in tlist]
+  
+    xmin = np.nanmin(lon)
+    xmax = np.nanmax(lon)
+    if xmin < 0 and xmax > 0: central_longitude=180
+    if int(central_longitude)==180:
+       lon2 = [360+x if x<0 else x for x in lon]
+       lon = lon2
+
+ 
     lat = [x[0] for x in tlist]
 
     # create the polygons
     numpts = len(lon)
     mpts = make_multi(lon,lat)
-    if numpts >= 4: 
+    if numpts >= 6: 
         ch, ep = concave_hull(mpts,alpha=alpha)
     else:
         ch = mpts.convex_hull
@@ -228,6 +243,7 @@ def concave_hull(mpoints, alpha=1):
     
     #rpoly= cascaded_union(triangles)
     rpoly= unary_union(triangles)
+    #print('FINAL alpha', alpha)
     return rpoly, edge_points
 
 def make_multi(x,y):
