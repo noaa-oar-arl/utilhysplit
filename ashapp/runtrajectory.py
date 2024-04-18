@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 
 
 def round_start_time(stime, mround=5):
+    if isinstance(stime, np.datetime64):
+        # Convert numpy.datetime64 to datetime.datetime
+        stime = stime.astype('datetime64[m]').astype(datetime.datetime)
+
     # round down
     minutes = int(stime.minute - stime.minute%mround)
     newtime = datetime.datetime(stime.year, stime.month, stime.day, stime.hour, minutes)

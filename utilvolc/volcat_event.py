@@ -29,7 +29,6 @@ from utilvolc.volcat_files import EventFile
 from utilvolc.volcat_files import get_summary_file_df
 from utilvolc.volcat_files import get_log_files
 from utilvolc.volcat_files import check_file
-from utilvolc.utiltraj import trajectory_input_csv
 
 from utilvolc import volcat_plots as vp
 

@@ -13,56 +13,235 @@ import numpy.ma as ma
 import xarray as xr
 import shapely.geometry as sgeo
 from shapely.ops import nearest_points
-
-
 #from natsort import natsorted
+
 from math import pi
 from monetio.models import hytraj
 from monetio.models import hysplit
 #from utilvolc.utiltraj import combine_traj
 from utilhysplit import emitimes
+from utilhysplit.fixlondf import fixlondf
 from utilvolc import volcat
+from utilvolc import volcat_so2
 from utilvolc.volcat import VolcatName
 from utilvolc import get_area
 from utilhysplit import geotools
 from utilvolc.make_data_insertion import make_1D_sub, EmitName
 
-# 2023 Dec 04 (amc)  added make_btraj_filename function
-# 2023 Dec 04 (amc)  modified combine_traj to handle tdump files with multiple trajectories.
-# 2023 Dec 04 (amc)  modified combine_traj to add observed time, altitude, and area to file
-# 2023 Dec 04 (amc)  modified trajectory_input_csv function for different naming convention.
-# 2023 Dec 04 (amc)  added modified functions for computing distance from trajectory to volcano.
-# 2023 Dec 04 (amc)  removed dependence on natsorted
+from sklearn.cluster import KMeans
 
+"""
+This function reads the VOLCAT data and performs K-Means clustering that partition a dataset into "K"
+non-overlapping clusters.
+"""
 
-
-
-def make_btraj_filename(volcat_fname):
-    suffix = ''
-    enn = EmitName(None)
-    return enn.make_filename(volcat_fname, prefix='btraj', suffix=suffix) + '.csv'
-
-
-def trajectory_input_csv(dataset, data_dir, layer_height=None):
+def volcat_kmeans_clustering(vname, num_samples, time_obs_threshold):
     """
-    Functions reads the xarray datasets and generates csv files which can be used by ash_main.py.
+    vname: the path of the VOLCAT retrieval data.
+    num_samples: number of samples that we seek to transform the total observations into. # of clusters.
+    time_obs_threshold: minimum count of measurements for each time period.
+    """
+    # read data and preprocess
+    vvolc = volcat_so2.volcatSO2L3(fname=vname)
+    vframe = fixlondf(vvolc.points2frame(), colname='lon',neg=False)
+    vframe_df = vframe[['lat', 'lon', 'massI', 'heightI', 'time']]
+    vframe_df.rename(columns={"massI": "mass", "heightI": "height"}, inplace = True)
+    vframe_df = vframe_df.dropna(subset=['height','mass'])
+    vframe_df = vframe_df.sort_values(by='time', ascending=True)
+
+    # count the number of observations at each distinct time
+    time_counts = vframe_df['time'].value_counts()
+
+    # exclude times with observation counts below the threshold
+    exclude_times = [str(time) for time in time_counts[time_counts < time_obs_threshold].index]
+    df_filtered = vframe_df[~vframe_df['time'].isin(exclude_times)]
+
+    sample_data = pd.DataFrame(columns=['lat', 'lon', 'mass', 'height', 'time'])
+
+    # perform clustering
+    for distinct_time in df_filtered['time'].unique():
+        df_filtered_time = df_filtered[df_filtered['time'] == distinct_time]
+        num_samples_per_time = math.floor((len(df_filtered_time)/len(df_filtered)) * num_samples)
+        # skip if the number of samples is below 1
+        if num_samples_per_time < 1:
+            continue
+
+        # extract features for clustering and perform K-means clustering
+        features = df_filtered_time[['lat','lon','height']].values
+        kmeans = KMeans(n_clusters=num_samples_per_time, random_state=42)
+        cluster_labels = kmeans.fit_predict(features)
+        cluster_centers = kmeans.cluster_centers_
+        cluster_counts = np.bincount(cluster_labels)
+
+        # extract cluster information and calculate sample data
+        for cluster_id in range(num_samples_per_time):
+            cluster_points = df_filtered_time[cluster_labels == cluster_id]
+            total_mass = cluster_points['mass'].sum()
+
+            weighted_lat = cluster_centers[cluster_id, 0]        
+            weighted_lon = cluster_centers[cluster_id, 1]
+            weighted_count = cluster_counts[cluster_id]
+            weighted_height = cluster_centers[cluster_id, 2]
+
+            sample_data = sample_data.append({
+                'lat': weighted_lat,
+                'lon': weighted_lon,
+                'mass': total_mass,
+                'count': weighted_count,
+                'height': weighted_height,
+                'time': distinct_time,
+            }, ignore_index=True)
+
+
+    return sample_data
+
+def traj_volc_dist2(vloc, df):
+    # shapely only does computations in 2d.
+    # although you can define point and line with a z coordinate.
+    vpoint = sgeo.Point((vloc[1],vloc[0]))
+    x=df.longitude
+    y=df.latitude
+    xy=list(zip(x,y))
+    # creates line segments from trajectory points.
+    tline = sgeo.LineString(xy)
+    # finds closest point on the linestring to volcano.
+    # do this because it may be between trajectory points.
+    a,b = nearest_points(tline,vpoint)
+    # returns distance in km
+    distance = geotools.distance(a,b)
+    return a, distance
+
+#____________________________________________________________
+# updated function trajectory_volc_dist by 12/05/2023 !Bavand
+def trajectory_volc_dist(obs_data_point, tdumpfiles, vlocation, trange_start_time, trange_end_time):
+    """
+    Functions reads the xarray datasets of observations and tdump files and finds nearest trajectories,
+    the output is a dataframe.
     Input:
-        xarray dataset representing volcat data.
-    Output:
-        csv file used by ash_main.py to create a set of back trajectory runs from the observation 
-        points. 
+        xarray dataset representing volcat data (obs_data_point).
+        vlocation has longitude and latitude of the volcano.
+        tdump files are the results of back trajectories calculated for a layer.
+        trange_start_time and trange_end_time are start time and end time of each trajectory for calculation
+        of nearest point to vent.
+    Outputs:
+        characteristics of the nearest point of the resolved trajectories to the volcano
+        the names are abbreviated:
+        dist_len: array
+                  the distance length between the closest point of the trajectory and the volcano
+        dist_hgt: array
+                  height at which the trajectories come closest to the volcano
+        dist_lat, dist_lon: array
+                  the coordinates of the nearest points to the volcano eruption
+        dist_time:
+                  the time when the nearest point reaches the volcano
+        obs_"variables":
+                  the locations of the back trajectory starting points (coordinates and altitude)
     """
-    obs_data_orig = pd.DataFrame(make_1D_sub(dataset), columns=['lat','lon','mass','height','area'])
-    obs_data_orig['time'] = dataset.time.values
-    if layer_height:
-       obs_data_orig["heightI"] = layer_height
-       fname = f'btraj{"%02d" %layer_height}km.csv'
-    else:
-       fname = make_btraj_filename(dataset.dataset_name)
-    out = os.path.join(data_dir,fname)
-    print('writing', out)
-    obs_data_orig.to_csv(out, index = False)
-    return obs_data_orig
+
+    traj_dataframe = hytraj.combine_dataset(tdumpfiles, renumber=True)
+    traj_dataframe['adjusted_longitude'] = np.where(traj_dataframe['longitude'] < 0, traj_dataframe['longitude'] + 360, traj_dataframe['longitude'])
+    # add new column of initial altitude to mark the starting height of each trajectories
+    traj_dataframe['init_alt']    = traj_dataframe['altitude'].iloc[0]
+    # sort the dataframe with the traj_num -from beginning to the end- and time from the trajectory start point to the last point 
+    traj_dataframe = traj_dataframe.sort_values(by=['traj_num','time'], ascending=[True, False]).copy()
+    traj_dataframe.reset_index(drop=True, inplace=True)
+    # select those trajectories that fall within a certain time range after the eruption event
+    #trange_start_time = '2022-01-15 04:00:00'
+    #trange_end_time   = '2022-01-15 16:00:00'
+    traj_dataframe = traj_dataframe[(traj_dataframe['time'] >= trange_start_time) & (traj_dataframe['time'] <= trange_end_time)].copy()
+    deg2km = 111.111
+    # find the distances between the trajectories and volcano, nearest point and its index
+    traj_dataframe['dist_len'] = np.sqrt(((traj_dataframe['latitude']-vlocation[0])*(np.cos(np.radians(0.5*(traj_dataframe['latitude']+vlocation[0]))))*deg2km)**2 + ((traj_dataframe['adjusted_longitude']-vlocation[1])*deg2km)**2) 
+
+    min_dist_rows = traj_dataframe.groupby('traj_num')['dist_len'].idxmin()
+    result_df = traj_dataframe.loc[min_dist_rows]
+    result_df.reset_index(drop=True, inplace=True)
+
+    result_df['obs_time'] = pd.to_datetime(obs_data_point['time'], format='%Y-%m-%d %H:%M:%S', errors='coerce')
+    result_df['obs_lat'] = obs_data_point['lat']
+    result_df['obs_lon'] = obs_data_point['lon']
+    result_df['obs_height'] = obs_data_point['height']*1000
+    result_df['dist_weight'] = obs_data_point['mass']
+    result_df['obs_count'] = obs_data_point['count']
+    result_df['col_conc'] = result_df['dist_weight']/result_df['obs_count']
+    result_df.rename(columns={'latitude':'dist_lat', 'adjusted_longitude':'dist_lon', 'altitude':'dist_hgt', 'time':'dist_time'}, inplace = True)
+    
+    return result_df
+
+def traj_layer_dataframe2(datadir, fname, suffix, num_lyr, vlocation, trange_start_time, trange_end_time):
+    """
+    This function outputs the characteristics of the trajectories' nearest point to the volcano.
+    """
+    var1 = {}
+
+    for i in range(1, num_lyr):
+
+        print(i)
+        tdump_files1 = glob.glob(datadir +  f'{fname}_{"%02d" %i}km/' + f'tdump.ashtest_btraj{"%02d" %i}{suffix}.*')
+        obs_data_point1 = pd.read_csv(datadir +  f'{fname}_{"%02d" %i}km/' + f'btraj{"%02d" %i}{suffix}.csv')
+#        print(tdump_files1)
+#        print('***********************************')
+#        print(obs_data_point1)
+#        print('***********************************')
+        print('****************end first step********************')
+        var1[i] = trajectory_volc_dist(obs_data_point1, tdump_files1, vlocation, trange_start_time, trange_end_time)
+
+#    return (var1)
+
+#        obs_data = {'dist_len': dist_len, 'dist_hgt': dist_hgt, 'dist_lat': dist_lat, 'dist_lon': dist_lon,
+#                    'dist_time': dist_time, 'obs_time': obs_time, 'obs_lat':obs_lat, 'obs_lon': obs_lon,
+#                    'init_alt': init_alt, 'obs_height': obs_height, 'dist_weight': dist_weight}
+#        var1[i] = obs_data
+    print('**************************************************')
+#    print('****************end second step********************')
+    df = {}
+
+    for ii in range(len(obs_data_point1)):
+        print(ii)
+        df_variable = pd.DataFrame()
+        for j in range(1, num_lyr):
+
+            df_variable = pd.concat([df_variable, pd.DataFrame(var1[j])[ii:ii+1]])
+            df[ii] = df_variable[['obs_time', 'obs_lat', 'obs_lon', 'obs_height', 'init_alt', 'dist_time', 'dist_hgt', 
+                                'dist_lat', 'dist_lon', 'dist_len', 'dist_weight','obs_count', 'col_conc']]
+
+    return (df)
+#____________________________________________________________
+
+def combine_traj_old(fnames, csvfile=None):
+    """
+    fnames  : list of str. trajectory file names. full path.
+    csvfile : csv file output by sample_and_write which contains weighting information.
+    combined trajectories in different files into one dataframe.
+    """
+    trajlist = []
+    if csvfile:
+        weightcsv = pd.read_csv(csvfile)
+    for iii, fnn in enumerate(fnames):
+        try:
+            df1 = hytraj.open_dataset(fnn)
+        except:
+            print('Failed {}'.format(fnn))
+            continue
+        # get trajectory number from the file name
+        temp = fnn.split(".")
+        trajnum = int(temp[-1])
+        # add new column to dataframe with trajectory number
+        df1["traj_num"] = trajnum
+        #print('TRAJNUM', trajnum)
+        # add weight information from csvfile to the dataframe
+        if csvfile:
+            temp = weightcsv.loc[trajnum]
+        #    weight = temp.massI
+            weight = temp.mass
+        else:
+            weight = 1
+        df1["weight"] = weight
+ 
+        trajlist.append(df1.copy())
+    # concatenate the trajectories into one dataframe.
+    trajdf = pd.concat(trajlist)
+    return trajdf
 
 
 def combine_traj(fnames, csvfile=None):
@@ -99,19 +278,84 @@ def combine_traj(fnames, csvfile=None):
         #    weight = temp.massI
             weight = temp.mass
             obsalt = temp.height
-            obsarea = temp.area
+        #    obsarea = temp.area
         else:
             weight = 1
             obsalt = None
             obsarea = None
         df1["weight"] = weight
         df1["obsalt"] = obsalt
-        df1["area"] = obsarea
- 
+        #df1["area"] = obsarea
+
+        trajlist.append(df1.copy())
+        print(fnn)
+        print('bavand')
+    # concatenate the trajectories into one dataframe.
+    trajdf = pd.concat(trajlist)
+    return trajdf
+
+
+
+def combine_traj2(fnames, csvfile=None):
+    """
+    fnames  : list of str. trajectory file names. full path.
+    csvfile : csv file output by sample_and_write which contains weighting information.
+    combined trajectories in different files into one dataframe.
+    """
+
+    # 01 November 2023. changed to handle tdump files which may have multiple trajectories.
+    #                   do not over-write the traj_num column. instead add a run_num column.
+
+    #                   Also add the observed altitude and area to the new dataframe.
+    trajlist = []
+    if csvfile:
+        weightcsv = pd.read_csv(csvfile)
+#03/28/2024
+#        weightcsv.rename(columns={weightcsv.columns[6]: 'bavand'}, inplace=True)
+
+#03/28/2024
+    for iii, fnn in enumerate(fnames):
+        try:
+            df1 = hytraj.open_dataset(fnn)
+        except:
+            print('Failed {}'.format(fnn))
+            continue
+        # get trajectory number from the file name
+        temp = fnn.split(".")
+        trajnum = int(temp[-1])
+        # add new column to dataframe with run number
+        # the run may have multiple trajectories in it.
+        #df1["traj_num"] = trajnum
+
+#03/28/2024 BS7
+        df1["run_num"] = trajnum
+        #df1["traj_num"] = trajnum
+#03/28/2024 BS7
+
+
+        #print('TRAJNUM', trajnum)
+        # add weight information from csvfile to the dataframe
+        if csvfile:
+            temp = weightcsv.loc[trajnum]
+        #    weight = temp.massI
+            weight = temp.mass
+            obsalt = temp.height
+            #obsarea = temp.area
+
+        else:
+            weight = 1
+            obsalt = None
+            obsarea = None
+        df1["weight"] = weight
+        df1["obsalt"] = obsalt
+        #df1["area"] = obsarea
+
         trajlist.append(df1.copy())
     # concatenate the trajectories into one dataframe.
     trajdf = pd.concat(trajlist)
     return trajdf
+
+
 
 
 def read_traj_output(data_dir, fname, num_layer):
@@ -122,138 +366,12 @@ def read_traj_output(data_dir, fname, num_layer):
     tnames_path = []
     obs_path = []
     trajectory_data = {}
-    for ii in range(1,num_layer+1):
-        tdump_files = glob.glob(data_dir + f'{fname}_{"%02d" %ii}km/' + 'tdump.ashtest_btraj*')
-    #for ii in range(1,num_layer):
-    #    tdump_files = natsorted(glob.glob(data_dir + f'{fname}_{"%02d" %ii}km/' + 'tdump.ashtest_btraj*'))
+    for ii in range(1,num_layer):
+        tdump_files = natsorted(glob.glob(data_dir + f'{fname}_{"%02d" %ii}km/' + 'tdump.ashtest_btraj*'))
         trajectory_data[f'tdump{ii}'] = tdump_files
         tnames_path.append(trajectory_data[f'tdump{ii}'])
-        obs_path.append(data_dir + f'{fname}_{"%02d" %ii}km/' + f'btraj{"%02d" %ii}kmASC3.csv')
+        obs_path.append(data_dir + f'{fname}_{"%02d" %ii}km/' + f'btraj{"%02d" %ii}kmDES.csv')
     return (tnames_path, obs_path)
-
-
-def traj_volc_dist2(vloc, df):
-    # shapely only does computations in 2d. 
-    # although you can define point and line with a z coordinate.
-    vpoint = sgeo.Point((vloc[1],vloc[0]))
-    x=df.longitude
-    y=df.latitude
-    xy=list(zip(x,y))
-    # creates line segments from trajectory points.
-    tline = sgeo.LineString(xy)
-    # finds closest point on the linestring to volcano.
-    # do this because it may be between trajectory points.
-    a,b = nearest_points(tline,vpoint)
-    # returns distance in km
-    distance = geotools.distance(a,b)
-    return a, distance
-
-
-def traj_volc_dist_km(vloc, df):
-    from utilhysplit.geotools import calculate_distance
-    """
-    The function calculates the distances between each trajectory (at each time step) and the volcano vent.
-    Similar to traj_volc_dist but output is in km.
-    Inputs:
-        volcano: array; lat and lon of the volcano
-        df: dataframe, trajectory characteristics
-    Outputs:
-        dist : array; values of the distances between each point of the trajectory and the volcano.
-    """
-    distlist = []
-    for iii, row in df.iterrows():
-        dist = calculate_distance(row.latitude,row.longitude,vloc[0],vloc[1])
-        distlist.append(dist)
-        dist = np.array(distlist)
-    return dist
-
-def traj_volc_dist(vloc, df):
-    """
-    The function calculates the distances between a trajectory (at each time step) and the volcano vent.
-    Inputs:
-        volcano: array; lat and lon of the volcano
-        df: dataframe, trajectory characteristics
-    Outputs:
-        dist : array; values of the distances between each point of the trajectory and the volcano.
-    """
-    dist = []
-    deg2km = 111.111
-
-    for i in range(len(df)):
-        span = ((df.latitude[i] - vloc[0])*deg2km)**2 + ((df.longitude[i] - vloc[1])*deg2km)**2
-        span = math.sqrt(span)
-        dist = np.append(dist, span)
-        dist = np.array(dist)
-    return dist
-
-
-def traj_layer_cal(tnames_path, obs_path, vloc, tdump_num):
-    """
-    The function calculates the characteristics of trajectories coming close to the volcano over entire observations.
-    It performs calculations for the number of measurements.
-
-    Inputs:
-        tnames: name and path of resolved back trajectory (list)
-        obs_path: dataframe; contains the characteristics of the data measurement
-    volcano:  array
-              lat and lon of the volcano
-
-    outputs:
-    characteristics of the nearest point of the resolved trajectories to the volcano
-    the names are abbreviated:
-        dist_len: array
-                  the distance length between the closest point of the trajectory and the volcano
-        dist_hgt: array
-                  height at which the trajectories come closest to the volcano
-        dist_lat, dist_lon: array
-                  the coordinates of the nearest points to the volcano eruption
-        dist_time:
-                  the time when the nearest point reaches the volcano
-        obs_"variables":
-                  the locations of the back trajectory starting points (coordinates and altitude)
-    """
-
-    (dist_len, dist_hgt, dist_lat, dist_lon, dist_time, obs_time, obs_lat,
-    obs_lon, init_alt, obs_height, dist_weight) = ([] for i in range(11))
-    for traj_no in range(tdump_num):
-
-        # read the trajectory file (HYSPLIT output)
-        df = combine_traj([tnames_path[traj_no]], csvfile = obs_path).copy()
-        # altitude of trajectory starting point
-        df['init_alt'] = df['altitude'].iloc[0]
-        # measured altitude of observation point
-        obs_path_csvfile = pd.read_csv(obs_path)
-        df['height'] = (obs_path_csvfile['height'].iloc[traj_no])*1000
-        df.loc[df['longitude'] < 0, 'longitude'] = df['longitude'] + 360
-        # filter the trajectory points for the 12 hours period after the volcano eruption. check for each volcano.
-        df2 = df.loc[df['time'].between('2022-01-15 04:00:00', '2022-01-15 16:00:00')]
-        #df2 = df
-        df2 = df2.reset_index(level=None, drop=True, inplace=False)
-        # find the distances between the trajectories and volcano, nearest point, and its index
-        dist_out = traj_volc_dist(vloc, df2)
-        closer_dist_value = np.min(dist_out)
-        closer_dist_index = np.argmin(dist_out)
-
-        # dist_len, the distance length between the closest point of the trajectory and the volcano
-        dist_len = np.append(dist_len, dist_out[closer_dist_index])
-        # dist_hgt; height at which the trajectories come closest to the volcano
-        dist_hgt = np.append(dist_hgt, df2.altitude[closer_dist_index])
-        # dist_lat and dist_lon; the coordinates of the nearest points to the volcano
-        dist_lat = np.append(dist_lat, df2.latitude[closer_dist_index])
-        dist_lon = np.append(dist_lon, df2.longitude[closer_dist_index])
-        # dist_time; the time when the nearest point reaches the volcano
-        dist_time  = np.append(dist_time, df2.time[closer_dist_index])
-        # the locations of the back trajectory starting points (coordinates and altitude)
-        obs_time = np.append(obs_time, df.time[0])
-        obs_lat = np.append(obs_lat, df.latitude[0])
-        obs_lon = np.append(obs_lon, df.longitude[0])
-        init_alt = np.append(init_alt, df2.init_alt[closer_dist_index])
-        obs_height = np.append(obs_height, df2.height[closer_dist_index])
-        dist_weight = np.append(dist_weight, df2.weight[closer_dist_index])
-
-    return (dist_len, dist_hgt, dist_lat, dist_lon, dist_time, obs_time, obs_lat, obs_lon, init_alt,
-            obs_height, dist_weight)
-
 
 
 def traj_layer_dataframe(tnames_path, obs_path, vloc, tdump_num):
@@ -295,8 +413,8 @@ def traj_layer_dataframe(tnames_path, obs_path, vloc, tdump_num):
 
     return (df)
 
-
-def plume_thick_cal(df, cutoff):
+# the function was modified by Bavand 12/05/2023
+def plume_thick_cal(df):
     """
     This function selects the layers at which the shortest distance between trajectories and volcano points occurs.
     It sets a cut-off value and identifies the base and top of the cloud, allowing the code to calculate the cloud thickness.
@@ -305,25 +423,32 @@ def plume_thick_cal(df, cutoff):
     df_dist_min = pd.DataFrame()
     df_dist_min_criteria_pass = pd.DataFrame()
     df_closest_row = pd.DataFrame()
-    
-    critera_pass_traj_num = 0
 
+    critera_pass_traj_num = 0
+    
+#    cutoff = 500
     for i in range(len(df)):
+#        cutoff = 1.5*df[i]['dist_len'].min()
+        cutoff = 800
         # finds the layers where the trajectories come within a certain distance to the volcano
-        selected_rows = df[i].loc[df[i]['dist_len'] < cutoff]
+        selected_rows = df[i].loc[df[i]['dist_len'] <= cutoff]
+
 
         # If there was no single layer where the trajectory comes within this threshold distance of the vent, the code will choose
         # the initial altitude of the nearest trajectory layer and set it as the top of the cloud.
-        if selected_rows.empty:
+#        if len(selected_rows) == 1:
+        if len(selected_rows) == 0 or len(selected_rows) == 1:
             df_closest_row = pd.DataFrame(df[i].iloc[df[i]['dist_len'].argmin()]).transpose()
             df_closest_row['cloud_top'] = df_closest_row['init_alt']
             df_closest_row['cloud_bottom'] = df_closest_row['cloud_top'] - 1000
             df_closest_row['thickness'] = 1000
             df_dist_min = pd.concat([df_dist_min, df_closest_row])
 
+
         # For the trajectories that come within the threshold, the code determine both a bottom and top level for the plume
         # and display the number of them multiplied by 1 km as the thickness.
         else:
+
             selected_values = selected_rows['init_alt'].values
             range_of_values = (np.min(selected_values), np.max(selected_values))
             df_closest_row = selected_rows.nsmallest(1, 'dist_len')
@@ -331,83 +456,195 @@ def plume_thick_cal(df, cutoff):
             df_closest_row['cloud_bottom'] = np.min(selected_values)
             df_closest_row['thickness'] = len(selected_rows)*1000 # np.max(selected_values) - np.min(selected_values)
             df_closest_row['thickness'] = df_closest_row['thickness'].clip(lower=1000)
+            # df_dist_min is the dataframe of plume characteristics over entire observation points
             df_dist_min = pd.concat([df_dist_min, df_closest_row])
+            # df_dist_min is the dataframe of plume characteristics over observation points that come within the cut-off value.
             df_dist_min_criteria_pass = pd.concat([df_dist_min_criteria_pass, df_closest_row])
             critera_pass_traj_num = critera_pass_traj_num + 1
-    print(critera_pass_traj_num)
+
     return(df_dist_min, df_dist_min_criteria_pass, critera_pass_traj_num)
 
-
-def conc_emitimes_data(df, cutoff):
+# This function was modified by a dynamic method of selecting the cutoff, 02/21/2023
+def conc_emitimes_data(df):
     """"
     This function prepares the characteristics of plume emission for EMITIMES needed for forward dispersion run.
     """
     df_dist_fwd_data = pd.DataFrame()
     df_dist_fwd = {}
+    deg2km = 111.111
 
     critera_pass_traj_num = 0
-    for i in range(len(df)):
+    for i in range(1,len(df)):
 
+        cutoff = 1.5*df[i]['dist_len'].min()
         # finds the layers where the trajectories come within a certain distance to the volcano
         selected_rows = df[i].loc[df[i]['dist_len'] < cutoff]
 
         # if there was no single layer where the trajectory comes within this threshold distance of the vent, the code will
         # choose the initial altitude of the nearest trajectory layer and set it as the top of the cloud
-        if selected_rows.empty:
+        if len(selected_rows) == 1:
 
             df_dist_fwd[i] = pd.DataFrame(df[i].iloc[df[i]['dist_len'].argmin()]).transpose()
-            
+            #print('length of the variable here is', len(df_dist_fwd[i]))
             # (I) check if it is needed to convert the DU to g/m^2
             # df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['dist_weight']) * (2.6867E20) * (64.066) * (1/(6.022E23))
             # (II) check if it is needed to convert the g/m^2 to g (7.0 km ~ 7000 m)
             # df_dist_fwd[i]['tload'] = df_dist_fwd[i]['tload'] * 49000000
-            # (III) check what convertion the unit of mass requires. Units will remain unchanged.
+            # (III) check what convertion the unit of mass requires. Units will remain unchanged
             df_dist_fwd[i] = df_dist_fwd[i].copy()
-            df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['dist_weight']) * 1.0
-
+        
             # to add a new column showing the number of source emission layers at the point
             df_dist_fwd[i] = df_dist_fwd[i].assign(count = len(df_dist_fwd[i]))
+            obs_lat_radians = np.radians(df_dist_fwd[i]['obs_lat'].iloc[0])
+            area = (np.abs(np.cos(obs_lat_radians)) * 0.045 * deg2km * 1000) * (0.045 * deg2km * 1000)
+            print('area')
+            print(area)
 
+            df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['col_conc'] * df_dist_fwd[i]['obs_count'] * area
+#            df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['col_conc'] * df_dist_fwd[i]['obs_count'] * 25000000
+#            df['altitude'].iloc[0]
+            df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['tload'] / len(df_dist_fwd[i])
             # will add a new column for the emission rate (1/hr): df_dist_fwd[i]['tload'] * (1/[emission time (hr)])
+            # rate unit (1/hr)
             df_dist_fwd[i]['rate'] = df_dist_fwd[i]['tload'] / (1/12)
 
-            # will set the date, Year(YYYY) Month(MM), Day(DD), Hour(HH)
+            # will set the date
             df_dist_fwd[i]['YYYY'] = df_dist_fwd[i]['obs_time'].dt.year
             df_dist_fwd[i]['MM']   = df_dist_fwd[i]['obs_time'].dt.month
             df_dist_fwd[i]['DD']   = df_dist_fwd[i]['obs_time'].dt.day
             df_dist_fwd[i]['HH']   = df_dist_fwd[i]['obs_time'].dt.hour
+            #df_dist_fwd[i]['MIN']  = df_dist_fwd[i]['obs_time'].dt.minute
+            df_dist_fwd[i]['MIN']  = (df_dist_fwd[i]['obs_time'].dt.minute // 5) *5
 
-            # will add up the emission to data file
+            # will add up the emission to data file 
             df_dist_fwd_data = pd.concat([df_dist_fwd_data, df_dist_fwd[i]])
 
         else:
 
             df_dist_fwd[i] = selected_rows
+            # (I) check if it is needed to convert the DU to g/m^2
+            # df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['dist_weight']) * (2.6867E20) * (64.066) * (1/(6.022E23))
+            # (II) check if it is needed to convert the g/m^2 to g (7.0 km ~ 7000 m)
+            # df_dist_fwd[i]['tload'] = df_dist_fwd[i]['tload'] * 49000000
+            # (III) check what convertion the unit of mass requires. Units will remain unchanged
+            df_dist_fwd[i] = df_dist_fwd[i].copy()
+            # to add a new column showing the number of source emission layers at the point
+            df_dist_fwd[i] = df_dist_fwd[i].assign(count = len(df_dist_fwd[i]))
+            obs_lat_radians = np.radians(df_dist_fwd[i]['obs_lat'].iloc[0])
+            area = (np.abs(np.cos(obs_lat_radians)) * 0.045 * deg2km * 1000) * (0.045 * deg2km * 1000)
+            print('area')
+            print(area)
+
+#            df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['col_conc'] * df_dist_fwd[i]['obs_count'] * 25000000)
+            df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['col_conc'] * df_dist_fwd[i]['obs_count'] * area
+            # distribute the total mass over the layers
+            df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['tload'] / len(df_dist_fwd[i])
+
+            # will add a new column for the emission rate (1/hr): df_dist_fwd[i]['tload'] * (1/[emission time (hr)])
+            # rate unit (1/hr)
+            df_dist_fwd[i]['rate'] = df_dist_fwd[i]['tload'] / (1/12)
+
+            # will set the date
+            df_dist_fwd[i]['YYYY'] = df_dist_fwd[i]['obs_time'].dt.year
+            df_dist_fwd[i]['MM']   = df_dist_fwd[i]['obs_time'].dt.month
+            df_dist_fwd[i]['DD']   = df_dist_fwd[i]['obs_time'].dt.day
+            df_dist_fwd[i]['HH']   = df_dist_fwd[i]['obs_time'].dt.hour
+            #df_dist_fwd[i]['MIN']  = df_dist_fwd[i]['obs_time'].dt.minute
+            df_dist_fwd[i]['MIN']  = (df_dist_fwd[i]['obs_time'].dt.minute // 5) *5
+        
+            # will add up the emission to data file 
+            df_dist_fwd_data = pd.concat([df_dist_fwd_data, df_dist_fwd[i]])
+
+    return(df_dist_fwd_data, df_dist_fwd)
+
+# This function was modified by a dynamic method of selecting the cutoff, 02/21/2023
+def conc_emitimes_data_raw(df):
+    """"
+    This function prepares the characteristics of plume emission for EMITIMES needed for forward dispersion run.
+    """
+    df_dist_fwd_data = pd.DataFrame()
+    df_dist_fwd = {}
+    deg2km = 111.111
+
+    critera_pass_traj_num = 0
+    for i in range(1,len(df)):
+
+        cutoff = 1.5*df[i]['dist_len'].min()
+        # finds the layers where the trajectories come within a certain distance to the volcano
+        selected_rows = df[i].loc[df[i]['dist_len'] < cutoff]
+
+        # if there was no single layer where the trajectory comes within this threshold distance of the vent, the code will
+        # choose the initial altitude of the nearest trajectory layer and set it as the top of the cloud
+        #if len(selected_rows) == 1:
+
+        df_dist_fwd[i] = pd.DataFrame(df[i].iloc[df[i]['dist_len'].argmin()]).transpose()
+            #print('length of the variable here is', len(df_dist_fwd[i]))
+            # (I) check if it is needed to convert the DU to g/m^2
+            # df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['dist_weight']) * (2.6867E20) * (64.066) * (1/(6.022E23))
+            # (II) check if it is needed to convert the g/m^2 to g (7.0 km ~ 7000 m)
+            # df_dist_fwd[i]['tload'] = df_dist_fwd[i]['tload'] * 49000000
+            # (III) check what convertion the unit of mass requires. Units will remain unchanged
+        df_dist_fwd[i] = df_dist_fwd[i].copy()
+            # to add a new column showing the number of source emission layers at the point
+        df_dist_fwd[i] = df_dist_fwd[i].assign(count = len(df_dist_fwd[i]))
+
+        obs_lat_radians = np.radians(df_dist_fwd[i]['obs_lat'].iloc[0])
+        area = (np.abs(np.cos(obs_lat_radians)) * 0.045 * deg2km * 1000) * (0.045 * deg2km * 1000)
+        print('area')
+        print(area)
+     
+        df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['col_conc'] * df_dist_fwd[i]['obs_count'] * area
+#            df['altitude'].iloc[0]
+        df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['tload'] / 1
+            # will add a new column for the emission rate (1/hr): df_dist_fwd[i]['tload'] * (1/[emission time (hr)])
+            # rate unit (1/hr)
+        df_dist_fwd[i]['rate'] = df_dist_fwd[i]['tload'] / (1/12)
+
+            # will set the date
+        df_dist_fwd[i]['YYYY'] = df_dist_fwd[i]['obs_time'].dt.year
+        df_dist_fwd[i]['MM']   = df_dist_fwd[i]['obs_time'].dt.month
+        df_dist_fwd[i]['DD']   = df_dist_fwd[i]['obs_time'].dt.day
+        df_dist_fwd[i]['HH']   = df_dist_fwd[i]['obs_time'].dt.hour
+        #df_dist_fwd[i]['MIN']  = df_dist_fwd[i]['obs_time'].dt.minute
+        df_dist_fwd[i]['MIN']  = (df_dist_fwd[i]['obs_time'].dt.minute // 5) *5
+
+            # will add up the emission to data file
+        df_dist_fwd_data = pd.concat([df_dist_fwd_data, df_dist_fwd[i]])
+
+#else:
+
+#            df_dist_fwd[i] = selected_rows
 
             # (I) check if it is needed to convert the DU to g/m^2
             # df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['dist_weight']) * (2.6867E20) * (64.066) * (1/(6.022E23))
             # (II) check if it is needed to convert the g/m^2 to g (7.0 km ~ 7000 m)
             # df_dist_fwd[i]['tload'] = df_dist_fwd[i]['tload'] * 49000000
-            # (III) check what convertion the unit of mass requires. Units will remain unchanged.
-            df_dist_fwd[i] = df_dist_fwd[i].copy()
-            df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['dist_weight']) * 1.0
-            # distribute the total mass over the layers
-            df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['tload'] / len(df_dist_fwd[i])
+            # (III) check what convertion the unit of mass requires. Units will remain unchanged
+#            df_dist_fwd[i] = df_dist_fwd[i].copy()
 
-            # to add a new column showing the number of source emission layers at the point            
-            df_dist_fwd[i] = df_dist_fwd[i].assign(count = len(df_dist_fwd[i]))
+            # to add a new column showing the number of source emission layers at the point
+#            df_dist_fwd[i] = df_dist_fwd[i].assign(count = len(df_dist_fwd[i]))
+
+
+#            df_dist_fwd[i].loc[:, 'tload'] = (df_dist_fwd[i]['col_conc'] * df_dist_fwd[i]['obs_count'] * 25000000 * 1000)
+            # distribute the total mass over the layers
+#            df_dist_fwd[i].loc[:, 'tload'] = df_dist_fwd[i]['tload'] / 1
+
 
             # will add a new column for the emission rate (1/hr): df_dist_fwd[i]['tload'] * (1/[emission time (hr)])
-            df_dist_fwd[i]['rate'] = df_dist_fwd[i]['tload'] / (1/12)
+            # rate unit (1/hr)
+#           df_dist_fwd[i]['rate'] = df_dist_fwd[i]['tload'] / (1/12)
 
-            # will set the date, Year(YYYY) Month(MM), Day(DD), Hour(HH)
-            df_dist_fwd[i]['YYYY'] = df_dist_fwd[i]['obs_time'].dt.year
-            df_dist_fwd[i]['MM']   = df_dist_fwd[i]['obs_time'].dt.month
-            df_dist_fwd[i]['DD']   = df_dist_fwd[i]['obs_time'].dt.day
-            df_dist_fwd[i]['HH']   = df_dist_fwd[i]['obs_time'].dt.hour
+            # will set the date
+#            df_dist_fwd[i]['YYYY'] = df_dist_fwd[i]['obs_time'].dt.year
+#            df_dist_fwd[i]['MM']   = df_dist_fwd[i]['obs_time'].dt.month
+#            df_dist_fwd[i]['DD']   = df_dist_fwd[i]['obs_time'].dt.day
+#            df_dist_fwd[i]['HH']   = df_dist_fwd[i]['obs_time'].dt.hour
+#            df_dist_fwd[i]['MIN']  = df_dist_fwd[i]['obs_time'].dt.minute
 
             # will add up the emission to data file
-            df_dist_fwd_data = pd.concat([df_dist_fwd_data, df_dist_fwd[i]])
+#            df_dist_fwd_data = pd.concat([df_dist_fwd_data, df_dist_fwd[i]])
 
-    return(df_dist_fwd, df_dist_fwd_data)
+    return(df_dist_fwd_data, df_dist_fwd)
+
 
