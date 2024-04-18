@@ -250,10 +250,8 @@ def combine_traj(fnames, csvfile=None):
     csvfile : csv file output by sample_and_write which contains weighting information.
     combined trajectories in different files into one dataframe.
     """
-
     # 01 November 2023. changed to handle tdump files which may have multiple trajectories.
     #                   do not over-write the traj_num column. instead add a run_num column.
-
     #                   Also add the observed altitude and area to the new dataframe.
     trajlist = []
     if csvfile:
@@ -372,6 +370,143 @@ def read_traj_output(data_dir, fname, num_layer):
         tnames_path.append(trajectory_data[f'tdump{ii}'])
         obs_path.append(data_dir + f'{fname}_{"%02d" %ii}km/' + f'btraj{"%02d" %ii}kmDES.csv')
     return (tnames_path, obs_path)
+
+
+def traj_volc_dist2(vloc, df):
+    """
+    df : dataframe that represents one trajectory.
+    vloc : a coordinate point 
+
+    OUTPUT
+    a - nearest point on the trajectory to the point
+    distance - distance of nearest point to the trajectory point.
+    """
+    # shapely only does computations in 2d. 
+    # although you can define point and line with a z coordinate.
+    vpoint = sgeo.Point((vloc[1],vloc[0]))
+    x=df.longitude
+    y=df.latitude
+    xy=list(zip(x,y))
+    # creates line segments from trajectory points.
+    try:
+        tline = sgeo.LineString(xy)
+    except:
+        print('ERROR on trajectory')
+        print(df)
+        return (0,0), -1
+    # finds closest point on the linestring to volcano.
+    # do this because it may be between trajectory points.
+    a,b = nearest_points(tline,vpoint)
+    # returns distance in km
+    distance = geotools.distance(a,b)
+    return a, distance
+
+
+def traj_volc_dist_km(vloc, df):
+    from utilhysplit.geotools import calculate_distance
+    """
+    The function calculates the distances between each trajectory (at each time step) and the volcano vent.
+    Similar to traj_volc_dist but output is in km.
+    Inputs:
+        volcano: array; lat and lon of the volcano
+        df: dataframe, trajectory characteristics
+    Outputs:
+        dist : array; values of the distances between each point of the trajectory and the volcano.
+    """
+    distlist = []
+    for iii, row in df.iterrows():
+        dist = calculate_distance(row.latitude,row.longitude,vloc[0],vloc[1])
+        distlist.append(dist)
+        dist = np.array(distlist)
+    return dist
+
+def traj_volc_dist(vloc, df):
+    """
+    The function calculates the distances between a trajectory (at each time step) and the volcano vent.
+    Inputs:
+        volcano: array; lat and lon of the volcano
+        df: dataframe, trajectory characteristics
+    Outputs:
+        dist : array; values of the distances between each point of the trajectory and the volcano.
+    """
+    dist = []
+    deg2km = 111.111
+
+    for i in range(len(df)):
+        span = ((df.latitude[i] - vloc[0])*deg2km)**2 + ((df.longitude[i] - vloc[1])*deg2km)**2
+        span = math.sqrt(span)
+        dist = np.append(dist, span)
+        dist = np.array(dist)
+    return dist
+
+
+def traj_layer_cal(tnames_path, obs_path, vloc, tdump_num):
+    """
+    The function calculates the characteristics of trajectories coming close to the volcano over entire observations.
+    It performs calculations for the number of measurements.
+
+    Inputs:
+        tnames: name and path of resolved back trajectory (list)
+        obs_path: dataframe; contains the characteristics of the data measurement
+    volcano:  array
+              lat and lon of the volcano
+
+    outputs:
+    characteristics of the nearest point of the resolved trajectories to the volcano
+    the names are abbreviated:
+        dist_len: array
+                  the distance length between the closest point of the trajectory and the volcano
+        dist_hgt: array
+                  height at which the trajectories come closest to the volcano
+        dist_lat, dist_lon: array
+                  the coordinates of the nearest points to the volcano eruption
+        dist_time:
+                  the time when the nearest point reaches the volcano
+        obs_"variables":
+                  the locations of the back trajectory starting points (coordinates and altitude)
+    """
+
+    (dist_len, dist_hgt, dist_lat, dist_lon, dist_time, obs_time, obs_lat,
+    obs_lon, init_alt, obs_height, dist_weight) = ([] for i in range(11))
+    for traj_no in range(tdump_num):
+
+        # read the trajectory file (HYSPLIT output)
+        df = combine_traj([tnames_path[traj_no]], csvfile = obs_path).copy()
+        # altitude of trajectory starting point
+        df['init_alt'] = df['altitude'].iloc[0]
+        # measured altitude of observation point
+        obs_path_csvfile = pd.read_csv(obs_path)
+        df['height'] = (obs_path_csvfile['height'].iloc[traj_no])*1000
+        df.loc[df['longitude'] < 0, 'longitude'] = df['longitude'] + 360
+        # filter the trajectory points for the 12 hours period after the volcano eruption. check for each volcano.
+        df2 = df.loc[df['time'].between('2022-01-15 04:00:00', '2022-01-15 16:00:00')]
+        #df2 = df
+        df2 = df2.reset_index(level=None, drop=True, inplace=False)
+        # find the distances between the trajectories and volcano, nearest point, and its index
+        dist_out = traj_volc_dist(vloc, df2)
+        closer_dist_value = np.min(dist_out)
+        closer_dist_index = np.argmin(dist_out)
+
+        # dist_len, the distance length between the closest point of the trajectory and the volcano
+        dist_len = np.append(dist_len, dist_out[closer_dist_index])
+        # dist_hgt; height at which the trajectories come closest to the volcano
+        dist_hgt = np.append(dist_hgt, df2.altitude[closer_dist_index])
+        # dist_lat and dist_lon; the coordinates of the nearest points to the volcano
+        dist_lat = np.append(dist_lat, df2.latitude[closer_dist_index])
+        dist_lon = np.append(dist_lon, df2.longitude[closer_dist_index])
+        # dist_time; the time when the nearest point reaches the volcano
+        dist_time  = np.append(dist_time, df2.time[closer_dist_index])
+        # the locations of the back trajectory starting points (coordinates and altitude)
+        obs_time = np.append(obs_time, df.time[0])
+        obs_lat = np.append(obs_lat, df.latitude[0])
+        obs_lon = np.append(obs_lon, df.longitude[0])
+        init_alt = np.append(init_alt, df2.init_alt[closer_dist_index])
+        obs_height = np.append(obs_height, df2.height[closer_dist_index])
+        dist_weight = np.append(dist_weight, df2.weight[closer_dist_index])
+
+    return (dist_len, dist_hgt, dist_lat, dist_lon, dist_time, obs_time, obs_lat, obs_lon, init_alt,
+            obs_height, dist_weight)
+
 
 
 def traj_layer_dataframe(tnames_path, obs_path, vloc, tdump_num):
