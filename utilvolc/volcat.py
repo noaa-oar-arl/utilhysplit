@@ -12,6 +12,7 @@ import monet
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
+import warnings
 import xarray as xr
 from monetio.models import hysplit
 from utilhysplit import hysplit_gridutil
@@ -21,6 +22,7 @@ from utilvolc.helperinterface import FileNameInterface
 
 logger = logging.getLogger(__name__)
 
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # change log
 # 2022 Nov 17 AMC updated correct_pc with better regrid support.
@@ -217,6 +219,7 @@ def open_dataset(
             fname, mask_and_scale=mask_and_scale, decode_times=decode_times
         )
         # not needed for new Bezy data.
+    # This generates a future warning. TODO.
     if "Dim1" in dset.dims.keys() and "Dim2" in dset.dims.keys():
         dset = dset.rename({"Dim1": "y", "Dim0": "x"})
     # if "some_vars.nc" in fname:
@@ -554,6 +557,7 @@ def test_volcat(tdir, daterange=None, verbose=True):
             print("failed")
 
 def get_name_class(fname):
+    original_name = fname
     if "/" in fname:
         temp = fname.split("/")
         fname = temp[-1]
@@ -562,9 +566,9 @@ def get_name_class(fname):
     fname = fname.replace("FULL_DISK", "FullDisk")
     temp = fname.split("_")
     # current name style with two feature id tags.
-    if temp[5][0] == 'g': return VolcatName(fname)
+    if temp[5][0] == 'g': return VolcatName(fname,original_name)
     # old name style with only one feature id tags. Bezymianny 2020 data is in this format.
-    elif temp[5][0] == 'v': return VolcatNameA(fname)
+    elif temp[5][0] == 'v': return VolcatNameA(fname,original_name)
 
 
 class VolcatName(FileNameInterface):
@@ -581,7 +585,7 @@ class VolcatName(FileNameInterface):
     compare: returns what is different between two file names.
     """
 
-    def __init__(self, fname):
+    def __init__(self, fname, original_name=None):
         # if full directory path is input then just get the filename
         self.fname = fname
         if isinstance(fname, str):
@@ -602,7 +606,11 @@ class VolcatName(FileNameInterface):
         # parse only if a string is given.
         if isinstance(fname, str):
             self.parse(self.fname)
-        self.vhash["filename"] = fname
+        if isinstance(original_name,str):
+           self.vhash['filename']=original_name
+           #print('using original name')
+        else:
+           self.vhash["filename"] = fname
 
     def make_datekeys(self):
         self.datekeys = [3, 4, 10, 11]
@@ -620,7 +628,7 @@ class VolcatName(FileNameInterface):
         self.keylist.append("image scanning strategy")
         self.keylist.append("event_date")  # should be event date (check)
         self.keylist.append("event_time")
-        self.keylist.append("feature_id")
+        self.keylist.append("original_feature_id")
 
     def __lt__(self, other):
         """
