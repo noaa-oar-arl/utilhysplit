@@ -8,47 +8,87 @@ from utilvolc import runhelper
 from bs4 import BeautifulSoup
 from utilvolc import volcat_name, volcano_information
 
-def greenlist(name):
+def greenlist(name,vaac):
       """
       Check if the name is in the greenlist.
       Case-insensitive comparison by converting input to lowercase.
       """
-      greenlist = ['popocatepetl', 'fuego', 'colima',
+      if vaac == 'Washington':
+          greenlist = ['popocatepetl', 'fuego', 'colima',
                   'pacaya',  
                   'turrialba', 'nevado del ruiz', 'reventador', 'cotopaxi', 
                   'tungurahua', 'sangay']
+      elif vaac == 'Anchorage':
+          greenlist = ['gareloi',
+                       'pavlof', 'veniaminof', 'spurr']
+      elif vaac == 'Tokyo':
+          greenlist = ['sheveluch', 'klyuchevskoy', 'karymsky', 'zhupanovsky',
+                       'sarychev peak']
+      else: 
+          return False
       return name.lower() in greenlist
 
+    
 
-def lookup_washington(key):
-    dhash = {}
-    dhash['342090'] = 'Fuego'
-    dhash['341040'] = 'Colima'
-    dhash['321010'] = 'BAKER'
-    dhash['322040'] = 'SAND MOUNTAIN FIELD'
-    dhash['341040'] = 'COLIMA'
-    dhash['341090'] = 'POPOCATEPETL'
-    dhash['341097'] = 'LA GLORIA'
-    dhash['342030'] = 'SANTA MARIA'
-    dhash['342090'] = 'FUEGO'
-    dhash['342110'] = 'PACAYA'
-    dhash['342200'] = 'None'
-    dhash['344020'] = 'SAN CRISTOBAL'
-    dhash['344140'] = 'None'
-    dhash['345070'] = 'TURRIALBA'
-    dhash['351020'] = 'NEVADO DEL RUIZ'
-    dhash['351060'] = 'PURACE'
-    dhash['352010'] = 'REVENTADOR'
-    dhash['352050'] = 'COTOPAXI'
-    dhash['352060'] = 'QUILOTOA'
-    dhash['352080'] = 'TUNGURAHUA'
-    dhash['352090'] = 'SANGAY'
-    dhash['360170'] = 'ST. CATHERINE'
-     
+def lookup_vid(key,vaac):
+   dhash = {}
+   if vaac == 'Washington':
+      dhash['342090'] = 'Fuego'
+      dhash['341040'] = 'Colima'
+      dhash['321010'] = 'BAKER'
+      dhash['322040'] = 'SAND MOUNTAIN FIELD'
+      dhash['341040'] = 'COLIMA'
+      dhash['341090'] = 'POPOCATEPETL'
+      dhash['341097'] = 'LA GLORIA'
+      dhash['342030'] = 'SANTA MARIA'
+      dhash['342090'] = 'FUEGO'
+      dhash['342110'] = 'PACAYA'
+      dhash['342200'] = 'None'
+      dhash['344020'] = 'SAN CRISTOBAL'
+      dhash['344140'] = 'None'
+      dhash['345070'] = 'TURRIALBA'
+      dhash['351020'] = 'NEVADO DEL RUIZ'
+      dhash['351060'] = 'PURACE'
+      dhash['352010'] = 'REVENTADOR'
+      dhash['352050'] = 'COTOPAXI'
+      dhash['352060'] = 'QUILOTOA'
+      dhash['352080'] = 'TUNGURAHUA'
+      dhash['352090'] = 'SANGAY'
+      dhash['360170'] = 'ST. CATHERINE'
+  
+   elif vaac == 'Anchorage':
+      dhash['311070'] = 'GARELOI'
+      dhash['311140'] = 'KONIUJI'
+      dhash['311160'] = 'ATKA VOLCANIC COMPLEX'
+      dhash['312030'] = 'PAVLOF'
+      dhash['312070'] = 'VENIAMINOF'
+      dhash['313040'] = 'SPURR'
 
-    if key in dhash.keys():
+   elif vaac == 'Tokyo':
+      dhash['273030'] = 'MAYON'
+      dhash['273070'] = 'TAAL'
+      dhash['274030'] = 'BABUYAN CLARO'
+      dhash['282080'] = 'SAKURAJIMA / WAKAMIKO (AIRA CALDERA)'
+      dhash['282090'] = 'KIRISHIMAYAMA'
+      dhash['284030'] = 'KOZUSHIMA'
+      dhash['284096'] = 'NISHINOSHIMA'
+      dhash['284130'] = 'FUKUTOKU-OKA-NO-BA'
+      dhash['285080'] = 'ATOSANUPURI (KUSSHARO CALDERA)'
+      dhash['290240'] = 'SARYCHEV PEAK'
+      dhash['290260'] = 'CHIRINKOTAN'
+      dhash['290380'] = 'EBEKO'
+      dhash['300059'] = 'VISOKIY'
+      dhash['300120'] = 'ZHUPANOVSKY'
+      dhash['300130'] = 'KARYMSKY'
+      dhash['300260'] = 'KLYUCHEVSKOY'
+      dhash['300270'] = 'SHEVELUCH'
+      dhash['302040'] = 'VITIM VOLCANIC FIELD'
+
+
+
+   if key in dhash.keys():
        return dhash[key]
-    else:
+   else:
        return key
 
 def generate_links(iname):
@@ -65,8 +105,36 @@ def generate_links(iname):
                        szb = int(match.group(1))
               yield href, szb
 
+def valid_vaacs():
+      """
+      Return a list of valid VAAC names.
+      """
+      return ['Anchorage', 'Washington', 'Tokyo', 'London', 'Montreal', 
+               'Buenos Aires', 'Wellington', 'Darwin', 'Toulouse']
+
+def check_vaac(vaac):
+      """
+      Check if the VAAC is valid.
+      """
+      valid = valid_vaacs()
+      vaac = vaac.capitalize()  # Ensure the VAAC name is capitalized
+      if vaac not in valid:
+         print(f"Invalid VAAC name: {vaac}. Valid options are: {', '.join(valid_vaacs)}")
+         return None
+      return vaac
+
 if __name__ == "__main__":
-   vaac='Washington'
+   # Get VAAC name from command line if provided, otherwise default to 'Washington'
+   vaac = None
+   if len(sys.argv) > 1:
+       vaac = sys.argv[1]
+       vaac = check_vaac(vaac)
+   if vaac is None: 
+      print('USage: python get_log.py [VAAC]')
+      print('Valid VAACs are: {}'.format(', '.join(valid_vaacs())))
+      sys.exit(1)
+
+
    helper = runhelper.Helper
    helper.remove('{}.1/index.html'.format(vaac))
    helper.remove('index.html')
@@ -101,12 +169,13 @@ if __name__ == "__main__":
            #vname = nref.split('/')[-1] 
            vname = volcat_name.VolcatName25(nref)
            vname.vhash['size (bytes)'] = sz
-           name = lookup_washington(vname.vhash['event vid'])
+           name = lookup_vid(vname.vhash['event vid'],vaac)
            vname.vhash['vname'] = name
-           if greenlist(name):
+           if greenlist(name,vaac):
               subdir = f'/pub/ECMWF/JPSS/VOLCAT/Files/{name}/'
+              vname.vhash['filename'] = os.path.join(subdir,vname.vhash['filename'])
               runhelper.make_dir(subdir, newdir=None, verbose=True)
-              if not os.path.isfile(subdir + nref):
+              if not os.path.isfile(vname.vhash['filename']):
               # Download the file if it does not exist
                   download = subprocess.run(["wget", "-P", subdir, nref], 
                     capture_output=True, text=True)

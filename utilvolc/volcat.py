@@ -115,6 +115,14 @@ Improvements to be done:
 """
 
 
+def explore_dset(dset):
+    for var in dset.data_vars:
+        if 'time' in var:
+            print(var, dset[var].values)
+
+
+
+
 def check_vals(idate, ghash, dset):
     slist = []
     slist.append(dset.time_bounds)
@@ -292,6 +300,34 @@ def flist2eventdf(flist, inphash):
     return vframe
 
 
+
+def find_volcat_from_log(logpath='volcat_log.csv',vid=None,daterange=None):
+    """
+    May 2025 add to deal with new file formats.
+    logname : full path to the log file.
+    vid : volcano id
+    daterange : [datetime, datetime] or None
+    Reads the log file and returns a list of volcat files.
+    logname: name of the log file.
+    Returns:
+    list of volcat files.
+    """
+    if not os.path.isfile(logpath):
+        print('Log file not found {}'.format(logpath))
+        return []
+    df = pd.read_csv(logpath)
+    df = df[df['downloaded'] == True]
+    if df.empty:
+        print('No downloaded files in log file {}'.format(logpath))
+        return []
+    if daterange is not None:
+        if isinstance(daterange, (list, np.ndarray)):
+            df = df[df["s_date"] >= daterange[0]]
+            df = df[df["s_date"] < daterange[1]] 
+    if vid is not None:
+        df = df[df["event vid"] == vid]
+    return df.reset_index()
+
 def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=False):
     """
     Returns dataframe with columns being the information in the vhash
@@ -393,10 +429,8 @@ def get_volcat_list(
 def write_parallax_corrected_files(
     tdir,
     wdir,
-    vid=None,
-    daterange=None,
+    flist,
     verbose=False,
-    flist=None,
     gridspace=None,
     tag="pc",
 ):
@@ -405,10 +439,8 @@ def write_parallax_corrected_files(
     cause a problem with the function. Flist must not include directories, just file names***
     tdir : str : location of volcat files.
     wdir : str : location to write new files
-    vid : volcano id : if None will find all
-    daterange : [datetime, datetime] : if None will find all.
-    verbose: boolean
     flist: list of files? ***NEED TO SPECIFY FILE LIST***
+    verbose: boolean
     gridspace: float : grid size of pc array
     tag: used to create filename of new file.
 
@@ -428,10 +460,6 @@ def write_parallax_corrected_files(
         if verbose:
             print("Using filenamse from list")
         vlist = flist
-    else:
-        if verbose:
-            print("Finding filenames")
-        vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
 
     for iii, val in enumerate(vlist):
         if verbose:
@@ -608,24 +636,45 @@ def _get_time(dset):
     # June 2023 There was some issue with this for the reprocessed Popo data.
 
     import pandas as pd
+    from datetime import timedelta
 
-    # temp2 = dset.full_image_start_time.values
-    # scan start and end times
-    # temp2 = dset.time_bounds.values[0]
-
-    # full image stat. this corresponds to the idate.
-    # temp2 = dset.full_image_start_time.values
-
-    temp2 = dset.attrs["event_observation_time"]
-    # temp3 = dset.attrs["time_coverage_end"]
-    # if temp1 != temp2:
-    #   logger.warning('Different times in volcat {} {}'.format(temp1,temp2,temp3))
     dstr = "%Y-%m-%dT%H:%M:%SZ"
-    # time string sometimes has seconds as a decimal which is not recognized by strptime.
-    # Remove the decimal part.
-    iii = str.find(temp2, ".")
-    temp2 = temp2[0:iii] + "Z"
-    time = datetime.datetime.strptime(temp2, dstr)
+    if 'event_observation_time' in dset.attrs.keys():
+        temp2 = dset.attrs["event_observation_time"]
+        time = datetime.datetime.strptime(temp2, dstr)
+    elif 'event_observation_time' in dset.data_vars:
+        temp2 = dset.event_observation_time.values
+        if len(temp2) == 1:
+            temp2 = temp2[0]
+            time = datetime.datetime.strptime(temp2, dstr)
+        else:
+            # Calculate average time when multiple times are provided
+            time_list = []
+            for ttt in temp2:
+                try:
+                    time_list.append(pd.to_datetime(ttt, format=dstr))
+                except:
+                    # Skip any times that can't be parsed
+                    continue
+            
+            if time_list:
+                # Convert datetime objects to timestamps (seconds since epoch)
+                timestamps = [t.timestamp() for t in time_list]
+                # Calculate the average timestamp
+                avg_timestamp = sum(timestamps) / len(timestamps)
+                # Convert back to datetime
+                time = datetime.datetime.fromtimestamp(avg_timestamp)
+            else:
+                # If no valid times were found, use current time
+                time = datetime.datetime.now()
+                print("Warning: No valid times found in event_observation_time")
+    print('Time', time)
+    # Handle the decimal part in the time string
+    #iii = str.find(temp2, ".")
+    #if iii > 0:
+    #    temp2 = temp2[0:iii] + "Z"
+    #    time = datetime.datetime.strptime(temp2, dstr)
+    
     dset["time"] = time
     dset = dset.set_coords(["time"])
     # expand_dims has been moved to the get_data function.
@@ -1011,19 +1060,33 @@ def correct_pc(dset, gridspace=None):
         print("warning: coordinate values are not the same")
     # ---------------------------------------
 
+    if len(dset.feature_area.values) >1:
+       area = dset.feature_area.values.sum()
+    else:
+       area = dset.feature_area.values
+
+    if len(dset.ash_mass_loading_total_mass.values) > 1:
+        mass = dset.ash_mass_loading_total_mass.values.sum()
+    else:   
+        mass = dset.ash_mass_loading_total_mass.values 
+
     dnew = xr.Dataset(
         {
             "ash_mass_loading": newmass,
             "ash_cloud_height": newhgt,
             "effective_radius_of_ash": newrad,
-            "ash_mass_loading_total_mass": dset.ash_mass_loading_total_mass.values,
-            "feature_area": dset.feature_area.values,
+            "ash_mass_loading_total_mass": mass,
+            "feature_area": area,
             "feature_age": dset.feature_age.values,
             "feature_id": dset.feature_id.values,
         }
     )
 
     dnew["time"] = time
+    dnew.ash_mass_loading_total_mass.attrs.update(
+        dset.ash_mass_loading_total_mass.attrs
+    )
+    dnew.feature_area.attrs.update(dset.feature_area.attrs)
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.effective_radius_of_ash.attrs.update(dset.effective_radius_of_ash.attrs)

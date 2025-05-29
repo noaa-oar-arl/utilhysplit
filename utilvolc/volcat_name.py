@@ -1,5 +1,68 @@
 from utilvolc.helperinterface import FileNameInterface
 import datetime
+from utilvolc import volcano_information
+import sys
+
+class VolcatName25(FileNameInterface):
+    """
+    04/28/2025 works with new data format.
+    """
+
+    def __init__(self, fname):
+        # if full directory path is input then just get the filename
+        self.vhash = {}
+        self.vhash["url"]= fname
+        if isinstance(fname, str):
+            if "/" in fname:
+                temp = fname.split("/")
+                self.fname = temp[-1]
+            else:
+                self.fname = fname
+        print('FNAME', self.fname)
+        self.vhash['filename'] = self.fname
+        self.date = None
+        self.image_date = None
+        self.event_date = None
+        self.dtfmt = "%Y%m%d%H%M%S"
+
+        #self.make_keylist()
+        #self.make_datekeys()
+
+        # parse only if a string is given.
+        if isinstance(fname, str):
+            self.parse(self.fname)
+
+
+
+    def find_name(self,ref_file):
+        vid = self.vhash['event vid']
+        vs = volcano_information.VolcanoSearch(ref_file)
+        vname = vs.search_vid(vid)
+        if vname: vname = vname[0]
+        else: vname=vid
+        self.vhash['volcano name'] = vname
+           
+    def make_filename(self):
+        pass
+
+    def parse(self,fname):
+        """
+        """
+        temp = fname.split("_")
+        for ttt in temp:
+            if 'vid' in ttt:
+                self.vhash['event vid'] = ttt.split('vid')[-1]
+            elif ttt.startswith('s'):
+                self.vhash['sdate'] = datetime.datetime.strptime(ttt[1:-1], self.dtfmt)
+            elif ttt.startswith('e'):
+                self.vhash['edate'] = datetime.datetime.strptime(ttt[1:-1], self.dtfmt)
+            elif ttt.startswith('c'): 
+                ttt = ttt.replace('.nc','')
+                self.vhash['cdate'] = datetime.datetime.strptime(ttt[1:-1], self.dtfmt)
+            elif ttt.startswith('v'): 
+                self.vhash['version'] = ttt  
+            elif ttt.startswith('g'): 
+                self.vhash['g'] = ttt  
 
 class VolcatName(FileNameInterface):
     """
