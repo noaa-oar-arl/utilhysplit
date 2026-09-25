@@ -29,6 +29,9 @@ output to concentrations using mixture models or
 kernel density estimation.
 the KDE functionality is very basic.
 
+The main function is par2fit which creates the fit.
+MassFit object then wraps the fit
+
 
 classes
 -------------
@@ -230,6 +233,9 @@ def par2fit(
     min_par_num : int : input into MassFit. Will decrease nnn if number
                   of points to fit / min_par_num is less than nnn.
 
+    htunits : HYSPLIT generally has height units in meters. However fitting tends to be better 
+              if height units are in km.
+
     returns an instance of the MassFit class.
     """
     # pardump height is in meters.
@@ -338,13 +344,13 @@ def get_bic(
 
 class Par2Conc:
     """
-    This class needs to be re-written.
+    This class needs to be worked on
     """
 
     def __init__(self, df):
-        self.df = df  # pandas DataFrame
+        self.df = df       # pandas DataFrame
         self.fitlist = []  # collection of MassFit objects.
-        self.dra = None  # array with concentrations.
+        self.dra = None    # array with concentrations.
         # not in MONET format but get_conc and monet_conc
         # both return array converted to MONET format.
 
@@ -355,6 +361,14 @@ class Par2Conc:
         self.tmave = time_average
 
     def subsetdf(self, stime, tmave, splist=None, sorti=None, htmin=None, htmax=None):
+        """
+        subset the particle positions.
+        stime - by time
+        tmave(minutes) - if > 0 then considers particles with times from stime to stime + tmave
+        splist - if only fitting a particular species
+        sorti  - list of particle sort numbers to use (usually None)
+        htmin, htmax -  only consider particles within this height range.
+        """
         # jjj, dfnew = combine_pdict(self.pdict, pd.to_datetime(date), tmave)
         pardf = self.df.copy()
         d1 = stime
@@ -381,7 +395,7 @@ class Par2Conc:
             df = self.subsetdf(time, tmave, parargs)
             if iii == 0:
                 mfit = par2fit(df, method="bgm", nnn=50)
-            else:
+            else: # starts with previous fit
                 mfit = par2fit(df, method="p_bgm", pfit=pfit, nnn=50)
             pfit = mfit.gfit
             mfitlist.append(mfit)
