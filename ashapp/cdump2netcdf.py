@@ -102,8 +102,8 @@ class Cdump2Awips:
         # self.dt = dt
         self.add_probs = False
 
-        # set to True to add compression
-        self.zlib = True
+        # set to None if compression not wanted.
+        self.compression = 'zlib'
 
         self.dfmt = "%Y-%m-%d %H:%M:%S"
         self.outname = outname
@@ -181,7 +181,7 @@ class Cdump2Awips:
 
     def make_conc_level(self, fid, variable_name, min_level, max_level):
         coordlist = self.coordlist
-        concid = fid.createVariable(variable_name, "f4", coordlist, zlib=self.zlib)
+        concid = fid.createVariable(variable_name, "f4", coordlist, compression=self.compression)
         concid.units = self.munit + "/m3"
         concid.long_name = "Concentration Array"
         concid.bottomlevel = min_level
@@ -211,7 +211,7 @@ class Cdump2Awips:
         uses function:
              makeconc
         """
-
+        print('working on ', iii)
         xrash = self.xrash.copy()
         munit = self.munit
         sample_time = self.sample_time
@@ -269,7 +269,7 @@ class Cdump2Awips:
             "MassLoading",
             "f4",
             self.coordlist,
-            zlib=self.zlib,
+            compression=self.compression,
             least_significant_digit=2,
         )
         massid.units = self.massunit + "/m2"
@@ -277,20 +277,25 @@ class Cdump2Awips:
 
         # Standard Contour levels for concentration in mg/m3
         clevelid = fid.createVariable(
-            "Contour_levels", "f4", ("contour_levels"), zlib=self.zlib
+            "Contour_levels", "f4", ("contour_levels"), compression=self.compression
         )
         clevelid[:] = clevs
 
         # Dimension with different ensemble members.
-        ensembleid = fid.createVariable("ensemble", "str", ("ensid"), zlib=self.zlib)
-        ensid = fid.createVariable("ensid", "i4", ("ensid"), zlib=self.zlib)
-        sourceid = fid.createVariable("source", "str", ("ensid"), zlib=self.zlib)
+        # 1/5/2024 for some reason using compression=True for ensemble and source
+        # was resulting in an error. 
+        # NETCDF: Filter error: bad id or parameters or duplicate filters:
+        #(variable 'ens', group '/')
+        #  maybe string doesn't work with that compression
+        ensembleid = fid.createVariable("ensemble", 'str', ("ensid"))
+        ensid = fid.createVariable("ensid", "i4", ("ensid"), compression=self.compression)
+        sourceid = fid.createVariable("source", "str", ("ensid"))
 
-        latid = fid.createVariable("latitude", "f4", ("latitude"), zlib=self.zlib)
+        latid = fid.createVariable("latitude", "f4", ("latitude"), compression=self.compression)
         latid.long_name = "latitude degrees north from the equator"
         latid.units = "degrees_north"
         latid.point_spacing = "even"
-        lonid = fid.createVariable("longitude", "f4", ("longitude"), zlib=self.zlib)
+        lonid = fid.createVariable("longitude", "f4", ("longitude"), compression=self.compression)
         lonid.long_name = "longitude degrees east from the greenwhich meridian"
         lonid.units = "degrees_east"
         lonid.point_spacing = "even"
@@ -300,7 +305,7 @@ class Cdump2Awips:
         # levelid.long_name = 'Top height of each layer'
         # levelid.units='m'
 
-        timeid = fid.createVariable("time", "f4", ("time"), zlib=self.zlib)
+        timeid = fid.createVariable("time", "f4", ("time"), compression=self.compression)
         # attributes for time grid.
         timeid.units = "days since 1970-01-01 00:00:00"
         timeid.standard_name = "time"
@@ -308,7 +313,7 @@ class Cdump2Awips:
         timeid.calendar = "gregorian"
 
         time_bnds = fid.createVariable(
-            "time_bnds", "f4", ("time", "bnds"), zlib=self.zlib
+            "time_bnds", "f4", ("time", "bnds"), compression=self.compression
         )
 
         # Put data into variables

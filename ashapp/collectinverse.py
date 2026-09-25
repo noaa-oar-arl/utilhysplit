@@ -7,6 +7,7 @@ from ashapp.ashruninterface import ModelCollectionInterface
 from utilhysplit.metfiles import gefs_suffix_list
 from utilhysplit.runhandler import ProcessList
 import ashapp.utildatainsertion as udi
+from utilvolc import runhelper
 
 from utilvolc.invhelper import inverse_get_suffix_list
 
@@ -80,7 +81,7 @@ class CollectInverse(ModelCollectionInterface):
         self._inp['rate'] = 1
 
         #inverse_hash = inverse_get_suffix_list(inp)
-        complete = is_input_complete(self.ilist,self._inp)
+        complete = runhelper.is_input_complete(self.ilist,self._inp)
 
         if "jobid" in self._inp.keys():
             self.JOBID = self._inp["jobid"]

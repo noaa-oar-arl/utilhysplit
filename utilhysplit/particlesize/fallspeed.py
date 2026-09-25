@@ -1,24 +1,16 @@
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
-
 from math import *
-
 import matplotlib.pyplot as plt
 import numpy as np
 
 """
-# PROGRAM:  fallspd.py   
-#   PRGMMR: Alice Crawford   ORG: R/ARL       DATE:
+# PROGRAM:  fallspeed.py   
+# PRGMMR: Alice Crawford   ORG: R/ARL       DATE:
 #
 # ABSTRACT:  THIS CODE WRITTEN AT THE AIR RESOURCES LABORATORY ...
 #            Used to calculate terminal fall velocity, tvf, as a function of particle size.
 
 functions for computing Stokes , Ganser and Wilson and Huang Formulations for computing tfv.
-
-# Functions
-# constants()
-# wilson()
-# 
-
 """
 
 ##02/18/2016 This file was used to calculate terminal fall velocity, tvf,  as a function of particle size
@@ -40,8 +32,8 @@ def wilson(tfv, rhop, rhoa, dp, phi, verbose=True):
     rhoa is air density  (kg/me)
     dp is particle diameter (m)
     phi is shape factor should be
-        ##phi = (b+c) / 2a. where a = longest principle axis, b - intermediate, c=shortest
-     TO DO  make sure shape parameter defined appropriately""" 
+    ##phi = (b+c) / 2a. where a = longest principle axis, b - intermediate, c=shortest
+    TO DO  make sure shape parameter defined appropriately""" 
 
     mu, grav, dstp, frep = constants()
     condition=True

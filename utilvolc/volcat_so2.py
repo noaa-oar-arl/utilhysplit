@@ -29,20 +29,46 @@ class volcatSO2L3:
         dset = xr.open_dataset(self.fname, decode_times=True)
         return dset 
 
-    def plotscatter(self,interp=False,cmap='viridis',neg=False):
+
+    @property
+    def totalmass(self):
+        totalmass = self.dset.total_mass_so2.values #kt
+        unit = self.dest.total_mass_so2.attrs['units']
+        if unit == 'kt':
+           # convert to Tg
+           # multiply by 1e6 to get to kg then divide by 1e9 to get to Tg
+           totalmass = totalmass * 1e-3 
+        return totalmass
+
+    def plotscatter(self,interp=False,cmap='viridis',neg=False,val='mass'):
         pframe = self.pframe.copy()
-        pframe = fixlondf(pframe,colname='lon',neg=neg)
+        if neg:
+           pframe = fixlondf(pframe,colname='lon',neg=neg)
         sns.set(style='whitegrid')
         lon = pframe.lon.values
         lat = pframe.lat.values
         if not interp:
-            mass = pframe.mass.values
+            if val=='mass': mass = pframe.mass.values
+            if val=='ht': mass = pframe.height.values
+            if val=='time':
+               pframe['tindex'] = pframe.apply(lambda x: int(x['time'].strftime("%d%H")),axis=1)
+               mass = pframe.tindex.values
+               print(pframe.tindex.unique())
         else:
-            mass = pframe.massI.values
+            if val=='mass': mass = pframe.massI.values
+            if val=='ht': mass = pframe.heightI.values
              
         cb = plt.scatter(lon,lat,c=mass,s=0.1,cmap=cmap)
         plt.colorbar(cb) 
         plt.tight_layout()
+
+    def plotht(self,interp=True,cmap='viridis'):
+        if interp:
+           vals = self.height_interp
+        else:
+           vals = self.height
+        cb = plt.pcolormesh(vals,cmap=cmap)
+        plt.colorbar(cb)
 
     def plotmass(self,interp=True):
         if interp:

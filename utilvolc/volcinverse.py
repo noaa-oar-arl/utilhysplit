@@ -28,6 +28,7 @@ from utilvolc.volcpaired import VolcatHysplit
 from utilvolc import invhelper
 from utilvolc.volctcm import TCM, make_outdat_df
 from utilvolc import plottcm
+from utilvolc import volctcm
 
 # def save_emis_gefs(inverse):
 #    tlist = 'gec00'
@@ -61,7 +62,6 @@ def check_type_basic(check):
     if isinstance(check, str):
         return True
     return False
-
 
 # def check_type_iterable(check):
 
@@ -227,21 +227,14 @@ class InversionEns:
             label = run.directories.subdir.split('/')[-1]
             run.plot_outdat_ts(ax=ax,log=False,clr=clr,label=label)
 
-
-#class InversionOutput():
-
-#    def __init__(self,inp):
-#        self._ilist = None
-#        self._inp = {}  #dictionary with information from the config file.
-#        self._directories = None
-#        self._tcm = TCM()
- 
-#    def make_outdat(self):
-#        return (self._tcm.make_outdat())
-
-
 class RunInversion(RunInversionInterface):
-     # do do
+    # workflow
+    # test = RunInversion(inp)
+    # test.setup_paired_data(ilist)
+    # (optional) test.paired_data.compare_plotsA(iii)
+    # test.setup_tcm(tiilist......)
+    # test._tcm.run(execdir, subdir)
+    # 
 
     def __init__(self, inp):
 
@@ -265,8 +258,8 @@ class RunInversion(RunInversionInterface):
         self._paired_data.vdir = self.inp['OBS_DIR']
 
         print('setting up TCM')
-        self._tcm = TCM()
-
+        self._tcm = None   # whatever the current tcm is.
+        self.tcmhash = {}  # dictionary with all tcm's.
         # can be constructed in the inp setter from inp['configdir'] and inp['configfile'].
         #self._sourcehash = {}
 
@@ -306,50 +299,48 @@ class RunInversion(RunInversionInterface):
     def tcm(self):
         return self._tcm
 
+    def clear(self):
+        self._tcm = None   # whatever the current tcm is.
+        self.tcmhash = {}  # dictionary with all tcm's.
+        
+
+    def set_tcm(self,tag):
+        """
+        sets the current tcm 
+        """
+        if tag in self.tcmhash.keys():
+            self._tcm = self.tcmhash[tag]
+        else:
+            print('does not exist {}'.format(tag))
+
+    def print_summary(self):
+        return -1
+
     @property
     def directories(self):
         return self._directories
-
-    def make_output(self):
-        rcopy = InversionOutput()
-        rcopy._input - self._input
-        rcopy._directories = self._directories
-        rcopy._tcm = self._tcm
-        return rcopy
-
 
     def copy(self):
         rcopy = RunInversion(self.inp)
         rcopy._paired_data = self._paired_data
         rcopy._directories = self._directories
         rcopy._tcm = self._tcm
+        rcopy.tcmhash = tcmhash
         return rcopy
 
-    def print_summary(self):
-        return -1
-
-    #def get_times(self):
-    #    kyy = ['start_date', 'durationOfSimulation']
-    #    shash =  {key:self.inp[key] for key in kyy}
-    #    dlist = invhelper.create_dlist(shash)
-    #    return dlist
-
     def setup_paired_data(self, ilist=None):
-        #dlist = self.get_times()
-
+        print('setting up paired data')
         dlist = self._paired_data.get_times()
-
         if isinstance(ilist,list):
-           dlist = dlist[ilist[0]:ilist[1]]
+           dlist = dlist[ilist[0]:ilist[-1]]
         print('Times to prepare {}'.format(len(dlist)))
         for time in dlist:
             d1 = time[0].strftime("%Y %m/%d %HZ")
             d2 = time[1].strftime("%Y %m/%d %HZ")
             logger.info('Preparing paired data for {} {}'.format(d1,d2))
-            print('Preparing paired data for {} {}'.format(d1,d2))
+            #print('Preparing paired data for {} {}'.format(d1,d2))
             self._paired_data.prepare_one_time(time)
                 
-
     def setup_tcm(self,tiilist, 
                   concmult=1,
 
@@ -358,16 +349,22 @@ class RunInversion(RunInversionInterface):
                   remove_sources=False,
                   remove_ncs = 0,
                   tcm_name='tcm'):
-        pdata = []
-        columns = self._paired_data.cdump.ens.values
-        self.tcm.columns = columns
-
+        """
+        create an instance of TCM class and creates and writes the tcm file.
+        Makes this tcm class instance the current one and also adds it to the dictionary.
+        INPUTS
+        tiilist : list of integers representing observation times to use in the inversion.
+        concmult : 
+        remove_cols :
+        remove_sources :
+        remove_ncs : don't use clear sky obs within this number of pixels of obs.
+        rcm_name : 
+        """   
+        # setup the directory and name structure 
         basetag = self.inp['jobname']
         tag = invhelper.create_runtag(basetag,tiilist,remove_cols,remove_rows,remove_sources,remove_ncs)
         self.directories.subdir = tag
         print('subdir', self.directories.subdir) 
-
-
         tcm_name = '{}.{}.txt'.format(self.inp['jobname'],tcm_name)
         tcm_name = os.path.join(self.directories.subdir,tcm_name) 
 
@@ -376,135 +373,57 @@ class RunInversion(RunInversionInterface):
            tcm_name = tag
 
         # get the cdump and volcat data
+        pdata = []
         for tii in tiilist:
             model = self._paired_data.cdump_mass_hash[tii]
             obs = self._paired_data.volcat_avg_hash[tii]
+            print('TIME', tii, model.time.values)
             pdata.append((model,obs))
 
-        print('tag is ', tag)
-        self._tcm.make_tcm_mult(pdata,concmult,remove_cols,remove_rows,remove_sources,remove_ncs)
-        self._tcm.write(tcm_name)
+        # create and setup the tcm  
+        current_tcm = TCM()
+        columns = self._paired_data.cdump.ens.values
+        current_tcm.columns = columns
+        current_tcm.subdir = self.directories.subdir
+        current_tcm.make_tcm_mult(pdata,concmult,remove_cols,remove_rows,remove_sources,remove_ncs)
+        current_tcm.write(tcm_name)
+       
+        # add tcm to the dictionary and 
+        # set the current tcm.
+        self.tcmhash[tag] = current_tcm
+        self._tcm = current_tcm
+
+        # run the tcm
+        self._tcm.run(self.directories.execdir)
+        # add the sourcehash to the emissions object instance
+        self._tcm.emissions.sourcehash = self._sourcehash
+
         return -1
 
-    def make_outdat(self):
-        dfdat = self.tcm.output.get_emis()
-        volcinverse.make_outdat(self._sourcehash, self.tcm.columns, dfdat)
-
-    # TODO also a funciton in volctcm.
-    def make_outdat_old(self):
+    def load_tcm(self):
         """
-        makeoutdat for InverseAshPart class.
-        dfdat : pandas dataframe output by InverseOutDat class get_emis method.
-        Returns
-        vals : tuple (date, height, emission mass, particle size)
+        gets info for tcm that has been run in the past?
         """
-        # matches emissions from the out.dat file with
-        # the date and time of emission.
-        # uses the tcm_columns array which has the key
-        # and the sourehash dictionary which contains the information.
-        datelist = []
-        htlist = []
-        valra = []
-        psizera = []
-        dfdat = self.tcm.output.get_emis()
-        # if not isinstance(self.tcm_columns, (list, np.ndarray)):
-        #   self.tcm_columns = self.make_tcm_columns()
-        for val in zip(self.tcm.columns, dfdat[1]):
-            shash = self._sourcehash[val[0]]
-            datelist.append(shash["sdate"])
-            htlist.append(shash["bottom"])
-            valra.append(val[1])
-            psizera.append(val[0][1])
-        vals = list(zip(datelist, htlist, valra, psizera))
-        return vals
+        return -1
 
-    def plot_outdat_ts(self, log=False, fignum=1, unit="kg/s", ax=None, clr='k', label=''):
-        # InverseAshPart class
-
-        # plots time series of MER. summed along column.
-        # dfdat : pandas dataframe output by InverseOutDat class get_emis method.
-        if not ax:
-            sns.set()
-            sns.set_style("whitegrid")
-            fig = plt.figure(fignum, figsize=(10, 5))
-            ax = fig.add_subplot(1, 1, 1)
-        df = self.make_outdat_df()
-        #ax, ts = plottcm.plot_outdat_ts_psize_function(df,ax=ax,log=log)
-        ax, ts = plottcm.plot_outdat_ts_function(df,ax=ax,log=log,clr=clr,label=label)
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles, labels)
-        return ax, ts
-
-    def make_outdat_df(self):
-        dfdat = self.tcm.output.get_emis()
-        vals = self._tcm.make_outdat(dfdat)
-        return make_outdat_df(vals)
-
-    # to do -also a function in volctcm.py
-    def make_outdat_df_old(self, savename=None, part="basic"):
-        # InverseAsh class
-        """
-        dfdat : pandas dataframe output by InverseOutDat class get_emis method.
-                this is a list of tuples (source tag), value from emissions
-        """
-        vals = self.make_outdat()
-        vals = list(zip(*vals))
-        ht = vals[1]
-        time = vals[0]
-        # emit = np.array(vals[2])/1.0e3/3600.0
-        emit = np.array(vals[2])
-
-        # this is for particle size. Used by the InverseAshPart class.
-        if len(vals) == 4:
-            psize = vals[3]
-            data = zip(time, ht, psize, emit)
-            if part == "index":
-                iii = 0
-                cols = [1, 2]
-            elif part == "cols":
-                iii = 1
-                cols = [0, 2]
-            colnames = ["date", "ht", "psize", "mass"]
-        # this is for only height and time
-        else:
-            data = zip(time, ht, emit)
-            iii = 1
-            cols = 0
-            colnames = ["date", "ht", "mass"]
-        dfout = pd.DataFrame(data)
-        if part == "condense" and len(vals) == 4:
-            dfout.columns = colnames
-            dfout = dfout.groupby(["date", "ht"]).sum()
-            dfout = dfout.reset_index()
-            dfout.columns = [0, 1, 2]
-            iii = 1
-            cols = 0
-
-        if part == "basic":
-            dfout.columns = colnames
-            return dfout
-        dfout = dfout.pivot(columns=cols, index=iii)
-        if savename:
-            print("saving  emissions to ", savename)
-            dfout.to_csv(savename)
-        return dfout
-
-    def plot_outdat_profile(self, fignum=1, unit="kg", ax=None):
-        # InverseAshPart class
-        dfdat = self.tcm.output.get_emis()
-        if not ax:
-            sns.set()
-            sns.set_style("whitegrid")
-            fig = plt.figure(fignum, figsize=(10, 5))
-            ax = fig.add_subplot(1, 1, 1)
-        df = self.make_outdat_df(dfdat, part="basic")
-        ax, ts = plottcm.plot_outdat_profile_psize_function(df,ax=ax)
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles, labels)
-        return ax, ts
 
     def run_hysplit(self):
+        """
+        create the EMIT file for the current tcm
+        run HYSPLIT for the EMIT file found in the current tcm subdirectory.
+        """
         from ashapp.maindispersion import MainEmitTimes
+
+        # write the emit-times file.
+        vlat = self.inp['latitude']
+        vlon = self.inp['longitude']
+        ename = os.path.join(self.tcm.subdir, 'EMIT.txt')
+        threshold = 100
+        if 'area' in self.inp.keys(): area = self.inp['area']
+        else: area=1
+        self.tcm.emissions.write_emit(vlat,vlon,threshold,area=area,name=ename)
+
+        # Setup and run HYSPLIT
         jobid = self.directories.subdir.split('/')[-1]
         inp = self.inp.copy()
         inp['durationOfSimulation']=24

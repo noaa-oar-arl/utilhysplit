@@ -61,7 +61,7 @@ class ProcessList(object):
     def pipe_stderr(self):
         self.stderr = subprocess.PIPE
 
-    def startnew(self, callstr, wdir="./", descrip="new", nice=10):
+    def startnew(self, callstr, wdir="./", descrip="new", nice=0):
         """ "starts a new process"""
         logger.info("CALLSTRING{}".format(callstr))
         xproc = subprocess.Popen(

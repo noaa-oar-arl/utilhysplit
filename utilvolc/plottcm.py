@@ -108,7 +108,7 @@ def plot_outdat_ts_psize_function(
     return ax, ts
 
 
-def plot_outdat_ts_function(
+def plot_emissions_timeseries(
     dfdat,
     log=False,
     fignum=1,
@@ -135,12 +135,12 @@ def plot_outdat_ts_function(
     sns.set()
     if 'psize' in df.columns: df = df.drop("psize", axis=1)
     # dfp = dfp.pivot(index='date',columns='ht')
-    df = df.pivot(index="ht", columns="date")
+    df = df.pivot(index="date", columns="ht")
     try: 
        df = df.mass
     except: 
        pass
-    ts = df.sum()
+    ts = df.sum(axis=1)
     if unit == "kg/s":
         yval = ts.values / 3.6e6
     elif unit == "g/h":
@@ -155,10 +155,15 @@ def plot_outdat_ts_function(
     )
     # fig.autofmt_xdate()
     ax.set_ylabel("MER {}".format(unit), fontsize=15)
+    plt.xticks(rotation=45)
+    if log: ax.set_yscale('log')
     return ax, df
 
 
-def plot_outdat_profile_function(
+
+
+
+def plot_emissions_profile(
     dfdat, fignum=1, unit="km", ax=None, clr="k", label=None, alpha=1, lw=1, marker="o"
 ):
     if not ax:
@@ -172,8 +177,11 @@ def plot_outdat_profile_function(
         df = df.dropna()
     else:
         df = dfdat
-
-    ts = df.sum(axis=1)
+ 
+    if 'psize' in df.columns: df = df.drop("psize", axis=1)
+    # dfp = dfp.pivot(index='date',columns='ht')
+    df2 = df.pivot(index="ht", columns="date")
+    ts = df2.sum(axis=1)
     sns.set()
     xval = ts.values * 1 / 1e12
     try:
@@ -202,4 +210,40 @@ def plot_outdat_profile_function(
     # print('total {} Tg'.format(totalmass))
     return ax, totalmass
 
+
+
+def plot_emissions(
+    df, log=False, fignum=1, cmap="Blues", unit="kg/s", thresh=0
+    ):
+    # InverseAsh class
+    """
+    vals is output by make_outdat.
+    """
+    fig = plt.figure(fignum, figsize=(10, 5))
+    #vals = list(zip(*vals))
+    mass = df['mass'].values
+    ht = df['ht'].values / 1e3
+    time = df['date'].values
+    sns.set()
+    sns.set_style("whitegrid")
+    # output in kg/s?/
+    if unit == "kg/s":
+        emit = np.array(mass) / 1.0e3 / 3600.0
+    elif unit == "kg/h":
+        emit = np.array(mass) / 1.0e3
+    elif unit == "g/h":
+        emit = np.array(mass) / 1.0
+    vpi = np.where(emit < thresh)
+    emit[vpi] = 0
+    if not log:
+        cb = plt.scatter(time, ht, c=emit, s=100, cmap=cmap, marker="s")
+    else:
+
+        cb = plt.scatter(
+            time, ht, c=np.log10(emit), s=100, cmap=cmap, marker="s"
+        )
+        # cb = plt.pcolormesh(vals[0],ht,emit,cmap=cmap)
+    cbar = plt.colorbar(cb)
+    cbar.ax.set_ylabel(unit)
+    fig.autofmt_xdate()
 

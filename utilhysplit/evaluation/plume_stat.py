@@ -8,7 +8,8 @@ import pandas as pd
 import scipy
 import xarray as xr
 from scipy.signal import convolve2d
-from utilhysplit.evaluation import ensemble_tools, statmain
+from utilhysplit.evaluation import statmain
+from utilhysplit import ensemble_tools
 
 """
 Routines to calculate various statistics like Critical Success Index, Gilbert Skill Score, Fractions Skill Score,

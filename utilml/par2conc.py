@@ -15,7 +15,7 @@ from sklearn.cluster import KMeans
 from sklearn.mixture import BayesianGaussianMixture as BGM
 from sklearn.mixture import GaussianMixture as GMM
 
-#import monet
+import monet
 import monetio.models.pardump as pardump
 from utilhysplit.fixlondf import fixlondf
 
@@ -28,6 +28,9 @@ Functions and classes to convert pardump file
 output to concentrations using mixture models or
 kernel density estimation.
 the KDE functionality is very basic.
+
+The main function is par2fit which creates the fit.
+MassFit object then wraps the fit
 
 
 classes
@@ -58,6 +61,17 @@ get_thickness
 merge_pdat
 makeplot
 cdump_plot
+
+
+09/13/2024 changes for the poker flat oilburn experiment in which 
+1. really high resolution was needed. 
+   1. More work is needed to make sure proper precision is kept on
+      latitude/ longitude locations. 
+   2. made ability to change vertical height units more flexible. Before could
+      only use m or km.
+2. concentrations along flight path.
+
+June 2026 new ways to get concentration from Gaussians fits 
 
 """
 
@@ -187,6 +201,7 @@ def par2fit(
     msl=True,
     wcp=1e3,
     min_par_num=50,
+    htunits='km'
 ):  # used for Bayesian Gaussian Mixture
     """
     INPUT
@@ -218,19 +233,32 @@ def par2fit(
     min_par_num : int : input into MassFit. Will decrease nnn if number
                   of points to fit / min_par_num is less than nnn.
 
+    htunits : HYSPLIT generally has height units in meters. However fitting tends to be better 
+              if height units are in km.
+
     returns an instance of the MassFit class.
     """
-
-    htmult = 1 / 1000.0  # convert height to km
+    # pardump height is in meters.
+    if isinstance(htunits,(float,int)):
+        htmult = htunits
+    elif isinstance(htunits,str):
+        if htunits=='km': htmult = 0.001 # convert height to km
+        elif htunits=='m': htmult = 1  # convert height to km
     bic = True
     # mfithash = {}
     # iii = 0
     df2 = pdumpdf.copy()
+    prec=1000
     # df2 = df2[df2['poll']==species]
     mass = df2["pmass"].sum() * mult
     logger.debug("par2fit mult {} mass {}".format(mult, mass))
-    lon = df2["lon"].values
-    lat = df2["lat"].values
+    lon = df2["lon"].values*prec
+    lat = df2["lat"].values*prec
+
+    if 'date' in df2.columns:
+        date = df2.date.unique()
+        date = date[0]
+
     hval = "ht"
     if "agl" in df2.columns.values:
         if msl:
@@ -252,6 +280,7 @@ def par2fit(
             nnn = np.floor(len(xra) / 2.0)
         if nnn == 0:
             nnn = 1
+        print('getting clusters {}'.format(nnn))
         gmm = get_gmm(n_clusters=nnn)
     elif method == "bgm":
         gmm = get_bgm(n_clusters=nnn, wcp=wcp)
@@ -269,7 +298,9 @@ def par2fit(
     else:
         print("Not valid method ", method)
         sys.exit()
-    mfit = MassFit(gmm, xra, mass, min_par_num=min_par_num)
+    mfit = MassFit(gmm, xra, mass, time=date, min_par_num=min_par_num)
+    mfit.htunits=htmult
+    mfit.prec = 1/prec
     return mfit
 
 
@@ -313,13 +344,13 @@ def get_bic(
 
 class Par2Conc:
     """
-    This class needs to be re-written.
+    This class needs to be worked on
     """
 
     def __init__(self, df):
-        self.df = df  # pandas DataFrame
+        self.df = df       # pandas DataFrame
         self.fitlist = []  # collection of MassFit objects.
-        self.dra = None  # array with concentrations.
+        self.dra = None    # array with concentrations.
         # not in MONET format but get_conc and monet_conc
         # both return array converted to MONET format.
 
@@ -330,6 +361,14 @@ class Par2Conc:
         self.tmave = time_average
 
     def subsetdf(self, stime, tmave, splist=None, sorti=None, htmin=None, htmax=None):
+        """
+        subset the particle positions.
+        stime - by time
+        tmave(minutes) - if > 0 then considers particles with times from stime to stime + tmave
+        splist - if only fitting a particular species
+        sorti  - list of particle sort numbers to use (usually None)
+        htmin, htmax -  only consider particles within this height range.
+        """
         # jjj, dfnew = combine_pdict(self.pdict, pd.to_datetime(date), tmave)
         pardf = self.df.copy()
         d1 = stime
@@ -356,20 +395,23 @@ class Par2Conc:
             df = self.subsetdf(time, tmave, parargs)
             if iii == 0:
                 mfit = par2fit(df, method="bgm", nnn=50)
-            else:
+            else: # starts with previous fit
                 mfit = par2fit(df, method="p_bgm", pfit=pfit, nnn=50)
             pfit = mfit.gfit
             mfitlist.append(mfit)
             iii += 1
 
 
+
 def fit_timeloop(
     pardf,
     nnn,
-    maxht=None,
+    maxht=None, # in meters
     mlist=None,
     method="gmm",
     warm_start=True,
+    htunits=1,
+    initialize=True
 ):
     """
     pardf : dataframe with particle positions.
@@ -382,10 +424,11 @@ def fit_timeloop(
     logger.debug("Running fit_timeloop")
     jjj = 0
     submlist = []
-    pmethod = "p_" + method
+    pmethod = method
+    if initialize: pmethod = "p_" + method
     # masslist = []
     # fit each unique date in the period.
-    dlist = pardf.date.unique()
+    dlist = list(pardf.date.unique())
     dlist.sort()
     for ndate in dlist:
         pdn = pardf[pardf.date == ndate]
@@ -393,9 +436,9 @@ def fit_timeloop(
             pdn = pdn[pdn["ht"] < maxht]
         if not mlist:
             if jjj == 0:
-                mfit = par2fit(pdn, nnn=nnn, method=method)
+                mfit = par2fit(pdn, nnn=nnn, method=method,htunits=htunits)
             else:
-                mfit = par2fit(pdn, nnn=nnn, method=pmethod, pfit=pfit)
+                mfit = par2fit(pdn, nnn=nnn, method=pmethod, pfit=pfit,htunits=htunits)
         else:
             mfit = mlist[jjj]
         if not mfit.fit:
@@ -445,8 +488,8 @@ def draw_ellipse(position, covariance, ax=None, **kwargs):
 
     # Draw the Ellipse
     for nsig in range(1, 4):
-        # print('HERE', nsig, width, height, angle)
-        ax.add_patch(Ellipse(position, nsig * width, nsig * height, angle, **kwargs))
+        #print('HERE', nsig, width, height, angle)
+        ax.add_patch(Ellipse(xy=position, width=nsig * width, height=nsig * height, angle=angle))
 
 
 def get_kde(bandwidth, kernel="gaussian"):
@@ -535,6 +578,63 @@ def get_lra(lmin, lmax, dd):
     return lra
 
 
+def save_gmm(gmm, gname):
+    np.save('{}_weights'.format(gname), gmm.weights_, allow_pickle=False) 
+    np.save('{}_means'.format(gname), gmm.means_, allow_pickle=False) 
+    np.save('{}_covariances'.format(gname), gmm.covariances_, allow_pickle=False) 
+    return True
+
+def gmm2str(gmm):
+    weights =  gmm.weights_ 
+    means = gmm.means_
+    covar = gmm.covariances_
+
+    number = len(weights)
+    rstr = 'Number: {}\n'.format(number)
+    glist = list(zip(weights,means,covar))
+    # put in order of weights
+    glist.sort()
+    glist.reverse()
+    for val in glist:
+        rstr +=  'Weight: {}\n'.format(val[0])
+        meanstr = 'Means: {}, {}, {} \n'.format(val[1][0],val[1][1], val[1][2])
+        rstr += meanstr
+
+        cstr = 'Covariance: \n'
+        ccc = val[2]
+        cstr += '{:2.6e}, {:2.6e}, {:2.6e}\n'.format(ccc[0][0], ccc[0][1], ccc[0][2]) 
+        cstr += '{:2.6e}, {:2.6e}, {:2.6e}\n'.format(ccc[1][0], ccc[1][1], ccc[1][2]) 
+        cstr += '{:2.6e}, {:2.6e}, {:2.6e}\n'.format(ccc[2][0], ccc[2][1], ccc[2][2]) 
+
+        rstr += cstr
+        rstr += '\n'
+    return rstr   
+
+
+def load_gmm(gname):
+    means = np.load('{}_means.npy'.format(gname))
+    covar = np.load('{}_covariances.npy'.format(gname))
+    gmm = GMM(n_components=len(means), covariance_type='full')
+    gmm.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(covar))
+    gmm.weights_ = np.load('{}_weights.npy'.format(gname))
+    gmm.means_ = means
+    gmm.covariances = covar
+    return gmm
+   
+def load_massfit( gname):
+    gmm = load_gmm(gname)
+    xra = np.load('{}_xra.npy'.format(gname))
+    with open('{}_mass.txt'.format(gname),'r') as fid:
+         mass = fid.readline()
+         mass = float(mass)
+         time = fid.readline()
+         time = datetime.datetime.strptime(time,"%Y%m%d_%H%M")
+    mfit = MassFit(gmm,xra,mass=mass,time=time)
+    return mfit 
+
+
+
+
 class MassFit:
 
     """
@@ -542,7 +642,7 @@ class MassFit:
     If we can keep giving it different xra values then we can
     """
 
-    def __init__(self, gmm, xra, mass=1, min_par_num=50):
+    def __init__(self, gmm, xra, mass=1, min_par_num=50, time=None):
         """
         gmm : GuassianModelMixture object
               OR KED or BGM
@@ -552,10 +652,13 @@ class MassFit:
         min_par_num : int : used to decrease n_components if necessary.
         """
         self.gmm = gmm
+        self.mass = mass
         self.xra = xra
+        self.time = time
         self.fit = True
         self.check_n_components(min_par_num=min_par_num)
         self.fitloop()
+        self.prec=1
         # try:
         #   self.gfit = gmm.fit(xra)
         # except:
@@ -563,8 +666,56 @@ class MassFit:
         # if not self.fit.converged_:
         #   logger.warning('Fit did not converge tolderance {}'.\
         #                   .format(self.gmm.tol))
-        self.mass = mass
-        self.htunits = self.get_ht_units()
+        # self.htunits = self.get_ht_units()
+
+    # Gaussian Mixture Model
+    @property
+    def gmm(self):
+        """
+        GaussianMixture object
+        """
+        return self._gmm
+
+    @gmm.setter
+    def gmm(self,gmm):
+        self._gmm = gmm
+
+    @property
+    def mass(self):
+        return self._mass
+
+    @mass.setter
+    def mass(self,mass):
+           self._mass = mass
+
+    def make_savename(self,base=None):
+        if isinstance(base,str): base = base + '_'
+        else: base = ''
+      
+        ncomponents = self.gmm.n_components
+        nc = 'n{}_'.format(ncomponents) 
+        if isinstance(self.time,datetime.datetime):
+           dstr = self.time.strftime("%Y%m%d_%H%M_")
+        elif isinstance(self.time,str):
+           dstr = self.time
+        else:
+           dstr = ''
+        sname = '{}{}{}gmmfit'.format(base,nc,dstr)
+        return sname
+
+    
+    def save(self,gname=None):
+        gname = self.make_savename(base=gname)
+        save_gmm(self.gmm,gname)
+        np.save('{}_xra'.format(gname), self.xra, allow_pickle=False)
+        with open('{}_mass.txt'.format(gname), 'w') as fid:
+             fid.write('{:2.8e}\n'.format(self.mass))
+             fid.write(self.time.strftime('%Y%m%d_%H%M'))
+        return True  
+
+    #@property
+    #def gmm(self):
+    #    return self._gmm
 
     def check_n_components(self, min_par_num=50, min_n=2):
         """
@@ -583,12 +734,12 @@ class MassFit:
         new_n = np.min([n_max, nnn])
         # decide if change is needed.
         if new_n != nnn:
-            # logger.warning(
-            #    "Changing n_components to {} from {} parnum {}".format(
-            #        new_n, nnn, parnum
-            #    )
-            # )
-            self.gmm.n_components = new_n
+             logger.warning(
+                "Suggest changing n_components to {} from {} parnum {}".format(
+                    new_n, nnn, parnum
+                )
+             ) 
+             #self.gmm.n_components = new_n
 
     def fitloop(self):
         """
@@ -681,9 +832,14 @@ class MassFit:
             ax.axis("equal")
         return z
 
-    def plot_means(self, dim="ht"):
+    def plot_means(self, dim="ht",ax=None,z=10):
+        if not ax:
+           fig = plt.figure(1)
+           ax = fig.add_subplot(1,1,1)
+        if dim=='ht': mult = self.prec
+        else: mult = self.htunits
         for pos, covar, www in self.generate_gaussians(dim):
-            plt.scatter(pos[0], pos[1], s=100 * www)
+            ax.scatter(pos[0]*self.prec, pos[1]*mult, s=100 * www,zorder=z)
 
     def auto_find(self):
         # get positions of centers of Gaussians
@@ -900,6 +1056,12 @@ class MassFit:
             # if check and verbose:  print("conc 1 pt estimation ", prob * self.mass / vol, prob)
         return conc
 
+    def center_grid(self):
+        zlist = self.sort_fits()
+        center = zlist[0][0]
+        return center
+        
+
     def sort_fits(self):
         gfit = self.gfit
         zlist = zip(gfit.means_, gfit.covariances_, gfit.weights_)
@@ -949,7 +1111,7 @@ class MassFit:
             # if clr:
             #   b = np.ones(len(pos))
             #   clr = [clr for x in b]
-            ax.scatter(pos[0], pos[1], pos[2], c=[clr], s=MarkerSize, marker=sym[1])
+            ax.scatter(pos[0]*self.prec, pos[1]*self.prec, pos[2], c=[clr], s=MarkerSize, marker=sym[1])
         plt.tight_layout()
 
     def plot_centers(self, ax=None, dim="ht", sym="k*", clr=None, MarkerSize=2):
@@ -961,21 +1123,27 @@ class MassFit:
         if dim == "ht":
             c1 = 0
             c2 = 1
+            mc1 = self.prec
+            mc2 = self.prec
         if dim == "lon":
             c1 = 1
             c2 = 2
+            mc1 = self.prec
+            mc2 = self.htunits
         if dim == "lat":
             c1 = 0
             c2 = 2
+            mc1 = self.prec
+            mc2 = self.htunits
         for pos, covar, www in zip(gfit.means_, gfit.covariances_, gfit.weights_):
             # position = np.array([pos[c1], pos[c2]])
             plt.plot(
-                pos[c1],
-                pos[c2],
+                pos[c1]*mc1,
+                pos[c2]*mc2,
                 marker=sym[1],
                 markerfacecolor=clr,
                 markeredgecolor=clr,
-                MarkerSize=MarkerSize,
+                markersize=MarkerSize,
             )
             centerlist.append([pos[c1], pos[c2]])
         return centerlist
@@ -1005,29 +1173,39 @@ class MassFit:
             covariance = np.array([[one, two], [three, four]])
             draw_ellipse(position, covariance, ax, alpha=www * wfactor)
 
+        return ax
+
     def get_ht_ra(self, htmin, htmax, dh):
         """ """
+        #htmin = htmin * self.htunits
+        #htmax = htmax * self.htunits
+        #dh = dh * self.htunits
         # first convert to km.
-        if self.htunits == "m":
-            htmin = htmin / 1000.0
-            htmax = htmax / 1000.0
-            dh = dh / 1000.0
-        # htmin = np.floor(htmin)
-        # htmax = np.ceil(htmax)
-        if htmin <= 0.01:
-            htmin = -0.02
-        htra = np.arange(htmin, htmax, dh)
+        #if self.htunits == "m":
+        #    htmin = htmin / 1000.0
+        #    htmax = htmax / 1000.0
+        #    dh = dh / 1000.0
+        #htmin = np.floor(htmin)
+        #htmax = np.ceil(htmax)
+        #if  htmin <= 0.01:
+        #    htmin = -2*dh
+        htra = np.arange(htmin, htmax+dh, dh)
         # then convert back to m.
-
-        if self.htunits == "m":
-            htra = htra * 1000.0
+        #if self.htunits == "m":
+        #    htra = htra * 1000.0
         return htra
+
+    def test(self):
+        print(self.xra[:,0])
+        print(self.xra[:,1])
 
     def totalgrid(self, dd, dh, buf):
         """
         returns lat, lon, ht arrays based
         on data in the xra.
         """
+        dd = dd/self.prec
+        buf =  buf/self.prec
         lon = self.xra[:, 0]
         lat = self.xra[:, 1]
         ht = self.xra[:, 2]
@@ -1035,10 +1213,15 @@ class MassFit:
         latmax = np.max(lat) + buf
         lonmin = np.min(lon) - buf
         lonmax = np.max(lon) + buf
-        htmin = np.min(ht) - buf
-        htmax = np.max(ht) + buf
+        #htmin = np.floor(np.min(ht)/dh)*dh 
+        #htmax = np.ceil(np.max(ht)/dh)*dh 
         latra = get_lra(latmin, latmax, dd)
         lonra = get_lra(lonmin, lonmax, dd)
+
+        htmin = np.min(ht)
+        htmax = np.max(ht)
+
+        print('HERE', htmin, htmax,dh,np.max(ht))
         htra = self.get_ht_ra(htmin, htmax, dh)
         return latra, lonra, htra
 
@@ -1052,10 +1235,13 @@ class MassFit:
         Will allow height array to go below 0.
 
         """
-        bufx = buf[0]
+        lat = lat/self.prec
+        lon = lon/self.prec
+        dd = dd/self.prec
+        bufx = buf[0]/self.prec
         if bufx < dd:
             bufx = dd
-        bufh = buf[1]
+        bufh = buf[1]*self.htunits
         if bufh < dd:
             bufh = dh
         latmin = lat - bufx
@@ -1064,9 +1250,12 @@ class MassFit:
         lonmax = lon + dd + bufx
         htmin = ht - bufh
         htmax = ht + dh + bufh
+        print(latmin, latmax, lat, bufx, dd)
         latra = get_lra(latmin, latmax, dd)
         lonra = get_lra(lonmin, lonmax, dd)
+        print('htra',htmin, htmax, ht, bufh, dd)
         htra = self.get_ht_ra(htmin, htmax, dh)
+        print(htra)
         # latra = np.array([latmin,lat,latmax])
         # lonra = np.array([lonmin,lon,lonmax])
         # htra = np.array([htmin,ht,htmax])
@@ -1076,6 +1265,94 @@ class MassFit:
         return monet.monet_accessor._dataset_to_monet(
             self.dra, lat_name="y", lon_name="x"
         )
+
+    def get_conc_quadrature(
+        self,
+        inra,
+        dh,
+        dd,
+        qn=5,
+        qnz=10,
+        midlat=45,
+        mass=None,
+    ):
+        """Average concentration for points in ``inra`` via box quadrature.
+
+        ``inra`` points are expected in ``[lon, lat, ht]`` order.
+        """
+        if isinstance(inra, pd.DataFrame):
+            if {"lon", "lat", "ht"}.issubset(inra.columns):
+                pts = inra[["lon", "lat", "ht"]].to_numpy()
+            else:
+                pts = inra.to_numpy()
+        else:
+            pts = np.asarray(inra)
+
+        if pts.ndim == 1:
+            pts = pts.reshape(1, -1)
+        if pts.shape[1] != 3:
+            raise ValueError("inra must be array-like with shape (N, 3) in [lon, lat, ht] order")
+
+        conclist = []
+        for pt in pts:
+            conc = self._get_conc_quadrature(
+                pt[0], pt[1], pt[2], dh, dd, qn=qn, qnz=qnz, midlat=midlat, mass=mass
+            )
+            conclist.append(conc)
+        return conclist
+    
+
+    def _get_conc_quadrature(
+        self,
+        lon,
+        lat,
+        ht,
+        dh,
+        dd,
+        qn=5,
+        qnz=None,
+        midlat=45,
+        mass=None,
+    ):
+        """ does not use midpoint approxmation.
+        Uses 5x5x5 quadrature to get average concentration in volume defined by dd and dh."""
+        box = get_box(lon, lat, ht, dd, dh)
+        pts = get_pts(box, n=qn, nz=qnz)
+        conclist = np.zeros(len(pts))
+        for iii, pt in enumerate(pts):
+            conclist[iii] = self.get_conc_nogrid([[pt[0], pt[1], pt[2]]], midlat=midlat, mass=mass)
+        return conclist.mean()
+
+    def get_conc_nogrid(self, inra, midlat=45, mass=None):
+        """Uses midpoint approximation and returns concentration in mass/m3."""
+        deg2m = 111e3
+        if not mass:
+            mass = self.mass
+        score = self.gfit.score_samples(inra)
+        area_per_fit_xy = deg2m**2 * np.cos(midlat * np.pi / 180.0) * self.prec**2
+        conc = np.exp(score) * mass * self.htunits / area_per_fit_xy
+        return conc
+        #prob = np.exp(score) * dd**2 * dh
+        #one = prob.sum()
+        #print(prob) 
+        # use real volume to get concentration 
+        #ddm = dd*self.prec
+        #dlat = ddm * deg2m
+        #midlat = latra.mean()
+        #dlon = ddm * deg2m * np.cos(midlat*np.pi/180.0)
+        #volume = dh * dlon * dlat
+        #if self.htunits == 'km': volume = volume * 1000.0
+        #volume = volume * self.htunits
+        #conc = prob*mass/volume
+
+        #conc = np.exp(score)*dd^2*dh*mass / (dh*dlon*dlat)
+        #conc = np.exp(score)*dd^2*mass / (dlon*dlat)
+        #conc = np.exp(score)*dd^2*mass/ (dd*self.prec*deg2m*np.cos(midlat*np.pi/180) * dd*self.prec * deg2m)
+        #conc = np.exp(score)*mass / ((self.prec*degm)^2 * np.cos(midlat*np.pi/180))
+
+
+        #conc = np.exp(score)* mass
+        #return conc
 
     def get_conc(
         self,
@@ -1101,9 +1378,9 @@ class MassFit:
         # probability 'under curve' calculated using the cumulative distribution
         # function. Should be used for larger volumes. May produce error with
         # very small volumes because involves subtraction of small floats.
-        # elif method == 'cdf':
-        #    self.get_conc3(dd, dh, latra, lonra, htra, buf=buf, time=time,
-        #                   mass=mass)
+        elif method == 'cdf':
+            self.get_conc3(dd, dh, latra, lonra, htra, buf=buf, time=time,
+                           mass=mass)
         dra = monet.monet_accessor._dataset_to_monet(
             self.dra, lat_name="y", lon_name="x"
         )
@@ -1111,9 +1388,11 @@ class MassFit:
 
     def get_grid(self, dd, dh, buf, lat=None, lon=None, ht=None):
         # returns arrays that can be used as input to get_conc2.
-        if not lat:
+        if lat is None and lon is None and ht is None:
             latra, lonra, htra = self.totalgrid(dd, dh, buf)
         else:
+            if lat is None or lon is None or ht is None:
+                raise ValueError("lat, lon, and ht must all be provided for partial grids")
             latra, lonra, htra = self.partialgrid(lat, lon, ht, dd, dh, buf)
         return latra, lonra, htra
 
@@ -1121,16 +1400,17 @@ class MassFit:
         self, dd, dh, latra, lonra, htra, time=None, mass=None, verbose=False
     ):
 
+        
         if not mass:
             logger.debug("using mass{}".format(self.mass))
             mass = self.mass
         x, y, z = np.meshgrid(lonra, latra, htra)
         xra2 = np.array([x.ravel(), y.ravel(), z.ravel()]).T
-
+        print('done allocating xarray')
         # retrieve values at sampling grid locations.
         score = self.gfit.score_samples(xra2)
-
-        # multipy by volume to get probability in that volume.
+        # multipy by volume in fit space to get probability in that volume.
+        dd = dd/self.prec
         prob = np.exp(score) * dd**2 * dh
 
         # sum over whole volume should be one
@@ -1141,19 +1421,21 @@ class MassFit:
         # to get the mass in that volume.
         # Divide by volume (in m^3) to get
         # concentration.
+
+        # now compute the volume of the grid cell in real space (meters)
         deg2meter = 111e3
-        # dlon = np.min(latra) + (np.max(latra)-np.min(latra))/2
-        # dlon = dd * deg2meter * np.cos(dlon *np.pi /180.0)
-        dlon = dd * deg2meter
-        volume = dh * (dd * deg2meter) * dlon
-        if self.htunits == "km":
-            volume = volume * 1000.0
+        midlat = latra.mean()*self.prec
+        dm = dd*self.prec
+        dlon = dm * deg2meter * np.cos(midlat *np.pi /180.0)
+        volume = dh * (dm * deg2meter) * dlon
+        # Convert fit vertical units to meters: z_m = z_fit / self.htunits.
+        volume = volume / self.htunits
 
         # self.conc = np.exp(score)*dd**2 * dh * mass / volume
         self.conc = prob * mass / volume
 
         # reshape the array.
-        corder = [(latra, "y"), (lonra, "x"), (htra, "z")]
+        corder = [(latra*self.prec, "y"), (lonra*self.prec, "x"), (htra/self.htunits, "z")]
         rshape = []
         coords = []
         dims = []
@@ -1166,9 +1448,8 @@ class MassFit:
         # create the xarray
         dra = xr.DataArray(conc2, coords=coords, dims=dims)
         # add time dimensions
-        # if time:
-        #    dra['time'] = time
-        #    dra = self.dra.expand_dims(dim='time')
+        dra['time'] = self.time
+        dra = dra.expand_dims(dim='time')
 
         # modify xarray.
         # self.dra = monet.monet_accessor._dataset_to_monet(dra, lat_name='y', lon_name='x')
@@ -1216,6 +1497,9 @@ class MassFit:
         area = (dd * deg2meter) ** 2
         massload = np.exp(score) * dd**2 * self.mass / area
         return lonra, latra, massload
+
+
+    
 
 
 def use_gmm(gmm, xra, mass=1, label=True, ax=None):
@@ -1373,6 +1657,46 @@ def get_xra(lon, lat, ht=None):
     else:
         xra = np.array(list(zip(lon, lat)))
     return xra
+
+
+def get_box(lon, lat, ht, dd, dh):
+    """Return centered box bounds for quadrature sampling.
+
+    Inputs follow the common point convention in this module:
+    ``[lon, lat, ht]``.
+    The returned dictionary stores bounds in native fit-space units and is
+    consumed by ``get_pts``.
+    """
+    half_dd = 0.5 * dd
+    half_dh = 0.5 * dh
+    return {
+        "lat": (lat - half_dd, lat + half_dd),
+        "lon": (lon - half_dd, lon + half_dd),
+        "ht": (ht - half_dh, ht + half_dh),
+    }
+
+
+def get_pts(box, n=5, nz=None):
+    """Create evenly spaced sample points in a box.
+
+    ``n`` controls horizontal sampling (x/y). ``nz`` controls height sampling.
+    If ``nz`` is ``None`` it defaults to ``n``.
+
+    Output points are in ``[lon, lat, ht]`` order for direct use by
+    ``get_conc_nogrid``.
+    """
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    if nz is None:
+        nz = n
+    if nz < 1:
+        raise ValueError("nz must be >= 1")
+    lonra = np.linspace(box["lon"][0], box["lon"][1], n)
+    latra = np.linspace(box["lat"][0], box["lat"][1], n)
+    htra = np.linspace(box["ht"][0], box["ht"][1], nz)
+    x, y, z = np.meshgrid(lonra, latra, htra, indexing="xy")
+    pts = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
+    return pts
 
 
 # def compare_fits(fit1, fit2, method="gmm"):

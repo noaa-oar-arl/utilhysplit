@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import xarray as xr
-from utilhysplit.evaluation import ensemble_tools
+from utilhysplit import ensemble_tools
 
 
 class TestTalagrand():

@@ -66,7 +66,7 @@ class HeightPolygons:
         if not self.ch_hash: return True
         else: return False            
  
-    def process(self,dset,alpha=10):
+    def process(self,dset,alpha=10,central_longitude=0):
         """
         dset : xarray DataArray
         """
@@ -79,9 +79,8 @@ class HeightPolygons:
             if np.min(diff)>10: continue
             thresh1 = hhh-10
             thresh2 = hhh+10
-            ch, ep = geotools.get_hull(dset,thresh1,thresh2,alpha)
             try:
-                ch, ep = geotools.get_hull(dset,thresh1,thresh2,alpha)
+                ch, ep = geotools.get_hull(dset,thresh1,thresh2,alpha,central_longitude)
             except Exception as eee:
                 print(eee)
                 print('error for level', wep.meterev2FL(hhh), hhh,  dset)
@@ -131,13 +130,13 @@ class HeightPolygons:
             newkey = '{}_{}'.format(wep.meterev2FL(low),wep.meterev2FL(hi))
             cfunc = other_colors
         newhash = {newkey:newpoly}
-        new = HeightPolygons(levlist=[newkey],colorfunction=cfunc)
+        new = HeightPolygons(levlist=[newkey],cmap='winter',colorfunction=cfunc)
         new.ch_hash = newhash
         return new 
 
     #def merge(self):
 
-    def merge_with(self,other):
+    def merge_with(self,other,cmap='viridis'):
         self_polygons = list(self.ch_hash.values())
         other_polygons = list(other.ch_hash.values())
     
@@ -153,21 +152,23 @@ class HeightPolygons:
         newkey = '{}_{}'.format(wep.meterev2FL(low),wep.meterev2FL(hi))
         cfunc = other_colors
         newhash = {newkey:newpoly}
-        new = HeightPolygons(levlist=[newkey],colorfunction=cfunc)
+        new = HeightPolygons(levlist=[newkey],colorfunction=cfunc,cmap=cmap)
         new.ch_hash = newhash
        
         return new 
 
 
-    def plot(self,vloc,pbuffer,ax,legend=True,linewidth=5):
+    def plot(self,vloc=None,pbuffer=0.15,ax=None,legend=True,linewidth=5,transform=None):
         for hhh in self.ch_hash.keys():
             if isinstance(hhh,(float,int)): label = wep.meterev2FL(hhh)
             else: label = hhh
             if pbuffer>0: ch = self.ch_hash[hhh].buffer(pbuffer)
             else: ch = self.ch_hash[hhh]
-            for x,y in geotools.plotpoly(ch):
-                ax.plot(x,y,linewidth=linewidth,color=self.colorhash[hhh],label=label)
-        ax.plot(vloc[1],vloc[0],'c^',markersize=20)
+            for xxx,y in geotools.plotpoly(ch):
+                #x2 = [360+x if x<0 else x for x in xxx]
+                ax.plot(xxx,y,linewidth=linewidth,color=self.colorhash[hhh],label=label,transform=transform)
+        if isinstance(vloc, (tuple,list,np.ndarray)):  
+            ax.plot(vloc[1],vloc[0],'c^',markersize=20,transform=transform)
         handles, labels = ax.get_legend_handles_labels()
         if legend:
             ax.legend(handles,labels,fontsize=self.fs)

@@ -46,7 +46,6 @@ class LevelSetter:
               top = 650 
            if not isinstance(dz,(float,int)):
               dz = 50 
-           print('HERE HERE', bottom,top,dz)
            self._levlist, self._descriptions = set_qva_levels(bottom,top,dz)
 
         if unit=='m':

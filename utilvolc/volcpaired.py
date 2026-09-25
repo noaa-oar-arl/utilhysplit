@@ -141,7 +141,7 @@ class VolcatHysplit():
         print("times in cdump file")
         self.print_times()
 
-    def add_cdump_dset(self,dset,ensdim='ens'):
+    def add_cdump_dset(self,dset,ensdim='source'):
         self.cdump = self.process_cdump(dset,ensdim)
 
     def add_qva_levels(self):
@@ -189,6 +189,7 @@ class VolcatHysplit():
     def process_cdump(self,cdump,ensdim):
         if not isinstance(cdump, xr.core.dataarray.DataArray):
             # turn dataset into dataarray
+            print(type(cdump)) 
             temp = list(cdump.keys())
             cdump = cdump[temp[0]]
         # get rid of source dimension
@@ -336,19 +337,26 @@ class VolcatHysplit():
 
         """
 
+        
         fig = plt.figure(1, figsize=(10, 5))
         ax1 = fig.add_subplot(1, 1, 1)
         if tii is None:
             tii = self.time_index(daterange[0])
-        print("tii", tii)
         cdump = self.concmult * self.cdump_mass_hash[tii]
         volcat = self.volcat_avg_hash[tii]
-        if not zii:
+
+        if zii is None:
             csum = cdump.sum(dim="ens")
-        else:
+        elif isinstance(zii,int):
             csum = cdump.isel(ens=zii)
             print(cdump.ens.values[zii])
-            # print(csum.ens.values)
+        elif isinstance(zii,list):
+            csum = cdump.sel(ens=zii)
+            print(csum.ens.values)
+            csum = csum.sum(dim="ens")
+
+
+           # print(csum.ens.values)
             # print(self.sourcehash[str(csum.ens.values)])
         # print(cdump.time)
         # print(csum.coords)
@@ -358,6 +366,9 @@ class VolcatHysplit():
             # plt.pcolormesh(csum.longitude, csum.latitude, np.log10(csum),cmap='Reds',shading='nearest')
             cbm = ax1.pcolormesh(
                 csum.x, csum.y, np.log10(csum), cmap="Reds", shading="nearest"
+            )
+            cbm2 = ax1.contour(
+                csum.x, csum.y, np.log10(csum), cmap="Reds"
             )
         except:
             print("FAILED max value", np.max(csum))

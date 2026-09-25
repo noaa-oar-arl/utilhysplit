@@ -20,14 +20,16 @@ from ashapp.collectemittimes import CollectEmitTimes, GEFSEmitTimes
 from ashapp.collectinverse import CollectInverse
 from ashapp.ensembledispersion import EnsembleDispersion
 from ashapp.graphicsdispersion import GraphicsDispersion
+from ashapp.graphicsensdispersion import GraphicsEnsembleDispersion
 from ashapp.outputdispersion import OutputDispersion
 from ashapp.rundispersion import RunDispersion
 from ashapp.runtrajectory import RunTrajectory
 from ashapp.collecttraj import CollectTrajectory
 from ashapp.outputtrajectory import OutputTrajectory
 from ashapp.graphicstrajectory import GraphicsTrajectory
+from ashapp.graphicsdummy import GraphicsDummy
 from utilvolc.runhelper import complicated2str, is_input_complete
-
+from ashapp.utildatainsertion import EmitFileFinder, DetEmitFileFinder
 
 # from ashapp import  utils
 
@@ -50,8 +52,8 @@ method in order to loop through all the GEFS members.
 """
 
 
-class MainDispersion(MainRunInterface):
 
+class MainDispersion(MainRunInterface):
     ilist = []
     ilist.extend(RunDispersion.ilist)
     ilist.extend(OutputDispersion.ilist)
@@ -71,7 +73,7 @@ class MainDispersion(MainRunInterface):
         self.headerstr = None
 
         self.filelocator = None
-        #self.maptexthash = {}
+        # self.maptexthash = {}
         self.awips = True
 
         self._modelrun = RunDispersion(inp)
@@ -79,10 +81,7 @@ class MainDispersion(MainRunInterface):
         inp["fraction_of_fine_ash"] = 0.01
         self._modeloutput = OutputDispersion(inp, [])
         self._modelgraphics = GraphicsDispersion(inp)
-
         utils.setup_logger()
-
- 
 
     @property
     def JOBID(self):
@@ -99,6 +98,7 @@ class MainDispersion(MainRunInterface):
     @inp.setter
     def inp(self, inp):
         self._inp.update(inp)
+        #print('checking inp', inp.keys())
         complete = is_input_complete(self.ilist, self._inp)
         if not complete:
             logger.warning("Inputs not complete")
@@ -136,7 +136,7 @@ class MainDispersion(MainRunInterface):
             RUN_URL = os.environ[self.urlstr]
             statusUrl = "{}/status/{}/{}".format(RUN_URL, jobId, status)
             req = requests.put(statusUrl, headers={self.headerstr: API_KEY})
-            logger.debug('Requests put {}'.format(req))
+            logger.debug("Requests put {}".format(req))
         else:
             logger.info("Running in offline test mode")
         logger.info("Posted status {} for job {}".format(status, jobId))
@@ -185,7 +185,7 @@ class MainDispersion(MainRunInterface):
 
         # make the graphics
         if self.modeloutput.check():
-            self.modelgraphics.inputlist = self.modeloutput.outputlist
+            self.modelgraphics.ingest_model_output(self.modeloutput)
             self.modelgraphics.postprocess()
 
         # update the run status
@@ -225,13 +225,14 @@ class MainDispersion(MainRunInterface):
 
 
 class MainEmitTimes(MainDispersion):
-
-    ilist = []
+    ilist = [('meteorologicalData','req')]
     ilist.extend(CollectEmitTimes.ilist)
     ilist.extend(OutputDispersion.ilist)
+    ilist.extend(GraphicsDispersion.ilist)
+
+    # 2023 Dec 07 (amc) added EmitFileFinder classes.
 
     def __init__(self, inp, JOBID):
-
         """
         modelrun attribute is the EnsembleDispersion class.
         """
@@ -246,28 +247,37 @@ class MainEmitTimes(MainDispersion):
         self.headerstr = None
 
         self.filelocator = None
-        #self.maptexthash = {}
+        # self.maptexthash = {}
         self.awips = True
 
         if inp["meteorologicalData"].lower() == "gefs":
             self._modelrun = GEFSEmitTimes(inp, self.JOBID)
+            self._modelgraphics = GraphicsEnsembleDispersion(inp)
         else:
             self._modelrun = CollectEmitTimes(inp, self.JOBID)
+            self._modelgraphics = GraphicsDispersion(inp)
+
+        # set the way the EmitTimes files are found.
+        if "emitfile" in inp.keys():
+            # used for polygon data insertion
+            self._modelrun._emit_file_finder = DetEmitFileFinder(
+                filename=inp["emitfile"]
+            )
+        else:
+            # usef for volcat data insertion and other data insertions.
+            self._modelrun._emit_file_finder = EmitFileFinder()
 
         inp["Use_Mastin_eq"] = False
         inp["fraction_of_fine_ash"] = 1
         self._modeloutput = OutputDispersion(inp, [])
-        self._modelgraphics = GraphicsDispersion(inp)
 
         utils.setup_logger()
 
 
 class MainInverse(MainDispersion):
-
     ilist = []
     ilist.extend(CollectInverse.ilist)
     ilist.extend(OutputDispersion.ilist)
-
 
     def __init__(self, inp, JOBID):
         """
@@ -285,20 +295,20 @@ class MainInverse(MainDispersion):
         self.headerstr = None
 
         self.filelocator = None
-        #self.maptexthash = {}
+        # self.maptexthash = {}
         self.awips = True
 
         self._modelrun = CollectInverse(inp, self.JOBID)
         inp["Use_Mastin_eq"] = False
         inp["fraction_of_fine_ash"] = 1
         self._modeloutput = OutputDispersion(inp, [])
-        self._modelgraphics = GraphicsDispersion(inp)
+
+        self._modelgraphics = GraphicsDummy(inp)
 
         utils.setup_logger()
 
 
 class MainGEFSInverse(MainInverse):
-
     # same as MainInverse but over-rides the doit method.
 
     # needs a setter since reset the model output for each GEFS run.
@@ -362,11 +372,10 @@ class MainGEFSInverse(MainInverse):
 
 
 class MainEnsemble(MainDispersion):
- 
     ilist = []
     ilist.extend(EnsembleDispersion.ilist)
     ilist.extend(OutputDispersion.ilist)
-
+    ilist.extend(GraphicsEnsembleDispersion.ilist)
 
     def __init__(self, inp, JOBID):
         """
@@ -374,7 +383,6 @@ class MainEnsemble(MainDispersion):
         """
 
         self.JOBID = JOBID  # string
-
 
         inp["jobid"] = JOBID
         self._inp = {}
@@ -384,27 +392,32 @@ class MainEnsemble(MainDispersion):
         self.headerstr = None
 
         self.filelocator = None
-        #self.maptexthash = {}
-        #self.awips = True
+        # self.maptexthash = {}
+        # self.awips = True
 
         inp["Use_Mastin_eq"] = True
         inp["fraction_of_fine_ash"] = 0.05
         self._modelrun = EnsembleDispersion(inp, self.JOBID)
         self._modeloutput = OutputDispersion(inp, [])
-        self._modelgraphics = GraphicsDispersion(inp)
+        self._modelgraphics = GraphicsEnsembleDispersion(inp)
 
         utils.setup_logger()
 
 
 class MainTrajectory(MainDispersion):
+    # 2023 DEC 16 (amc) change trajectory generator to generate_qva_traj_from_config
+    #                   in order to produce trajectories at different height levels.
 
-    ilist = []
+    
+    ilist = [('top','opt'),('bottom','opt')] #neeeded for generate_qva_from_config 
     ilist.extend(RunTrajectory.ilist)
     ilist.extend(OutputTrajectory.ilist)
+    ilist.extend(GraphicsTrajectory.ilist)
     # these are set in the main routines.
 
     def __init__(self, inp, JOBID):
-        from ashapp.trajectory_generators import generate_traj_from_config
+        from ashapp.trajectory_generators import generate_qva_traj_from_config
+
         # 14 instance attributes
         self.JOBID = JOBID  # string
 
@@ -416,19 +429,17 @@ class MainTrajectory(MainDispersion):
         self.headerstr = None
 
         self.filelocator = None
-        #self.maptexthash = {}
-        if self.inp['runflag'] == 'trajectory':
-            trajgenerator = generate_traj_from_config(inp)
-            self._modelrun = RunTrajectory(inp,trajgenerator)
-        elif self.inp['runflag'] == 'backtrajectoryfromobs':
-            self._modelrun = CollectTrajectory(inp,self.JOBID)
+        # self.maptexthash = {}
+        if self.inp["runflag"] == "trajectory":
+            trajgenerator = generate_qva_traj_from_config(inp)
+            self._modelrun = RunTrajectory(inp, trajgenerator)
+        elif self.inp["runflag"] == "backtrajectoryfromobs":
+            self._modelrun = CollectTrajectory(inp, self.JOBID)
         else:
-            logger.warning('Unknown trajectory run type {}'.format(self.inp['runflag']))
-            logger.warning('Using regular trajectory run type ')
+            logger.warning("Unknown trajectory run type {}".format(self.inp["runflag"]))
+            logger.warning("Using regular trajectory run type ")
             trajgenerator = generate_traj_from_config(inp)
-            self._modelrun = RunTrajectory(inp,trajgenerator)
-            
+            self._modelrun = RunTrajectory(inp, trajgenerator)
 
         self._modeloutput = OutputTrajectory(inp, [])
         self._modelgraphics = GraphicsTrajectory(inp)
-

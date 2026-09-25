@@ -10,8 +10,8 @@ import xarray as xr
 from utilvolc.runhelper import Helper
 
 from utilvolc.inversioninterface import TCMInterface
-from utilvolc.utiltcm import ParametersIn, InverseDat
-
+from utilvolc.utiltcm import ParametersIn
+from utilvolc import utiltcm
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +29,18 @@ logger = logging.getLogger(__name__)
 # 2023 Dec 04 (amc) added get_output method
 
 class TCM(TCMInterface):
+    """
+    This class only handles the tcm and running the inversion algorithm.
+    """
+
     def __init__(self, tag='TCM'):
         self._columns = None
         self._tcm = np.array([[]])
 
         self.tcm_name = 'TCM_sum.csv'
 
-        self.output =  None
+        self.emissions =  None #InvEstimatedEmissions class
+        self.eval= None        #InverseOut2Dat class
 
         self.tag = tag
 
@@ -43,9 +48,23 @@ class TCM(TCMInterface):
         self.lonlist = None
         self.tcm_lat = None
         self.tcm_lon = None
+        self._history = ["initialized"]
+
+
+    @property
+    def subdir(self):
+        return self._subdir
+
+    @subdir.setter
+    def subdir(self,subdir):
+        self._subdir = subdir
+
+    @property
+    def history(self):
+        return self._history
 
     def empty(self):
-        if self.n_ctrl=-1:
+        if self.n_ctrl==-1:
            return True
         else:
            return False
@@ -62,7 +81,7 @@ class TCM(TCMInterface):
         These are the column headers
         """
         return self._columns
-    
+ 
     @property
     def n_ctrl(self):
         return(self.tcm.shape[1] - 1)
@@ -122,12 +141,14 @@ class TCM(TCMInterface):
             nmax = t3.shape[1]
             iremove = []
             # very last column is obs. So start with second to last column.
-            for nnn in np.arange(nmax - 2, 0, -1):
+            for nnn in np.arange(nmax - 2, -1, -1):
                 test = t3[:, nnn]
+                print(nnn, self.columns[nnn])
                 if np.all(test == 0.0):
+                    print('removed')
                     iremove.append(nnn)
                 else:
-                    break
+                    continue
             t3 = np.delete(t3, iremove, axis=1)
             if len(self.columns) > 0:
                 self.columns = np.delete(self.columns, iremove, axis=0)
@@ -136,11 +157,11 @@ class TCM(TCMInterface):
         self.tcm_lon = lon
         #self.latlist = np.array(latlist)
         #self.lonlist = np.array(lonlist)
-        print('HERE C')
         return t3, lat, lon
 
-    def make_outdat(self, dfdat):
-        return make_outdat(self.columns, dfdat)
+    #def make_outdat(self, sourcehash):
+    #    dfdat = self.get_emis()
+    #    return make_outdat(sourcehash, self.columns, dfdat)
 
     def plot(self):
         """ """
@@ -182,6 +203,7 @@ class TCM(TCMInterface):
             fid.write(hstr + astr)
         self.tcm_name = name
         print('writing tcm to {}'.format(self.tcm_name))
+        self._history.append('written')
         return hstr + astr
 
     def make_tcm(
@@ -250,7 +272,7 @@ class TCM(TCMInterface):
         model = model.fillna(0)
         # remove columns which have no contribution at all.
         if remove_cols:
-            model = model.where(model > 0)
+            model = xr.where(model > 0,model,np.nan)
             model = model.dropna(dim="ens", how="all")
 
         model_lat = model.latitude.values.reshape(s1, 1)
@@ -299,7 +321,7 @@ class TCM(TCMInterface):
         self.tcm_lat = model_lat
         self.tcm_lon = model_lon
         # this contains the keys that can be matched in the sourcehash attribute.
-        self.tcm_columns = columns
+        self.columns = columns
         return tcm, model_lat, model_lon, columns
 
     def make_tcm_names(self):
@@ -310,12 +332,7 @@ class TCM(TCMInterface):
         name2 = "{}_{}".format(self.tag, out_name2)
         return name1, name2
 
-    def get_output(self,subdir):
-        new_name1, new_name2 = self.make_tcm_names()
-        return InverseDat(wdir=subdir, fname = new_name1, fname2 = new_name2)
-
-
-    def run(self,execdir,subdir):
+    def run(self,execdir='./'):
         """
         """
         out_name1 = "out.dat"
@@ -326,12 +343,13 @@ class TCM(TCMInterface):
         #for iii, tcm in enumerate(self.tcm_names):
 
         print("run_tcm tag", self.tag)
-        os.chdir(subdir)
+        os.chdir(self.subdir)
         print("working in ", os.getcwd())
         params = ParametersIn(os.path.join(execdir, "Parameters_in.dat.original"))
         params.change_and_write(
-            os.path.join(subdir, "Parameters_in.dat"), self.n_ctrl
+            os.path.join(self.subdir, "Parameters_in.dat"), self.n_ctrl
         )
+
 
         Helper.remove(inp_name)
 
@@ -347,35 +365,39 @@ class TCM(TCMInterface):
 
         Helper.move(out_name1, new_name1)
         Helper.move(out_name2, new_name2)
-        Helper.move("fort.188", "fort.188.{}".format(self.tag))
-        #self.output = InverseDat(wdir=subdir, fname = new_name1, fname2 = new_name2)
+
+        with open('fort.188','r') as fid:
+             temp = fid.readlines()
+        self.cost = [x for x in temp if 'Cost' in x]
+        self.gradient = [x for x in temp if 'Gradient' in x] 
+        self.result = temp[-10:]
         
 
+        Helper.move("fort.188", "fort.188.{}".format(self.tag))
+        try:
+            self.create_emissions()
+        except Exception as eee:
+            logger.warning('could not get output {}'.format(eee))
 
-# replicated in volcinverse as a method.
-def make_outdat(sourcehash, tcm_columns, dfdat):
-    """
-    makeoutdat for InverseAshPart class.
-    dfdat : pandas dataframe output by InvEstimatedEmissions class get_emis method.
-    Returns
-    vals : tuple (date, height, emission mass, particle size)
-    """
-    # matches emissions from the out.dat file with
-    # the date and time of emission.
-    # uses the tcm_columns array which has the key
-    # and the sourehash dictionary which contains the information.
-    datelist = []
-    htlist = []
-    valra = []
-    psizera = []
-    for val in zip(tcm_columns, dfdat[1]):
-        shash = sourcehash[val[0][0]]
-        datelist.append(shash["sdate"])
-        htlist.append(shash["bottom"])
-        valra.append(val[1])
-        psizera.append(val[0][1])
-    vals = list(zip(datelist, htlist, valra, psizera))
-    return vals
+    def create_emissions(self):
+        new_name1, new_name2 = self.make_tcm_names()
+        fname = os.path.join(self.subdir,new_name1)
+        self.emissions= utiltcm.InvEstimatedEmissions(fname,columns=self.columns)
+        self.emissions.read(self.subdir)
+
+    def create_outdat(self,subdir):
+        new_name1, new_name2 = self.make_tcm_names()
+        fname = os.path.join(subdir,new_name2)
+        self.out2dat = utiltcm.InverseOut2Dat(fname)
+        self.out2dat.read(subdir)
+
+
+    #def get_emissions_df(self,sourcehash):
+    #    self.emissions.sourcehash = sourcehash
+    #    return self.emissions.make_emissions()
+        
+ 
+
 
 
 # TODO also in volcinverse as a method.
@@ -416,7 +438,6 @@ def make_outdat_df(vals, savename=None, part="basic"):
         dfout.columns = [0, 1, 2]
         iii = 1
         cols = 0
-
     if part == "basic":
         dfout.columns = colnames
         return dfout

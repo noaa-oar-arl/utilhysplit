@@ -98,6 +98,9 @@ def create_run_instance(jid, runinp):
                  set of heights
     trajectory : gefs : runs forward trajectories at predetermined set of heights
                  for each GEFS ensemble member.
+
+    If qva is in the runflag then
+    
     """
     logger.info("Creating run Instance")
 
@@ -118,14 +121,26 @@ def create_run_instance(jid, runinp):
             crun = MainDispersion(runinp, jid)
             logger.info("Dispersion")
 
+    elif 'polygon' in runinp["runflag"].lower():
+        from maindispersion import MainEmitTimes
+        from utilhysplit import polygon2emit
+        # first need to write the emit-times file.
+        runinp['emitfilename'] = '{}/{}.{}'.format(runinp['WORK_DIR'],runinp['emitfilename'],jid)
+        polygon2emit.polygon2emit(runinp['polygon'],height=runinp['top'],
+                                  time=runinp['start_date'],thickness=1000,
+                                  filename=runinp['emitfilename'])
+       
+        # then create the HYSPLIT runs based on the emit-times file. 
+        crun = MainEmitTimes(runinp, jid)
+        logger.info("Use EmitTimes created from polygon")
+
     elif 'datainsertion' in runinp["runflag"].lower():
         # This handles GEFS as well as deterministic runs.
         from maindispersion import MainEmitTimes
-
         crun = MainEmitTimes(runinp, jid)
         logger.info("Use EmitTimes files")
 
-    elif 'inverse' in runinp["runflag"]:
+    elif 'inverse' in runinp["runflag"].lower():
         if runinp["meteorologicalData"].lower() == "gefs":
             # this one generates a separate netcdf file
             # for each gefs member
@@ -166,6 +181,7 @@ def create_run_instance(jid, runinp):
     return crun
 
 
+
 if __name__ == "__main__":
     # Configure the logger so that log messages appears in the "Model Status" text box.
     # setup_logger(level=logging.DEBUG)
@@ -183,6 +199,8 @@ if __name__ == "__main__":
     if RUNTYPE == "test":
         logging.getLogger().setLevel(20)
         logging.basicConfig(stream=sys.stdout)
+
+        # the test gets inputs from a configuration file/
         configname = "config.{}.txt".format(JOBID)
         logger.info("CONFIG FILE {}".format(configname))
         logger.info("TESTING")
@@ -192,9 +210,7 @@ if __name__ == "__main__":
             finputs.add_inverse_params()
             logger.info("Inverse run")
         inp = finputs.inp
-
         arun = create_run_instance(JOBID, inp)
-        
         arun.doit()
         sys.exit(1)
 
@@ -218,14 +234,14 @@ if __name__ == "__main__":
                 rrr = requests.get(inputUrl, headers={headerstr: API_KEY})
                 aaa = rrr.json()
                 JOBID = aaa["id"]
-            elif RUNTYPE == "dispersion":
+            else:
                 inputUrl = "{}/runinput/{}".format(RUN_URL, JOBID)
                 rrr = requests.get(inputUrl, headers={headerstr: API_KEY})
                 aaa = rrr.json()
-            elif RUNTYPE == "datainsertion":
-                inputUrl = "{}/datainsertion/{}".format(RUN_URL, JOBID)
-                rrr = requests.get(inputUrl, headers={headerstr: API_KEY})
-                aaa = rrr.json()
+            #elif RUNTYPE == "datainsertion":
+            #    inputUrl = "{}/datainsertion/{}".format(RUN_URL, JOBID)
+            #    rrr = requests.get(inputUrl, headers={headerstr: API_KEY})
+            #    aaa = rrr.json()
             # print(json.dumps(a, indent=4))
             inp = setup.parse_inputs(aaa)
             arun = create_run_instance(JOBID, inp)

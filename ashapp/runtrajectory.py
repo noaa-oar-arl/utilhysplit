@@ -21,7 +21,8 @@ import numpy as np
 
 from utilhysplit import hcontrol
 from utilhysplit.metfiles import MetFileFinder
-from utilvolc.runhelper import Helper, JobFileNameComposer, is_input_complete
+from utilvolc.runhelper import Helper, is_input_complete
+from ashapp.filenamer import  JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
 
 # from runhandler import ProcessList
@@ -31,6 +32,10 @@ logger = logging.getLogger(__name__)
 
 
 def round_start_time(stime, mround=5):
+    if isinstance(stime, np.datetime64):
+        # Convert numpy.datetime64 to datetime.datetime
+        stime = stime.astype('datetime64[m]').astype(datetime.datetime)
+
     # round down
     minutes = int(stime.minute - stime.minute%mround)
     newtime = datetime.datetime(stime.year, stime.month, stime.day, stime.hour, minutes)
@@ -46,7 +51,6 @@ class RunTrajectory(ModelRunInterface):
         ("durationOfSimulation",'req'),
         ("latitude",'req'),
         ("longitude",'req'),
-        ("height",'opt'),
         ("start_date",'req'),
         ("jobid",'req'),
         ("jobname",'req')
@@ -57,8 +61,6 @@ class RunTrajectory(ModelRunInterface):
         """
         A trajectory run from inputs.
 
-        inp['height'] may be a list of heights or a single height in meters.
- 
         durationOfSimulation is number or hours for simulation to run.
                              A negative number will result in backwards trajectories.
 
@@ -261,7 +263,7 @@ class RunTrajectory(ModelRunInterface):
             logger.info("execute {}".format(type(command)))
             Helper.execute(command)
         else:
-            logger.info("No run to execture")
+            logger.info("No run to execute")
 
     def run_model(self, overwrite=False):
         # make control and setup files

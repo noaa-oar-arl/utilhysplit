@@ -424,12 +424,15 @@ class CompareMetProfile:
         ax2.invert_yaxis()
         return ax1, ax2
 
-    def check_3d(self,var,date,legend=False,ax=None):
+    def check_3d(self,var,date,legend=False,ax=None,only=None):
         if not ax:
             fig = plt.figure(10)
             ax = fig.add_subplot(1,1,1)
         #iii=0
         for prof, label, color in self.generate_prof():
+            if isinstance(only,str):
+               if not label==only: continue
+            print(label)
             if var not in prof.var3d: continue
             df = prof.get_3dvar_df()
             df = df[df['time'] == date]

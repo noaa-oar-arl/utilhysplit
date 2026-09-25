@@ -23,15 +23,12 @@ from utilvolc.volcat import flist2eventdf
 
 from utilhysplit.runhandler import ProcessList
 from utilhysplit.plotutils import map_util
-import utilhysplit.evaluation.web_ensemble_plots as wep
 from utilvolc import make_data_insertion as mdi
-from utilhysplit.evaluation import ensemble_tools
 
 from utilvolc.volcat_files import EventFile
 from utilvolc.volcat_files import get_summary_file_df
 from utilvolc.volcat_files import get_log_files
 from utilvolc.volcat_files import check_file
-from utilvolc.utiltraj import trajectory_input_csv
 
 from utilvolc import volcat_plots as vp
 
@@ -54,6 +51,8 @@ logger = logging.getLogger(__name__)
  2023 DEC 04 AMC added staticmethod make_ax
  2023 DEC 04 AMC added plot_polygons method
  2023 DEC 04 AMC added search input to create_event_from_fnames function
+ 2024 FEB 25 AMC change so emit-times writes rate in mg/h not g/h.
+ 2024 Mar 01 AMC better plotting for polygons and plot function using map_util
 """
 
 #TODO 
@@ -656,7 +655,7 @@ class Events:
         ## TO DO - read config file to give summary of run.
         return difiles
 
-    def write_emit(self, overwrite=False, daterange=None, verbose=False):
+    def write_emit(self, unit='mg',overwrite=False, daterange=None, verbose=False):
         """
         write emit-times files.
         """
@@ -691,6 +690,10 @@ class Events:
                 pollnum=pollnum,
                 pollpercents=pollpercents,
             )
+            # write so that the rate is in mg/h.
+            # volcat data is in g/m2.
+            volcemit.rate_unit = '{}/h'.format(unit)
+            print('UNIT', volcemit.unit_conversion)
             if not volcemit.check_for_file() or overwrite:
                 oname = volcemit.write_emit(area_file=False, clip=clip, verbose=verbose)
                 try:
@@ -972,7 +975,7 @@ class Events:
                 if pd.to_datetime(vmass.time.values) > daterange[1]:
                     continue
 
-            transform = wep.get_transform(central_longitude=-180)
+            transform = map_util.get_transform(central_longitude=-180)
             fig, axarr = plt.subplots(
                 nrows=1,
                 ncols=2,
@@ -1017,9 +1020,9 @@ class Events:
             if vloc[0] != -999:
                 ax2.plot(vloc[1], vloc[0], "m^", markersize=5)
             # ax = plt.gca()
-            transform = wep.get_transform()
-            wep.format_plot(ax, transform)
-            wep.format_plot(ax2, transform)
+            transform = map_util.get_transform()
+            map_util.format_plot(ax, transform)
+            map_util.format_plot(ax2, transform)
 
             plt.tight_layout()
             plt.show()
@@ -1098,37 +1101,49 @@ class Events:
         import cartopy
         from utilhysplit.plotutils import vtools
         from utilhysplit.plotutils import colormaker
+        from utilhysplit.plotutils import map_util
         ncolor = len(vlist)
         cmake = colormaker.ColorMaker('viridis',ncolor,ctype='rgb')
         clrs = cmake() 
+        das = self.events
 
+        lonlist = []
+        latlist = []
+        for jjj, iii in enumerate(vlist):
+            lon,lat = volcat.get_polygon(das[iii])
+            lonlist.extend(list(lon.values))
+            latlist.extend(list(lat.values))
+        params = map_util.PolygonPlotParams(lonlist,latlist)
+        central_longitude = params.central_longitude
+        dy = params.ymax - params.ymin
+        dx = params.xmax - params.xmin
         transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
         fig, ax = plt.subplots(
             nrows=1,
             ncols=1,
-            figsize=(20, 5),
-            constrained_layout=True,
+            figsize=(10, 5),
+            constrained_layout=False,
             subplot_kw={"projection": transform},
         )
         vloc = self.get_vloc()
-        das = self.events
         volcat_transform = cartopy.crs.PlateCarree(central_longitude=0)
         for jjj, iii in enumerate(vlist):
-            print(iii)
-            print(das[iii].time.values)
             lon,lat = volcat.get_polygon(das[iii])
-            print(clrs[jjj])
-            lon2 = [360+x if x < 0 else x for x in lon.values]
-            ax.plot(lon2,lat.values,color=clrs[jjj],transform=volcat_transform)
+            lon2 = lon
+            if central_longitude==180:
+                lon2 = [360+x if x < 0 else x for x in lon.values]
+            ax.plot(lon2,lat.values,linestyle='-',marker='',color=clrs[jjj],transform=volcat_transform)
+        ax.set_ylim(params.ymin,params.ymax)
+        ax.set_xlim(params.xmin,params.xmax)
         ax.plot(vloc[1],vloc[0],'r^',markersize=10,transform=volcat_transform)
-        wep.format_plot(ax, transform)
-
+        map_util.format_plot(ax, volcat_transform,fsz=10,xticks=params.xticks,yticks=params.yticks)
+        return ax
 
     def plots(
         self,
         pstep,
         pc=False,
-        levels=[0.02, 0.2, 0.3, 2, 5, 10, 50],
+        levels=[0.02, 0.2, 0.3, 2, 5, 10,25,50,100], hlevels=np.arange(0,30,1),
         vlist=None,
         central_longitude=0,
     ):
@@ -1136,8 +1151,8 @@ class Events:
         from matplotlib.colors import BoundaryNorm
         import cartopy
         from utilhysplit.plotutils import vtools
+        from utilhysplit.plotutils import map_util
 
-        transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
         volcat_transform = cartopy.crs.PlateCarree(central_longitude=0)
 
         vloc = self.get_vloc()
@@ -1155,8 +1170,14 @@ class Events:
 
         temp = None
         for jjj, iii in enumerate(vlist):
-            ax, ax2, fig = self.make_ax(transform)
             vht = volcat.get_height(das[iii], clip=True)
+            params = map_util.PlotParams(vht,minval=1,nticks=4)
+            central_longitude = params.central_longitude
+            transform = cartopy.crs.PlateCarree(central_longitude=central_longitude)
+
+            cmap = plt.get_cmap("Reds")
+            normh = BoundaryNorm(hlevels, ncolors=cmap.N, clip=False)
+            ax, ax2, fig = self.make_ax(transform)
             sns.set()
             print(iii)
             print("total mass", das[iii].ash_mass_loading_total_mass.values)
@@ -1178,13 +1199,14 @@ class Events:
                tlist = list(zip(lon,lat,ht))
                tlist = [x for x in tlist if ~np.isnan(x[2])]
                tnew = list(zip(*tlist))
-               ax.scatter(tnew[0],tnew[1],c=tnew[2],s=2,transform=volcat_transform)
+               cb1 = ax.scatter(tnew[0],tnew[1],c=tnew[2],s=2,transform=volcat_transform)
             else: 
-                vht.isel(time=0).plot.pcolormesh(
+                cb1 = vht.isel(time=0).plot.pcolormesh(
                     ax=ax,
                     x="longitude",
                     y="latitude",
                     cmap="Reds",
+                    norm=normh,
                     transform=volcat_transform,
                 )
 
@@ -1212,12 +1234,23 @@ class Events:
                     norm=norm,
                     transform=volcat_transform,
                 )
-            plt.colorbar(cb)
+            masscb = plt.colorbar(cb)
+            masscb.set_label('Column mass loading g m$^{-2}$')
+
+            #cb1.set_label('Height')
+            #htcb = ax.colorbar(cb)
+            #masscb.set_label('Column mass loading g m$^{-2}$')
+
+            ax.plot(vloc[1], vloc[0], "m^", markersize=10, transform=volcat_transform)
             ax2.plot(vloc[1], vloc[0], "m^", markersize=10, transform=volcat_transform)
-            wep.format_plot(ax, transform)
-            wep.format_plot(ax2, transform)
+            map_util.format_plot(ax, volcat_transform, xticks=params.xticks, yticks=params.yticks)
+            map_util.format_plot(ax2, volcat_transform,xticks=params.xticks,yticks=params.yticks)
+            #ax.set_xlim(params.xmin,params.xmax)
+            #ax.set_ylim(params.ymin,params.ymax)
+            #ax2.set_xlim(params.xmin,params.xmax)
+            #ax2.set_ylim(params.ymin,params.ymax)
             plt.show()
-            yield fig, ax, ax2, temp
+            #yield fig, ax, ax2, temp
 
 
 def create_event_from_fnames(inp, vname, volclistfile=None, search="VOLCAT*nc"):

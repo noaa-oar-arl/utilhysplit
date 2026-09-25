@@ -27,7 +27,8 @@ import numpy as np
 
 from utilhysplit import hcontrol
 from utilhysplit.metfiles import MetFileFinder
-from utilvolc.runhelper import is_input_complete, Helper, JobFileNameComposer
+from utilvolc.runhelper import is_input_complete, Helper
+from ashapp.filenamer import  JobFileNameComposer
 from ashapp.ashruninterface import ModelRunInterface
 from ashapp.level_setter import get_levelsetter
 
@@ -111,7 +112,7 @@ class RunDispersion(ModelRunInterface):
         self._metfilefinder.set_archives_directory(inp["archivesDirectory"])
   
         self._levelsetter = get_levelsetter(self.inp)
-        print('LEVELS', self._levelsetter.levlist)
+        print('bbb LEVELS', self._levelsetter.levlist)
 
         # self._filehash and self_filelist are
         # set in the filelocator setter method.
@@ -174,7 +175,8 @@ class RunDispersion(ModelRunInterface):
 
     @property
     def filelocator(self):
-        self._filelist = list(set(self._filelist))
+        # why is this here?
+        # self._filelist = list(set(self._filelist))
         return self._filelocator
 
     @filelocator.setter
@@ -274,7 +276,7 @@ class RunDispersion(ModelRunInterface):
     def create_run_command(self):
         command = [
             os.path.join(self.inp["HYSPLIT_DIR"], "exec", "hycs_std"),
-            str(self.filelocator.job),
+            str(self.filelocator.make_suffix()),
         ]
         return command
 

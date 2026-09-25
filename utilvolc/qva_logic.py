@@ -23,7 +23,7 @@ from utilhysplit.runhandler import ProcessList
 from utilhysplit.plotutils import map_util
 import utilhysplit.evaluation.web_ensemble_plots as wep
 from utilvolc import make_data_insertion as mdi
-from utilhysplit.evaluation import ensemble_tools
+from utilhysplit import ensemble_tools
 
 from utilvolc.volcat_files import EventFile
 from utilvolc.volcat_files import get_summary_file_df

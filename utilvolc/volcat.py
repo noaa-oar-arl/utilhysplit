@@ -8,16 +8,21 @@ from os import walk
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeat
-import monet
+#import monet
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
 import xarray as xr
-from monetio.models import hysplit
+from utilhysplit import hysplit
 from utilhysplit import hysplit_gridutil
-
 from utilvolc.get_area import get_area
-from utilvolc.helperinterface import FileNameInterface
+from utilvolc.volcat_name import VolcatName, VolcatNameA
+#from utilvolc.volcat_helpers import (
+#    bbox,
+#    _get_latlon,
+#    _get_time,
+#)
+import netCDF4
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +113,14 @@ Improvements to be done:
 
 
 """
+
+
+def explore_dset(dset):
+    for var in dset.data_vars:
+        if 'time' in var:
+            print(var, dset[var].values)
+
+
 
 
 def check_vals(idate, ghash, dset):
@@ -217,7 +230,7 @@ def open_dataset(
             fname, mask_and_scale=mask_and_scale, decode_times=decode_times
         )
         # not needed for new Bezy data.
-    if "Dim1" in dset.dims.keys() and "Dim2" in dset.dims.keys():
+    if "Dim1" in dset.sizes and "Dim2" in dset.sizes:
         dset = dset.rename({"Dim1": "y", "Dim0": "x"})
     # if "some_vars.nc" in fname:
     #    pass
@@ -286,6 +299,34 @@ def flist2eventdf(flist, inphash):
             vframe[key.lower()] = inphash[key.lower()]
     return vframe
 
+
+
+def find_volcat_from_log(logpath='volcat_log.csv',vid=None,daterange=None):
+    """
+    May 2025 add to deal with new file formats.
+    logname : full path to the log file.
+    vid : volcano id
+    daterange : [datetime, datetime] or None
+    Reads the log file and returns a list of volcat files.
+    logname: name of the log file.
+    Returns:
+    list of volcat files.
+    """
+    if not os.path.isfile(logpath):
+        print('Log file not found {}'.format(logpath))
+        return []
+    df = pd.read_csv(logpath)
+    df = df[df['downloaded'] == True]
+    if df.empty:
+        print('No downloaded files in log file {}'.format(logpath))
+        return []
+    if daterange is not None:
+        if isinstance(daterange, (list, np.ndarray)):
+            df = df[df["s_date"] >= daterange[0]]
+            df = df[df["s_date"] < daterange[1]] 
+    if vid is not None:
+        df = df[df["event vid"] == vid]
+    return df.reset_index()
 
 def get_volcat_name_df(tdir, daterange=None, vid=None, fid=None, include_last=False):
     """
@@ -381,17 +422,15 @@ def get_volcat_list(
                 )
             )
         else:
-            das.append(xr.open_dataset(os.path.join(tdir, iii)))
+            das.append(xr.open_dataset(os.path.join(tdir, iii),engine='netcdf4'))
     return das
 
 
 def write_parallax_corrected_files(
     tdir,
     wdir,
-    vid=None,
-    daterange=None,
+    flist,
     verbose=False,
-    flist=None,
     gridspace=None,
     tag="pc",
 ):
@@ -400,10 +439,8 @@ def write_parallax_corrected_files(
     cause a problem with the function. Flist must not include directories, just file names***
     tdir : str : location of volcat files.
     wdir : str : location to write new files
-    vid : volcano id : if None will find all
-    daterange : [datetime, datetime] : if None will find all.
-    verbose: boolean
     flist: list of files? ***NEED TO SPECIFY FILE LIST***
+    verbose: boolean
     gridspace: float : grid size of pc array
     tag: used to create filename of new file.
 
@@ -423,10 +460,6 @@ def write_parallax_corrected_files(
         if verbose:
             print("Using filenamse from list")
         vlist = flist
-    else:
-        if verbose:
-            print("Finding filenames")
-        vlist = find_volcat(tdir, vid, daterange, verbose=verbose, return_val=2)
 
     for iii, val in enumerate(vlist):
         if verbose:
@@ -554,6 +587,7 @@ def test_volcat(tdir, daterange=None, verbose=True):
             print("failed")
 
 def get_name_class(fname):
+    original_name = fname
     if "/" in fname:
         temp = fname.split("/")
         fname = temp[-1]
@@ -562,198 +596,9 @@ def get_name_class(fname):
     fname = fname.replace("FULL_DISK", "FullDisk")
     temp = fname.split("_")
     # current name style with two feature id tags.
-    if temp[5][0] == 'g': return VolcatName(fname)
+    if temp[5][0] == 'g': return VolcatName(fname,original_name)
     # old name style with only one feature id tags. Bezymianny 2020 data is in this format.
-    elif temp[5][0] == 'v': return VolcatNameA(fname)
-
-
-class VolcatName(FileNameInterface):
-    """
-    12/18/2020 works with 'new' data format.
-    parse the volcat name to get information.
-    attributes:
-    self.fname name of file
-    self.date date associated with file
-    self.vhash is a dictionary which contains info
-    gleaned from the naming convention.
-
-    methods:
-    compare: returns what is different between two file names.
-    """
-
-    def __init__(self, fname):
-        # if full directory path is input then just get the filename
-        self.fname = fname
-        if isinstance(fname, str):
-            if "/" in fname:
-                temp = fname.split("/")
-                self.fname = temp[-1]
-        self.vhash = {}
-        self.date = None
-        self.image_date = None
-        self.event_date = None
-        self.image_dtfmt = "s%Y%j_%H%M%S"
-        self.event_dtfmt = "b%Y%j_%H%M%S"
-
-        self.make_keylist()
-        self.make_datekeys()
-
-        self.pc_corrected = False
-        # parse only if a string is given.
-        if isinstance(fname, str):
-            self.parse(self.fname)
-        self.vhash["filename"] = fname
-
-    def make_datekeys(self):
-        self.datekeys = [3, 4, 10, 11]
-
-    def make_keylist(self):
-        self.keylist = ["algorithm name"]
-        self.keylist.append("satellite platform")
-        self.keylist.append("event scanning strategy")
-        self.keylist.append("observation_date")  # should be image date (check)
-        self.keylist.append("image time")
-        self.keylist.append("feature_id")
-        self.keylist.append("event vid")
-        self.keylist.append("description")
-        self.keylist.append("WMO satellite id")
-        self.keylist.append("image scanning strategy")
-        self.keylist.append("event_date")  # should be event date (check)
-        self.keylist.append("event_time")
-        self.keylist.append("feature_id")
-
-    def __lt__(self, other):
-        """
-        sort by
-        volcano id first.
-        event date
-        image date
-        feature id if it exists.
-        """
-        if self.vhash["event vid"] < other.vhash["event vid"]:
-            return True
-        if "fid" in self.vhash.keys() and "fid" in other.vhash.keys():
-            if self.vhash["fid"] < other.vhash["fid"]:
-                return True
-        if self.event_date < other.event_date:
-            return True
-        if self.image_date < other.image_date:
-            return True
-        sortlist = [
-            "feature id",
-            "image scanning strategy",
-            "WMO satellite id",
-            "description",
-            "event scanning strategy",
-            "satellite platform",
-            "algorithm name",
-        ]
-        for key in sortlist:
-            if key in other.vhash.keys() and key in self.vhash.keys():
-                if self.vhash[key] < other.vhash[key]:
-                    return True
-
-    def compare(self, other):
-        """
-        other is another VolcatName object.
-        Returns
-        dictionary of information which is different.
-        values is a  tuple of (other value, self value).
-        """
-        diffhash = {}
-        for key in self.keylist:
-            if key in other.vhash.keys() and key in self.vhash.keys():
-                if other.vhash[key] != self.vhash[key]:
-                    diffhash[key] = (other.vhash[key], self.vhash[key])
-        return diffhash
-
-    def __str__(self):
-        # 2023 14 Jan (amc) make sure keys are in the dictionary.
-        keys = self.vhash.keys()
-        keylist = [x for x in self.keylist if x in keys]
-        val = [str(self.vhash[x]) for x in keylist]
-        return str.join("_", val)
-
-    @staticmethod
-    def split_name(fname):
-        # if full_disk in filename replace with fulldisk because _ is used as separator
-        fname = fname.replace("Full_Disk", "FullDisk")
-        fname = fname.replace("FULL_DISK", "FullDisk")
-        temp = fname.split("_")
-        return temp
-
-    def parse(self, fname):
-        temp = self.split_name(fname)
-
-        if "pc" in temp[-1]:
-            self.pc_corrected = True
-        jjj = 0
-        for iii, key in enumerate(self.keylist):
-            val = temp[jjj]
-            # nishinoshima files have a g00? code before the volcano id.
-            if key == "fid":
-                if val[0] == "g":
-                    self.vhash[key] = val
-                else:
-                    continue
-            self.vhash[key] = val
-            jjj += 1
-
-        # Image date marks date of the data collection
-        dk = self.datekeys
-        if isinstance(dk[0], int) and isinstance(dk[1], int):
-            dstr = "{}_{}".format(
-                self.vhash[self.keylist[dk[0]]], self.vhash[self.keylist[dk[1]]]
-            )
-            self.image_date = datetime.datetime.strptime(dstr, self.image_dtfmt)
-
-        # Event date is start of event
-        if isinstance(dk[2], int) and isinstance(dk[3], int):
-            dstr = "{}_{}".format(
-                self.vhash[self.keylist[dk[2]]], self.vhash[self.keylist[dk[3]]]
-            )
-            self.event_date = datetime.datetime.strptime(dstr, self.event_dtfmt)
-            self.vhash[self.keylist[dk[3]]] = self.vhash[self.keylist[dk[3]]].replace(
-                ".nc", ""
-            )
-
-        # this is the date associated with the data
-        self.vhash["observation_date"] = self.image_date
-        # this date may be the same as the image date or earlier
-        self.vhash["event date"] = self.event_date
-        self.date = self.image_date
-        return self.vhash
-
-
-    @property
-    def image_date_str(self):
-        return self.image_date.strftime(self.image_dtfmt)
-
-    def make_filename(self):
-        """
-        To do: returns filename given some inputs.
-        """
-        return -1
-
-class VolcatNameA(VolcatName):
-    # for the Bezymianny data and some older data the first feature id is not there.
-
-    def make_datekeys(self):
-        self.datekeys = [3, 4, 9, 10]
-
-    def make_keylist(self):
-        self.keylist = ["algorithm name"]
-        self.keylist.append("satellite platform")
-        self.keylist.append("event scanning strategy")
-        self.keylist.append("observation_date")  # should be image date (check)
-        self.keylist.append("image time")
-        self.keylist.append("event vid")
-        self.keylist.append("description")
-        self.keylist.append("WMO satellite id")
-        self.keylist.append("image scanning strategy")
-        self.keylist.append("event_date")  # should be event date (check)
-        self.keylist.append("event_time")
-        self.keylist.append("feature_id")
+    elif temp[5][0] == 'v': return VolcatNameA(fname,original_name)
 
 
 def bbox(darray, fillvalue):
@@ -775,7 +620,7 @@ def bbox(darray, fillvalue):
     if np.nanmin(a[0]) != 0.0 and np.nanmin(a[1]) != 0.0:
         bbox = (
             [np.nanmin(a[0] - 3), np.nanmin(a[1]) - 3],
-            [np.nanmax(a[0] + 3), np.nanmax(a[1]) + 3],
+            [np.nanmax(a[0] + 3), np.nanmax(a[1] + 3)],
         )
     else:
         bbox = ([np.nanmin(a[0]), np.nanmin(a[1])], [np.nanmax(a[0]), np.nanmax(a[1])])
@@ -791,24 +636,45 @@ def _get_time(dset):
     # June 2023 There was some issue with this for the reprocessed Popo data.
 
     import pandas as pd
+    from datetime import timedelta
 
-    # temp2 = dset.full_image_start_time.values
-    # scan start and end times
-    # temp2 = dset.time_bounds.values[0]
-
-    # full image stat. this corresponds to the idate.
-    # temp2 = dset.full_image_start_time.values
-
-    temp2 = dset.attrs["event_observation_time"]
-    # temp3 = dset.attrs["time_coverage_end"]
-    # if temp1 != temp2:
-    #   logger.warning('Different times in volcat {} {}'.format(temp1,temp2,temp3))
     dstr = "%Y-%m-%dT%H:%M:%SZ"
-    # time string sometimes has seconds as a decimal which is not recognized by strptime.
-    # Remove the decimal part.
-    iii = str.find(temp2, ".")
-    temp2 = temp2[0:iii] + "Z"
-    time = datetime.datetime.strptime(temp2, dstr)
+    if 'event_observation_time' in dset.attrs.keys():
+        temp2 = dset.attrs["event_observation_time"]
+        time = datetime.datetime.strptime(temp2, dstr)
+    elif 'event_observation_time' in dset.data_vars:
+        temp2 = dset.event_observation_time.values
+        if len(temp2) == 1:
+            temp2 = temp2[0]
+            time = datetime.datetime.strptime(temp2, dstr)
+        else:
+            # Calculate average time when multiple times are provided
+            time_list = []
+            for ttt in temp2:
+                try:
+                    time_list.append(pd.to_datetime(ttt, format=dstr))
+                except:
+                    # Skip any times that can't be parsed
+                    continue
+            
+            if time_list:
+                # Convert datetime objects to timestamps (seconds since epoch)
+                timestamps = [t.timestamp() for t in time_list]
+                # Calculate the average timestamp
+                avg_timestamp = sum(timestamps) / len(timestamps)
+                # Convert back to datetime
+                time = datetime.datetime.fromtimestamp(avg_timestamp)
+            else:
+                # If no valid times were found, use current time
+                time = datetime.datetime.now()
+                print("Warning: No valid times found in event_observation_time")
+    print('Time', time)
+    # Handle the decimal part in the time string
+    #iii = str.find(temp2, ".")
+    #if iii > 0:
+    #    temp2 = temp2[0:iii] + "Z"
+    #    time = datetime.datetime.strptime(temp2, dstr)
+    
     dset["time"] = time
     dset = dset.set_coords(["time"])
     # expand_dims has been moved to the get_data function.
@@ -1194,19 +1060,33 @@ def correct_pc(dset, gridspace=None):
         print("warning: coordinate values are not the same")
     # ---------------------------------------
 
+    if len(dset.feature_area.values) >1:
+       area = dset.feature_area.values.sum()
+    else:
+       area = dset.feature_area.values
+
+    if len(dset.ash_mass_loading_total_mass.values) > 1:
+        mass = dset.ash_mass_loading_total_mass.values.sum()
+    else:   
+        mass = dset.ash_mass_loading_total_mass.values 
+
     dnew = xr.Dataset(
         {
             "ash_mass_loading": newmass,
             "ash_cloud_height": newhgt,
             "effective_radius_of_ash": newrad,
-            "ash_mass_loading_total_mass": dset.ash_mass_loading_total_mass.values,
-            "feature_area": dset.feature_area.values,
+            "ash_mass_loading_total_mass": mass,
+            "feature_area": area,
             "feature_age": dset.feature_age.values,
             "feature_id": dset.feature_id.values,
         }
     )
 
     dnew["time"] = time
+    dnew.ash_mass_loading_total_mass.attrs.update(
+        dset.ash_mass_loading_total_mass.attrs
+    )
+    dnew.feature_area.attrs.update(dset.feature_area.attrs)
     dnew.ash_mass_loading.attrs.update(dset.ash_mass_loading.attrs)
     dnew.ash_cloud_height.attrs.update(dset.ash_cloud_height.attrs)
     dnew.effective_radius_of_ash.attrs.update(dset.effective_radius_of_ash.attrs)

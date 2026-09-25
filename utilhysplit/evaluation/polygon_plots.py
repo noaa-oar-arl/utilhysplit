@@ -19,7 +19,8 @@ import xarray as xr
 
 from utilhysplit.evaluation import web_ensemble_plots as wep
 from utilhysplit.evaluation.ensemble_polygons import HeightPolygons
-from utilhysplit.evaluation.ensemble_tools import topheight
+from utilhysplit.ensemble_tools import topheight
+from utilhysplit.plotutils.map_util import format_plot
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class PlotVAA:
             handles, labels = tpoly.plot(
                 ax=self.axra[iii], vloc=vloc, pbuffer=0.15, legend=False, linewidth=lw
             )
-            wep.format_plot(self.axra[iii], self.transform)
+            format_plot(self.axra[iii], self.transform)
             handles, labels = sort_labels(handles, labels)
             self.axra[iii].legend(handles, labels, fontsize=20)
             if plotmass:
@@ -178,7 +179,7 @@ class PlotVAA:
             handles, labels = tpoly.plot(
                 ax=self.axra[iii], vloc=vloc, pbuffer=0.15, legend=False, linewidth=lw
             )
-            wep.format_plot(self.axra[iii], self.transform)
+            format_plot(self.axra[iii], self.transform)
             hhh.extend(handles)
             lab.extend(labels)
             time = pd.to_datetime(time)

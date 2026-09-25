@@ -89,7 +89,8 @@ class CollectTrajectory(ModelCollectionInterface):
         # first level to start trajectories at in km above msl. 
         #  use at or slightly below vent height. 
         minht = floor(inp['bottom'])/1000.0
-        for time, trajgen in timegenerate_height_traj_from_obsdf(csvname,minht=minht):
+        maxht = floor(inp['top'])/1000.0
+        for time, trajgen in timegenerate_height_traj_from_obsdf(csvname,minht=minht,maxht=maxht):
             inp['start_date'] = time
             inp['jobid'] = '{}.{}'.format(self.JOBID, iii)
             run = RunTrajectory(inp,trajgen)
