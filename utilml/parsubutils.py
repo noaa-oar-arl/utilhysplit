@@ -694,7 +694,35 @@ class MassFit():
         #lonra = np.array([lonmin,lon,lonmax])
         #htra = np.array([htmin,ht,htmax]) 
         return latra, lonra, htra 
- 
+
+    def get_conc_nogrid(self,
+                 inra,
+                 dd,
+                 dh, 
+                 buf=0.2, 
+                 midlat=45,
+                 bnds=None, 
+                 time=None, 
+                 mass=None,
+                 lat=None,
+                 lon=None,
+                 ht=None,
+                 verbose=False):
+        if not mass: 
+           mass = self.mass
+        score = self.gfit.score_samples(inra)
+        one = np.exp(score) * dd**2 * dh
+        deg2meter = 111e3
+        dy = dd * deg2meter
+        #midlat = latra.mean()
+        dx = dd * deg2meter * np.cos(midlat*np.pi/180.0)
+        volume = dh * dx * dy
+        if self.htunits == 'km': volume = volume * 1000.0
+        conc = np.exp(score)*dd**2 * dh * mass / volume
+        conc = np.exp(score)* mass
+        return conc
+
+` 
     def get_conc(self,
                  dd,
                  dh, 

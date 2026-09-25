@@ -13,6 +13,13 @@ from keras.optimizers import RMSprop
 # originally used to see if could predict peaks in SO2 measurements at airnow stations
 # based on inputs of wind speed and direction.
 
+# do the runs. Fit GMM to get gaussians.
+# Input is GMM parameters from one run.
+# target is GMM parameters from all members.
+# can we use time evolution a well to predict what the next time period is?
+# 
+
+
 def heatmap(df):
     fs = 14
     plt.matshow(df.corr(),cmap='viridis')

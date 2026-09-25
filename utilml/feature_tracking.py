@@ -1,11 +1,17 @@
+"""
+
+
+"""
+
+
 import datetime
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.dates import DateFormatter
-import kasatochi_example as ke
-from utilhysplit import par2conc
+#import kasatochi_example as ke
+from utilml import par2conc
 import seaborn as sns
 
 
@@ -154,7 +160,7 @@ def compare_sub(fit1, fit2):
     return s12, s21, s11, s22
 
 
-def compare(ft1, ft2, name1="1", name2="2"):
+def compare(ft1, ft2, name1="1", name2="2",ax=None):
     """
     ft1 FeatureTracker
     ft2 FeatureTracker
@@ -191,30 +197,41 @@ def compare(ft1, ft2, name1="1", name2="2"):
     ax.xaxis.set_major_formatter(dform)
     return score
 
-def plot_score(score, xvals, name1, name2):
+def plot_score(score, xvals, name1, name2,ax=None,pretty=True):
+    if not ax:
+       fig = plt.figure(1)
+       ax = fig.add_subplot(1,1,1)
     clr = {}
+    #clr["1_1"] = "-ko"
+    #clr["2_2"] = "--g^"
+    #clr["1_2"] = "--r."
+    #clr["2_1"] = "--b."
     clr["1_1"] = "-ko"
-    clr["2_2"] = "--g^"
-    clr["1_2"] = "--r."
-    clr["2_1"] = "--b."
+    clr["2_2"] = "-c^"
+    clr["1_2"] = "--k."
+    clr["2_1"] = "--c^"
     label = {}
     label["1_2"] = make_label(name1, name2)
     label["2_1"] = make_label(name2, name1)
     label["1_1"] = make_label(name1, name1)
     label["2_2"] = make_label(name2, name2)
-    for key in score.keys():
-        plt.plot(xvals, score[key], clr[key], label=label[key])
-    plt.tight_layout()
-    plt.ylabel("Score")
+    a={}
+    a["1_2"]=0.5
+    a["2_1"]=0.5
+    a["1_1"]=1
+    a["2_2"]=1
+    for key in ['1_1','2_2','1_2','2_1']:
+        ax.plot(xvals, score[key], clr[key], label=label[key],alpha=a[key])
+    handles, labels = ax.get_legend_handles_labels()
+    if pretty:
+        plt.tight_layout()
+        plt.ylabel("Score")
     #plt.xlabel("Day Hour in August 2008 (UTC)")
     #dform = DateFormatter("%d %H")
-    ax = plt.gca()
     #ax.xaxis.set_major_formatter(dform)
     #ax.set_xticklabels(rotation=45, ha='right')
-    handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles, labels)
-    return ax
-
+        ax.legend(handles,labels)
+    return ax, handles, labels
 
 class FeatureTracker:
     """

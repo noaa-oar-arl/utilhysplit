@@ -67,6 +67,9 @@ cdump_plot
    2. made ability to change vertical height units more flexible. Before could
       only use m or km.
 2. concentrations along flight path.
+
+June 2026 new ways to get concentration from Gaussians fits 
+
 """
 
 
@@ -1249,39 +1252,93 @@ class MassFit:
             self.dra, lat_name="y", lon_name="x"
         )
 
-    def get_conc_nogrid(self,
-                 inra,
-                 dd,
-                 dh, 
-                 buf=0.2, 
-                 midlat=45,
-                 bnds=None, 
-                 time=None, 
-                 mass=None,
-                 lat=None,
-                 lon=None,
-                 ht=None,
-                 verbose=False):
-        if not mass: 
-           mass = self.mass
-        # use fit volume to get total probability
-        dd=dd/self.prec 
+    def get_conc_quadrature(
+        self,
+        inra,
+        dh,
+        dd,
+        qn=5,
+        qnz=10,
+        midlat=45,
+        mass=None,
+    ):
+        """Average concentration for points in ``inra`` via box quadrature.
+
+        ``inra`` points are expected in ``[lon, lat, ht]`` order.
+        """
+        if isinstance(inra, pd.DataFrame):
+            if {"lon", "lat", "ht"}.issubset(inra.columns):
+                pts = inra[["lon", "lat", "ht"]].to_numpy()
+            else:
+                pts = inra.to_numpy()
+        else:
+            pts = np.asarray(inra)
+
+        if pts.ndim == 1:
+            pts = pts.reshape(1, -1)
+        if pts.shape[1] != 3:
+            raise ValueError("inra must be array-like with shape (N, 3) in [lon, lat, ht] order")
+
+        conclist = []
+        for pt in pts:
+            conc = self._get_conc_quadrature(
+                pt[0], pt[1], pt[2], dh, dd, qn=qn, qnz=qnz, midlat=midlat, mass=mass
+            )
+            conclist.append(conc)
+        return conclist
+    
+
+    def _get_conc_quadrature(
+        self,
+        lon,
+        lat,
+        ht,
+        dh,
+        dd,
+        qn=5,
+        qnz=None,
+        midlat=45,
+        mass=None,
+    ):
+        """ does not use midpoint approxmation.
+        Uses 5x5x5 quadrature to get average concentration in volume defined by dd and dh."""
+        box = get_box(lon, lat, ht, dd, dh)
+        pts = get_pts(box, n=qn, nz=qnz)
+        conclist = np.zeros(len(pts))
+        for iii, pt in enumerate(pts):
+            conclist[iii] = self.get_conc_nogrid([[pt[0], pt[1], pt[2]]], midlat=midlat, mass=mass)
+        return conclist.mean()
+
+    def get_conc_nogrid(self, inra, midlat=45, mass=None):
+        """Uses midpoint approximation and returns concentration in mass/m3."""
+        deg2m = 111e3
+        if not mass:
+            mass = self.mass
         score = self.gfit.score_samples(inra)
-        prob = np.exp(score) * dd**2 * dh
-        one = prob.sum()
-       
-        # use real volume to get concentration 
-        deg2meter = 111e3
-        ddm = dd*self.prec
-        dlat = ddm * deg2meter
-        #midlat = latra.mean()
-        dlon = ddm * deg2meter * np.cos(midlat*np.pi/180.0)
-        volume = dh * dlon * dlat
-        #if self.htunits == 'km': volume = volume * 1000.0
-        volume = volume * self.htunits
-        conc = prob*mass/volume
-        #conc = np.exp(score)* mass
+        area_per_fit_xy = deg2m**2 * np.cos(midlat * np.pi / 180.0) * self.prec**2
+        conc = np.exp(score) * mass * self.htunits / area_per_fit_xy
         return conc
+        #prob = np.exp(score) * dd**2 * dh
+        #one = prob.sum()
+        #print(prob) 
+        # use real volume to get concentration 
+        #ddm = dd*self.prec
+        #dlat = ddm * deg2m
+        #midlat = latra.mean()
+        #dlon = ddm * deg2m * np.cos(midlat*np.pi/180.0)
+        #volume = dh * dlon * dlat
+        #if self.htunits == 'km': volume = volume * 1000.0
+        #volume = volume * self.htunits
+        #conc = prob*mass/volume
+
+        #conc = np.exp(score)*dd^2*dh*mass / (dh*dlon*dlat)
+        #conc = np.exp(score)*dd^2*mass / (dlon*dlat)
+        #conc = np.exp(score)*dd^2*mass/ (dd*self.prec*deg2m*np.cos(midlat*np.pi/180) * dd*self.prec * deg2m)
+        #conc = np.exp(score)*mass / ((self.prec*degm)^2 * np.cos(midlat*np.pi/180))
+
+
+        #conc = np.exp(score)* mass
+        #return conc
 
     def get_conc(
         self,
@@ -1317,9 +1374,11 @@ class MassFit:
 
     def get_grid(self, dd, dh, buf, lat=None, lon=None, ht=None):
         # returns arrays that can be used as input to get_conc2.
-        if not lat:
+        if lat is None and lon is None and ht is None:
             latra, lonra, htra = self.totalgrid(dd, dh, buf)
         else:
+            if lat is None or lon is None or ht is None:
+                raise ValueError("lat, lon, and ht must all be provided for partial grids")
             latra, lonra, htra = self.partialgrid(lat, lon, ht, dd, dh, buf)
         return latra, lonra, htra
 
@@ -1355,14 +1414,14 @@ class MassFit:
         dm = dd*self.prec
         dlon = dm * deg2meter * np.cos(midlat *np.pi /180.0)
         volume = dh * (dm * deg2meter) * dlon
-        #if self.htunits == "km":
-        volume = volume * self.htunits
+        # Convert fit vertical units to meters: z_m = z_fit / self.htunits.
+        volume = volume / self.htunits
 
         # self.conc = np.exp(score)*dd**2 * dh * mass / volume
         self.conc = prob * mass / volume
 
         # reshape the array.
-        corder = [(latra*self.prec, "y"), (lonra*self.prec, "x"), (htra*self.htunits, "z")]
+        corder = [(latra*self.prec, "y"), (lonra*self.prec, "x"), (htra/self.htunits, "z")]
         rshape = []
         coords = []
         dims = []
@@ -1584,6 +1643,46 @@ def get_xra(lon, lat, ht=None):
     else:
         xra = np.array(list(zip(lon, lat)))
     return xra
+
+
+def get_box(lon, lat, ht, dd, dh):
+    """Return centered box bounds for quadrature sampling.
+
+    Inputs follow the common point convention in this module:
+    ``[lon, lat, ht]``.
+    The returned dictionary stores bounds in native fit-space units and is
+    consumed by ``get_pts``.
+    """
+    half_dd = 0.5 * dd
+    half_dh = 0.5 * dh
+    return {
+        "lat": (lat - half_dd, lat + half_dd),
+        "lon": (lon - half_dd, lon + half_dd),
+        "ht": (ht - half_dh, ht + half_dh),
+    }
+
+
+def get_pts(box, n=5, nz=None):
+    """Create evenly spaced sample points in a box.
+
+    ``n`` controls horizontal sampling (x/y). ``nz`` controls height sampling.
+    If ``nz`` is ``None`` it defaults to ``n``.
+
+    Output points are in ``[lon, lat, ht]`` order for direct use by
+    ``get_conc_nogrid``.
+    """
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    if nz is None:
+        nz = n
+    if nz < 1:
+        raise ValueError("nz must be >= 1")
+    lonra = np.linspace(box["lon"][0], box["lon"][1], n)
+    latra = np.linspace(box["lat"][0], box["lat"][1], n)
+    htra = np.linspace(box["ht"][0], box["ht"][1], nz)
+    x, y, z = np.meshgrid(lonra, latra, htra, indexing="xy")
+    pts = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
+    return pts
 
 
 # def compare_fits(fit1, fit2, method="gmm"):
